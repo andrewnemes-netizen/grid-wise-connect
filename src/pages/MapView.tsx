@@ -1,26 +1,47 @@
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import { useMap } from "@/hooks/useMap";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
-import { LayerTogglePanel, DEFAULT_LAYERS, type LayerConfig } from "@/components/map/LayerTogglePanel";
+import {
+  LayerTogglePanel,
+  useRegistryLayers,
+  type LayerVisibility,
+  type RegistryLayer,
+} from "@/components/map/LayerTogglePanel";
 import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
-import { fetchLayerGeoJSON, addLayerToMap, removeLayerFromMap } from "@/lib/mapLayers";
+import {
+  fetchLayerGeoJSON,
+  addRegistryLayerToMap,
+  removeRegistryLayerFromMap,
+  clearLayerCache,
+} from "@/lib/mapLayers";
 import { useToast } from "@/hooks/use-toast";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
+
+function getMapBbox(map: maplibregl.Map): [number, number, number, number] {
+  const bounds = map.getBounds();
+  return [
+    bounds.getWest(),
+    bounds.getSouth(),
+    bounds.getEast(),
+    bounds.getNorth(),
+  ];
+}
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded } = useMap(containerRef);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const [layers, setLayers] = useState<LayerConfig[]>(DEFAULT_LAYERS);
+  const { registryLayers, registryLoading } = useRegistryLayers();
+  const [visibility, setVisibility] = useState<LayerVisibility>({});
   const [selectedFeature, setSelectedFeature] = useState<Record<string, unknown> | null>(null);
   const [selectedLayerLabel, setSelectedLayerLabel] = useState("");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | null>(null);
@@ -32,6 +53,117 @@ const MapView = () => {
   activeToolRef.current = activeTool;
   const { toast } = useToast();
   const { isDrawing, polygon: drawnPolygon, clearDrawing } = usePolygonDraw(map, activeTool === "polygon");
+
+  // Track which layers have click handlers attached
+  const clickHandlersRef = useRef<Set<string>>(new Set());
+  // Debounce timer ref for viewport refresh
+  const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Registry layer lookup
+  const layerMap = useMemo(() => {
+    const m = new Map<string, RegistryLayer>();
+    registryLayers.forEach((l) => m.set(l.id, l));
+    return m;
+  }, [registryLayers]);
+
+  // Load/refresh a single visible layer with current bbox
+  const loadLayer = useCallback(
+    async (layerId: string, bbox?: [number, number, number, number]) => {
+      const layer = layerMap.get(layerId);
+      if (!layer || !map) return;
+
+      setLoadingLayers((prev) => new Set(prev).add(layerId));
+      try {
+        const geojson = await fetchLayerGeoJSON(layerId, bbox);
+        // Find color index within category
+        const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
+        const colorIdx = catLayers.findIndex((l) => l.id === layerId);
+        const isUtil = layer.slug === "npg_hv_substations_utilisation";
+
+        addRegistryLayerToMap(map, layer, geojson, colorIdx, isUtil && heatmapMode);
+
+        // Attach click/hover handlers (once)
+        const mapLayerId = `layer-${layerId}`;
+        if (!clickHandlersRef.current.has(layerId)) {
+          map.on("click", mapLayerId, (e) => {
+            if (e.features && e.features.length > 0) {
+              setSelectedFeature(e.features[0].properties as Record<string, unknown>);
+              setSelectedLayerLabel(layer.display_name);
+            }
+          });
+          map.on("mouseenter", mapLayerId, () => {
+            if (activeToolRef.current !== "pin") map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", mapLayerId, () => {
+            if (activeToolRef.current !== "pin") map.getCanvas().style.cursor = "";
+          });
+          clickHandlersRef.current.add(layerId);
+        }
+
+        if (geojson.features.length === 0) {
+          toast({ title: layer.display_name, description: "No data in this viewport." });
+        }
+      } catch (err) {
+        console.error(`Failed to load layer ${layerId}:`, err);
+        toast({ title: "Layer load failed", description: `Could not load ${layer.display_name}`, variant: "destructive" });
+      } finally {
+        setLoadingLayers((prev) => {
+          const next = new Set(prev);
+          next.delete(layerId);
+          return next;
+        });
+      }
+    },
+    [map, layerMap, registryLayers, heatmapMode, toast]
+  );
+
+  // Handle layer toggle
+  const handleLayerToggle = useCallback(
+    async (layerId: string, visible: boolean) => {
+      setVisibility((prev) => ({ ...prev, [layerId]: visible }));
+
+      if (!map) return;
+
+      if (visible) {
+        const bbox = getMapBbox(map);
+        await loadLayer(layerId, bbox);
+      } else {
+        removeRegistryLayerFromMap(map, layerId);
+        clearLayerCache(layerId);
+      }
+    },
+    [map, loadLayer]
+  );
+
+  // Viewport-based auto-refresh: reload visible layers on moveend
+  useEffect(() => {
+    if (!map || !mapLoaded) return;
+
+    const onMoveEnd = () => {
+      // Debounce to avoid rapid fire
+      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+      moveEndTimerRef.current = setTimeout(() => {
+        const bbox = getMapBbox(map);
+        const visibleLayerIds = Object.entries(visibility)
+          .filter(([, v]) => v)
+          .map(([id]) => id);
+
+        // Clear cache for visible layers so they refetch with new bbox
+        visibleLayerIds.forEach((id) => clearLayerCache(id));
+
+        // Reload all visible layers with new bbox
+        visibleLayerIds.forEach((id) => loadLayer(id, bbox));
+      }, 500);
+    };
+
+    map.on("moveend", onMoveEnd);
+    return () => {
+      map.off("moveend", onMoveEnd);
+      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+    };
+  }, [map, mapLoaded, visibility, loadLayer]);
+
+  // Postcode search handler
   const handleSearchResult = useCallback(
     (lng: number, lat: number, label: string) => {
       if (!map) return;
@@ -51,75 +183,19 @@ const MapView = () => {
     [map]
   );
 
-  const handleLayerToggle = useCallback(
-    async (layerId: string, visible: boolean) => {
-      setLayers((prev) =>
-        prev.map((l) => (l.id === layerId ? { ...l, visible } : l))
-      );
-
-      if (!map) return;
-
-      if (visible) {
-        setLoadingLayers((prev) => new Set(prev).add(layerId));
-        try {
-          const geojson = await fetchLayerGeoJSON(layerId);
-          const layer = layers.find((l) => l.id === layerId) || DEFAULT_LAYERS.find((l) => l.id === layerId);
-          if (layer && map) {
-            addLayerToMap(map, layerId, geojson, layer.color, layerId === "site_utilisation" && heatmapMode);
-
-            map.on("click", layerId, (e) => {
-              if (e.features && e.features.length > 0) {
-                setSelectedFeature(e.features[0].properties as Record<string, unknown>);
-                setSelectedLayerLabel(layer.label);
-              }
-            });
-            map.on("mouseenter", layerId, () => {
-              if (activeToolRef.current !== "pin") {
-                map.getCanvas().style.cursor = "pointer";
-              }
-            });
-            map.on("mouseleave", layerId, () => {
-              if (activeToolRef.current !== "pin") {
-                map.getCanvas().style.cursor = "";
-              }
-            });
-
-            if (geojson.features.length === 0) {
-              toast({ title: `${layer.label}`, description: "No data loaded for this layer yet." });
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to load layer ${layerId}:`, err);
-          toast({ title: "Layer load failed", description: `Could not load ${layerId}`, variant: "destructive" });
-        } finally {
-          setLoadingLayers((prev) => {
-            const next = new Set(prev);
-            next.delete(layerId);
-            return next;
-          });
-        }
-      } else {
-        removeLayerFromMap(map, layerId);
-      }
-    },
-    [map, layers, toast, heatmapMode]
-  );
-
   const handleCloseFeatureInfo = useCallback(() => {
     setSelectedFeature(null);
     setSelectedLayerLabel("");
   }, []);
 
-  // Draw connection lines on map
+  // Connection lines
   const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
     if (!map) return;
-    // Remove old connection lines
     ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getLayer(`${id}-label`)) map.removeLayer(`${id}-label`);
       if (map.getSource(id)) map.removeSource(id);
     });
-
     lines.forEach((line) => {
       map.addSource(line.id, {
         type: "geojson",
@@ -151,7 +227,7 @@ const MapView = () => {
     });
   }, [map]);
 
-  // Pin drop via map click
+  // Pin drop
   useEffect(() => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
@@ -187,11 +263,32 @@ const MapView = () => {
     map.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
   }, [map]);
 
-  // Set cursor when pin tool active
+  // Cursor for active tools
   useEffect(() => {
     if (!map) return;
-    map.getCanvas().style.cursor = (activeTool === "pin" || activeTool === "measure" || activeTool === "polygon") ? "crosshair" : "";
+    map.getCanvas().style.cursor =
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon"
+        ? "crosshair"
+        : "";
   }, [map, activeTool]);
+
+  // Re-render utilisation layer when heatmap mode toggles
+  const handleHeatmapToggle = useCallback(
+    (enabled: boolean) => {
+      setHeatmapMode(enabled);
+      const utilLayer = registryLayers.find((l) => l.slug === "npg_hv_substations_utilisation");
+      if (utilLayer && visibility[utilLayer.id] && map) {
+        clearLayerCache(utilLayer.id);
+        const bbox = getMapBbox(map);
+        fetchLayerGeoJSON(utilLayer.id, bbox).then((geojson) => {
+          const catLayers = registryLayers.filter((l) => l.category === utilLayer.category && l.dno === utilLayer.dno);
+          const idx = catLayers.findIndex((l) => l.id === utilLayer.id);
+          addRegistryLayerToMap(map, utilLayer, geojson, idx, enabled);
+        });
+      }
+    },
+    [map, registryLayers, visibility]
+  );
 
   return (
     <div className="relative h-full w-full">
@@ -201,21 +298,18 @@ const MapView = () => {
         <>
           <PostcodeSearch onResult={handleSearchResult} />
           <LayerTogglePanel
-            layers={layers}
+            visibility={visibility}
             onToggle={handleLayerToggle}
             heatmapMode={heatmapMode}
-            onHeatmapToggle={(enabled) => {
-              setHeatmapMode(enabled);
-              // Re-render the utilisation layer if it's visible
-              const util = layers.find((l) => l.id === "site_utilisation");
-              if (util?.visible && map) {
-                fetchLayerGeoJSON("site_utilisation").then((geojson) => {
-                  addLayerToMap(map, "site_utilisation", geojson, util.color, enabled);
-                });
-              }
-            }}
+            onHeatmapToggle={handleHeatmapToggle}
+            registryLayers={registryLayers}
+            loadingLayers={loadingLayers}
           />
-          <MapLegend layers={layers} heatmapMode={heatmapMode} />
+          <MapLegend
+            registryLayers={registryLayers}
+            visibility={visibility}
+            heatmapMode={heatmapMode}
+          />
           <FeatureInfoPanel
             feature={selectedFeature}
             layerLabel={selectedLayerLabel}

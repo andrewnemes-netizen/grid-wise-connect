@@ -1,45 +1,130 @@
-import { useState } from "react";
-import { Layers, ChevronDown, ChevronUp, Flame } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
 
-export interface LayerConfig {
-  id: string;
-  label: string;
-  color: string;
-  group: string;
-  visible: boolean;
+export interface RegistryLayer {
+  id: string; // UUID from layer_registry
+  slug: string;
+  display_name: string;
+  dno: string;
+  category: string;
+  storage_table: string;
+  geometry_type: string;
+  style_json: any;
+  legend_json: any;
+  feature_count: number;
+  enabled: boolean;
+  visible_by_default: boolean;
+  min_zoom: number;
+  max_zoom: number;
 }
 
-const DEFAULT_LAYERS: LayerConfig[] = [
-  { id: "site_utilisation", label: "HV Substations (Utilisation)", color: "#2196F3", group: "Substations", visible: false },
-  { id: "primary_substations", label: "Primary Substations (33/66kV)", color: "#e74c3c", group: "Substations", visible: false },
-  { id: "ehv_feeders", label: "EHV Feeders", color: "#9b59b6", group: "Feeders", visible: false },
-  { id: "hv_feeders", label: "HV Feeders (33kV & 66kV)", color: "#3498db", group: "Feeders", visible: false },
-  { id: "underground_cables", label: "HV/EHV Underground Cables", color: "#e67e22", group: "Cables", visible: false },
-  { id: "ndp", label: "Network Development Plans", color: "#2ecc71", group: "Planning", visible: false },
-  { id: "highway_widths", label: "Footway / Carriageway Widths", color: "#95a5a6", group: "Constraints", visible: false },
-  { id: "wayleaves", label: "Wayleaves", color: "#f1c40f", group: "Constraints", visible: false },
-];
+export interface LayerVisibility {
+  [layerId: string]: boolean;
+}
 
 interface LayerTogglePanelProps {
-  layers: LayerConfig[];
+  visibility: LayerVisibility;
   onToggle: (layerId: string, visible: boolean) => void;
   heatmapMode?: boolean;
   onHeatmapToggle?: (enabled: boolean) => void;
+  registryLayers: RegistryLayer[];
+  loadingLayers: Set<string>;
 }
 
-export function LayerTogglePanel({ layers, onToggle, heatmapMode, onHeatmapToggle }: LayerTogglePanelProps) {
-  const [expanded, setExpanded] = useState(true);
+// Derive a consistent color from category + index
+const CATEGORY_COLORS: Record<string, string> = {
+  substations: "#2196F3",
+  feeders: "#9b59b6",
+  cables: "#e67e22",
+  constraints: "#95a5a6",
+  points: "#3498db",
+  polygons: "#2ecc71",
+};
 
-  const groups = layers.reduce<Record<string, LayerConfig[]>>((acc, layer) => {
-    if (!acc[layer.group]) acc[layer.group] = [];
-    acc[layer.group].push(layer);
-    return acc;
-  }, {});
+export function getLayerColor(layer: RegistryLayer, index: number): string {
+  // Check style_json for explicit color
+  const style = layer.style_json as any;
+  if (style?.color) return style.color;
+  if (style?.paint?.["circle-color"] && typeof style.paint["circle-color"] === "string") return style.paint["circle-color"];
+  if (style?.paint?.["line-color"] && typeof style.paint["line-color"] === "string") return style.paint["line-color"];
+
+  const base = CATEGORY_COLORS[layer.category] || "#888";
+  // Slightly offset hue for multiple layers in same category
+  if (index === 0) return base;
+  const hueShift = index * 30;
+  return `hsl(${(parseInt(base.slice(1), 16) + hueShift) % 360}, 60%, 50%)`;
+}
+
+// Check if a layer is the HV substations utilisation layer
+export function isUtilisationLayer(layer: RegistryLayer): boolean {
+  return layer.slug === "npg_hv_substations_utilisation" || layer.category === "substations";
+}
+
+export function useRegistryLayers() {
+  const [layers, setLayers] = useState<RegistryLayer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetch() {
+      const { data, error } = await supabase
+        .from("layer_registry")
+        .select("id, slug, display_name, dno, category, storage_table, geometry_type, style_json, legend_json, feature_count, enabled, visible_by_default, min_zoom, max_zoom")
+        .eq("enabled", true)
+        .order("dno")
+        .order("category")
+        .order("display_name");
+      if (error) {
+        console.error("Failed to load layer registry:", error);
+      } else {
+        setLayers((data as RegistryLayer[]) || []);
+      }
+      setLoading(false);
+    }
+    fetch();
+  }, []);
+
+  return { registryLayers: layers, registryLoading: loading };
+}
+
+export function LayerTogglePanel({
+  visibility,
+  onToggle,
+  heatmapMode,
+  onHeatmapToggle,
+  registryLayers,
+  loadingLayers,
+}: LayerTogglePanelProps) {
+  const [expanded, setExpanded] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Build tree: DNO → Category → Layers
+  const tree = useMemo(() => {
+    const dnoMap = new Map<string, Map<string, RegistryLayer[]>>();
+    registryLayers.forEach((layer) => {
+      if (!dnoMap.has(layer.dno)) dnoMap.set(layer.dno, new Map());
+      const catMap = dnoMap.get(layer.dno)!;
+      if (!catMap.has(layer.category)) catMap.set(layer.category, []);
+      catMap.get(layer.category)!.push(layer);
+    });
+    return dnoMap;
+  }, [registryLayers]);
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleCount = Object.values(visibility).filter(Boolean).length;
 
   return (
     <div className="absolute top-3 right-14 z-10 w-72">
@@ -50,60 +135,126 @@ export function LayerTogglePanel({ layers, onToggle, heatmapMode, onHeatmapToggl
         >
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Layers className="h-4 w-4 text-primary" />
-            NPG Layers
+            Map Layers
+            {visibleCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{visibleCount}</Badge>
+            )}
           </div>
-          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          {expanded ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
         </button>
 
         {expanded && (
-          <div className="border-t px-3 py-2 space-y-3 max-h-80 overflow-y-auto">
-            {Object.entries(groups).map(([group, groupLayers]) => (
-              <div key={group} className="space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group}</span>
-                {groupLayers.map((layer) => (
-                  <div key={layer.id} className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 py-0.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className="h-3 w-3 rounded-sm shrink-0 border border-border"
-                          style={{ backgroundColor: layer.color }}
-                        />
-                        <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal truncate cursor-pointer">
-                          {layer.label}
-                        </Label>
-                      </div>
-                      <Switch
-                        id={`layer-${layer.id}`}
-                        checked={layer.visible}
-                        onCheckedChange={(checked) => onToggle(layer.id, checked)}
-                        className="scale-75"
-                      />
-                    </div>
-                    {layer.id === "site_utilisation" && layer.visible && onHeatmapToggle && (
-                      <div className="flex items-center gap-1.5 pl-5">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant={heatmapMode ? "default" : "outline"}
-                              className="h-6 px-2 text-[10px] gap-1"
-                              onClick={() => onHeatmapToggle(!heatmapMode)}
-                            >
-                              <Flame className="h-3 w-3" />
-                              Heatmap
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">Toggle heatmap view weighted by utilisation %</TooltipContent>
-                        </Tooltip>
-                      </div>
-                    )}
+          <div className="border-t px-2 py-2 space-y-1 max-h-[60vh] overflow-y-auto">
+            {Array.from(tree.entries()).map(([dno, catMap]) => (
+              <div key={dno} className="space-y-0.5">
+                {/* DNO header - only show if multiple DNOs */}
+                {tree.size > 1 && (
+                  <div className="flex items-center gap-1.5 px-1 pt-1">
+                    <Badge variant="outline" className="text-[9px] font-semibold">{dno}</Badge>
                   </div>
-                ))}
+                )}
+
+                {Array.from(catMap.entries()).map(([category, catLayers]) => {
+                  const groupKey = `${dno}:${category}`;
+                  const isCollapsed = collapsedGroups.has(groupKey);
+
+                  return (
+                    <div key={groupKey} className="space-y-0.5">
+                      <button
+                        onClick={() => toggleGroup(groupKey)}
+                        className="flex items-center gap-1.5 w-full px-1 py-1 text-left hover:bg-accent/30 rounded transition-colors"
+                      >
+                        {isCollapsed ? (
+                          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                        )}
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">
+                          {category}
+                        </span>
+                        <span className="text-[9px] text-muted-foreground ml-auto">
+                          {catLayers.length}
+                        </span>
+                      </button>
+
+                      {!isCollapsed &&
+                        catLayers.map((layer, idx) => {
+                          const color = getLayerColor(layer, idx);
+                          const isVisible = visibility[layer.id] ?? false;
+                          const isLoading = loadingLayers.has(layer.id);
+                          const isUtilLayer = layer.slug === "npg_hv_substations_utilisation";
+
+                          return (
+                            <div key={layer.id} className="space-y-0.5 pl-4">
+                              <div className="flex items-center justify-between gap-2 py-0.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  {isLoading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                                  ) : (
+                                    <div
+                                      className="h-3 w-3 rounded-sm shrink-0 border border-border"
+                                      style={{ backgroundColor: color }}
+                                    />
+                                  )}
+                                  <Label
+                                    htmlFor={`layer-${layer.id}`}
+                                    className="text-xs font-normal truncate cursor-pointer"
+                                  >
+                                    {layer.display_name}
+                                  </Label>
+                                  {layer.feature_count > 0 && (
+                                    <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
+                                      {layer.feature_count > 999
+                                        ? `${(layer.feature_count / 1000).toFixed(1)}k`
+                                        : layer.feature_count}
+                                    </span>
+                                  )}
+                                </div>
+                                <Switch
+                                  id={`layer-${layer.id}`}
+                                  checked={isVisible}
+                                  onCheckedChange={(checked) => onToggle(layer.id, checked)}
+                                  className="scale-75"
+                                />
+                              </div>
+
+                              {/* Heatmap toggle for utilisation layer */}
+                              {isUtilLayer && isVisible && onHeatmapToggle && (
+                                <div className="flex items-center gap-1.5 pl-5 pb-0.5">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant={heatmapMode ? "default" : "outline"}
+                                        className="h-6 px-2 text-[10px] gap-1"
+                                        onClick={() => onHeatmapToggle(!heatmapMode)}
+                                      >
+                                        <Flame className="h-3 w-3" />
+                                        Heatmap
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                      Toggle heatmap view weighted by utilisation %
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  );
+                })}
               </div>
             ))}
-            <div className="pt-1 border-t">
-              <p className="text-[10px] text-muted-foreground">
-                Toggle layers to load spatial data from the database. Click features for details.
+
+            <div className="pt-1.5 border-t mt-1">
+              <p className="text-[10px] text-muted-foreground px-1">
+                Layers auto-refresh as you pan the map. Click features for details.
               </p>
             </div>
           </div>
@@ -112,5 +263,3 @@ export function LayerTogglePanel({ layers, onToggle, heatmapMode, onHeatmapToggl
     </div>
   );
 }
-
-export { DEFAULT_LAYERS };
