@@ -57,6 +57,7 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
       },
       center: UK_CENTER,
       zoom: DEFAULT_ZOOM,
+      maxZoom: 22,
     });
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
