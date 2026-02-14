@@ -17,15 +17,35 @@ const LAYER_RENDER_TYPE: Record<string, "line" | "circle" | "fill"> = {
 // Cache for fetched GeoJSON
 const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
 
-export async function fetchLayerGeoJSON(layerId: string): Promise<GeoJSON.FeatureCollection> {
-  if (geojsonCache.has(layerId)) {
-    return geojsonCache.get(layerId)!;
+/**
+ * Fetch GeoJSON for a layer. Supports both legacy slugs and new UUID layer_ids.
+ * Pass bbox as [minLng, minLat, maxLng, maxLat] for viewport filtering.
+ */
+export async function fetchLayerGeoJSON(
+  layerId: string,
+  bbox?: [number, number, number, number]
+): Promise<GeoJSON.FeatureCollection> {
+  const cacheKey = bbox ? `${layerId}:${bbox.join(",")}` : layerId;
+  if (geojsonCache.has(cacheKey)) {
+    return geojsonCache.get(cacheKey)!;
   }
 
   const { data: session } = await supabase.auth.getSession();
   const token = session.session?.access_token;
 
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-layer-geojson?layer=${layerId}`;
+  // Determine if layerId is a UUID (new system) or a slug (legacy)
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(layerId);
+  const params = new URLSearchParams();
+  if (isUUID) {
+    params.set("layer_id", layerId);
+  } else {
+    params.set("layer", layerId);
+  }
+  if (bbox) {
+    params.set("bbox", bbox.join(","));
+  }
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-layer-geojson?${params}`;
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -39,7 +59,7 @@ export async function fetchLayerGeoJSON(layerId: string): Promise<GeoJSON.Featur
   }
 
   const geojson = await res.json();
-  geojsonCache.set(layerId, geojson);
+  geojsonCache.set(cacheKey, geojson);
   return geojson;
 }
 
