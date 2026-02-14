@@ -55,7 +55,7 @@ const Auth = () => {
           <div className="mx-auto mb-3">
             <img src={epeLogo} alt="Eco Power Energy" className="h-12 mx-auto" />
           </div>
-          <CardTitle className="text-2xl">Feasibility Mapper</CardTitle>
+          <CardTitle className="text-2xl">Gridwise Connect</CardTitle>
           <CardDescription>Grid intelligence for EV & ICP connections</CardDescription>
         </CardHeader>
         <CardContent>
