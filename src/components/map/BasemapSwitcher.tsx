@@ -26,7 +26,7 @@ export function BasemapSwitcher({ active, onChange }: BasemapSwitcherProps) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="absolute top-16 right-2.5 z-10 flex flex-col items-end gap-1">
+    <div className="absolute bottom-8 left-3 z-10 flex flex-col items-start gap-1">
       <Tooltip delayDuration={2000}>
         <TooltipTrigger asChild>
           <Button
