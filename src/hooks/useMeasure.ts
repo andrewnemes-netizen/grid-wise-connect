@@ -42,9 +42,13 @@ export function useMeasure(
     popupRef.current?.remove();
     popupRef.current = null;
     if (map) {
-      if (map.getLayer(LABEL_LAYER_ID)) map.removeLayer(LABEL_LAYER_ID);
-      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-      if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+      try {
+        if (map.getStyle() && map.getLayer(LABEL_LAYER_ID)) map.removeLayer(LABEL_LAYER_ID);
+        if (map.getStyle() && map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
+        if (map.getStyle() && map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+      } catch {
+        // Map may already be destroyed during unmount
+      }
     }
     setState({ points: [], totalDistance: 0 });
   }, [map]);
