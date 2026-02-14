@@ -1,6 +1,6 @@
+import { useState } from "react";
 import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MapToolbarProps {
   activeTool: "pin" | "measure" | "polygon" | "connect" | null;
@@ -10,52 +10,73 @@ interface MapToolbarProps {
 }
 
 const tools = [
-  { id: "pin" as const, icon: MapPin, label: "Drop Pin — assess a location" },
-  { id: "connect" as const, icon: Cable, label: "Connect — click asset then destination for feasibility + cost" },
-  { id: "polygon" as const, icon: Pentagon, label: "Draw polygon — search substations in area" },
-  { id: "measure" as const, icon: Ruler, label: "Measure distance" },
+  { id: "pin" as const, icon: MapPin, label: "Drop Pin" },
+  { id: "connect" as const, icon: Cable, label: "Connect" },
+  { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
+  { id: "measure" as const, icon: Ruler, label: "Measure" },
 ] as const;
 
 export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK }: MapToolbarProps) {
+  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
+
   return (
-    <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1">
+    <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1 items-end">
       {tools.map((tool) => (
-        <Tooltip key={tool.id} delayDuration={2000}>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon"
-              variant={activeTool === tool.id ? "default" : "outline"}
-              className="h-9 w-9 shadow-md bg-background/95 backdrop-blur"
-              onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
-            >
-              <tool.icon className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left" sideOffset={8}>{tool.label}</TooltipContent>
-        </Tooltip>
+        <div
+          key={tool.id}
+          className="flex items-center gap-1.5"
+          onMouseEnter={() => setHoveredTool(tool.id)}
+          onMouseLeave={() => setHoveredTool(null)}
+        >
+          {hoveredTool === tool.id && (
+            <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
+              {tool.label}
+            </span>
+          )}
+          <Button
+            size="icon"
+            variant={activeTool === tool.id ? "default" : "outline"}
+            className="h-9 w-9 shadow-md bg-background/95 backdrop-blur"
+            onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
+          >
+            <tool.icon className="h-4 w-4" />
+          </Button>
+        </div>
       ))}
 
-      <div className="h-px bg-border my-0.5" />
+      <div className="h-px bg-border my-0.5 w-9" />
 
       {onZoomToUK && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="icon" variant="outline" className="h-9 w-9 shadow-md bg-background/95 backdrop-blur" onClick={onZoomToUK}>
-              <Compass className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="left">Reset view</TooltipContent>
-        </Tooltip>
+        <div
+          className="flex items-center gap-1.5"
+          onMouseEnter={() => setHoveredTool("uk")}
+          onMouseLeave={() => setHoveredTool(null)}
+        >
+          {hoveredTool === "uk" && (
+            <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
+              Reset view
+            </span>
+          )}
+          <Button size="icon" variant="outline" className="h-9 w-9 shadow-md bg-background/95 backdrop-blur" onClick={onZoomToUK}>
+            <Compass className="h-4 w-4" />
+          </Button>
+        </div>
       )}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button size="icon" variant="outline" className="h-9 w-9 shadow-md bg-background/95 backdrop-blur" onClick={onClear}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="left">Clear all</TooltipContent>
-      </Tooltip>
+      <div
+        className="flex items-center gap-1.5"
+        onMouseEnter={() => setHoveredTool("clear")}
+        onMouseLeave={() => setHoveredTool(null)}
+      >
+        {hoveredTool === "clear" && (
+          <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
+            Clear all
+          </span>
+        )}
+        <Button size="icon" variant="outline" className="h-9 w-9 shadow-md bg-background/95 backdrop-blur" onClick={onClear}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
