@@ -3,6 +3,7 @@ import { PoundSterling, ChevronDown, ChevronUp, AlertCircle, CheckCircle, HelpCi
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
 
 interface CostEstimatePanelProps {
   proposed_kw: number;
@@ -28,10 +29,11 @@ function formatGBP(amount: number): string {
 export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw }: CostEstimatePanelProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showBom, setShowBom] = useState(false);
+  const { data: unitRates } = useUnitRates();
 
   const estimate = useMemo<CostEstimate>(
-    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw }),
-    [proposed_kw, distances, constraints, nearest_headroom_kw]
+    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw }, unitRates),
+    [proposed_kw, distances, constraints, nearest_headroom_kw, unitRates]
   );
 
   const bom = useMemo<BomItem[]>(
