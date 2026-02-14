@@ -69,13 +69,36 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
       },
     });
   } else if (renderType === "circle") {
+    // Use data-driven styling for site_utilisation layer
+    const circleColor = layerId === "site_utilisation"
+      ? [
+          "match",
+          ["get", "utilisation_band"],
+          "Low", "#22c55e",
+          "Below Average", "#84cc16",
+          "Average", "#f59e0b",
+          "Above Average", "#f97316",
+          "High", "#ef4444",
+          color,
+        ] as any
+      : color;
+
+    const circleRadius = layerId === "site_utilisation"
+      ? [
+          "interpolate", ["linear"], ["zoom"],
+          6, 2,
+          10, 4,
+          14, 8,
+        ] as any
+      : 6;
+
     map.addLayer({
       id: layerId,
       type: "circle",
       source: sourceId,
       paint: {
-        "circle-radius": 6,
-        "circle-color": color,
+        "circle-radius": circleRadius,
+        "circle-color": circleColor,
         "circle-stroke-color": "#fff",
         "circle-stroke-width": 1.5,
         "circle-opacity": 0.9,

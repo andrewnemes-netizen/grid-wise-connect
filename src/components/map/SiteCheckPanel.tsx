@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2 } from "lucide-react";
+import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2, Search, ClipboardCheck, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,15 @@ interface SiteCheckPanelProps {
   lat: number | null;
   onClose: () => void;
   onSaved?: () => void;
+  onConnectionLines?: (lines: ConnectionLine[]) => void;
+}
+
+export interface ConnectionLine {
+  id: string;
+  label: string;
+  coords: [number, number][];
+  color: string;
+  distance_m: number;
 }
 
 interface ScoreResult {
@@ -34,6 +43,7 @@ interface ScoreResult {
     min_carriageway_m: number | null;
   };
   capacity_indicator?: string;
+  nearest_points?: { primary?: [number, number]; feeder?: [number, number]; cable?: [number, number] };
 }
 
 const SITE_TYPES = [
@@ -44,13 +54,19 @@ const SITE_TYPES = [
   { value: "other", label: "Other" },
 ];
 
-const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
-  GREEN: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-  AMBER: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
-  RED: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200" },
+const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
+  GREEN: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Viable" },
+  AMBER: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Possible" },
+  RED: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Challenging" },
 };
 
-export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelProps) {
+const STEPS = [
+  { num: 1, label: "Find Location", icon: Search },
+  { num: 2, label: "Assess Viability", icon: ClipboardCheck },
+  { num: 3, label: "Save to Portfolio", icon: FolderOpen },
+];
+
+export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }: SiteCheckPanelProps) {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
   const isInternal = hasRole("admin") || hasRole("engineer");
@@ -61,18 +77,36 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
   const [siteType, setSiteType] = useState("other");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
+
+  const currentStep = saved ? 3 : result ? 2 : 1;
 
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("score-site", {
         body: { lng, lat, proposed_kw: Number(proposedKw) || 0, site_name: siteName, postcode, site_type: siteType },
       });
       if (res.error) throw res.error;
       setResult(res.data);
+
+      // Build connection lines if nearest_points are available
+      if (res.data.nearest_points && onConnectionLines) {
+        const lines: ConnectionLine[] = [];
+        const origin: [number, number] = [lng, lat];
+        if (res.data.nearest_points.primary) {
+          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, res.data.nearest_points.primary], color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
+        }
+        if (res.data.nearest_points.feeder) {
+          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, res.data.nearest_points.feeder], color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
+        }
+        if (res.data.nearest_points.cable) {
+          lines.push({ id: "line-cable", label: "Cable", coords: [origin, res.data.nearest_points.cable], color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
+        }
+        onConnectionLines(lines);
+      }
     } catch (err: any) {
       toast({ title: "Scoring failed", description: err.message, variant: "destructive" });
     } finally {
@@ -96,7 +130,8 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
         created_by: user.id,
       } as any);
       if (error) throw error;
-      toast({ title: "Site saved" });
+      toast({ title: "Site saved to portfolio" });
+      setSaved(true);
       onSaved?.();
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
@@ -109,6 +144,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
 
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-96 border-l bg-background shadow-xl flex flex-col">
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <MapPin className="h-4 w-4 text-primary" />
@@ -119,11 +155,30 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
         </Button>
       </div>
 
+      {/* Step indicator */}
+      <div className="px-4 py-3 border-b bg-muted/10">
+        <div className="flex items-center justify-between">
+          {STEPS.map((step, i) => (
+            <div key={step.num} className="flex items-center gap-1.5">
+              <div className={`flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold transition-colors ${
+                currentStep >= step.num ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              }`}>
+                {step.num}
+              </div>
+              <span className={`text-[11px] hidden sm:inline ${currentStep >= step.num ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                {step.label}
+              </span>
+              {i < STEPS.length - 1 && <div className={`w-4 h-px mx-1 ${currentStep > step.num ? "bg-primary" : "bg-border"}`} />}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* Location */}
           <div className="rounded-md border bg-muted/20 p-3">
-            <p className="text-xs text-muted-foreground">Location</p>
+            <p className="text-xs text-muted-foreground">📍 Location</p>
             <p className="text-sm font-mono">{lat?.toFixed(5)}, {lng?.toFixed(5)}</p>
           </div>
 
@@ -157,42 +212,57 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
           </div>
 
           <Button onClick={handleScore} disabled={loading || !lng || !lat} className="w-full">
-            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running Check…</> : <><Zap className="mr-2 h-4 w-4" />Run Feasibility Check</>}
+            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Assessing Viability…</> : <><Zap className="mr-2 h-4 w-4" />Assess Connection Viability</>}
           </Button>
 
           {/* Results */}
           {result && sc && (
             <>
               <Separator />
+
+              {/* Score card */}
               <div className={`rounded-lg border p-4 ${sc.bg}`}>
-                <div className="flex items-center gap-2 mb-2">
-                  <sc.icon className={`h-5 w-5 ${sc.color}`} />
-                  <span className={`text-lg font-bold ${sc.color}`}>{result.score}</span>
+                <div className="flex items-center gap-3">
+                  <sc.icon className={`h-6 w-6 ${sc.color}`} />
+                  <div>
+                    <span className={`text-lg font-bold ${sc.color}`}>{result.score}</span>
+                    <p className={`text-xs ${sc.color}`}>{sc.label}</p>
+                  </div>
                 </div>
               </div>
 
               {/* Distances / Bands */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Connection Proximity</p>
                 {isInternal && result.distances ? (
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Primary Substation</span><span className="font-medium">{result.distances.primary_m}m</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Feeder</span><span className="font-medium">{result.distances.feeder_m}m</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Capacity Segment</span><span className="font-medium">{result.distances.capacity_segment_m}m</span></div>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: "Primary Substation", val: result.distances.primary_m, color: "#e74c3c" },
+                      { label: "Feeder", val: result.distances.feeder_m, color: "#9b59b6" },
+                      { label: "Cable Segment", val: result.distances.capacity_segment_m, color: "#e67e22" },
+                    ].map((d) => (
+                      <div key={d.label} className="flex items-center justify-between text-sm rounded-md border bg-muted/20 px-3 py-1.5">
+                        <span className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
+                          <span className="text-muted-foreground">{d.label}</span>
+                        </span>
+                        <span className="font-semibold">{d.val.toLocaleString()}m</span>
+                      </div>
+                    ))}
                   </div>
                 ) : result.distance_bands ? (
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Primary Substation</span><Badge variant="outline">{result.distance_bands.primary}</Badge></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Feeder</span><Badge variant="outline">{result.distance_bands.feeder}</Badge></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Capacity Segment</span><Badge variant="outline">{result.distance_bands.capacity_segment}</Badge></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Cable Segment</span><Badge variant="outline">{result.distance_bands.capacity_segment}</Badge></div>
                   </div>
                 ) : null}
               </div>
 
               {/* Constraints */}
               {isInternal && result.constraints && (
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Constraints</p>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Local & Upstream Constraints</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">NDP Intersect</span><Badge variant={result.constraints.ndp_intersect ? "destructive" : "outline"}>{result.constraints.ndp_intersect ? "Yes" : "No"}</Badge></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">NDP within 1km</span><Badge variant={result.constraints.ndp_within_1000m ? "secondary" : "outline"}>{result.constraints.ndp_within_1000m ? "Yes" : "No"}</Badge></div>
@@ -210,7 +280,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
 
               {/* Reasons */}
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reasons</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assessment Reasons</p>
                 <ul className="space-y-1">
                   {result.reasons.map((r, i) => (
                     <li key={i} className="text-xs text-foreground flex items-start gap-1.5">
@@ -223,7 +293,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
 
               {/* Next Steps */}
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Next Steps</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recommended Next Steps</p>
                 <ul className="space-y-1">
                   {result.next_steps.map((s, i) => (
                     <li key={i} className="text-xs text-foreground flex items-start gap-1.5">
@@ -235,9 +305,16 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved }: SiteCheckPanelPro
               </div>
 
               {/* Save */}
-              <Button onClick={handleSave} disabled={saving} variant="outline" className="w-full">
-                {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />Save as Site</>}
-              </Button>
+              {!saved ? (
+                <Button onClick={handleSave} disabled={saving} className="w-full">
+                  {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />Save to Portfolio</>}
+                </Button>
+              ) : (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-700 font-medium">Saved to portfolio</span>
+                </div>
+              )}
             </>
           )}
         </div>
