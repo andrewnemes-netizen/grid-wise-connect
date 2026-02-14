@@ -7,9 +7,11 @@ import { LayerTogglePanel, DEFAULT_LAYERS, type LayerConfig } from "@/components
 import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
-import { SiteCheckPanel } from "@/components/map/SiteCheckPanel";
+import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
 import { fetchLayerGeoJSON, addLayerToMap, removeLayerFromMap } from "@/lib/mapLayers";
 import { useToast } from "@/hooks/use-toast";
+
+const UK_CENTER: [number, number] = [-1.5, 54.0];
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -19,7 +21,7 @@ const MapView = () => {
   const [layers, setLayers] = useState<LayerConfig[]>(DEFAULT_LAYERS);
   const [selectedFeature, setSelectedFeature] = useState<Record<string, unknown> | null>(null);
   const [selectedLayerLabel, setSelectedLayerLabel] = useState("");
-  const [activeTool, setActiveTool] = useState<"pin" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | null>(null);
   const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [showSiteCheck, setShowSiteCheck] = useState(false);
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
@@ -55,7 +57,6 @@ const MapView = () => {
       if (!map) return;
 
       if (visible) {
-        // Fetch and render layer
         setLoadingLayers((prev) => new Set(prev).add(layerId));
         try {
           const geojson = await fetchLayerGeoJSON(layerId);
@@ -63,7 +64,6 @@ const MapView = () => {
           if (layer && map) {
             addLayerToMap(map, layerId, geojson, layer.color);
 
-            // Add click handler for feature info
             map.on("click", layerId, (e) => {
               if (e.features && e.features.length > 0) {
                 setSelectedFeature(e.features[0].properties as Record<string, unknown>);
@@ -107,6 +107,47 @@ const MapView = () => {
     setSelectedLayerLabel("");
   }, []);
 
+  // Draw connection lines on map
+  const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
+    if (!map) return;
+    // Remove old connection lines
+    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getLayer(`${id}-label`)) map.removeLayer(`${id}-label`);
+      if (map.getSource(id)) map.removeSource(id);
+    });
+
+    lines.forEach((line) => {
+      map.addSource(line.id, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: { label: `${line.label}: ${line.distance_m.toLocaleString()}m` },
+          geometry: { type: "LineString", coordinates: line.coords },
+        },
+      });
+      map.addLayer({
+        id: line.id,
+        type: "line",
+        source: line.id,
+        paint: {
+          "line-color": line.color,
+          "line-width": 3,
+          "line-dasharray": [4, 3],
+          "line-opacity": 0.9,
+        },
+      });
+    });
+  }, [map]);
+
+  const clearConnectionLines = useCallback(() => {
+    if (!map) return;
+    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+    });
+  }, [map]);
+
   // Pin drop via map click
   useEffect(() => {
     if (!map) return;
@@ -134,12 +175,18 @@ const MapView = () => {
     setPinLocation(null);
     setShowSiteCheck(false);
     setSelectedFeature(null);
-  }, []);
+    clearConnectionLines();
+  }, [clearConnectionLines]);
+
+  const handleZoomToUK = useCallback(() => {
+    if (!map) return;
+    map.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
+  }, [map]);
 
   // Set cursor when pin tool active
   useEffect(() => {
     if (!map) return;
-    map.getCanvas().style.cursor = activeTool === "pin" ? "crosshair" : "";
+    map.getCanvas().style.cursor = activeTool === "pin" ? "crosshair" : activeTool === "measure" ? "crosshair" : "";
   }, [map, activeTool]);
 
   return (
@@ -160,12 +207,14 @@ const MapView = () => {
             activeTool={activeTool}
             onToolChange={setActiveTool}
             onClear={handleClear}
+            onZoomToUK={handleZoomToUK}
           />
           {showSiteCheck && pinLocation && (
             <SiteCheckPanel
               lng={pinLocation.lng}
               lat={pinLocation.lat}
-              onClose={() => setShowSiteCheck(false)}
+              onClose={() => { setShowSiteCheck(false); clearConnectionLines(); }}
+              onConnectionLines={handleConnectionLines}
             />
           )}
         </>
