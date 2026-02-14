@@ -1,20 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { LayerConfig } from "@/components/map/LayerTogglePanel";
+import type { RegistryLayer } from "@/components/map/LayerTogglePanel";
+import { getLayerColor } from "@/components/map/LayerTogglePanel";
 import maplibregl from "maplibre-gl";
 
-// Map layer geometry types for MapLibre rendering
-const LAYER_RENDER_TYPE: Record<string, "line" | "circle" | "fill"> = {
-  site_utilisation: "circle",
-  primary_substations: "circle",
-  ehv_feeders: "line",
-  hv_feeders: "line",
-  underground_cables: "line",
-  ndp: "fill",
-  highway_widths: "line",
-  wayleaves: "fill",
-};
-
-// Cache for fetched GeoJSON
+// Cache for fetched GeoJSON keyed by "layerId:bbox"
 const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
 
 /**
@@ -25,7 +14,12 @@ export async function fetchLayerGeoJSON(
   layerId: string,
   bbox?: [number, number, number, number]
 ): Promise<GeoJSON.FeatureCollection> {
-  const cacheKey = bbox ? `${layerId}:${bbox.join(",")}` : layerId;
+  // Round bbox to 2 decimal places for cache key stability
+  const roundedBbox = bbox
+    ? bbox.map((v) => Math.round(v * 100) / 100) as [number, number, number, number]
+    : undefined;
+  const cacheKey = roundedBbox ? `${layerId}:${roundedBbox.join(",")}` : layerId;
+
   if (geojsonCache.has(cacheKey)) {
     return geojsonCache.get(cacheKey)!;
   }
@@ -41,8 +35,8 @@ export async function fetchLayerGeoJSON(
   } else {
     params.set("layer", layerId);
   }
-  if (bbox) {
-    params.set("bbox", bbox.join(","));
+  if (roundedBbox) {
+    params.set("bbox", roundedBbox.join(","));
   }
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-layer-geojson?${params}`;
@@ -63,35 +57,43 @@ export async function fetchLayerGeoJSON(
   return geojson;
 }
 
-export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: GeoJSON.FeatureCollection, color: string, heatmap?: boolean) {
-  const sourceId = `source-${layerId}`;
-  const renderType = LAYER_RENDER_TYPE[layerId] || "line";
+/** Determine MapLibre layer type from geometry_type */
+function getRenderType(geometryType: string): "circle" | "line" | "fill" {
+  const gt = geometryType.toLowerCase();
+  if (gt.includes("point")) return "circle";
+  if (gt.includes("line")) return "line";
+  if (gt.includes("polygon")) return "fill";
+  return "circle";
+}
 
-  // Remove existing source/layer if present
-  removeLayerFromMap(map, layerId);
+export function addRegistryLayerToMap(
+  map: maplibregl.Map,
+  layer: RegistryLayer,
+  geojson: GeoJSON.FeatureCollection,
+  colorIndex: number,
+  heatmap?: boolean
+) {
+  const sourceId = `source-${layer.id}`;
+  const layerMapId = `layer-${layer.id}`;
+  const color = getLayerColor(layer, colorIndex);
 
-  map.addSource(sourceId, {
-    type: "geojson",
-    data: geojson,
-  });
+  // Remove existing
+  removeRegistryLayerFromMap(map, layer.id);
 
-  // Heatmap mode for site_utilisation
-  if (heatmap && layerId === "site_utilisation") {
+  map.addSource(sourceId, { type: "geojson", data: geojson });
+
+  // Heatmap mode for utilisation layer
+  if (heatmap && layer.slug === "npg_hv_substations_utilisation") {
     map.addLayer({
-      id: layerId,
+      id: layerMapId,
       type: "heatmap",
       source: sourceId,
       paint: {
         "heatmap-weight": [
           "interpolate", ["linear"], ["coalesce", ["get", "utilisation_pct"], 50],
-          0, 0,
-          100, 1,
+          0, 0, 100, 1,
         ],
-        "heatmap-intensity": [
-          "interpolate", ["linear"], ["zoom"],
-          0, 0.5,
-          9, 2,
-        ],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.5, 9, 2],
         "heatmap-color": [
           "interpolate", ["linear"], ["heatmap-density"],
           0, "rgba(0,0,0,0)",
@@ -101,39 +103,20 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
           0.8, "hsl(27, 95%, 55%)",
           1, "hsl(0, 86%, 57%)",
         ],
-        "heatmap-radius": [
-          "interpolate", ["linear"], ["zoom"],
-          0, 4,
-          6, 15,
-          10, 30,
-          14, 50,
-        ],
-        "heatmap-opacity": [
-          "interpolate", ["linear"], ["zoom"],
-          7, 0.85,
-          14, 0.5,
-        ],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 6, 15, 10, 30, 14, 50],
+        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.85, 14, 0.5],
       },
     } as any);
     return;
   }
 
-  if (renderType === "line") {
-    map.addLayer({
-      id: layerId,
-      type: "line",
-      source: sourceId,
-      paint: {
-        "line-color": color,
-        "line-width": 2.5,
-        "line-opacity": 0.85,
-      },
-    });
-  } else if (renderType === "circle") {
-    const circleColor = layerId === "site_utilisation"
+  const renderType = getRenderType(layer.geometry_type);
+
+  if (renderType === "circle") {
+    // Data-driven color for utilisation substations
+    const circleColor = layer.slug === "npg_hv_substations_utilisation"
       ? [
-          "match",
-          ["get", "utilisation_band"],
+          "match", ["get", "utilisation_band"],
           "Low", "#22c55e",
           "Below Average", "#84cc16",
           "Average", "#f59e0b",
@@ -143,17 +126,12 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
         ] as any
       : color;
 
-    const circleRadius = layerId === "site_utilisation"
-      ? [
-          "interpolate", ["linear"], ["zoom"],
-          6, 2,
-          10, 4,
-          14, 8,
-        ] as any
+    const circleRadius = layer.slug === "npg_hv_substations_utilisation"
+      ? ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 4, 14, 8] as any
       : 6;
 
     map.addLayer({
-      id: layerId,
+      id: layerMapId,
       type: "circle",
       source: sourceId,
       paint: {
@@ -164,9 +142,20 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
         "circle-opacity": 0.9,
       },
     });
+  } else if (renderType === "line") {
+    map.addLayer({
+      id: layerMapId,
+      type: "line",
+      source: sourceId,
+      paint: {
+        "line-color": color,
+        "line-width": 2.5,
+        "line-opacity": 0.85,
+      },
+    });
   } else if (renderType === "fill") {
     map.addLayer({
-      id: layerId,
+      id: layerMapId,
       type: "fill",
       source: sourceId,
       paint: {
@@ -175,7 +164,7 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
       },
     });
     map.addLayer({
-      id: `${layerId}-outline`,
+      id: `${layerMapId}-outline`,
       type: "line",
       source: sourceId,
       paint: {
@@ -187,7 +176,21 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
   }
 }
 
+export function removeRegistryLayerFromMap(map: maplibregl.Map, layerId: string) {
+  const mapLayerId = `layer-${layerId}`;
+  if (map.getLayer(mapLayerId)) map.removeLayer(mapLayerId);
+  if (map.getLayer(`${mapLayerId}-outline`)) map.removeLayer(`${mapLayerId}-outline`);
+  const sourceId = `source-${layerId}`;
+  if (map.getSource(sourceId)) map.removeSource(sourceId);
+}
+
+// Legacy exports for backward compatibility
+export { addRegistryLayerToMap as addLayerToMap };
+
 export function removeLayerFromMap(map: maplibregl.Map, layerId: string) {
+  // Try both naming conventions
+  removeRegistryLayerFromMap(map, layerId);
+  // Also try legacy naming without prefix
   if (map.getLayer(layerId)) map.removeLayer(layerId);
   if (map.getLayer(`${layerId}-outline`)) map.removeLayer(`${layerId}-outline`);
   const sourceId = `source-${layerId}`;
@@ -196,7 +199,12 @@ export function removeLayerFromMap(map: maplibregl.Map, layerId: string) {
 
 export function clearLayerCache(layerId?: string) {
   if (layerId) {
-    geojsonCache.delete(layerId);
+    // Clear all cache entries for this layer
+    for (const key of geojsonCache.keys()) {
+      if (key.startsWith(layerId)) {
+        geojsonCache.delete(key);
+      }
+    }
   } else {
     geojsonCache.clear();
   }
