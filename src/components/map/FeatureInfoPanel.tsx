@@ -21,14 +21,14 @@ const utilisationColor: Record<string, string> = {
 };
 
 function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
-  const utilPct = feature.utilisation_pct as number | null;
-  const band = feature.utilisation_band as string | null;
-  const headroomKw = feature.transformer_headroom_kw as number | null;
-  const firmCapKw = feature.firm_capacity_kw as number | null;
-  const maxDemandKw = feature.max_demand_kw as number | null;
-  const customers = feature.connected_customers as number | null;
-  const siteName = feature.site_name as string | null;
-  const siteId = feature.site_id as string | null;
+  const utilPct = (feature.utilisation_pct ?? null) as number | null;
+  const band = (feature.utilisation_band ?? null) as string | null;
+  const headroomKw = (feature.transformer_headroom_kw ?? feature.headroom_kw ?? null) as number | null;
+  const firmCapKw = (feature.firm_capacity_kw ?? feature.capacity_kw ?? null) as number | null;
+  const maxDemandKw = (feature.max_demand_kw ?? feature.demand_kw ?? null) as number | null;
+  const customers = (feature.connected_customers ?? null) as number | null;
+  const siteName = (feature.site_name ?? feature.name ?? null) as string | null;
+  const siteId = (feature.site_id ?? feature.asset_id ?? null) as string | null;
   const substationType = feature.substation_type as string | null;
   const headroomBand = feature.headroom_band as string | null;
   const threePhase = feature.three_phase as string | null;
