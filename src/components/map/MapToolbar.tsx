@@ -20,7 +20,7 @@ export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK }: Ma
   return (
     <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1">
       {tools.map((tool) => (
-        <Tooltip key={tool.id} delayDuration={300}>
+        <Tooltip key={tool.id} delayDuration={2000}>
           <TooltipTrigger asChild>
             <Button
               size="icon"
