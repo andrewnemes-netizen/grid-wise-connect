@@ -25,6 +25,7 @@ const MapView = () => {
   const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [showSiteCheck, setShowSiteCheck] = useState(false);
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
+  const [heatmapMode, setHeatmapMode] = useState(false);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const { toast } = useToast();
@@ -62,7 +63,7 @@ const MapView = () => {
           const geojson = await fetchLayerGeoJSON(layerId);
           const layer = layers.find((l) => l.id === layerId) || DEFAULT_LAYERS.find((l) => l.id === layerId);
           if (layer && map) {
-            addLayerToMap(map, layerId, geojson, layer.color);
+            addLayerToMap(map, layerId, geojson, layer.color, layerId === "site_utilisation" && heatmapMode);
 
             map.on("click", layerId, (e) => {
               if (e.features && e.features.length > 0) {
@@ -99,7 +100,7 @@ const MapView = () => {
         removeLayerFromMap(map, layerId);
       }
     },
-    [map, layers, toast]
+    [map, layers, toast, heatmapMode]
   );
 
   const handleCloseFeatureInfo = useCallback(() => {
@@ -196,8 +197,22 @@ const MapView = () => {
       {mapLoaded && (
         <>
           <PostcodeSearch onResult={handleSearchResult} />
-          <LayerTogglePanel layers={layers} onToggle={handleLayerToggle} />
-          <MapLegend layers={layers} />
+          <LayerTogglePanel
+            layers={layers}
+            onToggle={handleLayerToggle}
+            heatmapMode={heatmapMode}
+            onHeatmapToggle={(enabled) => {
+              setHeatmapMode(enabled);
+              // Re-render the utilisation layer if it's visible
+              const util = layers.find((l) => l.id === "site_utilisation");
+              if (util?.visible && map) {
+                fetchLayerGeoJSON("site_utilisation").then((geojson) => {
+                  addLayerToMap(map, "site_utilisation", geojson, util.color, enabled);
+                });
+              }
+            }}
+          />
+          <MapLegend layers={layers} heatmapMode={heatmapMode} />
           <FeatureInfoPanel
             feature={selectedFeature}
             layerLabel={selectedLayerLabel}

@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Layers, ChevronDown, ChevronUp } from "lucide-react";
+import { Layers, ChevronDown, ChevronUp, Flame } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface LayerConfig {
   id: string;
@@ -26,9 +28,11 @@ const DEFAULT_LAYERS: LayerConfig[] = [
 interface LayerTogglePanelProps {
   layers: LayerConfig[];
   onToggle: (layerId: string, visible: boolean) => void;
+  heatmapMode?: boolean;
+  onHeatmapToggle?: (enabled: boolean) => void;
 }
 
-export function LayerTogglePanel({ layers, onToggle }: LayerTogglePanelProps) {
+export function LayerTogglePanel({ layers, onToggle, heatmapMode, onHeatmapToggle }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
 
   const groups = layers.reduce<Record<string, LayerConfig[]>>((acc, layer) => {
@@ -57,22 +61,42 @@ export function LayerTogglePanel({ layers, onToggle }: LayerTogglePanelProps) {
               <div key={group} className="space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{group}</span>
                 {groupLayers.map((layer) => (
-                  <div key={layer.id} className="flex items-center justify-between gap-2 py-0.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className="h-3 w-3 rounded-sm shrink-0 border border-border"
-                        style={{ backgroundColor: layer.color }}
+                  <div key={layer.id} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 py-0.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="h-3 w-3 rounded-sm shrink-0 border border-border"
+                          style={{ backgroundColor: layer.color }}
+                        />
+                        <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal truncate cursor-pointer">
+                          {layer.label}
+                        </Label>
+                      </div>
+                      <Switch
+                        id={`layer-${layer.id}`}
+                        checked={layer.visible}
+                        onCheckedChange={(checked) => onToggle(layer.id, checked)}
+                        className="scale-75"
                       />
-                      <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal truncate cursor-pointer">
-                        {layer.label}
-                      </Label>
                     </div>
-                    <Switch
-                      id={`layer-${layer.id}`}
-                      checked={layer.visible}
-                      onCheckedChange={(checked) => onToggle(layer.id, checked)}
-                      className="scale-75"
-                    />
+                    {layer.id === "site_utilisation" && layer.visible && onHeatmapToggle && (
+                      <div className="flex items-center gap-1.5 pl-5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant={heatmapMode ? "default" : "outline"}
+                              className="h-6 px-2 text-[10px] gap-1"
+                              onClick={() => onHeatmapToggle(!heatmapMode)}
+                            >
+                              <Flame className="h-3 w-3" />
+                              Heatmap
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">Toggle heatmap view weighted by utilisation %</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

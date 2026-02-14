@@ -43,19 +43,60 @@ export async function fetchLayerGeoJSON(layerId: string): Promise<GeoJSON.Featur
   return geojson;
 }
 
-export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: GeoJSON.FeatureCollection, color: string) {
+export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: GeoJSON.FeatureCollection, color: string, heatmap?: boolean) {
   const sourceId = `source-${layerId}`;
   const renderType = LAYER_RENDER_TYPE[layerId] || "line";
 
   // Remove existing source/layer if present
-  if (map.getLayer(layerId)) map.removeLayer(layerId);
-  if (map.getLayer(`${layerId}-outline`)) map.removeLayer(`${layerId}-outline`);
-  if (map.getSource(sourceId)) map.removeSource(sourceId);
+  removeLayerFromMap(map, layerId);
 
   map.addSource(sourceId, {
     type: "geojson",
     data: geojson,
   });
+
+  // Heatmap mode for site_utilisation
+  if (heatmap && layerId === "site_utilisation") {
+    map.addLayer({
+      id: layerId,
+      type: "heatmap",
+      source: sourceId,
+      paint: {
+        "heatmap-weight": [
+          "interpolate", ["linear"], ["coalesce", ["get", "utilisation_pct"], 50],
+          0, 0,
+          100, 1,
+        ],
+        "heatmap-intensity": [
+          "interpolate", ["linear"], ["zoom"],
+          0, 0.5,
+          9, 2,
+        ],
+        "heatmap-color": [
+          "interpolate", ["linear"], ["heatmap-density"],
+          0, "rgba(0,0,0,0)",
+          0.2, "hsl(141, 53%, 53%)",
+          0.4, "hsl(80, 60%, 55%)",
+          0.6, "hsl(45, 97%, 64%)",
+          0.8, "hsl(27, 95%, 55%)",
+          1, "hsl(0, 86%, 57%)",
+        ],
+        "heatmap-radius": [
+          "interpolate", ["linear"], ["zoom"],
+          0, 4,
+          6, 15,
+          10, 30,
+          14, 50,
+        ],
+        "heatmap-opacity": [
+          "interpolate", ["linear"], ["zoom"],
+          7, 0.85,
+          14, 0.5,
+        ],
+      },
+    } as any);
+    return;
+  }
 
   if (renderType === "line") {
     map.addLayer({
@@ -69,7 +110,6 @@ export function addLayerToMap(map: maplibregl.Map, layerId: string, geojson: Geo
       },
     });
   } else if (renderType === "circle") {
-    // Use data-driven styling for site_utilisation layer
     const circleColor = layerId === "site_utilisation"
       ? [
           "match",
