@@ -73,7 +73,7 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
             <p className="text-[10px] text-muted-foreground">Headroom</p>
             <p className="text-sm font-semibold flex items-center gap-1">
               <Zap className="h-3 w-3 text-primary" />
-              {headroomKw.toLocaleString()} kW
+              {headroomKw?.toLocaleString() ?? "—"} kW
             </p>
             {headroomBand && <p className="text-[10px] text-muted-foreground">{headroomBand}</p>}
           </div>
@@ -81,13 +81,13 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
         {firmCapKw !== null && (
           <div className="rounded-md border bg-muted/20 p-2">
             <p className="text-[10px] text-muted-foreground">Firm Capacity</p>
-            <p className="text-sm font-semibold">{firmCapKw.toLocaleString()} kW</p>
+            <p className="text-sm font-semibold">{firmCapKw?.toLocaleString() ?? "—"} kW</p>
           </div>
         )}
         {maxDemandKw !== null && (
           <div className="rounded-md border bg-muted/20 p-2">
             <p className="text-[10px] text-muted-foreground">Max Demand</p>
-            <p className="text-sm font-semibold">{maxDemandKw.toLocaleString()} kW</p>
+            <p className="text-sm font-semibold">{maxDemandKw?.toLocaleString() ?? "—"} kW</p>
           </div>
         )}
         {customers !== null && (
@@ -95,7 +95,7 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
             <p className="text-[10px] text-muted-foreground">Customers</p>
             <p className="text-sm font-semibold flex items-center gap-1">
               <Users className="h-3 w-3" />
-              {customers.toLocaleString()}
+              {customers?.toLocaleString() ?? "—"}
             </p>
           </div>
         )}
