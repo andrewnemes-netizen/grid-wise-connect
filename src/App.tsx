@@ -10,6 +10,7 @@ import MapView from "./pages/MapView";
 import Portfolio from "./pages/Portfolio";
 import SiteDetail from "./pages/SiteDetail";
 import Admin from "./pages/Admin";
+import QuickEstimate from "./pages/QuickEstimate";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ function AuthRoute() {
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute />} />
+    <Route path="/quick-estimate" element={<QuickEstimate />} />
     <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
     <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
