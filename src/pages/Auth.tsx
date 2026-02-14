@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Zap } from "lucide-react";
+import epeLogo from "@/assets/epe-logo.png";
 
 const Auth = () => {
   const [email, setEmail] = useState("");
@@ -52,10 +52,10 @@ const Auth = () => {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Zap className="h-6 w-6" />
+          <div className="mx-auto mb-3">
+            <img src={epeLogo} alt="Eco Power Energy" className="h-12 mx-auto" />
           </div>
-          <CardTitle className="text-2xl">EcoPower Feasibility</CardTitle>
+          <CardTitle className="text-2xl">Feasibility Mapper</CardTitle>
           <CardDescription>Grid intelligence for EV & ICP connections</CardDescription>
         </CardHeader>
         <CardContent>

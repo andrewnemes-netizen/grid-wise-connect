@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import epeLogo from "@/assets/epe-logo.png";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -9,7 +10,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col">
           <header className="flex h-12 items-center border-b bg-background px-4">
             <SidebarTrigger />
-            <h1 className="ml-3 text-sm font-semibold text-foreground">EcoPower Feasibility Mapper</h1>
+            <div className="ml-3 flex items-center gap-2">
+              <img src={epeLogo} alt="Eco Power Energy" className="h-5 object-contain" />
+              <span className="text-sm font-semibold text-foreground">Feasibility Mapper</span>
+            </div>
           </header>
           <div className="flex-1">{children}</div>
         </main>

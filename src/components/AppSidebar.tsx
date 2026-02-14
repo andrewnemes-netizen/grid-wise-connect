@@ -1,6 +1,7 @@
-import { Map, FolderOpen, Settings, LogOut, Zap } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
+import epeLogo from "@/assets/epe-logo.png";
 import {
   Sidebar,
   SidebarContent,
@@ -36,8 +37,11 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>
             <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-primary" />
-              {!collapsed && <span className="font-bold">EcoPower</span>}
+              {collapsed ? (
+                <img src={epeLogo} alt="EPE" className="h-5 w-5 object-contain" />
+              ) : (
+                <img src={epeLogo} alt="Eco Power Energy" className="h-6 object-contain" />
+              )}
             </div>
           </SidebarGroupLabel>
           <SidebarGroupContent>
