@@ -8,6 +8,8 @@ import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { SiteCheckPanel } from "@/components/map/SiteCheckPanel";
+import { fetchLayerGeoJSON, addLayerToMap, removeLayerFromMap } from "@/lib/mapLayers";
+import { useToast } from "@/hooks/use-toast";
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -20,15 +22,17 @@ const MapView = () => {
   const [activeTool, setActiveTool] = useState<"pin" | null>(null);
   const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [showSiteCheck, setShowSiteCheck] = useState(false);
+  const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
+  const { toast } = useToast();
 
   const handleSearchResult = useCallback(
     (lng: number, lat: number, label: string) => {
       if (!map) return;
       markerRef.current?.remove();
       map.flyTo({ center: [lng, lat], zoom: 15, duration: 1500 });
-      const marker = new maplibregl.Marker({ color: "hsl(152, 60%, 36%)" })
+      const marker = new maplibregl.Marker({ color: "hsl(100, 38%, 30%)" })
         .setLngLat([lng, lat])
         .setPopup(
           new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(
@@ -43,15 +47,59 @@ const MapView = () => {
   );
 
   const handleLayerToggle = useCallback(
-    (layerId: string, visible: boolean) => {
+    async (layerId: string, visible: boolean) => {
       setLayers((prev) =>
         prev.map((l) => (l.id === layerId ? { ...l, visible } : l))
       );
-      if (map && map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, "visibility", visible ? "visible" : "none");
+
+      if (!map) return;
+
+      if (visible) {
+        // Fetch and render layer
+        setLoadingLayers((prev) => new Set(prev).add(layerId));
+        try {
+          const geojson = await fetchLayerGeoJSON(layerId);
+          const layer = layers.find((l) => l.id === layerId) || DEFAULT_LAYERS.find((l) => l.id === layerId);
+          if (layer && map) {
+            addLayerToMap(map, layerId, geojson, layer.color);
+
+            // Add click handler for feature info
+            map.on("click", layerId, (e) => {
+              if (e.features && e.features.length > 0) {
+                setSelectedFeature(e.features[0].properties as Record<string, unknown>);
+                setSelectedLayerLabel(layer.label);
+              }
+            });
+            map.on("mouseenter", layerId, () => {
+              if (activeToolRef.current !== "pin") {
+                map.getCanvas().style.cursor = "pointer";
+              }
+            });
+            map.on("mouseleave", layerId, () => {
+              if (activeToolRef.current !== "pin") {
+                map.getCanvas().style.cursor = "";
+              }
+            });
+
+            if (geojson.features.length === 0) {
+              toast({ title: `${layer.label}`, description: "No data loaded for this layer yet." });
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to load layer ${layerId}:`, err);
+          toast({ title: "Layer load failed", description: `Could not load ${layerId}`, variant: "destructive" });
+        } finally {
+          setLoadingLayers((prev) => {
+            const next = new Set(prev);
+            next.delete(layerId);
+            return next;
+          });
+        }
+      } else {
+        removeLayerFromMap(map, layerId);
       }
     },
-    [map]
+    [map, layers, toast]
   );
 
   const handleCloseFeatureInfo = useCallback(() => {
