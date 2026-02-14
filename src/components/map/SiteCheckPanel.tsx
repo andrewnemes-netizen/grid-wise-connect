@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2, Search, ClipboardCheck, FolderOpen } from "lucide-react";
+import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2, Search, ClipboardCheck, FolderOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { NetworkVisibilityPanel } from "./NetworkVisibilityPanel";
 import { CostEstimatePanel } from "./CostEstimatePanel";
+import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 
 interface SiteCheckPanelProps {
   lng: number | null;
@@ -326,17 +327,38 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }
                 </ul>
               </div>
 
-              {/* Save */}
-              {!saved ? (
-                <Button onClick={handleSave} disabled={saving} className="w-full">
-                  {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />Save to Portfolio</>}
+              {/* Export & Save */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => generateAssessmentPdf({
+                    siteName: siteName || undefined,
+                    postcode: postcode || undefined,
+                    proposedKw: Number(proposedKw) || 0,
+                    lat: lat ?? undefined,
+                    lng: lng ?? undefined,
+                    score: result.score,
+                    reasons: result.reasons,
+                    nextSteps: result.next_steps,
+                    distances: result.distances,
+                    distanceBands: result.distance_bands,
+                    constraints: result.constraints,
+                  })}
+                >
+                  <Download className="mr-2 h-4 w-4" />Export PDF
                 </Button>
-              ) : (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-600" />
-                  <span className="text-sm text-emerald-700 font-medium">Saved to portfolio</span>
-                </div>
-              )}
+                {!saved ? (
+                  <Button onClick={handleSave} disabled={saving} className="flex-1">
+                    {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />Save</>}
+                  </Button>
+                ) : (
+                  <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 p-2 flex items-center justify-center gap-1.5">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-xs text-emerald-700 font-medium">Saved</span>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
