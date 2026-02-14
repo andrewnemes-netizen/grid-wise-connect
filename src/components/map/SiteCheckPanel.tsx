@@ -10,6 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { NetworkVisibilityPanel } from "./NetworkVisibilityPanel";
+import { CostEstimatePanel } from "./CostEstimatePanel";
 
 interface SiteCheckPanelProps {
   lng: number | null;
@@ -276,6 +278,26 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* Network Visibility - nearby substations with gauges */}
+              {isInternal && lng && lat && (
+                <>
+                  <Separator />
+                  <NetworkVisibilityPanel lng={lng} lat={lat} />
+                </>
+              )}
+
+              {/* Connection Cost Estimate */}
+              {result.distances && Number(proposedKw) > 0 && (
+                <>
+                  <Separator />
+                  <CostEstimatePanel
+                    proposed_kw={Number(proposedKw)}
+                    distances={result.distances}
+                    constraints={result.constraints}
+                  />
+                </>
               )}
 
               {/* Reasons */}
