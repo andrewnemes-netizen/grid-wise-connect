@@ -2,12 +2,14 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { useMap } from "@/hooks/useMap";
+import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
 import { LayerTogglePanel, DEFAULT_LAYERS, type LayerConfig } from "@/components/map/LayerTogglePanel";
 import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
+import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { fetchLayerGeoJSON, addLayerToMap, removeLayerFromMap } from "@/lib/mapLayers";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,7 +23,7 @@ const MapView = () => {
   const [layers, setLayers] = useState<LayerConfig[]>(DEFAULT_LAYERS);
   const [selectedFeature, setSelectedFeature] = useState<Record<string, unknown> | null>(null);
   const [selectedLayerLabel, setSelectedLayerLabel] = useState("");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | null>(null);
   const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [showSiteCheck, setShowSiteCheck] = useState(false);
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
@@ -29,7 +31,7 @@ const MapView = () => {
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const { toast } = useToast();
-
+  const { isDrawing, polygon: drawnPolygon, clearDrawing } = usePolygonDraw(map, activeTool === "polygon");
   const handleSearchResult = useCallback(
     (lng: number, lat: number, label: string) => {
       if (!map) return;
@@ -177,7 +179,8 @@ const MapView = () => {
     setShowSiteCheck(false);
     setSelectedFeature(null);
     clearConnectionLines();
-  }, [clearConnectionLines]);
+    clearDrawing();
+  }, [clearConnectionLines, clearDrawing]);
 
   const handleZoomToUK = useCallback(() => {
     if (!map) return;
@@ -187,7 +190,7 @@ const MapView = () => {
   // Set cursor when pin tool active
   useEffect(() => {
     if (!map) return;
-    map.getCanvas().style.cursor = activeTool === "pin" ? "crosshair" : activeTool === "measure" ? "crosshair" : "";
+    map.getCanvas().style.cursor = (activeTool === "pin" || activeTool === "measure" || activeTool === "polygon") ? "crosshair" : "";
   }, [map, activeTool]);
 
   return (
@@ -230,6 +233,12 @@ const MapView = () => {
               lat={pinLocation.lat}
               onClose={() => { setShowSiteCheck(false); clearConnectionLines(); }}
               onConnectionLines={handleConnectionLines}
+            />
+          )}
+          {drawnPolygon && (
+            <PolygonSearchResults
+              polygon={drawnPolygon}
+              onClose={() => { clearDrawing(); setActiveTool(null); }}
             />
           )}
         </>
