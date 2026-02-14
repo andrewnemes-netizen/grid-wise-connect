@@ -1,16 +1,17 @@
-import { MapPin, Trash2, Ruler, ZoomIn, Compass } from "lucide-react";
+import { MapPin, Trash2, Ruler, ZoomIn, Compass, Pentagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | null;
-  onToolChange: (tool: "pin" | "measure" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
 }
 
 const tools = [
   { id: "pin" as const, icon: MapPin, label: "Drop Pin — assess a location" },
+  { id: "polygon" as const, icon: Pentagon, label: "Draw polygon — search substations in area" },
   { id: "measure" as const, icon: Ruler, label: "Measure distance" },
 ] as const;
 
