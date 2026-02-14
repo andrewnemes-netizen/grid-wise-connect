@@ -1280,6 +1280,10 @@ export type Database = {
             }
             Returns: string
           }
+      batch_insert_geo_features: {
+        Args: { _features_json: string; _table_name: string }
+        Returns: number
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
