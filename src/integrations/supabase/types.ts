@@ -850,6 +850,10 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
+      get_layer_geojson: {
+        Args: { _bbox_filter?: string; _limit?: number; _table_name: string }
+        Returns: Json
+      }
       gettransactionid: { Args: never; Returns: unknown }
       has_role: {
         Args: {

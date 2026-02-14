@@ -78,7 +78,7 @@ export function LayerTogglePanel({ layers, onToggle }: LayerTogglePanelProps) {
             ))}
             <div className="pt-1 border-t">
               <p className="text-[10px] text-muted-foreground">
-                Layers will display when spatial data is loaded into the database.
+                Toggle layers to load spatial data from the database. Click features for details.
               </p>
             </div>
           </div>
