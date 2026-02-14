@@ -420,6 +420,111 @@ export type Database = {
           },
         ]
       }
+      site_utilisation: {
+        Row: {
+          ams_site_asset_id: string | null
+          attrs_json: Json | null
+          connected_customers: number | null
+          firm_capacity_kw: number | null
+          geo_point: string | null
+          geom: unknown
+          headroom_band: string | null
+          id: string
+          licence_area: string | null
+          loadings_data_source: string | null
+          local_authority: string | null
+          local_authority_code: string | null
+          lsoa_code: string | null
+          lsoa_name: string | null
+          max_demand_kw: number | null
+          msoa_code: string | null
+          msoa_name: string | null
+          site_band: string | null
+          site_easting: number | null
+          site_id: string
+          site_name: string
+          site_northing: number | null
+          substation_class: string | null
+          substation_type: string | null
+          three_phase: string | null
+          transformer_headroom_kw: number | null
+          transformer_id: string | null
+          upstream_site: string | null
+          utilisation_band: string | null
+          utilisation_pct: number | null
+          ward_code: string | null
+          ward_name: string | null
+        }
+        Insert: {
+          ams_site_asset_id?: string | null
+          attrs_json?: Json | null
+          connected_customers?: number | null
+          firm_capacity_kw?: number | null
+          geo_point?: string | null
+          geom?: unknown
+          headroom_band?: string | null
+          id?: string
+          licence_area?: string | null
+          loadings_data_source?: string | null
+          local_authority?: string | null
+          local_authority_code?: string | null
+          lsoa_code?: string | null
+          lsoa_name?: string | null
+          max_demand_kw?: number | null
+          msoa_code?: string | null
+          msoa_name?: string | null
+          site_band?: string | null
+          site_easting?: number | null
+          site_id: string
+          site_name: string
+          site_northing?: number | null
+          substation_class?: string | null
+          substation_type?: string | null
+          three_phase?: string | null
+          transformer_headroom_kw?: number | null
+          transformer_id?: string | null
+          upstream_site?: string | null
+          utilisation_band?: string | null
+          utilisation_pct?: number | null
+          ward_code?: string | null
+          ward_name?: string | null
+        }
+        Update: {
+          ams_site_asset_id?: string | null
+          attrs_json?: Json | null
+          connected_customers?: number | null
+          firm_capacity_kw?: number | null
+          geo_point?: string | null
+          geom?: unknown
+          headroom_band?: string | null
+          id?: string
+          licence_area?: string | null
+          loadings_data_source?: string | null
+          local_authority?: string | null
+          local_authority_code?: string | null
+          lsoa_code?: string | null
+          lsoa_name?: string | null
+          max_demand_kw?: number | null
+          msoa_code?: string | null
+          msoa_name?: string | null
+          site_band?: string | null
+          site_easting?: number | null
+          site_id?: string
+          site_name?: string
+          site_northing?: number | null
+          substation_class?: string | null
+          substation_type?: string | null
+          three_phase?: string | null
+          transformer_headroom_kw?: number | null
+          transformer_id?: string | null
+          upstream_site?: string | null
+          utilisation_band?: string | null
+          utilisation_pct?: number | null
+          ward_code?: string | null
+          ward_name?: string | null
+        }
+        Relationships: []
+      }
       sites: {
         Row: {
           client_org: string | null
