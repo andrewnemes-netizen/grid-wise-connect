@@ -440,20 +440,30 @@ const MapView = () => {
     map.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
   }, [map]);
 
-  // Capture map screenshot - fits bounds to route then captures canvas
+  // Capture map screenshot - fits bounds to route with 100m buffer on street basemap
   const handleCaptureMapScreenshot = useCallback(async (): Promise<string | null> => {
     if (!map || !connectEndpoints) return null;
 
-    // Fit map to show full route
+    // Switch to street basemap so roads, buildings, road names are visible
+    setBasemap("street");
+
+    // Fit map to show full route with ~100m buffer
     const coords = connectEndpoints.routeCoords;
     const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
     coords.forEach((c) => bounds.extend(c));
-    map.fitBounds(bounds, { padding: 60, duration: 0 });
 
-    // Wait for render after bounds change
+    // Add ~100m buffer: 100m ≈ 0.0009 degrees latitude, ~0.0014 degrees longitude at UK latitudes
+    const BUFFER_DEG_LAT = 0.0009;
+    const BUFFER_DEG_LNG = 0.0014;
+    bounds.extend([bounds.getWest() - BUFFER_DEG_LNG, bounds.getSouth() - BUFFER_DEG_LAT]);
+    bounds.extend([bounds.getEast() + BUFFER_DEG_LNG, bounds.getNorth() + BUFFER_DEG_LAT]);
+
+    map.fitBounds(bounds, { padding: 40, duration: 0 });
+
+    // Wait for tiles to load then capture
     return new Promise((resolve) => {
-      setTimeout(() => {
-        map.once("render", () => {
+      const waitForIdle = () => {
+        if (map.areTilesLoaded()) {
           try {
             const dataUrl = map.getCanvas().toDataURL("image/png");
             resolve(dataUrl);
@@ -461,12 +471,22 @@ const MapView = () => {
             console.warn("Map screenshot capture failed:", e);
             resolve(null);
           }
-        });
-        // Trigger render
-        map.setBearing(map.getBearing());
-      }, 300);
+        } else {
+          map.once("idle", () => {
+            try {
+              const dataUrl = map.getCanvas().toDataURL("image/png");
+              resolve(dataUrl);
+            } catch (e) {
+              console.warn("Map screenshot capture failed:", e);
+              resolve(null);
+            }
+          });
+        }
+      };
+      // Give time for basemap switch + bounds fit
+      setTimeout(waitForIdle, 500);
     });
-  }, [map, connectEndpoints]);
+  }, [map, connectEndpoints, setBasemap]);
 
   // Cursor for active tools
   useEffect(() => {
