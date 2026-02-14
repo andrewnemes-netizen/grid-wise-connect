@@ -2,6 +2,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import { useMap } from "@/hooks/useMap";
+import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { useMeasure } from "@/hooks/useMeasure";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
@@ -39,7 +40,8 @@ function getMapBbox(map: maplibregl.Map): [number, number, number, number] {
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { map, mapLoaded } = useMap(containerRef);
+  const { map, mapLoaded, setBasemap } = useMap(containerRef);
+  const [basemapId, setBasemapId] = useState<BasemapId>("street");
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
   const { registryLayers, registryLoading } = useRegistryLayers();
@@ -382,6 +384,13 @@ const MapView = () => {
       {mapLoaded && (
         <>
           <PostcodeSearch onResult={handleSearchResult} />
+          <BasemapSwitcher
+            active={basemapId}
+            onChange={(id) => {
+              setBasemapId(id);
+              setBasemap(id);
+            }}
+          />
           <LayerTogglePanel
             visibility={visibility}
             onToggle={handleLayerToggle}
