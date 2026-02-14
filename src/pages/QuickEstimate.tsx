@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { MapPin, Zap, Loader2, CheckCircle, AlertTriangle, XCircle, PoundSterling, ArrowRight, RotateCcw } from "lucide-react";
+import { MapPin, Zap, Loader2, CheckCircle, AlertTriangle, XCircle, PoundSterling, ArrowRight, RotateCcw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost, type CostEstimate } from "@/lib/connectionCosts";
+import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import epeLogo from "@/assets/epe-logo.png";
 
 interface QuickResult {
@@ -290,6 +291,22 @@ export default function QuickEstimate() {
                 This is an indicative assessment using UK industry-standard rates. For a formal quotation, contact our team or speak with your DNO directly.
               </p>
               <div className="flex gap-3 justify-center">
+                <Button
+                  variant="default"
+                  onClick={() => generateAssessmentPdf({
+                    postcode: postcode || undefined,
+                    proposedKw: Number(proposedKw) || 0,
+                    lat: coords?.lat,
+                    lng: coords?.lng,
+                    score: result.score,
+                    reasons: result.reasons,
+                    nextSteps: result.next_steps,
+                    distances: result.distances,
+                    distanceBands: result.distance_bands,
+                  })}
+                >
+                  <Download className="mr-2 h-4 w-4" /> Download Report
+                </Button>
                 <Button variant="outline" onClick={handleReset}>
                   <RotateCcw className="mr-2 h-4 w-4" /> New Assessment
                 </Button>
