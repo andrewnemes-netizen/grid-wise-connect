@@ -1478,7 +1478,7 @@ export type Database = {
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
       score_site: {
-        Args: { _proposed_kw: number; _site_geom: unknown }
+        Args: { _proposed_kw?: number; _site_geom: unknown }
         Returns: Json
       }
       score_site_from_lnglat: {
