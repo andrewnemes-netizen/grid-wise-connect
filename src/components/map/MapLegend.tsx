@@ -22,7 +22,7 @@ export function MapLegend({ registryLayers, visibility, heatmapMode }: MapLegend
   const showUtilBands = visibleLayers.some((l) => l.slug === "npg_hv_substations_utilisation");
 
   return (
-    <div className="absolute bottom-4 right-3 z-10">
+    <div className="absolute bottom-4 right-14 z-10">
       <div className="rounded-lg border bg-background/95 backdrop-blur shadow-md px-3 py-2 space-y-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Legend</span>
 
