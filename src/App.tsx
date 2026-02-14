@@ -8,6 +8,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import Auth from "./pages/Auth";
 import MapView from "./pages/MapView";
 import Portfolio from "./pages/Portfolio";
+import SiteDetail from "./pages/SiteDetail";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ const AppRoutes = () => (
     <Route path="/auth" element={<AuthRoute />} />
     <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+    <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

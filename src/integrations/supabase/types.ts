@@ -903,6 +903,10 @@ export type Database = {
         Args: { _proposed_kw: number; _site_geom: unknown }
         Returns: Json
       }
+      score_site_from_lnglat: {
+        Args: { _lat: number; _lng: number; _proposed_kw?: number }
+        Returns: Json
+      }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
