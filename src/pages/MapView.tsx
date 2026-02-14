@@ -15,6 +15,7 @@ import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
+import { ConnectAssessmentPanel, type ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
 import {
   fetchLayerGeoJSON,
   addRegistryLayerToMap,
@@ -44,11 +45,13 @@ const MapView = () => {
   const [visibility, setVisibility] = useState<LayerVisibility>({});
   const [selectedFeature, setSelectedFeature] = useState<Record<string, unknown> | null>(null);
   const [selectedLayerLabel, setSelectedLayerLabel] = useState("");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | null>(null);
   const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [showSiteCheck, setShowSiteCheck] = useState(false);
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const [heatmapMode, setHeatmapMode] = useState(false);
+  const [connectSource, setConnectSource] = useState<ConnectEndpoints["source"] | null>(null);
+  const [connectEndpoints, setConnectEndpoints] = useState<ConnectEndpoints | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const { toast } = useToast();
@@ -227,10 +230,82 @@ const MapView = () => {
     });
   }, [map]);
 
-  // Pin drop
+  // Pin drop + Connect tool handler
   useEffect(() => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
+      // Connect mode: two-click workflow
+      if (activeToolRef.current === "connect") {
+        const { lng, lat } = e.lngLat;
+
+        if (!connectSource) {
+          // First click: need to click on a feature from a visible layer
+          // Query rendered features at click point
+          const features = map.queryRenderedFeatures(e.point);
+          const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
+          if (!layerFeature) {
+            toast({ title: "Click on an asset", description: "First click should be on a visible network asset (substation, feeder, etc.)" });
+            return;
+          }
+          const layerId = layerFeature.layer.id.replace("layer-", "");
+          const regLayer = layerMap.get(layerId);
+          const coords = layerFeature.geometry.type === "Point"
+            ? (layerFeature.geometry as GeoJSON.Point).coordinates as [number, number]
+            : [lng, lat] as [number, number];
+
+          // Place marker on source
+          pinMarkerRef.current?.remove();
+          const srcMarker = new maplibregl.Marker({ color: "#3498db" })
+            .setLngLat(coords)
+            .addTo(map);
+          pinMarkerRef.current = srcMarker;
+
+          setConnectSource({
+            lngLat: coords,
+            properties: (layerFeature.properties || {}) as Record<string, unknown>,
+            layerLabel: regLayer?.display_name || "Asset",
+          });
+          toast({ title: `Source: ${regLayer?.display_name || "Asset"}`, description: "Now click the destination point" });
+        } else {
+          // Second click: destination
+          const destCoords: [number, number] = [lng, lat];
+
+          // Place destination marker
+          markerRef.current?.remove();
+          const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
+            .setLngLat(destCoords)
+            .addTo(map);
+          markerRef.current = dstMarker;
+
+          // Draw connection line
+          const lineId = "connect-line";
+          if (map.getLayer(lineId)) map.removeLayer(lineId);
+          if (map.getSource(lineId)) map.removeSource(lineId);
+          map.addSource(lineId, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "LineString", coordinates: [connectSource.lngLat, destCoords] },
+            },
+          });
+          map.addLayer({
+            id: lineId,
+            type: "line",
+            source: lineId,
+            paint: { "line-color": "#2ecc71", "line-width": 3, "line-dasharray": [4, 3] },
+          });
+
+          setConnectEndpoints({
+            source: connectSource,
+            destination: { lngLat: destCoords },
+          });
+          setActiveTool(null);
+        }
+        return;
+      }
+
+      // Pin mode
       if (activeToolRef.current !== "pin") return;
       const { lng, lat } = e.lngLat;
       pinMarkerRef.current?.remove();
@@ -244,7 +319,7 @@ const MapView = () => {
     };
     map.on("click", handler);
     return () => { map.off("click", handler); };
-  }, [map]);
+  }, [map, connectSource, layerMap, toast]);
 
   const handleClear = useCallback(() => {
     markerRef.current?.remove();
@@ -254,9 +329,16 @@ const MapView = () => {
     setPinLocation(null);
     setShowSiteCheck(false);
     setSelectedFeature(null);
+    setConnectSource(null);
+    setConnectEndpoints(null);
     clearConnectionLines();
     clearDrawing();
-  }, [clearConnectionLines, clearDrawing]);
+    // Clear connect line
+    if (map) {
+      if (map.getLayer("connect-line")) map.removeLayer("connect-line");
+      if (map.getSource("connect-line")) map.removeSource("connect-line");
+    }
+  }, [clearConnectionLines, clearDrawing, map]);
 
   const handleZoomToUK = useCallback(() => {
     if (!map) return;
@@ -267,7 +349,7 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect"
         ? "crosshair"
         : "";
   }, [map, activeTool]);
@@ -317,7 +399,10 @@ const MapView = () => {
           />
           <MapToolbar
             activeTool={activeTool}
-            onToolChange={setActiveTool}
+            onToolChange={(tool) => {
+              if (tool !== "connect") setConnectSource(null);
+              setActiveTool(tool);
+            }}
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
           />
@@ -333,6 +418,16 @@ const MapView = () => {
             <PolygonSearchResults
               polygon={drawnPolygon}
               onClose={() => { clearDrawing(); setActiveTool(null); }}
+            />
+          )}
+          {connectEndpoints && (
+            <ConnectAssessmentPanel
+              endpoints={connectEndpoints}
+              onClose={() => {
+                setConnectEndpoints(null);
+                setConnectSource(null);
+                handleClear();
+              }}
             />
           )}
         </>
