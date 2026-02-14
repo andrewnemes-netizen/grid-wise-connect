@@ -226,6 +226,318 @@ export type Database = {
         }
         Relationships: []
       }
+      geo_cables: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          capacity_flag: string | null
+          capacity_unit: string | null
+          capacity_value: number | null
+          created_at: string
+          dno: string
+          geom: unknown
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+          status: string | null
+          voltage_kv: number | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          capacity_flag?: string | null
+          capacity_unit?: string | null
+          capacity_value?: number | null
+          created_at?: string
+          dno: string
+          geom?: unknown
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          voltage_kv?: number | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          capacity_flag?: string | null
+          capacity_unit?: string | null
+          capacity_value?: number | null
+          created_at?: string
+          dno?: string
+          geom?: unknown
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          voltage_kv?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_cables_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_constraints: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          constraint_type: string | null
+          created_at: string
+          dno: string
+          geom: unknown
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+          status: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          constraint_type?: string | null
+          created_at?: string
+          dno: string
+          geom?: unknown
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          constraint_type?: string | null
+          created_at?: string
+          dno?: string
+          geom?: unknown
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_constraints_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_feeders: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          created_at: string
+          dno: string
+          feeder_ref: string | null
+          geom: unknown
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+          status: string | null
+          voltage_kv: number | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno: string
+          feeder_ref?: string | null
+          geom?: unknown
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          voltage_kv?: number | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno?: string
+          feeder_ref?: string | null
+          geom?: unknown
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          voltage_kv?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_feeders_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_points: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          created_at: string
+          dno: string
+          geom: unknown
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno: string
+          geom?: unknown
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno?: string
+          geom?: unknown
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_points_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_polygons: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          created_at: string
+          dno: string
+          geom: unknown
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno: string
+          geom?: unknown
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          created_at?: string
+          dno?: string
+          geom?: unknown
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_polygons_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      geo_substations: {
+        Row: {
+          asset_id: string | null
+          attrs_json: Json | null
+          capacity_kw: number | null
+          created_at: string
+          demand_kw: number | null
+          dno: string
+          geom: unknown
+          headroom_kw: number | null
+          id: string
+          layer_id: string
+          name: string | null
+          source_date: string | null
+          status: string | null
+          utilisation_pct: number | null
+          voltage_kv: number | null
+        }
+        Insert: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          capacity_kw?: number | null
+          created_at?: string
+          demand_kw?: number | null
+          dno: string
+          geom?: unknown
+          headroom_kw?: number | null
+          id?: string
+          layer_id: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          utilisation_pct?: number | null
+          voltage_kv?: number | null
+        }
+        Update: {
+          asset_id?: string | null
+          attrs_json?: Json | null
+          capacity_kw?: number | null
+          created_at?: string
+          demand_kw?: number | null
+          dno?: string
+          geom?: unknown
+          headroom_kw?: number | null
+          id?: string
+          layer_id?: string
+          name?: string | null
+          source_date?: string | null
+          status?: string | null
+          utilisation_pct?: number | null
+          voltage_kv?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geo_substations_layer_id_fkey"
+            columns: ["layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       highway_widths: {
         Row: {
           attrs_json: Json | null
@@ -256,6 +568,78 @@ export type Database = {
           restriction_flag?: string | null
           segment_id?: string
           source_date?: string | null
+        }
+        Relationships: []
+      }
+      layer_registry: {
+        Row: {
+          attribution: string | null
+          bbox: Json | null
+          category: string
+          created_at: string
+          created_by: string | null
+          display_name: string
+          dno: string
+          enabled: boolean | null
+          feature_count: number | null
+          geometry_type: string
+          id: string
+          legend_json: Json
+          max_zoom: number | null
+          min_zoom: number | null
+          slug: string
+          source_date: string | null
+          storage_table: string
+          style_json: Json
+          subcategory: string | null
+          updated_at: string
+          visible_by_default: boolean | null
+        }
+        Insert: {
+          attribution?: string | null
+          bbox?: Json | null
+          category: string
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          dno: string
+          enabled?: boolean | null
+          feature_count?: number | null
+          geometry_type?: string
+          id?: string
+          legend_json?: Json
+          max_zoom?: number | null
+          min_zoom?: number | null
+          slug: string
+          source_date?: string | null
+          storage_table: string
+          style_json?: Json
+          subcategory?: string | null
+          updated_at?: string
+          visible_by_default?: boolean | null
+        }
+        Update: {
+          attribution?: string | null
+          bbox?: Json | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          dno?: string
+          enabled?: boolean | null
+          feature_count?: number | null
+          geometry_type?: string
+          id?: string
+          legend_json?: Json
+          max_zoom?: number | null
+          min_zoom?: number | null
+          slug?: string
+          source_date?: string | null
+          storage_table?: string
+          style_json?: Json
+          subcategory?: string | null
+          updated_at?: string
+          visible_by_default?: boolean | null
         }
         Relationships: []
       }
