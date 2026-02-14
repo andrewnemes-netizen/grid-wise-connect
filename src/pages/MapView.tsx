@@ -75,7 +75,7 @@ const MapView = () => {
 
   // Load/refresh a single visible layer with current bbox
   const loadLayer = useCallback(
-    async (layerId: string, bbox?: [number, number, number, number]) => {
+    async (layerId: string, bbox?: [number, number, number, number], showEmptyToast = true) => {
       const layer = layerMap.get(layerId);
       if (!layer || !map) return;
 
@@ -107,7 +107,7 @@ const MapView = () => {
           clickHandlersRef.current.add(layerId);
         }
 
-        if (geojson.features.length === 0) {
+        if (geojson.features.length === 0 && showEmptyToast) {
           toast({ title: layer.display_name, description: "No data in this viewport." });
         }
       } catch (err) {
@@ -159,7 +159,7 @@ const MapView = () => {
         visibleLayerIds.forEach((id) => clearLayerCache(id));
 
         // Reload all visible layers with new bbox
-        visibleLayerIds.forEach((id) => loadLayer(id, bbox));
+        visibleLayerIds.forEach((id) => loadLayer(id, bbox, false));
       }, 500);
     };
 
