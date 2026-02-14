@@ -8,6 +8,10 @@ const corsHeaders = {
 
 // Map front-end layer IDs to database table(s) and geometry type
 const LAYER_TABLE_MAP: Record<string, { tables: string[]; type: "line" | "point" | "polygon" }> = {
+  site_utilisation: {
+    tables: ["site_utilisation"],
+    type: "point",
+  },
   primary_substations: {
     tables: ["primary_substations_33kv", "primary_substations_66kv"],
     type: "point",

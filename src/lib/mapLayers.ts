@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 
 // Map layer geometry types for MapLibre rendering
 const LAYER_RENDER_TYPE: Record<string, "line" | "circle" | "fill"> = {
+  site_utilisation: "circle",
   primary_substations: "circle",
   ehv_feeders: "line",
   hv_feeders: "line",

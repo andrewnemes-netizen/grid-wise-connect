@@ -13,6 +13,7 @@ export interface LayerConfig {
 }
 
 const DEFAULT_LAYERS: LayerConfig[] = [
+  { id: "site_utilisation", label: "HV Substations (Utilisation)", color: "#2196F3", group: "Substations", visible: false },
   { id: "primary_substations", label: "Primary Substations (33/66kV)", color: "#e74c3c", group: "Substations", visible: false },
   { id: "ehv_feeders", label: "EHV Feeders", color: "#9b59b6", group: "Feeders", visible: false },
   { id: "hv_feeders", label: "HV Feeders (33kV & 66kV)", color: "#3498db", group: "Feeders", visible: false },

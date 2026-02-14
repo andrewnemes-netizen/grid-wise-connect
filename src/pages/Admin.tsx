@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield } from "lucide-react";
+import { Settings, Users, FileText, Shield, Database } from "lucide-react";
 import { format } from "date-fns";
+import { DataUploader } from "@/components/admin/DataUploader";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -31,12 +32,16 @@ const Admin = () => {
         <h2 className="text-xl font-bold text-foreground">Admin</h2>
       </div>
 
-      <Tabs defaultValue="users">
+      <Tabs defaultValue="data">
         <TabsList>
+          <TabsTrigger value="data"><Database className="h-3.5 w-3.5 mr-1.5" />Data</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="data" className="mt-4">
+          <DataUploader />
+        </TabsContent>
         <TabsContent value="users" className="mt-4">
           <UserRolesTab />
         </TabsContent>

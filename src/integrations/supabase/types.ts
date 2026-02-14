@@ -1598,6 +1598,7 @@ export type Database = {
         Returns: unknown
       }
       unlockrows: { Args: { "": string }; Returns: number }
+      update_site_utilisation_geom: { Args: never; Returns: undefined }
       updategeometrysrid: {
         Args: {
           catalogn_name: string
