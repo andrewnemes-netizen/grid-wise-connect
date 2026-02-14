@@ -459,7 +459,6 @@ const MapView = () => {
     const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
     coords.forEach((c) => bounds.extend(c));
 
-    // Add ~100m buffer: 100m ≈ 0.0009 degrees latitude, ~0.0014 degrees longitude at UK latitudes
     const BUFFER_DEG_LAT = 0.0009;
     const BUFFER_DEG_LNG = 0.0014;
     bounds.extend([bounds.getWest() - BUFFER_DEG_LNG, bounds.getSouth() - BUFFER_DEG_LAT]);
@@ -467,30 +466,69 @@ const MapView = () => {
 
     map.fitBounds(bounds, { padding: 40, duration: 0 });
 
-    // Wait for tiles to load then capture
+    // Add temporary GeoJSON circle layers for start/end points (DOM markers don't appear on canvas)
+    const startCoord = coords[0];
+    const endCoord = coords[coords.length - 1];
+    const markersSourceId = "screenshot-markers";
+    const markersFillId = "screenshot-markers-fill";
+    const markersStrokeId = "screenshot-markers-stroke";
+
+    if (map.getLayer(markersFillId)) map.removeLayer(markersFillId);
+    if (map.getLayer(markersStrokeId)) map.removeLayer(markersStrokeId);
+    if (map.getSource(markersSourceId)) map.removeSource(markersSourceId);
+
+    map.addSource(markersSourceId, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [
+          { type: "Feature", properties: { role: "start" }, geometry: { type: "Point", coordinates: startCoord } },
+          { type: "Feature", properties: { role: "end" }, geometry: { type: "Point", coordinates: endCoord } },
+        ],
+      },
+    });
+    // White stroke ring
+    map.addLayer({
+      id: markersStrokeId,
+      type: "circle",
+      source: markersSourceId,
+      paint: { "circle-radius": 10, "circle-color": "#ffffff", "circle-opacity": 1 },
+    });
+    // Coloured fill: blue for start, red for end
+    map.addLayer({
+      id: markersFillId,
+      type: "circle",
+      source: markersSourceId,
+      paint: {
+        "circle-radius": 7,
+        "circle-color": ["match", ["get", "role"], "start", "#3498db", "#e74c3c"],
+        "circle-opacity": 1,
+      },
+    });
+
+    // Wait for tiles + markers to render then capture
     return new Promise((resolve) => {
-      const waitForIdle = () => {
-        if (map.areTilesLoaded()) {
-          try {
-            const dataUrl = map.getCanvas().toDataURL("image/png");
-            resolve(dataUrl);
-          } catch (e) {
-            console.warn("Map screenshot capture failed:", e);
-            resolve(null);
-          }
-        } else {
-          map.once("idle", () => {
-            try {
-              const dataUrl = map.getCanvas().toDataURL("image/png");
-              resolve(dataUrl);
-            } catch (e) {
-              console.warn("Map screenshot capture failed:", e);
-              resolve(null);
-            }
-          });
+      const capture = () => {
+        try {
+          const dataUrl = map.getCanvas().toDataURL("image/png");
+          resolve(dataUrl);
+        } catch (e) {
+          console.warn("Map screenshot capture failed:", e);
+          resolve(null);
+        } finally {
+          // Clean up temporary marker layers
+          if (map.getLayer(markersFillId)) map.removeLayer(markersFillId);
+          if (map.getLayer(markersStrokeId)) map.removeLayer(markersStrokeId);
+          if (map.getSource(markersSourceId)) map.removeSource(markersSourceId);
         }
       };
-      // Give time for basemap switch + bounds fit
+      const waitForIdle = () => {
+        if (map.areTilesLoaded()) {
+          capture();
+        } else {
+          map.once("idle", capture);
+        }
+      };
       setTimeout(waitForIdle, 500);
     });
   }, [map, connectEndpoints, setBasemap]);
