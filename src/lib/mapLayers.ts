@@ -19,7 +19,7 @@ export async function fetchLayerGeoJSON(
   if (bbox) {
     const lngSpan = bbox[2] - bbox[0];
     const latSpan = bbox[3] - bbox[1];
-    const MIN_SPAN = 0.02; // ~2km minimum extent
+    const MIN_SPAN = 0.05; // ~5km minimum extent
     if (lngSpan < MIN_SPAN || latSpan < MIN_SPAN) {
       const cLng = (bbox[0] + bbox[2]) / 2;
       const cLat = (bbox[1] + bbox[3]) / 2;
@@ -30,7 +30,7 @@ export async function fetchLayerGeoJSON(
 
   // Round bbox to 2 decimal places for cache key stability
   const roundedBbox = bufferedBbox
-    ? bufferedBbox.map((v) => Math.round(v * 100) / 100) as [number, number, number, number]
+    ? bufferedBbox.map((v) => Math.round(v * 1000) / 1000) as [number, number, number, number]
     : undefined;
   const cacheKey = roundedBbox ? `${layerId}:${roundedBbox.join(",")}` : layerId;
 
