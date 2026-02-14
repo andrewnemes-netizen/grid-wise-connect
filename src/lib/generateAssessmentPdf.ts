@@ -23,6 +23,7 @@ interface PdfInput {
     min_footway_m?: number | null;
     min_carriageway_m?: number | null;
   };
+  mapScreenshot?: string; // Base64 data URL of route map screenshot
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -112,6 +113,28 @@ export function generateAssessmentPdf(input: PdfInput): void {
   doc.text(statusDesc, pageW - margin - 4, y + 11, { align: "right" });
 
   y += 26;
+
+  // ── ROUTE MAP SCREENSHOT ──
+  if (input.mapScreenshot) {
+    checkPage(90);
+    doc.setTextColor(BRAND.black);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("Route Map", margin, y);
+    y += 6;
+    drawLine(y);
+    y += 3;
+
+    try {
+      // Calculate image dimensions to fit content width while preserving aspect ratio
+      const imgW = contentW;
+      const imgH = imgW * 0.6; // ~16:10 aspect ratio
+      doc.addImage(input.mapScreenshot, "PNG", margin, y, imgW, imgH);
+      y += imgH + 4;
+    } catch (e) {
+      console.warn("Failed to add map screenshot to PDF:", e);
+    }
+  }
 
   // ── SITE DETAILS ──
   doc.setTextColor(BRAND.black);

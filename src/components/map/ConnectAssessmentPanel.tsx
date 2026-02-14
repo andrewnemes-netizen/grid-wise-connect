@@ -26,6 +26,7 @@ export interface ConnectEndpoints {
 interface ConnectAssessmentPanelProps {
   endpoints: ConnectEndpoints;
   onClose: () => void;
+  onCaptureMapScreenshot?: () => Promise<string | null>;
 }
 
 /** Haversine distance in metres */
@@ -63,7 +64,7 @@ const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg:
   RED: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Challenging" },
 };
 
-export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessmentPanelProps) {
+export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot }: ConnectAssessmentPanelProps) {
   const { toast } = useToast();
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -283,7 +284,12 @@ export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessment
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() =>
+                onClick={async () => {
+                  let mapScreenshot: string | undefined;
+                  if (onCaptureMapScreenshot) {
+                    const screenshot = await onCaptureMapScreenshot();
+                    if (screenshot) mapScreenshot = screenshot;
+                  }
                   generateAssessmentPdf({
                     siteName: `Connection from ${sourceName}`,
                     proposedKw: Number(proposedKw) || 0,
@@ -294,8 +300,9 @@ export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessment
                     nextSteps: result.next_steps,
                     distances,
                     constraints: result.constraints,
-                  })
-                }
+                    mapScreenshot,
+                  });
+                }}
               >
                 <Download className="mr-2 h-4 w-4" />Export PDF
               </Button>

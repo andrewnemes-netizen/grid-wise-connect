@@ -440,6 +440,34 @@ const MapView = () => {
     map.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
   }, [map]);
 
+  // Capture map screenshot - fits bounds to route then captures canvas
+  const handleCaptureMapScreenshot = useCallback(async (): Promise<string | null> => {
+    if (!map || !connectEndpoints) return null;
+
+    // Fit map to show full route
+    const coords = connectEndpoints.routeCoords;
+    const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
+    coords.forEach((c) => bounds.extend(c));
+    map.fitBounds(bounds, { padding: 60, duration: 0 });
+
+    // Wait for render after bounds change
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        map.once("render", () => {
+          try {
+            const dataUrl = map.getCanvas().toDataURL("image/png");
+            resolve(dataUrl);
+          } catch (e) {
+            console.warn("Map screenshot capture failed:", e);
+            resolve(null);
+          }
+        });
+        // Trigger render
+        map.setBearing(map.getBearing());
+      }, 300);
+    });
+  }, [map, connectEndpoints]);
+
   // Cursor for active tools
   useEffect(() => {
     if (!map) return;
@@ -556,6 +584,7 @@ const MapView = () => {
           {connectEndpoints && (
             <ConnectAssessmentPanel
               endpoints={connectEndpoints}
+              onCaptureMapScreenshot={handleCaptureMapScreenshot}
               onClose={() => {
                 setConnectEndpoints(null);
                 setConnectSource(null);
