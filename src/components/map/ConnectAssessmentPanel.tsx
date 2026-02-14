@@ -20,6 +20,7 @@ export interface ConnectEndpoints {
   destination: {
     lngLat: [number, number];
   };
+  routeCoords: [number, number][]; // All points: source → waypoints → destination
 }
 
 interface ConnectAssessmentPanelProps {
@@ -68,6 +69,16 @@ export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessment
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
 
+  // Calculate route distance (sum of all segments)
+  const routeDistanceM = useMemo(() => {
+    const coords = endpoints.routeCoords;
+    let total = 0;
+    for (let i = 1; i < coords.length; i++) {
+      total += haversineM(coords[i - 1], coords[i]);
+    }
+    return Math.round(total);
+  }, [endpoints.routeCoords]);
+
   const straightLineM = useMemo(
     () => Math.round(haversineM(endpoints.source.lngLat, endpoints.destination.lngLat)),
     [endpoints]
@@ -104,21 +115,18 @@ export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessment
     }
   };
 
-  // Build distance overrides using the straight-line measurement + any auto-detected distances
+  // Build distance overrides using route measurement
   const distances = useMemo(() => {
     if (result?.distances) {
-      // Override the relevant distance with our measured straight-line
       return {
         ...result.distances,
-        // Use whichever is shorter: auto-detected or our measured
-        primary_m: Math.min(result.distances.primary_m, straightLineM),
-        feeder_m: Math.min(result.distances.feeder_m, straightLineM),
-        capacity_segment_m: Math.min(result.distances.capacity_segment_m, straightLineM),
+        primary_m: Math.min(result.distances.primary_m, routeDistanceM),
+        feeder_m: Math.min(result.distances.feeder_m, routeDistanceM),
+        capacity_segment_m: Math.min(result.distances.capacity_segment_m, routeDistanceM),
       };
     }
-    // Fallback: use straight-line for all
-    return { primary_m: straightLineM, feeder_m: straightLineM, capacity_segment_m: straightLineM };
-  }, [result, straightLineM]);
+    return { primary_m: routeDistanceM, feeder_m: routeDistanceM, capacity_segment_m: routeDistanceM };
+  }, [result, routeDistanceM]);
 
   const sc = result ? scoreConfig[result.score] || scoreConfig.AMBER : null;
 
@@ -155,13 +163,20 @@ export function ConnectAssessmentPanel({ endpoints, onClose }: ConnectAssessment
             </p>
           </div>
 
-          {/* Straight-line distance */}
+          {/* Route distance */}
           <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Straight-Line Distance</p>
-            <p className="text-2xl font-bold text-foreground">{straightLineM.toLocaleString()} m</p>
-            <Badge variant="outline" className="mt-1 text-[10px]">
-              {straightLineM < 500 ? "Close" : straightLineM < 1500 ? "Medium" : "Far"}
-            </Badge>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Route Distance</p>
+            <p className="text-2xl font-bold text-foreground">{routeDistanceM.toLocaleString()} m</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="text-[10px]">
+                {routeDistanceM < 500 ? "Close" : routeDistanceM < 1500 ? "Medium" : "Far"}
+              </Badge>
+              {endpoints.routeCoords.length > 2 && (
+                <span className="text-[10px] text-muted-foreground">
+                  {endpoints.routeCoords.length - 2} waypoint{endpoints.routeCoords.length - 2 !== 1 ? "s" : ""} · Straight: {straightLineM.toLocaleString()} m
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Proposed kW input */}

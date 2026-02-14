@@ -1,6 +1,8 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import maplibregl from "maplibre-gl";
+import { Undo2, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useMap } from "@/hooks/useMap";
 import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
@@ -54,7 +56,9 @@ const MapView = () => {
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [connectSource, setConnectSource] = useState<ConnectEndpoints["source"] | null>(null);
+  const [connectWaypoints, setConnectWaypoints] = useState<[number, number][]>([]);
   const [connectEndpoints, setConnectEndpoints] = useState<ConnectEndpoints | null>(null);
+  const waypointMarkersRef = useRef<maplibregl.Marker[]>([]);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const { toast } = useToast();
@@ -238,13 +242,12 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
-      // Connect mode: two-click workflow
+      // Connect mode: multi-point route drawing
       if (activeToolRef.current === "connect") {
         const { lng, lat } = e.lngLat;
 
         if (!connectSource) {
-          // First click: need to click on a feature from a visible layer
-          // Query rendered features at click point
+          // First click: select source asset from visible layer
           const features = map.queryRenderedFeatures(e.point);
           const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
           if (!layerFeature) {
@@ -269,42 +272,45 @@ const MapView = () => {
             properties: (layerFeature.properties || {}) as Record<string, unknown>,
             layerLabel: regLayer?.display_name || "Asset",
           });
-          toast({ title: `Source: ${regLayer?.display_name || "Asset"}`, description: "Now click the destination point" });
+          setConnectWaypoints([]);
+          toast({ title: `Source: ${regLayer?.display_name || "Asset"}`, description: "Click to add route waypoints. Double-click to finish." });
         } else {
-          // Second click: destination
-          const destCoords: [number, number] = [lng, lat];
+          // Subsequent clicks: add waypoint
+          const newPoint: [number, number] = [lng, lat];
+          const updatedWaypoints = [...connectWaypoints, newPoint];
+          setConnectWaypoints(updatedWaypoints);
 
-          // Place destination marker
-          markerRef.current?.remove();
-          const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
-            .setLngLat(destCoords)
+          // Place a small waypoint marker
+          const wpMarker = new maplibregl.Marker({ color: "#9b59b6", scale: 0.6 })
+            .setLngLat(newPoint)
             .addTo(map);
-          markerRef.current = dstMarker;
+          waypointMarkersRef.current.push(wpMarker);
 
-          // Draw connection line
+          // Update the polyline on the map
+          const allCoords = [connectSource.lngLat, ...updatedWaypoints];
           const lineId = "connect-line";
-          if (map.getLayer(lineId)) map.removeLayer(lineId);
-          if (map.getSource(lineId)) map.removeSource(lineId);
-          map.addSource(lineId, {
-            type: "geojson",
-            data: {
+          if (map.getSource(lineId)) {
+            (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
               type: "Feature",
               properties: {},
-              geometry: { type: "LineString", coordinates: [connectSource.lngLat, destCoords] },
-            },
-          });
-          map.addLayer({
-            id: lineId,
-            type: "line",
-            source: lineId,
-            paint: { "line-color": "#2ecc71", "line-width": 3, "line-dasharray": [4, 3] },
-          });
-
-          setConnectEndpoints({
-            source: connectSource,
-            destination: { lngLat: destCoords },
-          });
-          setActiveTool(null);
+              geometry: { type: "LineString", coordinates: allCoords },
+            });
+          } else {
+            map.addSource(lineId, {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: allCoords },
+              },
+            });
+            map.addLayer({
+              id: lineId,
+              type: "line",
+              source: lineId,
+              paint: { "line-color": "#2ecc71", "line-width": 3, "line-dasharray": [4, 3] },
+            });
+          }
         }
         return;
       }
@@ -322,18 +328,56 @@ const MapView = () => {
       setActiveTool(null);
     };
     map.on("click", handler);
-    return () => { map.off("click", handler); };
-  }, [map, connectSource, layerMap, toast]);
+
+    // Double-click to finish connect route
+    const dblClickHandler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current !== "connect" || !connectSource) return;
+      e.preventDefault();
+      
+      const waypoints = connectWaypoints;
+      if (waypoints.length === 0) return; // need at least one waypoint
+
+      const lastPoint = waypoints[waypoints.length - 1];
+      const allCoords: [number, number][] = [connectSource.lngLat, ...waypoints];
+
+      // Place destination marker on last point
+      markerRef.current?.remove();
+      const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
+        .setLngLat(lastPoint)
+        .addTo(map);
+      markerRef.current = dstMarker;
+
+      setConnectEndpoints({
+        source: connectSource,
+        destination: { lngLat: lastPoint },
+        routeCoords: allCoords,
+      });
+      setActiveTool(null);
+    };
+    map.on("dblclick", dblClickHandler);
+
+    return () => {
+      map.off("click", handler);
+      map.off("dblclick", dblClickHandler);
+    };
+  }, [map, connectSource, connectWaypoints, layerMap, toast]);
+
+  const clearWaypointMarkers = useCallback(() => {
+    waypointMarkersRef.current.forEach((m) => m.remove());
+    waypointMarkersRef.current = [];
+  }, []);
 
   const handleClear = useCallback(() => {
     markerRef.current?.remove();
     markerRef.current = null;
     pinMarkerRef.current?.remove();
     pinMarkerRef.current = null;
+    clearWaypointMarkers();
     setPinLocation(null);
     setShowSiteCheck(false);
     setSelectedFeature(null);
     setConnectSource(null);
+    setConnectWaypoints([]);
     setConnectEndpoints(null);
     clearConnectionLines();
     clearDrawing();
@@ -343,7 +387,53 @@ const MapView = () => {
       if (map.getLayer("connect-line")) map.removeLayer("connect-line");
       if (map.getSource("connect-line")) map.removeSource("connect-line");
     }
-  }, [clearConnectionLines, clearDrawing, clearMeasure, map]);
+  }, [clearConnectionLines, clearDrawing, clearMeasure, clearWaypointMarkers, map]);
+
+  // Finish route: finalize the multi-point connect route
+  const handleFinishRoute = useCallback(() => {
+    if (!connectSource || connectWaypoints.length === 0 || !map) return;
+    const lastPoint = connectWaypoints[connectWaypoints.length - 1];
+    const allCoords: [number, number][] = [connectSource.lngLat, ...connectWaypoints];
+
+    // Place destination marker on last point
+    markerRef.current?.remove();
+    const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
+      .setLngLat(lastPoint)
+      .addTo(map);
+    markerRef.current = dstMarker;
+
+    setConnectEndpoints({
+      source: connectSource,
+      destination: { lngLat: lastPoint },
+      routeCoords: allCoords,
+    });
+    setActiveTool(null);
+  }, [connectSource, connectWaypoints, map]);
+
+  // Undo last waypoint
+  const handleUndoWaypoint = useCallback(() => {
+    if (!map || connectWaypoints.length === 0 || !connectSource) return;
+    const updated = connectWaypoints.slice(0, -1);
+    setConnectWaypoints(updated);
+
+    // Remove last waypoint marker
+    const lastMarker = waypointMarkersRef.current.pop();
+    lastMarker?.remove();
+
+    // Update polyline
+    const allCoords = [connectSource.lngLat, ...updated];
+    const lineId = "connect-line";
+    if (updated.length === 0) {
+      if (map.getLayer(lineId)) map.removeLayer(lineId);
+      if (map.getSource(lineId)) map.removeSource(lineId);
+    } else if (map.getSource(lineId)) {
+      (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: allCoords },
+      });
+    }
+  }, [connectSource, connectWaypoints, map]);
 
   const handleZoomToUK = useCallback(() => {
     if (!map) return;
@@ -412,12 +502,43 @@ const MapView = () => {
           <MapToolbar
             activeTool={activeTool}
             onToolChange={(tool) => {
-              if (tool !== "connect") setConnectSource(null);
+              if (tool !== "connect") {
+                setConnectSource(null);
+                setConnectWaypoints([]);
+                clearWaypointMarkers();
+              }
               setActiveTool(tool);
             }}
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
           />
+          {/* Route drawing controls */}
+          {activeTool === "connect" && connectSource && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                {connectWaypoints.length === 0
+                  ? "Click to add route points"
+                  : `${connectWaypoints.length} point${connectWaypoints.length !== 1 ? "s" : ""} — click to add more`}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={connectWaypoints.length === 0}
+                onClick={handleUndoWaypoint}
+              >
+                <Undo2 className="h-3 w-3 mr-1" />Undo
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={connectWaypoints.length === 0}
+                onClick={handleFinishRoute}
+              >
+                <CheckCircle2 className="h-3 w-3 mr-1" />Finish
+              </Button>
+            </div>
+          )}
           {showSiteCheck && pinLocation && (
             <SiteCheckPanel
               lng={pinLocation.lng}
@@ -438,6 +559,8 @@ const MapView = () => {
               onClose={() => {
                 setConnectEndpoints(null);
                 setConnectSource(null);
+                setConnectWaypoints([]);
+                clearWaypointMarkers();
                 handleClear();
               }}
             />
