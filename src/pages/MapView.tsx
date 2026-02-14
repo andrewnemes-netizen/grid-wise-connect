@@ -59,6 +59,7 @@ const MapView = () => {
   const [connectWaypoints, setConnectWaypoints] = useState<[number, number][]>([]);
   const [connectEndpoints, setConnectEndpoints] = useState<ConnectEndpoints | null>(null);
   const waypointMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const connectDstMarkerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
   const { toast } = useToast();
@@ -341,11 +342,13 @@ const MapView = () => {
       const allCoords: [number, number][] = [connectSource.lngLat, ...waypoints];
 
       // Place destination marker on last point
-      markerRef.current?.remove();
-      const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
+      connectDstMarkerRef.current?.remove();
+      const dstEl = document.createElement("div");
+      dstEl.style.cssText = "width:18px;height:18px;background:#e74c3c;border:3px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);";
+      const dstMarker = new maplibregl.Marker({ element: dstEl })
         .setLngLat(lastPoint)
         .addTo(map);
-      markerRef.current = dstMarker;
+      connectDstMarkerRef.current = dstMarker;
 
       setConnectEndpoints({
         source: connectSource,
@@ -372,6 +375,8 @@ const MapView = () => {
     markerRef.current = null;
     pinMarkerRef.current?.remove();
     pinMarkerRef.current = null;
+    connectDstMarkerRef.current?.remove();
+    connectDstMarkerRef.current = null;
     clearWaypointMarkers();
     setPinLocation(null);
     setShowSiteCheck(false);
@@ -396,11 +401,13 @@ const MapView = () => {
     const allCoords: [number, number][] = [connectSource.lngLat, ...connectWaypoints];
 
     // Place destination marker on last point
-    markerRef.current?.remove();
-    const dstMarker = new maplibregl.Marker({ color: "#e74c3c" })
+    connectDstMarkerRef.current?.remove();
+    const dstEl = document.createElement("div");
+    dstEl.style.cssText = "width:18px;height:18px;background:#e74c3c;border:3px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);";
+    const dstMarker = new maplibregl.Marker({ element: dstEl })
       .setLngLat(lastPoint)
       .addTo(map);
-    markerRef.current = dstMarker;
+    connectDstMarkerRef.current = dstMarker;
 
     setConnectEndpoints({
       source: connectSource,
