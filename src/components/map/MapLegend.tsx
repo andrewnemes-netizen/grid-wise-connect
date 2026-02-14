@@ -2,6 +2,7 @@ import type { LayerConfig } from "./LayerTogglePanel";
 
 interface MapLegendProps {
   layers: LayerConfig[];
+  heatmapMode?: boolean;
 }
 
 const UTILISATION_BANDS = [
@@ -12,7 +13,7 @@ const UTILISATION_BANDS = [
   { label: "High", color: "#ef4444" },
 ];
 
-export function MapLegend({ layers }: MapLegendProps) {
+export function MapLegend({ layers, heatmapMode }: MapLegendProps) {
   const visibleLayers = layers.filter((l) => l.visible);
   if (visibleLayers.length === 0) return null;
 
@@ -23,7 +24,7 @@ export function MapLegend({ layers }: MapLegendProps) {
       <div className="rounded-lg border bg-background/95 backdrop-blur shadow-md px-3 py-2 space-y-1.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Legend</span>
 
-        {showUtilisationBands && (
+        {showUtilisationBands && !heatmapMode && (
           <div className="space-y-0.5 pb-1 border-b border-border">
             <span className="text-[10px] text-muted-foreground">Utilisation Band</span>
             {UTILISATION_BANDS.map((band) => (
@@ -32,6 +33,22 @@ export function MapLegend({ layers }: MapLegendProps) {
                 <span className="text-[11px] text-foreground">{band.label}</span>
               </div>
             ))}
+          </div>
+        )}
+
+        {showUtilisationBands && heatmapMode && (
+          <div className="space-y-0.5 pb-1 border-b border-border">
+            <span className="text-[10px] text-muted-foreground">Utilisation Heatmap</span>
+            <div
+              className="h-3 w-full rounded-sm"
+              style={{
+                background: "linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #f59e0b 50%, #f97316 75%, #ef4444 100%)",
+              }}
+            />
+            <div className="flex justify-between text-[9px] text-muted-foreground">
+              <span>Low</span>
+              <span>High</span>
+            </div>
           </div>
         )}
 
