@@ -12,7 +12,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger />
             <div className="ml-3 flex items-center gap-2">
               <img src={epeLogo} alt="Eco Power Energy" className="h-5 object-contain" />
-              <span className="text-sm font-semibold text-foreground">Feasibility Mapper</span>
+              <span className="text-sm font-semibold text-foreground">Gridwise Connect</span>
             </div>
           </header>
           <div className="flex-1">{children}</div>
