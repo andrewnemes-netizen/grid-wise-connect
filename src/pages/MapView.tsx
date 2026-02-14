@@ -3,6 +3,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import { useMap } from "@/hooks/useMap";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
+import { useMeasure } from "@/hooks/useMeasure";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
 import {
   LayerTogglePanel,
@@ -56,6 +57,7 @@ const MapView = () => {
   activeToolRef.current = activeTool;
   const { toast } = useToast();
   const { isDrawing, polygon: drawnPolygon, clearDrawing } = usePolygonDraw(map, activeTool === "polygon");
+  const { clearMeasure } = useMeasure(map, activeTool === "measure");
 
   // Track which layers have click handlers attached
   const clickHandlersRef = useRef<Set<string>>(new Set());
@@ -333,12 +335,13 @@ const MapView = () => {
     setConnectEndpoints(null);
     clearConnectionLines();
     clearDrawing();
+    clearMeasure();
     // Clear connect line
     if (map) {
       if (map.getLayer("connect-line")) map.removeLayer("connect-line");
       if (map.getSource("connect-line")) map.removeSource("connect-line");
     }
-  }, [clearConnectionLines, clearDrawing, map]);
+  }, [clearConnectionLines, clearDrawing, clearMeasure, map]);
 
   const handleZoomToUK = useCallback(() => {
     if (!map) return;
