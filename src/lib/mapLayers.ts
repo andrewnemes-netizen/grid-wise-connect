@@ -14,9 +14,23 @@ export async function fetchLayerGeoJSON(
   layerId: string,
   bbox?: [number, number, number, number]
 ): Promise<GeoJSON.FeatureCollection> {
+  // Ensure a minimum bbox size so close-zoom queries still capture nearby points
+  let bufferedBbox = bbox;
+  if (bbox) {
+    const lngSpan = bbox[2] - bbox[0];
+    const latSpan = bbox[3] - bbox[1];
+    const MIN_SPAN = 0.02; // ~2km minimum extent
+    if (lngSpan < MIN_SPAN || latSpan < MIN_SPAN) {
+      const cLng = (bbox[0] + bbox[2]) / 2;
+      const cLat = (bbox[1] + bbox[3]) / 2;
+      const halfSpan = MIN_SPAN / 2;
+      bufferedBbox = [cLng - halfSpan, cLat - halfSpan, cLng + halfSpan, cLat + halfSpan];
+    }
+  }
+
   // Round bbox to 2 decimal places for cache key stability
-  const roundedBbox = bbox
-    ? bbox.map((v) => Math.round(v * 100) / 100) as [number, number, number, number]
+  const roundedBbox = bufferedBbox
+    ? bufferedBbox.map((v) => Math.round(v * 100) / 100) as [number, number, number, number]
     : undefined;
   const cacheKey = roundedBbox ? `${layerId}:${roundedBbox.join(",")}` : layerId;
 
