@@ -96,32 +96,36 @@ export function addRegistryLayerToMap(
 
   map.addSource(sourceId, { type: "geojson", data: geojson });
 
-  // Heatmap mode for utilisation layer
+  // Heatmap mode for utilisation layer — render heatmap AND circle layer
   if (heatmap && layer.slug === "npg_hv_substations_utilisation") {
-    map.addLayer({
-      id: layerMapId,
-      type: "heatmap",
-      source: sourceId,
-      paint: {
-        "heatmap-weight": [
-          "interpolate", ["linear"], ["coalesce", ["get", "utilisation_pct"], 50],
-          0, 0, 100, 1,
-        ],
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.5, 9, 2],
-        "heatmap-color": [
-          "interpolate", ["linear"], ["heatmap-density"],
-          0, "rgba(0,0,0,0)",
-          0.2, "hsl(141, 53%, 53%)",
-          0.4, "hsl(80, 60%, 55%)",
-          0.6, "hsl(45, 97%, 64%)",
-          0.8, "hsl(27, 95%, 55%)",
-          1, "hsl(0, 86%, 57%)",
-        ],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 6, 15, 10, 30, 14, 50],
-        "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.85, 14, 0.5],
-      },
-    } as any);
-    return;
+    try {
+      map.addLayer({
+        id: `${layerMapId}-heat`,
+        type: "heatmap",
+        source: sourceId,
+        paint: {
+          "heatmap-weight": [
+            "interpolate", ["linear"], ["coalesce", ["get", "utilisation_pct"], 50],
+            0, 0, 100, 1,
+          ],
+          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.5, 9, 2],
+          "heatmap-color": [
+            "interpolate", ["linear"], ["heatmap-density"],
+            0, "rgba(0,0,0,0)",
+            0.2, "hsl(141, 53%, 53%)",
+            0.4, "hsl(80, 60%, 55%)",
+            0.6, "hsl(45, 97%, 64%)",
+            0.8, "hsl(27, 95%, 55%)",
+            1, "hsl(0, 86%, 57%)",
+          ],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 4, 6, 15, 10, 30, 14, 50],
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0.85, 14, 0.5],
+        },
+      } as any);
+    } catch (err) {
+      console.warn("Heatmap layer failed, falling back to circles only:", err);
+    }
+    // Don't return — still add circle layer below for pin drops & click interactions
   }
 
   const renderType = getRenderType(layer.geometry_type);
@@ -194,6 +198,7 @@ export function removeRegistryLayerFromMap(map: maplibregl.Map, layerId: string)
   const mapLayerId = `layer-${layerId}`;
   if (map.getLayer(mapLayerId)) map.removeLayer(mapLayerId);
   if (map.getLayer(`${mapLayerId}-outline`)) map.removeLayer(`${mapLayerId}-outline`);
+  if (map.getLayer(`${mapLayerId}-heat`)) map.removeLayer(`${mapLayerId}-heat`);
   const sourceId = `source-${layerId}`;
   if (map.getSource(sourceId)) map.removeSource(sourceId);
 }
