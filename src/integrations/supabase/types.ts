@@ -603,6 +603,78 @@ export type Database = {
         }
         Relationships: []
       }
+      unit_rates: {
+        Row: {
+          cable_ehv_per_m: number
+          cable_hv_per_m: number
+          cable_lv_per_m: number
+          contingency_pct: number
+          design_fee_pct: number
+          excavation_carriageway_per_m: number
+          excavation_footway_per_m: number
+          excavation_verge_per_m: number
+          id: string
+          jointing_each: number
+          metering_ct: number
+          metering_wc: number
+          project_management_pct: number
+          reinforcement_per_kw_over_capacity: number
+          switchgear_circuit_breaker: number
+          switchgear_ring_main: number
+          transformer_1000kva: number
+          transformer_1500kva: number
+          transformer_500kva: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cable_ehv_per_m?: number
+          cable_hv_per_m?: number
+          cable_lv_per_m?: number
+          contingency_pct?: number
+          design_fee_pct?: number
+          excavation_carriageway_per_m?: number
+          excavation_footway_per_m?: number
+          excavation_verge_per_m?: number
+          id?: string
+          jointing_each?: number
+          metering_ct?: number
+          metering_wc?: number
+          project_management_pct?: number
+          reinforcement_per_kw_over_capacity?: number
+          switchgear_circuit_breaker?: number
+          switchgear_ring_main?: number
+          transformer_1000kva?: number
+          transformer_1500kva?: number
+          transformer_500kva?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cable_ehv_per_m?: number
+          cable_hv_per_m?: number
+          cable_lv_per_m?: number
+          contingency_pct?: number
+          design_fee_pct?: number
+          excavation_carriageway_per_m?: number
+          excavation_footway_per_m?: number
+          excavation_verge_per_m?: number
+          id?: string
+          jointing_each?: number
+          metering_ct?: number
+          metering_wc?: number
+          project_management_pct?: number
+          reinforcement_per_kw_over_capacity?: number
+          switchgear_circuit_breaker?: number
+          switchgear_ring_main?: number
+          transformer_1000kva?: number
+          transformer_1500kva?: number
+          transformer_500kva?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string

@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost, type CostEstimate } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import epeLogo from "@/assets/epe-logo.png";
 
@@ -33,6 +34,7 @@ function formatGBP(amount: number): string {
 
 export default function QuickEstimate() {
   const { toast } = useToast();
+  const { data: unitRates } = useUnitRates();
   const [postcode, setPostcode] = useState("");
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -72,7 +74,7 @@ export default function QuickEstimate() {
           proposed_kw: Number(proposedKw),
           distances: data.distances,
           constraints: data.constraints,
-        });
+        }, unitRates);
         setCostEstimate(estimate);
       }
     } catch (err: any) {
