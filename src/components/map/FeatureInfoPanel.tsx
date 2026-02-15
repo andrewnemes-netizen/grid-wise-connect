@@ -259,7 +259,7 @@ export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: F
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
-        <ScrollArea className="max-h-72">
+        <ScrollArea className="max-h-[50vh] overflow-y-auto">
           <div className="px-3 py-2">
             {isSubstationArea ? <SubstationAreaInfo feature={feature} /> : isSubstation ? <SubstationInfo feature={feature} /> : <GenericInfo feature={feature} />}
           </div>
