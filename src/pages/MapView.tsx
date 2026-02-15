@@ -16,7 +16,7 @@ import { LayerTogglePanel } from "@/components/map/LayerTogglePanel";
 import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
-import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
+import { UnifiedIntelligencePanel, type ConnectionLine } from "@/components/map/UnifiedIntelligencePanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
@@ -250,7 +250,7 @@ const MapView = () => {
           )}
 
           {pin.showSiteCheck && pin.pinLocation && (
-            <SiteCheckPanel
+            <UnifiedIntelligencePanel
               lng={pin.pinLocation.lng}
               lat={pin.pinLocation.lat}
               onClose={() => { pin.closeSiteCheck(); clearConnectionLines(); }}
