@@ -54,22 +54,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let isMounted = true;
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      (_event, newSession) => {
         if (!isMounted) return;
         const newUserId = newSession?.user?.id ?? null;
         const currentUserId = lastUserIdRef.current;
 
-        // Always update the session ref and state so the client uses a fresh token
-        sessionRef.current = newSession;
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-
-        // Same user token refresh — roles already loaded, skip refetch
+        // Same user token refresh — store silently in ref, NO state updates
+        // This prevents re-renders that would unmount dialogs/forms mid-operation
         if (newUserId && newUserId === currentUserId) {
+          sessionRef.current = newSession;
           return;
         }
 
-        // Different user or sign-out — full role update
+        // Different user or sign-out — full state update
+        sessionRef.current = newSession;
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
         if (newSession?.user) {
           setTimeout(() => {
             if (isMounted) fetchRoles(newSession.user.id);

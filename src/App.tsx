@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5,6 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { toast } from "sonner";
 import Auth from "./pages/Auth";
 import MapView from "./pages/MapView";
 import Portfolio from "./pages/Portfolio";
@@ -30,6 +33,21 @@ function AuthRoute() {
   return <Auth />;
 }
 
+/** Catches unhandled promise rejections globally so they don't crash the app */
+function GlobalErrorCatcher({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const handler = (event: PromiseRejectionEvent) => {
+      console.error("Unhandled rejection:", event.reason);
+      event.preventDefault();
+      toast.error("An unexpected error occurred. Your work is safe — please try again.");
+    };
+    window.addEventListener("unhandledrejection", handler);
+    return () => window.removeEventListener("unhandledrejection", handler);
+  }, []);
+
+  return <>{children}</>;
+}
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<AuthRoute />} />
@@ -44,17 +62,21 @@ const AppRoutes = () => (
 );
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <ErrorBoundary>
+    <GlobalErrorCatcher>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </GlobalErrorCatcher>
+  </ErrorBoundary>
 );
 
 export default App;
