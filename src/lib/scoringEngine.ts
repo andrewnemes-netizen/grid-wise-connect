@@ -180,6 +180,7 @@ export function getCostBand(totalEstimate: number): "£" | "££" | "£££" {
 
 export function getFeederConstraintRisk(metrics: RawMetrics): "Low" | "Medium" | "High" {
   const util = metrics.connection.utilisation_pct;
+  if (util === null) return "Medium"; // unknown → neutral
   if (util < 50) return "Low";
   if (util < 80) return "Medium";
   return "High";
