@@ -163,40 +163,89 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   );
 }
 
-/** Simple CSV → GeoJSON converter. Expects lat/lng or latitude/longitude columns. */
+/** CSV → GeoJSON converter. Supports lat/lng columns OR a "Geo Shape" column with inline GeoJSON geometry. */
 function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
   const lines = csvText.trim().split("\n");
   if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
 
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"/, "").replace(/"$/, "").toLowerCase());
+  // Parse CSV header - handle BOM
+  const headerLine = lines[0].replace(/^\uFEFF/, "");
+  const headers = parseCSVRow(headerLine).map((h) => h.trim().toLowerCase());
+
+  const geoShapeIdx = headers.findIndex((h) => ["geo shape", "geo_shape", "geoshape", "geometry", "geom"].includes(h));
   const latIdx = headers.findIndex((h) => ["lat", "latitude", "y", "site_northing"].includes(h));
   const lngIdx = headers.findIndex((h) => ["lng", "lon", "longitude", "x", "site_easting"].includes(h));
 
-  if (latIdx === -1 || lngIdx === -1) {
-    throw new Error("CSV must have lat/lng (or latitude/longitude) columns");
+  if (geoShapeIdx === -1 && (latIdx === -1 || lngIdx === -1)) {
+    throw new Error("CSV must have lat/lng (or latitude/longitude) columns, or a 'Geo Shape' column with GeoJSON geometry");
   }
 
   const features: GeoJSON.Feature[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const vals = lines[i].split(",").map((v) => v.trim().replace(/^"/, "").replace(/"$/,""));
-    const lat = parseFloat(vals[latIdx]);
-    const lng = parseFloat(vals[lngIdx]);
-    if (isNaN(lat) || isNaN(lng)) continue;
+    if (!lines[i].trim()) continue;
+    const vals = parseCSVRow(lines[i]);
+
+    let geometry: GeoJSON.Geometry | null = null;
+
+    if (geoShapeIdx !== -1 && vals[geoShapeIdx]) {
+      try {
+        geometry = JSON.parse(vals[geoShapeIdx]);
+      } catch {
+        continue; // skip rows with unparseable geometry
+      }
+    } else if (latIdx !== -1 && lngIdx !== -1) {
+      const lat = parseFloat(vals[latIdx]);
+      const lng = parseFloat(vals[lngIdx]);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      geometry = { type: "Point", coordinates: [lng, lat] };
+    }
+
+    if (!geometry) continue;
 
     const props: Record<string, any> = {};
     headers.forEach((h, idx) => {
-      if (idx !== latIdx && idx !== lngIdx) {
+      if (idx !== geoShapeIdx && idx !== latIdx && idx !== lngIdx) {
         props[h] = vals[idx] || null;
       }
     });
 
-    features.push({
-      type: "Feature",
-      geometry: { type: "Point", coordinates: [lng, lat] },
-      properties: props,
-    });
+    features.push({ type: "Feature", geometry, properties: props });
   }
 
   return { type: "FeatureCollection", features };
+}
+
+/** Parse a single CSV row, respecting quoted fields that may contain commas and nested JSON. */
+function parseCSVRow(row: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < row.length && row[i + 1] === '"') {
+          current += '"';
+          i++; // skip escaped quote
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        result.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+  }
+  result.push(current);
+  return result;
 }
