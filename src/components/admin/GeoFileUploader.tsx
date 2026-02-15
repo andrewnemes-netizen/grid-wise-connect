@@ -21,10 +21,44 @@ interface GeoFileUploaderProps {
 
 interface FileStatus {
   name: string;
-  status: "pending" | "uploading" | "done" | "error";
+  status: "pending" | "parsing" | "uploading" | "done" | "error";
   progress: number;
   inserted: number;
+  featureCount: number;
+  hasSpatial: boolean;
   error?: string;
+}
+
+/** Parse a file into a feature collection. For CSVs without geometry, features will have null geometry. */
+async function parseFile(file: File): Promise<{ geojson: GeoJSON.FeatureCollection; hasSpatial: boolean }> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "geojson" || ext === "json") {
+    const text = await file.text();
+    const geojson = JSON.parse(text);
+    if (geojson.type !== "FeatureCollection") {
+      throw new Error("File must be a GeoJSON FeatureCollection");
+    }
+    return { geojson, hasSpatial: true };
+  }
+
+  if (ext === "gml") {
+    const text = await file.text();
+    return { geojson: gmlToGeoJSON(text), hasSpatial: true };
+  }
+
+  if (ext === "gz" && file.name.toLowerCase().endsWith(".gml.gz")) {
+    const buffer = await file.arrayBuffer();
+    const text = await decompressGzip(buffer);
+    return { geojson: gmlToGeoJSON(text), hasSpatial: true };
+  }
+
+  if (ext === "csv") {
+    const text = await file.text();
+    return csvToGeoJSONFlexible(text);
+  }
+
+  throw new Error("Unsupported format. Upload GeoJSON, CSV, or GML.");
 }
 
 export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderProps) {
@@ -34,12 +68,12 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   const [fileStatuses, setFileStatuses] = useState<FileStatus[]>([]);
   const [uploading, setUploading] = useState(false);
   const [allDone, setAllDone] = useState(false);
+  const [overallStatus, setOverallStatus] = useState("");
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files;
     if (!selected || selected.length === 0) return;
-    const newFiles = Array.from(selected);
-    setFiles((prev) => [...prev, ...newFiles]);
+    setFiles((prev) => [...prev, ...Array.from(selected)]);
     setAllDone(false);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -48,111 +82,145 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const processFile = async (
-    file: File,
-    fileIndex: number,
-    updateStatus: (update: Partial<FileStatus>) => void
-  ) => {
-    updateStatus({ status: "uploading", progress: 0 });
-
-    try {
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      let geojson: GeoJSON.FeatureCollection;
-
-      if (ext === "geojson" || ext === "json") {
-        const text = await file.text();
-        geojson = JSON.parse(text);
-        if (geojson.type !== "FeatureCollection") {
-          throw new Error("File must be a GeoJSON FeatureCollection");
-        }
-      } else if (ext === "csv") {
-        const text = await file.text();
-        geojson = csvToGeoJSON(text);
-      } else if (ext === "gml") {
-        const text = await file.text();
-        geojson = gmlToGeoJSON(text);
-      } else if (ext === "gz" && file.name.toLowerCase().endsWith(".gml.gz")) {
-        const buffer = await file.arrayBuffer();
-        const text = await decompressGzip(buffer);
-        geojson = gmlToGeoJSON(text);
-      } else {
-        throw new Error("Unsupported format. Upload GeoJSON, CSV, or GML.");
-      }
-
-      const features = geojson.features;
-      if (!features.length) {
-        throw new Error("No features found in file");
-      }
-
-      const BATCH_SIZE = 500;
-      let totalInserted = 0;
-
-      for (let i = 0; i < features.length; i += BATCH_SIZE) {
-        const batch = features.slice(i, i + BATCH_SIZE);
-
-        const res = await supabase.functions.invoke("ingest-geo-features", {
-          body: {
-            layer_id: layerId,
-            storage_table: layer.storage_table,
-            dno: layer.dno,
-            features: batch.map((f) => ({
-              geometry: f.geometry,
-              properties: f.properties || {},
-            })),
-          },
-        });
-
-        if (res.error) {
-          throw new Error(res.error.message || String(res.error));
-        }
-        totalInserted += res.data?.inserted || 0;
-        updateStatus({
-          progress: Math.round(((i + batch.length) / features.length) * 100),
-        });
-      }
-
-      updateStatus({ status: "done", progress: 100, inserted: totalInserted });
-      return totalInserted;
-    } catch (err: any) {
-      updateStatus({ status: "error", error: err.message });
-      return 0;
-    }
-  };
-
   const handleUploadAll = async () => {
     if (files.length === 0) return;
 
     setUploading(true);
     setAllDone(false);
+    setOverallStatus("Parsing files…");
 
-    const initialStatuses: FileStatus[] = files.map((f) => ({
+    const statuses: FileStatus[] = files.map((f) => ({
       name: f.name,
       status: "pending",
       progress: 0,
       inserted: 0,
+      featureCount: 0,
+      hasSpatial: false,
     }));
-    setFileStatuses(initialStatuses);
+    setFileStatuses([...statuses]);
 
-    let totalInserted = 0;
-    let hasErrors = false;
+    // Phase 1: Parse all files
+    const parsed: { geojson: GeoJSON.FeatureCollection; hasSpatial: boolean }[] = [];
+    let hasError = false;
 
     for (let i = 0; i < files.length; i++) {
-      const updateFn = (update: Partial<FileStatus>) => {
-        setFileStatuses((prev) =>
-          prev.map((s, idx) => (idx === i ? { ...s, ...update } : s))
-        );
-      };
+      statuses[i].status = "parsing";
+      setFileStatuses([...statuses]);
 
-      const inserted = await processFile(files[i], i, updateFn);
-      totalInserted += inserted;
-      if (inserted === 0 && files[i]) {
-        // Check if it was an error (not just empty)
-        hasErrors = true;
+      try {
+        const result = await parseFile(files[i]);
+        parsed.push(result);
+        statuses[i].featureCount = result.geojson.features.length;
+        statuses[i].hasSpatial = result.hasSpatial;
+        statuses[i].status = "pending";
+      } catch (err: any) {
+        parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
+        statuses[i].status = "error";
+        statuses[i].error = err.message;
+        hasError = true;
       }
+      setFileStatuses([...statuses]);
+    }
+
+    // Phase 2: Find the spatial file(s) and merge geometry into non-spatial files by row order
+    const spatialFiles = parsed.filter((p) => p.hasSpatial && p.geojson.features.length > 0);
+    const spatialGeometries: (GeoJSON.Geometry | null)[] = [];
+
+    // Collect all geometries from spatial files in order
+    spatialFiles.forEach((sf) => {
+      sf.geojson.features.forEach((f) => {
+        if (f.geometry) spatialGeometries.push(f.geometry);
+      });
+    });
+
+    // For non-spatial files, assign geometry by row order
+    if (spatialGeometries.length > 0) {
+      for (let i = 0; i < parsed.length; i++) {
+        if (statuses[i].status === "error") continue;
+        if (!parsed[i].hasSpatial && parsed[i].geojson.features.length > 0) {
+          setOverallStatus(`Merging geometry into ${files[i].name}…`);
+          const features = parsed[i].geojson.features;
+          for (let r = 0; r < features.length; r++) {
+            if (r < spatialGeometries.length) {
+              features[r] = { ...features[r], geometry: spatialGeometries[r]! };
+            }
+          }
+          // Remove features that didn't get geometry
+          parsed[i].geojson.features = features.filter((f) => f.geometry != null);
+          statuses[i].featureCount = parsed[i].geojson.features.length;
+          setFileStatuses([...statuses]);
+        }
+      }
+    } else {
+      // No spatial files at all — mark non-spatial files as error
+      for (let i = 0; i < parsed.length; i++) {
+        if (statuses[i].status !== "error" && !parsed[i].hasSpatial) {
+          statuses[i].status = "error";
+          statuses[i].error = "No geometry found — include at least one file with coordinates or Geo Shape";
+          hasError = true;
+        }
+      }
+      setFileStatuses([...statuses]);
+    }
+
+    // Phase 3: Upload features from each file
+    let totalInserted = 0;
+
+    for (let i = 0; i < parsed.length; i++) {
+      if (statuses[i].status === "error") continue;
+
+      const features = parsed[i].geojson.features;
+      if (features.length === 0) {
+        statuses[i].status = "done";
+        setFileStatuses([...statuses]);
+        continue;
+      }
+
+      statuses[i].status = "uploading";
+      setFileStatuses([...statuses]);
+      setOverallStatus(`Uploading ${files[i].name}…`);
+
+      try {
+        const BATCH_SIZE = 500;
+        let fileInserted = 0;
+
+        for (let b = 0; b < features.length; b += BATCH_SIZE) {
+          const batch = features.slice(b, b + BATCH_SIZE);
+
+          const res = await supabase.functions.invoke("ingest-geo-features", {
+            body: {
+              layer_id: layerId,
+              storage_table: layer.storage_table,
+              dno: layer.dno,
+              features: batch.map((f) => ({
+                geometry: f.geometry,
+                properties: f.properties || {},
+              })),
+            },
+          });
+
+          if (res.error) {
+            throw new Error(res.error.message || String(res.error));
+          }
+          fileInserted += res.data?.inserted || 0;
+          statuses[i].progress = Math.round(((b + batch.length) / features.length) * 100);
+          setFileStatuses([...statuses]);
+        }
+
+        statuses[i].status = "done";
+        statuses[i].inserted = fileInserted;
+        totalInserted += fileInserted;
+      } catch (err: any) {
+        statuses[i].status = "error";
+        statuses[i].error = err.message;
+        hasError = true;
+      }
+      setFileStatuses([...statuses]);
     }
 
     setUploading(false);
     setAllDone(true);
+    setOverallStatus("");
 
     if (totalInserted > 0) {
       toast({
@@ -160,7 +228,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         description: `${totalInserted.toLocaleString()} features ingested from ${files.length} file${files.length !== 1 ? "s" : ""}.`,
       });
     }
-    if (hasErrors) {
+    if (hasError) {
       toast({
         title: "Some files had errors",
         description: "Check individual file statuses below.",
@@ -174,6 +242,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setFileStatuses([]);
     setAllDone(false);
     setUploading(false);
+    setOverallStatus("");
   };
 
   return (
@@ -184,9 +253,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload one or more GeoJSON, CSV (with lat/lng or Geo Shape), or GML files.
-        All features will be added to <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{layer.storage_table}</code>.
-        You can combine markers, shapes, and parameters from separate files.
+        Upload one or more files. If a file has no coordinates, geometry is inherited from the spatial
+        file(s) in the same batch by row order — so you can combine a geometry file with separate
+        attribute files.
       </p>
 
       <input
@@ -198,7 +267,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         className="hidden"
       />
 
-      {/* File list */}
+      {/* Queued file list */}
       {files.length > 0 && !uploading && !allDone && (
         <div className="space-y-1.5 border rounded-md p-2">
           {files.map((f, idx) => (
@@ -208,12 +277,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
               <span className="text-muted-foreground shrink-0">
                 {(f.size / 1024).toFixed(0)} KB
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-5 w-5 p-0"
-                onClick={() => removeFile(idx)}
-              >
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => removeFile(idx)}>
                 <X className="h-3 w-3" />
               </Button>
             </div>
@@ -221,19 +285,24 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         </div>
       )}
 
-      {/* Progress display during upload */}
+      {/* Progress display */}
       {(uploading || allDone) && fileStatuses.length > 0 && (
         <div className="space-y-2 border rounded-md p-2">
           {fileStatuses.map((fs, idx) => (
             <div key={idx} className="space-y-1">
               <div className="flex items-center gap-2 text-xs">
                 {fs.status === "pending" && <Loader2 className="h-3 w-3 text-muted-foreground shrink-0" />}
+                {fs.status === "parsing" && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />}
                 {fs.status === "uploading" && <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />}
                 {fs.status === "done" && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
                 {fs.status === "error" && <AlertCircle className="h-3 w-3 text-destructive shrink-0" />}
                 <span className="truncate flex-1">{fs.name}</span>
+                {fs.status === "parsing" && <span className="text-muted-foreground shrink-0">parsing…</span>}
                 {fs.status === "done" && (
                   <span className="text-muted-foreground shrink-0">{fs.inserted.toLocaleString()} features</span>
+                )}
+                {!fs.hasSpatial && fs.status !== "error" && fs.featureCount > 0 && (
+                  <Badge variant="outline" className="text-[9px] shrink-0">inherits geometry</Badge>
                 )}
               </div>
               {fs.status === "uploading" && <Progress value={fs.progress} className="h-1.5" />}
@@ -245,7 +314,11 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         </div>
       )}
 
-      {/* Actions */}
+      {overallStatus && uploading && (
+        <p className="text-xs text-muted-foreground text-center">{overallStatus}</p>
+      )}
+
+      {/* Action buttons */}
       {!uploading && !allDone && (
         <div className="flex gap-2">
           <Button onClick={() => fileRef.current?.click()} variant="outline" className="flex-1">
@@ -260,17 +333,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         </div>
       )}
 
-      {uploading && (
-        <p className="text-xs text-muted-foreground text-center">
-          Processing {files.length} file{files.length !== 1 ? "s" : ""}… please wait.
-        </p>
-      )}
-
       {allDone && (
         <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={handleReset}>
-            Upload More
-          </Button>
+          <Button variant="ghost" size="sm" onClick={handleReset}>Upload More</Button>
           <Button size="sm" onClick={onComplete}>Done</Button>
         </div>
       )}
@@ -278,8 +343,12 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   );
 }
 
-/** CSV → GeoJSON converter. Supports lat/lng columns OR a "Geo Shape" column with inline GeoJSON geometry. */
-function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
+/**
+ * CSV → GeoJSON with flexible geometry handling.
+ * If the CSV has lat/lng or Geo Shape columns, features get proper geometry (hasSpatial=true).
+ * If not, features are created with null geometry (hasSpatial=false) so they can inherit from another file.
+ */
+function csvToGeoJSONFlexible(csvText: string): { geojson: GeoJSON.FeatureCollection; hasSpatial: boolean } {
   const lines = csvText.trim().split("\n");
   if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
 
@@ -290,9 +359,7 @@ function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
   const latIdx = headers.findIndex((h) => ["lat", "latitude", "y", "site_northing"].includes(h));
   const lngIdx = headers.findIndex((h) => ["lng", "lon", "longitude", "x", "site_easting"].includes(h));
 
-  if (geoShapeIdx === -1 && (latIdx === -1 || lngIdx === -1)) {
-    throw new Error("CSV must have lat/lng (or latitude/longitude) columns, or a 'Geo Shape' column with GeoJSON geometry");
-  }
+  const hasSpatial = geoShapeIdx !== -1 || (latIdx !== -1 && lngIdx !== -1);
 
   const features: GeoJSON.Feature[] = [];
 
@@ -315,8 +382,7 @@ function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
       geometry = { type: "Point", coordinates: [lng, lat] };
     }
 
-    if (!geometry) continue;
-
+    // Build properties from all non-geometry columns
     const props: Record<string, any> = {};
     headers.forEach((h, idx) => {
       if (idx !== geoShapeIdx && idx !== latIdx && idx !== lngIdx) {
@@ -324,13 +390,14 @@ function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
       }
     });
 
-    features.push({ type: "Feature", geometry, properties: props });
+    // For non-spatial files, create feature with null geometry (to be inherited)
+    features.push({ type: "Feature", geometry: geometry!, properties: props });
   }
 
-  return { type: "FeatureCollection", features };
+  return { geojson: { type: "FeatureCollection", features }, hasSpatial };
 }
 
-/** Parse a single CSV row, respecting quoted fields that may contain commas and nested JSON. */
+/** Parse a single CSV row, respecting quoted fields. */
 function parseCSVRow(row: string): string[] {
   const result: string[] = [];
   let current = "";
