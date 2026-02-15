@@ -69,11 +69,13 @@ Deno.serve(async (req) => {
     // Build the features JSON for the batch insert RPC
     const mappedFeatures = features.map((f: any) => {
       const props = f.properties || {};
-      // Auto-promote LineString → MultiLineString if the layer expects it
+      // Auto-promote geometry types to match target table expectations
       let geom = f.geometry;
-      if (geom && geom.type === "LineString" && storage_table === "geo_cables" || 
-          geom && geom.type === "LineString" && storage_table === "geo_feeders") {
+      if (geom && geom.type === "LineString" && (storage_table === "geo_cables" || storage_table === "geo_feeders")) {
         geom = { type: "MultiLineString", coordinates: [geom.coordinates] };
+      }
+      if (geom && geom.type === "Polygon" && storage_table === "geo_polygons") {
+        geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
       }
       return {
         geom_geojson: JSON.stringify(geom),
