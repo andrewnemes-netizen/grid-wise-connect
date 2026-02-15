@@ -46,7 +46,8 @@ function bboxDimensionShifted(
 export function useLayerManager(
   map: maplibregl.Map | null,
   mapLoaded: boolean,
-  heatmapMode: boolean
+  heatmapMode: boolean,
+  selectedDno?: string | null
 ) {
   const { registryLayers, registryLoading } = useRegistryLayers();
   const [visibility, setVisibility] = useState<LayerVisibility>({});
@@ -55,9 +56,11 @@ export function useLayerManager(
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  // Refs for stable moveend listener (no dependency on visibility state)
+  // Refs for stable moveend listener (no dependency on visibility/dno state)
   const visibilityRef = useRef<LayerVisibility>({});
   visibilityRef.current = visibility;
+  const selectedDnoRef = useRef<string | null | undefined>(selectedDno);
+  selectedDnoRef.current = selectedDno;
 
   const clickHandlersRef = useRef<Map<string, { click: (e: any) => void; enter: () => void; leave: () => void }>>(new Map());
   const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,7 +112,7 @@ export function useLayerManager(
 
       setLoadingLayers((prev) => new Set(prev).add(layerId));
       try {
-        const geojson = await fetchLayerGeoJSON(layerId, bbox);
+        const geojson = await fetchLayerGeoJSON(layerId, bbox, selectedDnoRef.current);
         const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
         const colorIdx = catLayers.findIndex((l) => l.id === layerId);
         const isUtil = layer.slug === "npg_hv_substations_utilisation";

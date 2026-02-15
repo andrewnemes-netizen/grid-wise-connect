@@ -38,7 +38,7 @@ const MapView = () => {
   const {
     registryLayers, visibility, handleLayerToggle, loadingLayers,
     selectedFeature, selectedLayerLabel, closeFeatureInfo, layerMap,
-  } = useLayerManager(map, mapLoaded, heatmapMode);
+  } = useLayerManager(map, mapLoaded, heatmapMode, selectedDno);
 
   const connect = useConnectTool(map, layerMap);
   const pin = usePinDrop(map);

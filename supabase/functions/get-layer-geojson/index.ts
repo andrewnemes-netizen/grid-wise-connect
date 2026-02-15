@@ -80,6 +80,7 @@ Deno.serve(async (req) => {
         _storage_table: layerMeta.storage_table,
         _bbox: bboxParam || null,
         _limit: limit,
+        _dno_clip: dnoClip || null,
       });
 
       if (rpcErr) {
@@ -125,6 +126,7 @@ Deno.serve(async (req) => {
         _storage_table: regLayer.storage_table,
         _bbox: bboxParam || null,
         _limit: limit,
+        _dno_clip: dnoClip || null,
       });
 
       if (rpcErr) {
