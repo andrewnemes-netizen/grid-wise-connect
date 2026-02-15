@@ -71,11 +71,17 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   const [overallStatus, setOverallStatus] = useState("");
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files;
-    if (!selected || selected.length === 0) return;
-    setFiles((prev) => [...prev, ...Array.from(selected)]);
-    setAllDone(false);
-    if (fileRef.current) fileRef.current.value = "";
+    try {
+      console.log("[GeoUploader] File input changed");
+      const selected = e.target.files;
+      if (!selected || selected.length === 0) return;
+      console.log("[GeoUploader] Files selected:", Array.from(selected).map(f => f.name));
+      setFiles((prev) => [...prev, ...Array.from(selected)]);
+      setAllDone(false);
+      if (fileRef.current) fileRef.current.value = "";
+    } catch (err) {
+      console.error("[GeoUploader] Error in handleFilesSelected:", err);
+    }
   };
 
   const removeFile = (index: number) => {
@@ -85,11 +91,13 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   const handleUploadAll = async () => {
     if (files.length === 0) return;
 
+    console.log("[GeoUploader] handleUploadAll started, files:", files.length);
     setUploading(true);
     setAllDone(false);
     setOverallStatus("Parsing files…");
 
     try {
+    console.log("[GeoUploader] Phase 1: Parsing files");
 
     const statuses: FileStatus[] = files.map((f) => ({
       name: f.name,
@@ -189,6 +197,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         for (let b = 0; b < features.length; b += BATCH_SIZE) {
           const batch = features.slice(b, b + BATCH_SIZE);
 
+          console.log(`[GeoUploader] Sending batch ${b}-${b + batch.length} of ${features.length} for ${files[i].name}`);
           const res = await supabase.functions.invoke("ingest-geo-features", {
             body: {
               layer_id: layerId,
