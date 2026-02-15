@@ -158,11 +158,18 @@ export async function addRegistryLayerToMap(
     }
   }
 
-  // If source already exists, just update data in-place — no flicker
+  // If source already exists, check if we need a full rebuild (heatmap toggle) or just data update
   const existingSource = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
   if (existingSource && typeof existingSource.setData === "function") {
-    existingSource.setData(geojson);
-    return; // layers are already attached, no need to re-add
+    const heatLayerExists = !!map.getLayer(`${layerMapId}-heat`);
+    const needsHeatmap = !!(heatmap && layer.slug === "npg_hv_substations_utilisation");
+    
+    // If heatmap state matches what's on the map, just update data in-place
+    if (heatLayerExists === needsHeatmap) {
+      existingSource.setData(geojson);
+      return;
+    }
+    // Otherwise fall through to full rebuild (remove + re-add with correct layers)
   }
 
   // Remove any stale remnants (shouldn't happen but safety)
