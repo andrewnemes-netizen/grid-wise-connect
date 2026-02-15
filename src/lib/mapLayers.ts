@@ -12,7 +12,8 @@ const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
  */
 export async function fetchLayerGeoJSON(
   layerId: string,
-  bbox?: [number, number, number, number]
+  bbox?: [number, number, number, number],
+  dnoClip?: string | null
 ): Promise<GeoJSON.FeatureCollection> {
   // Ensure a minimum bbox size so close-zoom queries still capture nearby points
   let bufferedBbox = bbox;
@@ -32,7 +33,9 @@ export async function fetchLayerGeoJSON(
   const roundedBbox = bufferedBbox
     ? bufferedBbox.map((v) => Math.round(v * 1000) / 1000) as [number, number, number, number]
     : undefined;
-  const cacheKey = roundedBbox ? `${layerId}:${roundedBbox.join(",")}` : layerId;
+  const cacheKey = roundedBbox
+    ? `${layerId}:${roundedBbox.join(",")}${dnoClip ? `:${dnoClip}` : ""}`
+    : `${layerId}${dnoClip ? `:${dnoClip}` : ""}`;
 
   if (geojsonCache.has(cacheKey)) {
     return geojsonCache.get(cacheKey)!;
@@ -51,6 +54,9 @@ export async function fetchLayerGeoJSON(
   }
   if (roundedBbox) {
     params.set("bbox", roundedBbox.join(","));
+  }
+  if (dnoClip) {
+    params.set("dno_clip", dnoClip);
   }
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-layer-geojson?${params}`;

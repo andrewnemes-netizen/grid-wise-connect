@@ -1442,15 +1442,26 @@ export type Database = {
         Returns: boolean
       }
       geomfromewkt: { Args: { "": string }; Returns: unknown }
-      get_geo_layer_geojson: {
-        Args: {
-          _bbox?: string
-          _layer_id: string
-          _limit?: number
-          _storage_table: string
-        }
-        Returns: Json
-      }
+      get_geo_layer_geojson:
+        | {
+            Args: {
+              _bbox?: string
+              _layer_id: string
+              _limit?: number
+              _storage_table: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _bbox?: string
+              _dno_clip?: string
+              _layer_id: string
+              _limit?: number
+              _storage_table: string
+            }
+            Returns: Json
+          }
       get_layer_geojson: {
         Args: { _bbox_filter?: string; _limit?: number; _table_name: string }
         Returns: Json
