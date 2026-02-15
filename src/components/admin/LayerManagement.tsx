@@ -223,7 +223,12 @@ export function LayerManagement() {
 
       {/* Upload dialog */}
       <Dialog open={!!uploadLayerId} onOpenChange={(open) => { if (!open) setUploadLayerId(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent
+          className="max-w-lg"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onFocusOutside={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Upload Features</DialogTitle>
           </DialogHeader>
