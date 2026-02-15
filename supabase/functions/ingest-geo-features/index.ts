@@ -53,8 +53,14 @@ Deno.serve(async (req) => {
     // Build the features JSON for the batch insert RPC
     const mappedFeatures = features.map((f: any) => {
       const props = f.properties || {};
+      // Auto-promote LineString → MultiLineString if the layer expects it
+      let geom = f.geometry;
+      if (geom && geom.type === "LineString" && storage_table === "geo_cables" || 
+          geom && geom.type === "LineString" && storage_table === "geo_feeders") {
+        geom = { type: "MultiLineString", coordinates: [geom.coordinates] };
+      }
       return {
-        geom_geojson: JSON.stringify(f.geometry),
+        geom_geojson: JSON.stringify(geom),
         layer_id,
         dno,
         name: props.name || props.site_name || props.Name || props.SITE_NAME || null,
@@ -66,9 +72,9 @@ Deno.serve(async (req) => {
         demand_kw: parseNum(props.max_demand_kw || props.demand_kw),
         headroom_kw: parseNum(props.transformer_headroom_kw || props.headroom_kw),
         utilisation_pct: parseNum(props.utilisation_pct),
-        voltage_kv: parseNum(props.voltage_kv),
+        voltage_kv: parseNum(props.voltage_kv || props.voltage),
         // feeder
-        feeder_ref: props.feeder_ref || null,
+        feeder_ref: props.feeder_ref || props.circuit_id || props["circuit id"] || null,
         // cable
         capacity_value: parseNum(props.capacity_value),
         capacity_unit: props.capacity_unit || null,
