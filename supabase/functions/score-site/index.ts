@@ -56,30 +56,38 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch nearest substations (ranked by distance)
-    const offset = 0.02; // ~2km radius
-    const searchPolygon = {
-      type: "Polygon",
-      coordinates: [[
-        [lng - offset, lat - offset],
-        [lng + offset, lat - offset],
-        [lng + offset, lat + offset],
-        [lng - offset, lat + offset],
-        [lng - offset, lat - offset],
-      ]],
-    };
+    // Adaptive radius search for nearest substations: 2km → 5km → 10km
+    let substations: any[] = [];
+    const radii = [0.02, 0.05, 0.1]; // ~2km, ~5km, ~10km
 
-    const { data: substations, error: subError } = await supabase.rpc("search_substations_in_polygon", {
-      _geojson: JSON.stringify(searchPolygon),
-      _limit: 10,
-    });
+    for (const offset of radii) {
+      const searchPolygon = {
+        type: "Polygon",
+        coordinates: [[
+          [lng - offset, lat - offset],
+          [lng + offset, lat - offset],
+          [lng + offset, lat + offset],
+          [lng - offset, lat + offset],
+          [lng - offset, lat - offset],
+        ]],
+      };
 
-    if (subError) {
-      console.error("Substation search error:", subError);
+      const { data, error: subError } = await supabase.rpc("search_substations_in_polygon", {
+        _geojson: JSON.stringify(searchPolygon),
+        _limit: 10,
+      });
+
+      if (subError) {
+        console.error("Substation search error:", subError);
+        break;
+      }
+
+      substations = data || [];
+      if (substations.length > 0) break; // Found results, stop expanding
     }
 
     // Map substations to response format
-    const nearestSubstations = (substations || []).map((s: any) => ({
+    const nearestSubstations = substations.map((s: any) => ({
       site_name: s.site_name,
       site_id: s.site_id,
       utilisation_pct: s.utilisation_pct,
