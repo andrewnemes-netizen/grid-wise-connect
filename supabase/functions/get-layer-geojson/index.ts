@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
     const layerParam = url.searchParams.get("layer");
     const layerId = url.searchParams.get("layer_id"); // new: UUID from layer_registry
     const bboxParam = url.searchParams.get("bbox"); // minLng,minLat,maxLng,maxLat
+    const dnoClip = url.searchParams.get("dno_clip"); // optional: DNO code for spatial filtering
     const limitParam = parseInt(url.searchParams.get("limit") || "5000");
     const limit = Math.min(Math.max(limitParam, 1), 10000);
 

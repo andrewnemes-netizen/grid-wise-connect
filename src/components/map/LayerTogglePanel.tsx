@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface RegistryLayer {
@@ -35,6 +36,8 @@ interface LayerTogglePanelProps {
   onHeatmapToggle?: (enabled: boolean) => void;
   registryLayers: RegistryLayer[];
   loadingLayers: Set<string>;
+  selectedDno?: string | null;
+  onDnoChange?: (dno: string | null) => void;
 }
 
 // Derive a consistent color from category + index
@@ -99,21 +102,32 @@ export function LayerTogglePanel({
   onHeatmapToggle,
   registryLayers,
   loadingLayers,
+  selectedDno,
+  onDnoChange,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
-  // Build tree: DNO → Category → Layers
+  // Unique DNO list
+  const dnoList = useMemo(() => {
+    const dnos = new Set(registryLayers.map((l) => l.dno));
+    return Array.from(dnos).sort();
+  }, [registryLayers]);
+
+  // Build tree: DNO → Category → Layers (filtered by selectedDno)
   const tree = useMemo(() => {
+    const filtered = selectedDno
+      ? registryLayers.filter((l) => l.dno === selectedDno)
+      : registryLayers;
     const dnoMap = new Map<string, Map<string, RegistryLayer[]>>();
-    registryLayers.forEach((layer) => {
+    filtered.forEach((layer) => {
       if (!dnoMap.has(layer.dno)) dnoMap.set(layer.dno, new Map());
       const catMap = dnoMap.get(layer.dno)!;
       if (!catMap.has(layer.category)) catMap.set(layer.category, []);
       catMap.get(layer.category)!.push(layer);
     });
     return dnoMap;
-  }, [registryLayers]);
+  }, [registryLayers, selectedDno]);
 
   const toggleGroup = (key: string) => {
     setCollapsedGroups((prev) => {
@@ -149,6 +163,25 @@ export function LayerTogglePanel({
 
         {expanded && (
           <div className="border-t px-2 py-2 space-y-1 max-h-[60vh] overflow-y-auto">
+            {/* DNO filter */}
+            {dnoList.length > 1 && onDnoChange && (
+              <div className="pb-1.5 mb-1 border-b">
+                <Select
+                  value={selectedDno || "all"}
+                  onValueChange={(v) => onDnoChange(v === "all" ? null : v)}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue placeholder="All DNOs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All DNOs</SelectItem>
+                    {dnoList.map((dno) => (
+                      <SelectItem key={dno} value={dno}>{dno}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             {Array.from(tree.entries()).map(([dno, catMap]) => (
               <div key={dno} className="space-y-0.5">
                 {/* DNO header - only show if multiple DNOs */}

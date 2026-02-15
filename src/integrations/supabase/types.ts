@@ -127,6 +127,33 @@ export type Database = {
         }
         Relationships: []
       }
+      dno_licence_areas: {
+        Row: {
+          attrs_json: Json | null
+          created_at: string
+          dno_code: string
+          dno_name: string
+          geom: unknown
+          id: string
+        }
+        Insert: {
+          attrs_json?: Json | null
+          created_at?: string
+          dno_code: string
+          dno_name: string
+          geom?: unknown
+          id?: string
+        }
+        Update: {
+          attrs_json?: Json | null
+          created_at?: string
+          dno_code?: string
+          dno_name?: string
+          geom?: unknown
+          id?: string
+        }
+        Relationships: []
+      }
       feeders_ehv: {
         Row: {
           asset_id: string
