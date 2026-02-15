@@ -91,11 +91,15 @@ Deno.serve(async (req) => {
           geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
         }
 
+        // Auto-convert Polygon/MultiPolygon → Point (centroid) when target expects Point
+        if (expectedGeomType === "Point" && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
+          geom = computeCentroid(geom);
+        }
+
         // Validate geometry family matches target table
         const geomFamily = geom.type.replace("Multi", "");
         const expectedFamily = expectedGeomType.replace("Multi", "");
         if (expectedGeomType !== "Geometry" && geomFamily !== expectedFamily) {
-          // Skip this feature — geometry type doesn't match target table
           return null;
         }
       }
@@ -174,4 +178,45 @@ function parseNum(v: any): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   return isNaN(n) ? null : n;
+}
+
+/** Compute the centroid of a Polygon or MultiPolygon as a Point geometry. */
+function computeCentroid(geom: any): any {
+  let rings: number[][][] = [];
+  if (geom.type === "Polygon") {
+    rings = [geom.coordinates[0]]; // outer ring
+  } else if (geom.type === "MultiPolygon") {
+    rings = geom.coordinates.map((p: number[][][]) => p[0]); // outer ring of each polygon
+  }
+  let totalArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (const ring of rings) {
+    // Shoelace-based centroid for each ring
+    let area = 0;
+    let rx = 0;
+    let ry = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      const [x0, y0] = ring[i];
+      const [x1, y1] = ring[i + 1];
+      const cross = x0 * y1 - x1 * y0;
+      area += cross;
+      rx += (x0 + x1) * cross;
+      ry += (y0 + y1) * cross;
+    }
+    area /= 2;
+    if (Math.abs(area) < 1e-12) continue;
+    rx /= (6 * area);
+    ry /= (6 * area);
+    const absArea = Math.abs(area);
+    cx += rx * absArea;
+    cy += ry * absArea;
+    totalArea += absArea;
+  }
+  if (totalArea < 1e-12) {
+    // Fallback: average of first ring's first coordinate
+    const fallback = rings[0]?.[0] || [0, 0];
+    return { type: "Point", coordinates: fallback };
+  }
+  return { type: "Point", coordinates: [cx / totalArea, cy / totalArea] };
 }
