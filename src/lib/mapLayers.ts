@@ -97,10 +97,30 @@ export function addRegistryLayerToMap(
   const layerMapId = `layer-${layer.id}`;
   const color = getLayerColor(layer, colorIndex);
 
+  // Guard: ensure map style is loaded before mutating sources/layers
+  if (!map.isStyleLoaded()) {
+    console.warn(`Map style not loaded, deferring layer ${layer.display_name}`);
+    map.once("idle", () => {
+      try { addRegistryLayerToMap(map, layer, geojson, colorIndex, heatmap); } catch {}
+    });
+    return;
+  }
+
   // Remove existing
   removeRegistryLayerFromMap(map, layer.id);
 
-  map.addSource(sourceId, { type: "geojson", data: geojson });
+  try {
+    map.addSource(sourceId, { type: "geojson", data: geojson });
+  } catch (err) {
+    console.warn(`Failed to add source ${sourceId}:`, err);
+    // Source may already exist — try updating data instead
+    const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+    if (existing && typeof existing.setData === "function") {
+      existing.setData(geojson);
+    } else {
+      return;
+    }
+  }
 
   // Heatmap mode for utilisation layer — render heatmap AND circle layer
   if (heatmap && layer.slug === "npg_hv_substations_utilisation") {
@@ -136,77 +156,84 @@ export function addRegistryLayerToMap(
 
   const renderType = getRenderType(layer.geometry_type);
 
-  if (renderType === "circle") {
-    // Data-driven color for utilisation substations
-    const circleColor = layer.slug === "npg_hv_substations_utilisation"
-      ? [
-          "match", ["get", "utilisation_band"],
-          "Low", "#22c55e",
-          "Below Average", "#84cc16",
-          "Average", "#f59e0b",
-          "Above Average", "#f97316",
-          "High", "#ef4444",
-          color,
-        ] as any
-      : color;
+  try {
+    if (renderType === "circle") {
+      const circleColor = layer.slug === "npg_hv_substations_utilisation"
+        ? [
+            "match", ["get", "utilisation_band"],
+            "Low", "#22c55e",
+            "Below Average", "#84cc16",
+            "Average", "#f59e0b",
+            "Above Average", "#f97316",
+            "High", "#ef4444",
+            color,
+          ] as any
+        : color;
 
-    const circleRadius = layer.slug === "npg_hv_substations_utilisation"
-      ? ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 4, 14, 8] as any
-      : 6;
+      const circleRadius = layer.slug === "npg_hv_substations_utilisation"
+        ? ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 4, 14, 8] as any
+        : 6;
 
-    map.addLayer({
-      id: layerMapId,
-      type: "circle",
-      source: sourceId,
-      paint: {
-        "circle-radius": circleRadius,
-        "circle-color": circleColor,
-        "circle-stroke-color": "#fff",
-        "circle-stroke-width": 1.5,
-        "circle-opacity": 0.9,
-      },
-    });
-  } else if (renderType === "line") {
-    map.addLayer({
-      id: layerMapId,
-      type: "line",
-      source: sourceId,
-      paint: {
-        "line-color": color,
-        "line-width": 2.5,
-        "line-opacity": 0.85,
-      },
-    });
-  } else if (renderType === "fill") {
-    map.addLayer({
-      id: layerMapId,
-      type: "fill",
-      source: sourceId,
-      paint: {
-        "fill-color": color,
-        "fill-opacity": 0.25,
-      },
-    });
-    map.addLayer({
-      id: `${layerMapId}-outline`,
-      type: "line",
-      source: sourceId,
-      paint: {
-        "line-color": color,
-        "line-width": 1.5,
-        "line-opacity": 0.7,
-      },
-    });
+      map.addLayer({
+        id: layerMapId,
+        type: "circle",
+        source: sourceId,
+        paint: {
+          "circle-radius": circleRadius,
+          "circle-color": circleColor,
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 1.5,
+          "circle-opacity": 0.9,
+        },
+      });
+    } else if (renderType === "line") {
+      map.addLayer({
+        id: layerMapId,
+        type: "line",
+        source: sourceId,
+        paint: {
+          "line-color": color,
+          "line-width": 2.5,
+          "line-opacity": 0.85,
+        },
+      });
+    } else if (renderType === "fill") {
+      map.addLayer({
+        id: layerMapId,
+        type: "fill",
+        source: sourceId,
+        paint: {
+          "fill-color": color,
+          "fill-opacity": 0.25,
+        },
+      });
+      map.addLayer({
+        id: `${layerMapId}-outline`,
+        type: "line",
+        source: sourceId,
+        paint: {
+          "line-color": color,
+          "line-width": 1.5,
+          "line-opacity": 0.7,
+        },
+      });
+    }
+  } catch (err) {
+    console.warn(`Failed to add render layer for ${layer.display_name}:`, err);
   }
 }
 
 export function removeRegistryLayerFromMap(map: maplibregl.Map, layerId: string) {
-  const mapLayerId = `layer-${layerId}`;
-  if (map.getLayer(mapLayerId)) map.removeLayer(mapLayerId);
-  if (map.getLayer(`${mapLayerId}-outline`)) map.removeLayer(`${mapLayerId}-outline`);
-  if (map.getLayer(`${mapLayerId}-heat`)) map.removeLayer(`${mapLayerId}-heat`);
-  const sourceId = `source-${layerId}`;
-  if (map.getSource(sourceId)) map.removeSource(sourceId);
+  try {
+    const mapLayerId = `layer-${layerId}`;
+    if (map.getLayer(mapLayerId)) map.removeLayer(mapLayerId);
+    if (map.getLayer(`${mapLayerId}-outline`)) map.removeLayer(`${mapLayerId}-outline`);
+    if (map.getLayer(`${mapLayerId}-heat`)) map.removeLayer(`${mapLayerId}-heat`);
+    const sourceId = `source-${layerId}`;
+    if (map.getSource(sourceId)) map.removeSource(sourceId);
+  } catch (err) {
+    console.warn(`Error removing layer ${layerId}:`, err);
+  }
 }
 
 // Legacy exports for backward compatibility
