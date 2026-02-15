@@ -1,4 +1,4 @@
-import { Map, FolderOpen, Settings, LogOut } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut, Building2 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 import epeLogo from "@/assets/epe-logo.png";
@@ -21,6 +21,10 @@ const navItems = [
   { title: "Portfolio", url: "/portfolio", icon: FolderOpen },
 ];
 
+const internalItems = [
+  { title: "LA Programme", url: "/la-programme", icon: Building2 },
+];
+
 const adminItems = [
   { title: "Admin", url: "/admin", icon: Settings },
 ];
@@ -30,6 +34,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { user, hasRole, signOut } = useAuth();
   const showAdmin = hasRole("admin");
+  const showInternal = hasRole("admin") || hasRole("engineer");
 
   return (
     <Sidebar collapsible="icon">
@@ -47,6 +52,16 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+              {showInternal && internalItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">

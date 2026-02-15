@@ -10,6 +10,7 @@ import MapView from "./pages/MapView";
 import Portfolio from "./pages/Portfolio";
 import SiteDetail from "./pages/SiteDetail";
 import Admin from "./pages/Admin";
+import LaProgramme from "./pages/LaProgramme";
 import QuickEstimate from "./pages/QuickEstimate";
 import NotFound from "./pages/NotFound";
 
@@ -36,6 +37,7 @@ const AppRoutes = () => (
     <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
     <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
     <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
+    <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
