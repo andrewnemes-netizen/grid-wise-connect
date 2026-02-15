@@ -13,7 +13,8 @@ const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
 export async function fetchLayerGeoJSON(
   layerId: string,
   bbox?: [number, number, number, number],
-  dnoClip?: string | null
+  dnoClip?: string | null,
+  featureLimit?: number
 ): Promise<GeoJSON.FeatureCollection> {
   // Ensure a minimum bbox size so close-zoom queries still capture nearby points
   let bufferedBbox = bbox;
@@ -77,11 +78,12 @@ export async function fetchLayerGeoJSON(
 
   // Call the RPC directly
   const bboxStr = roundedBbox ? roundedBbox.join(",") : null;
+  const effectiveLimit = featureLimit ?? 5000;
   const { data: features, error } = await supabase.rpc("get_geo_layer_geojson" as any, {
     _layer_id: resolvedLayerId,
     _storage_table: storageTable,
     _bbox: bboxStr,
-    _limit: 10000,
+    _limit: effectiveLimit,
     _dno_clip: dnoClip || null,
   });
 

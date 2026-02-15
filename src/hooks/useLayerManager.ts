@@ -74,12 +74,24 @@ export function useLayerManager(
     return m;
   }, [registryLayers]);
 
-  // Determine feature cap by geometry type
-  const getFeatureCap = useCallback((layer: RegistryLayer): number => {
+  // Zoom-adaptive feature cap — fewer features at wide zoom to keep load times fast
+  const getFeatureCap = useCallback((layer: RegistryLayer, zoom?: number): number => {
     const gt = layer.geometry_type.toLowerCase();
-    if (gt.includes("point")) return 1000;
-    if (gt.includes("polygon")) return 1000;
-    return 2000; // lines
+    const z = zoom ?? 10;
+    if (gt.includes("line")) {
+      if (z < 7) return 500;
+      if (z < 9) return 1500;
+      if (z < 11) return 3000;
+      return 5000;
+    }
+    if (gt.includes("point")) {
+      if (z < 7) return 2000;
+      if (z < 9) return 5000;
+      return 10000;
+    }
+    if (z < 7) return 500;
+    if (z < 9) return 1000;
+    return 2000;
   }, []);
 
   // Detach event handlers for a layer
@@ -110,9 +122,10 @@ export function useLayerManager(
         return;
       }
 
+      const cap = getFeatureCap(layer, currentZoom);
       setLoadingLayers((prev) => new Set(prev).add(layerId));
       try {
-        const geojson = await fetchLayerGeoJSON(layerId, bbox, selectedDnoRef.current);
+        const geojson = await fetchLayerGeoJSON(layerId, bbox, selectedDnoRef.current, cap);
         const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
         const colorIdx = catLayers.findIndex((l) => l.id === layerId);
         const isUtil = layer.slug === "npg_hv_substations_utilisation";
