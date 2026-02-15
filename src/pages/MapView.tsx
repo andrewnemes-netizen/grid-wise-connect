@@ -29,6 +29,7 @@ const MapView = () => {
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
+  const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
@@ -194,6 +195,8 @@ const MapView = () => {
             onHeatmapToggle={handleHeatmapToggle}
             registryLayers={registryLayers}
             loadingLayers={loadingLayers}
+            selectedDno={selectedDno}
+            onDnoChange={setSelectedDno}
           />
           <MapLegend
             registryLayers={registryLayers}
