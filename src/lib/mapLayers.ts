@@ -7,7 +7,7 @@ import maplibregl from "maplibre-gl";
 const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
 
 /**
- * Fetch GeoJSON for a layer. Supports both legacy slugs and new UUID layer_ids.
+ * Fetch GeoJSON for a layer directly via the database RPC — no edge function needed.
  * Pass bbox as [minLng, minLat, maxLng, maxLat] for viewport filtering.
  */
 export async function fetchLayerGeoJSON(
@@ -20,7 +20,7 @@ export async function fetchLayerGeoJSON(
   if (bbox) {
     const lngSpan = bbox[2] - bbox[0];
     const latSpan = bbox[3] - bbox[1];
-    const MIN_SPAN = 0.1; // ~10km minimum extent – ensures data loads at street-level zoom
+    const MIN_SPAN = 0.1;
     if (lngSpan < MIN_SPAN || latSpan < MIN_SPAN) {
       const cLng = (bbox[0] + bbox[2]) / 2;
       const cLat = (bbox[1] + bbox[3]) / 2;
@@ -29,7 +29,7 @@ export async function fetchLayerGeoJSON(
     }
   }
 
-  // Round bbox to 2 decimal places for cache key stability
+  // Round bbox for cache key stability
   const roundedBbox = bufferedBbox
     ? bufferedBbox.map((v) => Math.round(v * 1000) / 1000) as [number, number, number, number]
     : undefined;
@@ -41,38 +41,60 @@ export async function fetchLayerGeoJSON(
     return geojsonCache.get(cacheKey)!;
   }
 
-  const { data: session } = await supabase.auth.getSession();
-  const token = session.session?.access_token;
-
-  // Determine if layerId is a UUID (new system) or a slug (legacy)
+  // Look up the layer's storage_table from the registry
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(layerId);
-  const params = new URLSearchParams();
+
+  let storageTable: string | null = null;
+  let resolvedLayerId = layerId;
+
   if (isUUID) {
-    params.set("layer_id", layerId);
+    const { data: meta } = await supabase
+      .from("layer_registry")
+      .select("id, storage_table, enabled")
+      .eq("id", layerId)
+      .single();
+    if (!meta || !meta.enabled) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    storageTable = meta.storage_table;
   } else {
-    params.set("layer", layerId);
-  }
-  if (roundedBbox) {
-    params.set("bbox", roundedBbox.join(","));
-  }
-  if (dnoClip) {
-    params.set("dno_clip", dnoClip);
+    // Legacy slug lookup
+    const { data: meta } = await supabase
+      .from("layer_registry")
+      .select("id, storage_table, enabled")
+      .eq("slug", layerId)
+      .single();
+    if (!meta || !meta.enabled) {
+      return { type: "FeatureCollection", features: [] };
+    }
+    storageTable = meta.storage_table;
+    resolvedLayerId = meta.id;
   }
 
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-layer-geojson?${params}`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-    },
-  });
-
-  if (!res.ok) {
-    console.error(`Failed to fetch layer ${layerId}:`, await res.text());
+  if (!storageTable) {
     return { type: "FeatureCollection", features: [] };
   }
 
-  const geojson = await res.json();
+  // Call the RPC directly
+  const bboxStr = roundedBbox ? roundedBbox.join(",") : null;
+  const { data: features, error } = await supabase.rpc("get_geo_layer_geojson" as any, {
+    _layer_id: resolvedLayerId,
+    _storage_table: storageTable,
+    _bbox: bboxStr,
+    _limit: 5000,
+    _dno_clip: dnoClip || null,
+  });
+
+  if (error) {
+    console.error(`RPC error for layer ${layerId}:`, error);
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const geojson: GeoJSON.FeatureCollection = {
+    type: "FeatureCollection",
+    features: (features as any[]) || [],
+  };
+
   geojsonCache.set(cacheKey, geojson);
   return geojson;
 }
@@ -113,7 +135,6 @@ export function addRegistryLayerToMap(
     map.addSource(sourceId, { type: "geojson", data: geojson });
   } catch (err) {
     console.warn(`Failed to add source ${sourceId}:`, err);
-    // Source may already exist — try updating data instead
     const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
     if (existing && typeof existing.setData === "function") {
       existing.setData(geojson);
@@ -122,7 +143,7 @@ export function addRegistryLayerToMap(
     }
   }
 
-  // Heatmap mode for utilisation layer — render heatmap AND circle layer
+  // Heatmap mode for utilisation layer
   if (heatmap && layer.slug === "npg_hv_substations_utilisation") {
     try {
       map.addLayer({
@@ -151,7 +172,6 @@ export function addRegistryLayerToMap(
     } catch (err) {
       console.warn("Heatmap layer failed, falling back to circles only:", err);
     }
-    // Don't return — still add circle layer below for pin drops & click interactions
   }
 
   const renderType = getRenderType(layer.geometry_type);
@@ -240,9 +260,7 @@ export function removeRegistryLayerFromMap(map: maplibregl.Map, layerId: string)
 export { addRegistryLayerToMap as addLayerToMap };
 
 export function removeLayerFromMap(map: maplibregl.Map, layerId: string) {
-  // Try both naming conventions
   removeRegistryLayerFromMap(map, layerId);
-  // Also try legacy naming without prefix
   if (map.getLayer(layerId)) map.removeLayer(layerId);
   if (map.getLayer(`${layerId}-outline`)) map.removeLayer(`${layerId}-outline`);
   const sourceId = `source-${layerId}`;
@@ -251,7 +269,6 @@ export function removeLayerFromMap(map: maplibregl.Map, layerId: string) {
 
 export function clearLayerCache(layerId?: string) {
   if (layerId) {
-    // Clear all cache entries for this layer
     for (const key of geojsonCache.keys()) {
       if (key.startsWith(layerId)) {
         geojsonCache.delete(key);
