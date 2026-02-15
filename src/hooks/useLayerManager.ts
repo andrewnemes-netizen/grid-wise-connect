@@ -38,8 +38,6 @@ function bboxDimensionShifted(
 ): boolean {
   const aW = a[2] - a[0];
   const aH = a[3] - a[1];
-  const bW = b[2] - b[0];
-  const bH = b[3] - b[1];
   const cxShift = Math.abs((a[0] + a[2]) / 2 - (b[0] + b[2]) / 2);
   const cyShift = Math.abs((a[1] + a[3]) / 2 - (b[1] + b[3]) / 2);
   return cxShift > aW * threshold || cyShift > aH * threshold;
@@ -57,7 +55,11 @@ export function useLayerManager(
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  const clickHandlersRef = useRef<Set<string>>(new Set());
+  // Refs for stable moveend listener (no dependency on visibility state)
+  const visibilityRef = useRef<LayerVisibility>({});
+  visibilityRef.current = visibility;
+
+  const clickHandlersRef = useRef<Map<string, { click: (e: any) => void; enter: () => void; leave: () => void }>>(new Map());
   const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBboxMap = useRef<Map<string, [number, number, number, number]>>(new Map());
   const lastZoomRef = useRef<number>(6);
@@ -77,6 +79,21 @@ export function useLayerManager(
     return 2000; // lines
   }, []);
 
+  // Detach event handlers for a layer
+  const detachLayerHandlers = useCallback((map: maplibregl.Map, layerId: string) => {
+    const handlers = clickHandlersRef.current.get(layerId);
+    if (!handlers) return;
+    const mapLayerId = `layer-${layerId}`;
+    try {
+      map.off("click", mapLayerId, handlers.click);
+      map.on("mouseenter", mapLayerId, handlers.enter);
+      map.off("mouseleave", mapLayerId, handlers.leave);
+    } catch {
+      // layer may already be removed
+    }
+    clickHandlersRef.current.delete(layerId);
+  }, []);
+
   // Load a single layer
   const loadLayer = useCallback(
     async (layerId: string, bbox?: [number, number, number, number], showEmptyToast = true) => {
@@ -86,7 +103,6 @@ export function useLayerManager(
       // Check min_zoom
       const currentZoom = map.getZoom();
       if (layer.min_zoom && currentZoom < layer.min_zoom) {
-        // Remove from map if present, but don't show toast
         removeRegistryLayerFromMap(map, layerId);
         return;
       }
@@ -103,23 +119,23 @@ export function useLayerManager(
         // Store the bbox we fetched with
         if (bbox) lastBboxMap.current.set(layerId, bbox);
 
-        // Attach click/hover handlers once
+        // Attach click/hover handlers (detach old ones first)
         const mapLayerId = `layer-${layerId}`;
-        if (!clickHandlersRef.current.has(layerId)) {
-          map.on("click", mapLayerId, (e) => {
-            if (e.features && e.features.length > 0) {
-              setSelectedFeature(e.features[0].properties as Record<string, unknown>);
-              setSelectedLayerLabel(layer.display_name);
-            }
-          });
-          map.on("mouseenter", mapLayerId, () => {
-            map.getCanvas().style.cursor = "pointer";
-          });
-          map.on("mouseleave", mapLayerId, () => {
-            map.getCanvas().style.cursor = "";
-          });
-          clickHandlersRef.current.add(layerId);
-        }
+        detachLayerHandlers(map, layerId);
+
+        const clickHandler = (e: any) => {
+          if (e.features && e.features.length > 0) {
+            setSelectedFeature(e.features[0].properties as Record<string, unknown>);
+            setSelectedLayerLabel(layer.display_name);
+          }
+        };
+        const enterHandler = () => { map.getCanvas().style.cursor = "pointer"; };
+        const leaveHandler = () => { map.getCanvas().style.cursor = ""; };
+
+        map.on("click", mapLayerId, clickHandler);
+        map.on("mouseenter", mapLayerId, enterHandler);
+        map.on("mouseleave", mapLayerId, leaveHandler);
+        clickHandlersRef.current.set(layerId, { click: clickHandler, enter: enterHandler, leave: leaveHandler });
 
         if (geojson.features.length === 0 && showEmptyToast) {
           toast({ title: layer.display_name, description: "No data in this viewport." });
@@ -135,7 +151,7 @@ export function useLayerManager(
         });
       }
     },
-    [map, layerMap, registryLayers, heatmapMode, toast]
+    [map, layerMap, registryLayers, heatmapMode, toast, detachLayerHandlers]
   );
 
   // Toggle layer on/off
@@ -148,15 +164,17 @@ export function useLayerManager(
         const bbox = getMapBbox(map);
         await loadLayer(layerId, bbox);
       } else {
+        // Detach handlers, remove from map, clear cache
+        detachLayerHandlers(map, layerId);
         removeRegistryLayerFromMap(map, layerId);
         clearLayerCache(layerId);
         lastBboxMap.current.delete(layerId);
       }
     },
-    [map, loadLayer]
+    [map, loadLayer, detachLayerHandlers]
   );
 
-  // Smart viewport refresh on moveend
+  // Smart viewport refresh on moveend — stable: uses visibilityRef, not visibility state
   useEffect(() => {
     if (!map || !mapLoaded) return;
 
@@ -168,7 +186,8 @@ export function useLayerManager(
         const prevZoom = lastZoomRef.current;
         lastZoomRef.current = newZoom;
 
-        const visibleLayerIds = Object.entries(visibility)
+        const currentVisibility = visibilityRef.current;
+        const visibleLayerIds = Object.entries(currentVisibility)
           .filter(([, v]) => v)
           .map(([id]) => id);
 
@@ -176,7 +195,7 @@ export function useLayerManager(
           const layer = layerMap.get(id);
           if (!layer) return;
 
-          // min_zoom threshold crossing: fetch when becoming eligible
+          // min_zoom threshold crossing
           if (layer.min_zoom) {
             const wasBelow = prevZoom < layer.min_zoom;
             const isAbove = newZoom >= layer.min_zoom;
@@ -187,8 +206,7 @@ export function useLayerManager(
               return;
             }
             if (wasBelow && isAbove) {
-              // Just crossed into eligible zoom — force fetch
-              clearLayerCache(id);
+              // Just crossed into eligible zoom — force fetch (no cache clear)
               loadLayer(id, newBbox, false);
               return;
             }
@@ -197,7 +215,6 @@ export function useLayerManager(
           // Check overlap with last-fetched bbox
           const lastBbox = lastBboxMap.current.get(id);
           if (!lastBbox) {
-            // Never fetched — fetch now
             loadLayer(id, newBbox, false);
             return;
           }
@@ -205,9 +222,8 @@ export function useLayerManager(
           const overlap = bboxOverlap(lastBbox, newBbox);
           const shifted = bboxDimensionShifted(lastBbox, newBbox, 0.32);
 
-          // Only refetch if overlap < 70% OR shifted > 32%
+          // Only refetch if overlap < 70% OR shifted > 32% — DON'T clear cache, let fetchLayerGeoJSON cache handle it
           if (overlap < 0.7 || shifted) {
-            clearLayerCache(id);
             loadLayer(id, newBbox, false);
           }
         });
@@ -219,7 +235,25 @@ export function useLayerManager(
       map.off("moveend", onMoveEnd);
       if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
     };
-  }, [map, mapLoaded, visibility, loadLayer, layerMap]);
+  }, [map, mapLoaded, loadLayer, layerMap]); // NO visibility dependency — uses ref
+
+  // Cleanup all handlers on unmount
+  useEffect(() => {
+    return () => {
+      if (!map) return;
+      clickHandlersRef.current.forEach((handlers, layerId) => {
+        const mapLayerId = `layer-${layerId}`;
+        try {
+          map.off("click", mapLayerId, handlers.click);
+          map.off("mouseenter", mapLayerId, handlers.enter);
+          map.off("mouseleave", mapLayerId, handlers.leave);
+        } catch {
+          // ignore
+        }
+      });
+      clickHandlersRef.current.clear();
+    };
+  }, [map]);
 
   const closeFeatureInfo = useCallback(() => {
     setSelectedFeature(null);
