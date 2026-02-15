@@ -58,7 +58,9 @@ export function useLayerManager(
 
   // Refs for stable moveend listener (no dependency on visibility/dno state)
   const visibilityRef = useRef<LayerVisibility>({});
-  visibilityRef.current = visibility;
+  // Do NOT sync visibilityRef from state here — it's updated immediately
+  // in handleLayerToggle to prevent moveend from seeing stale values.
+  // Syncing here would overwrite the immediate update before React batches the setState.
   const selectedDnoRef = useRef<string | null | undefined>(selectedDno);
   selectedDnoRef.current = selectedDno;
 
