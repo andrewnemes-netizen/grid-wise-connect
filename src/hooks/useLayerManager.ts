@@ -100,7 +100,7 @@ export function useLayerManager(
     const mapLayerId = `layer-${layerId}`;
     try {
       map.off("click", mapLayerId, handlers.click);
-      map.on("mouseenter", mapLayerId, handlers.enter);
+      map.off("mouseenter", mapLayerId, handlers.enter);
       map.off("mouseleave", mapLayerId, handlers.leave);
     } catch {
       // layer may already be removed
