@@ -1,181 +1,88 @@
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRef, useState, useCallback, useEffect, useMemo } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { Undo2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMap } from "@/hooks/useMap";
-import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
+import { useLayerManager } from "@/hooks/useLayerManager";
+import { useConnectTool } from "@/hooks/useConnectTool";
+import { usePinDrop } from "@/hooks/usePinDrop";
+import { useMapScreenshot } from "@/hooks/useMapScreenshot";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { useMeasure } from "@/hooks/useMeasure";
+import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
-import {
-  LayerTogglePanel,
-  useRegistryLayers,
-  type LayerVisibility,
-  type RegistryLayer,
-} from "@/components/map/LayerTogglePanel";
+import { LayerTogglePanel } from "@/components/map/LayerTogglePanel";
 import { FeatureInfoPanel } from "@/components/map/FeatureInfoPanel";
 import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { SiteCheckPanel, type ConnectionLine } from "@/components/map/SiteCheckPanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
-import { ConnectAssessmentPanel, type ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
-import {
-  fetchLayerGeoJSON,
-  addRegistryLayerToMap,
-  removeRegistryLayerFromMap,
-  clearLayerCache,
-} from "@/lib/mapLayers";
-import { useToast } from "@/hooks/use-toast";
+import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
+import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
-
-function getMapBbox(map: maplibregl.Map): [number, number, number, number] {
-  const bounds = map.getBounds();
-  return [
-    bounds.getWest(),
-    bounds.getSouth(),
-    bounds.getEast(),
-    bounds.getNorth(),
-  ];
-}
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const markerRef = useRef<maplibregl.Marker | null>(null);
-  const pinMarkerRef = useRef<maplibregl.Marker | null>(null);
-  const { registryLayers, registryLoading } = useRegistryLayers();
-  const [visibility, setVisibility] = useState<LayerVisibility>({});
-  const [selectedFeature, setSelectedFeature] = useState<Record<string, unknown> | null>(null);
-  const [selectedLayerLabel, setSelectedLayerLabel] = useState("");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | null>(null);
-  const [pinLocation, setPinLocation] = useState<{ lng: number; lat: number } | null>(null);
-  const [showSiteCheck, setShowSiteCheck] = useState(false);
-  const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const [heatmapMode, setHeatmapMode] = useState(false);
-  const [connectSource, setConnectSource] = useState<ConnectEndpoints["source"] | null>(null);
-  const [connectWaypoints, setConnectWaypoints] = useState<[number, number][]>([]);
-  const [connectEndpoints, setConnectEndpoints] = useState<ConnectEndpoints | null>(null);
-  const waypointMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const connectDstMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
-  const { toast } = useToast();
+
+  // Extracted hooks
+  const {
+    registryLayers, visibility, handleLayerToggle, loadingLayers,
+    selectedFeature, selectedLayerLabel, closeFeatureInfo, layerMap,
+  } = useLayerManager(map, mapLoaded, heatmapMode);
+
+  const connect = useConnectTool(map, layerMap);
+  const pin = usePinDrop(map);
+  const { captureScreenshot } = useMapScreenshot(map, setBasemap);
   const { isDrawing, polygon: drawnPolygon, clearDrawing } = usePolygonDraw(map, activeTool === "polygon");
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
 
-  // Track which layers have click handlers attached
-  const clickHandlersRef = useRef<Set<string>>(new Set());
-  // Debounce timer ref for viewport refresh
-  const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Registry layer lookup
-  const layerMap = useMemo(() => {
-    const m = new Map<string, RegistryLayer>();
-    registryLayers.forEach((l) => m.set(l.id, l));
-    return m;
-  }, [registryLayers]);
-
-  // Load/refresh a single visible layer with current bbox
-  const loadLayer = useCallback(
-    async (layerId: string, bbox?: [number, number, number, number], showEmptyToast = true) => {
-      const layer = layerMap.get(layerId);
-      if (!layer || !map) return;
-
-      setLoadingLayers((prev) => new Set(prev).add(layerId));
-      try {
-        const geojson = await fetchLayerGeoJSON(layerId, bbox);
-        // Find color index within category
-        const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
-        const colorIdx = catLayers.findIndex((l) => l.id === layerId);
-        const isUtil = layer.slug === "npg_hv_substations_utilisation";
-
-        addRegistryLayerToMap(map, layer, geojson, colorIdx, isUtil && heatmapMode);
-
-        // Attach click/hover handlers (once)
-        const mapLayerId = `layer-${layerId}`;
-        if (!clickHandlersRef.current.has(layerId)) {
-          map.on("click", mapLayerId, (e) => {
-            if (e.features && e.features.length > 0) {
-              setSelectedFeature(e.features[0].properties as Record<string, unknown>);
-              setSelectedLayerLabel(layer.display_name);
-            }
-          });
-          map.on("mouseenter", mapLayerId, () => {
-            if (activeToolRef.current !== "pin") map.getCanvas().style.cursor = "pointer";
-          });
-          map.on("mouseleave", mapLayerId, () => {
-            if (activeToolRef.current !== "pin") map.getCanvas().style.cursor = "";
-          });
-          clickHandlersRef.current.add(layerId);
-        }
-
-        if (geojson.features.length === 0 && showEmptyToast) {
-          toast({ title: layer.display_name, description: "No data in this viewport." });
-        }
-      } catch (err) {
-        console.error(`Failed to load layer ${layerId}:`, err);
-        toast({ title: "Layer load failed", description: `Could not load ${layer.display_name}`, variant: "destructive" });
-      } finally {
-        setLoadingLayers((prev) => {
-          const next = new Set(prev);
-          next.delete(layerId);
-          return next;
-        });
-      }
-    },
-    [map, layerMap, registryLayers, heatmapMode, toast]
-  );
-
-  // Handle layer toggle
-  const handleLayerToggle = useCallback(
-    async (layerId: string, visible: boolean) => {
-      setVisibility((prev) => ({ ...prev, [layerId]: visible }));
-
-      if (!map) return;
-
-      if (visible) {
-        const bbox = getMapBbox(map);
-        await loadLayer(layerId, bbox);
-      } else {
-        removeRegistryLayerFromMap(map, layerId);
-        clearLayerCache(layerId);
-      }
-    },
-    [map, loadLayer]
-  );
-
-  // Viewport-based auto-refresh: reload visible layers on moveend
+  // Map click dispatcher
   useEffect(() => {
-    if (!map || !mapLoaded) return;
-
-    const onMoveEnd = () => {
-      // Debounce to avoid rapid fire
-      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
-      moveEndTimerRef.current = setTimeout(() => {
-        const bbox = getMapBbox(map);
-        const visibleLayerIds = Object.entries(visibility)
-          .filter(([, v]) => v)
-          .map(([id]) => id);
-
-        // Clear cache for visible layers so they refetch with new bbox
-        visibleLayerIds.forEach((id) => clearLayerCache(id));
-
-        // Reload all visible layers with new bbox
-        visibleLayerIds.forEach((id) => loadLayer(id, bbox, false));
-      }, 500);
+    if (!map) return;
+    const handler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "connect") {
+        connect.handleConnectClick(e);
+        return;
+      }
+      if (activeToolRef.current === "pin") {
+        pin.handlePinClick(e);
+        setActiveTool(null);
+        return;
+      }
     };
-
-    map.on("moveend", onMoveEnd);
+    const dblHandler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "connect") {
+        connect.handleDblClick(e);
+        setActiveTool(null);
+      }
+    };
+    map.on("click", handler);
+    map.on("dblclick", dblHandler);
     return () => {
-      map.off("moveend", onMoveEnd);
-      if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+      map.off("click", handler);
+      map.off("dblclick", dblHandler);
     };
-  }, [map, mapLoaded, visibility, loadLayer]);
+  }, [map, connect, pin]);
 
-  // Postcode search handler
+  // Cursor for active tools
+  useEffect(() => {
+    if (!map) return;
+    map.getCanvas().style.cursor =
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect"
+        ? "crosshair"
+        : "";
+  }, [map, activeTool]);
+
+  // Postcode search
   const handleSearchResult = useCallback(
     (lng: number, lat: number, label: string) => {
       if (!map) return;
@@ -195,17 +102,11 @@ const MapView = () => {
     [map]
   );
 
-  const handleCloseFeatureInfo = useCallback(() => {
-    setSelectedFeature(null);
-    setSelectedLayerLabel("");
-  }, []);
-
-  // Connection lines
+  // Connection lines from SiteCheckPanel
   const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
     if (!map) return;
     ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
-      if (map.getLayer(`${id}-label`)) map.removeLayer(`${id}-label`);
       if (map.getSource(id)) map.removeSource(id);
     });
     lines.forEach((line) => {
@@ -221,12 +122,7 @@ const MapView = () => {
         id: line.id,
         type: "line",
         source: line.id,
-        paint: {
-          "line-color": line.color,
-          "line-width": 3,
-          "line-dasharray": [4, 3],
-          "line-opacity": 0.9,
-        },
+        paint: { "line-color": line.color, "line-width": 3, "line-dasharray": [4, 3], "line-opacity": 0.9 },
       });
     });
   }, [map]);
@@ -239,317 +135,31 @@ const MapView = () => {
     });
   }, [map]);
 
-  // Pin drop + Connect tool handler
-  useEffect(() => {
-    if (!map) return;
-    const handler = (e: maplibregl.MapMouseEvent) => {
-      // Connect mode: multi-point route drawing
-      if (activeToolRef.current === "connect") {
-        const { lng, lat } = e.lngLat;
-
-        if (!connectSource) {
-          // First click: select source asset from visible layer
-          const features = map.queryRenderedFeatures(e.point);
-          const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
-          if (!layerFeature) {
-            toast({ title: "Click on an asset", description: "First click should be on a visible network asset (substation, feeder, etc.)" });
-            return;
-          }
-          const layerId = layerFeature.layer.id.replace("layer-", "");
-          const regLayer = layerMap.get(layerId);
-          const coords = layerFeature.geometry.type === "Point"
-            ? (layerFeature.geometry as GeoJSON.Point).coordinates as [number, number]
-            : [lng, lat] as [number, number];
-
-          // Place marker on source
-          pinMarkerRef.current?.remove();
-          const srcMarker = new maplibregl.Marker({ color: "#3498db" })
-            .setLngLat(coords)
-            .addTo(map);
-          pinMarkerRef.current = srcMarker;
-
-          setConnectSource({
-            lngLat: coords,
-            properties: (layerFeature.properties || {}) as Record<string, unknown>,
-            layerLabel: regLayer?.display_name || "Asset",
-          });
-          setConnectWaypoints([]);
-          toast({ title: `Source: ${regLayer?.display_name || "Asset"}`, description: "Click to add route waypoints. Double-click to finish." });
-        } else {
-          // Subsequent clicks: add waypoint
-          const newPoint: [number, number] = [lng, lat];
-          const updatedWaypoints = [...connectWaypoints, newPoint];
-          setConnectWaypoints(updatedWaypoints);
-
-          // Place a small waypoint marker
-          const wpMarker = new maplibregl.Marker({ color: "#9b59b6", scale: 0.6 })
-            .setLngLat(newPoint)
-            .addTo(map);
-          waypointMarkersRef.current.push(wpMarker);
-
-          // Update the polyline on the map
-          const allCoords = [connectSource.lngLat, ...updatedWaypoints];
-          const lineId = "connect-line";
-          if (map.getSource(lineId)) {
-            (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
-              type: "Feature",
-              properties: {},
-              geometry: { type: "LineString", coordinates: allCoords },
-            });
-          } else {
-            map.addSource(lineId, {
-              type: "geojson",
-              data: {
-                type: "Feature",
-                properties: {},
-                geometry: { type: "LineString", coordinates: allCoords },
-              },
-            });
-            map.addLayer({
-              id: lineId,
-              type: "line",
-              source: lineId,
-              paint: { "line-color": "#2ecc71", "line-width": 3, "line-dasharray": [4, 3] },
-            });
-          }
-        }
-        return;
-      }
-
-      // Pin mode
-      if (activeToolRef.current !== "pin") return;
-      const { lng, lat } = e.lngLat;
-      pinMarkerRef.current?.remove();
-      const marker = new maplibregl.Marker({ color: "#e74c3c" })
-        .setLngLat([lng, lat])
-        .addTo(map);
-      pinMarkerRef.current = marker;
-      setPinLocation({ lng, lat });
-      setShowSiteCheck(true);
-      setActiveTool(null);
-    };
-    map.on("click", handler);
-
-    // Double-click to finish connect route
-    const dblClickHandler = (e: maplibregl.MapMouseEvent) => {
-      if (activeToolRef.current !== "connect" || !connectSource) return;
-      e.preventDefault();
-      
-      const waypoints = connectWaypoints;
-      if (waypoints.length === 0) return; // need at least one waypoint
-
-      const lastPoint = waypoints[waypoints.length - 1];
-      const allCoords: [number, number][] = [connectSource.lngLat, ...waypoints];
-
-      // Place destination marker on last point
-      connectDstMarkerRef.current?.remove();
-      const dstEl = document.createElement("div");
-      dstEl.style.cssText = "width:18px;height:18px;background:#e74c3c;border:3px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);";
-      const dstMarker = new maplibregl.Marker({ element: dstEl })
-        .setLngLat(lastPoint)
-        .addTo(map);
-      connectDstMarkerRef.current = dstMarker;
-
-      setConnectEndpoints({
-        source: connectSource,
-        destination: { lngLat: lastPoint },
-        routeCoords: allCoords,
-      });
-      setActiveTool(null);
-    };
-    map.on("dblclick", dblClickHandler);
-
-    return () => {
-      map.off("click", handler);
-      map.off("dblclick", dblClickHandler);
-    };
-  }, [map, connectSource, connectWaypoints, layerMap, toast]);
-
-  const clearWaypointMarkers = useCallback(() => {
-    waypointMarkersRef.current.forEach((m) => m.remove());
-    waypointMarkersRef.current = [];
-  }, []);
-
+  // Clear all
   const handleClear = useCallback(() => {
     markerRef.current?.remove();
     markerRef.current = null;
-    pinMarkerRef.current?.remove();
-    pinMarkerRef.current = null;
-    connectDstMarkerRef.current?.remove();
-    connectDstMarkerRef.current = null;
-    clearWaypointMarkers();
-    setPinLocation(null);
-    setShowSiteCheck(false);
-    setSelectedFeature(null);
-    setConnectSource(null);
-    setConnectWaypoints([]);
-    setConnectEndpoints(null);
+    pin.clearPin();
+    connect.clearConnect();
+    closeFeatureInfo();
     clearConnectionLines();
     clearDrawing();
     clearMeasure();
-    // Clear connect line
-    if (map) {
-      if (map.getLayer("connect-line")) map.removeLayer("connect-line");
-      if (map.getSource("connect-line")) map.removeSource("connect-line");
-    }
-  }, [clearConnectionLines, clearDrawing, clearMeasure, clearWaypointMarkers, map]);
-
-  // Finish route: finalize the multi-point connect route
-  const handleFinishRoute = useCallback(() => {
-    if (!connectSource || connectWaypoints.length === 0 || !map) return;
-    const lastPoint = connectWaypoints[connectWaypoints.length - 1];
-    const allCoords: [number, number][] = [connectSource.lngLat, ...connectWaypoints];
-
-    // Place destination marker on last point
-    connectDstMarkerRef.current?.remove();
-    const dstEl = document.createElement("div");
-    dstEl.style.cssText = "width:18px;height:18px;background:#e74c3c;border:3px solid #fff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);";
-    const dstMarker = new maplibregl.Marker({ element: dstEl })
-      .setLngLat(lastPoint)
-      .addTo(map);
-    connectDstMarkerRef.current = dstMarker;
-
-    setConnectEndpoints({
-      source: connectSource,
-      destination: { lngLat: lastPoint },
-      routeCoords: allCoords,
-    });
-    setActiveTool(null);
-  }, [connectSource, connectWaypoints, map]);
-
-  // Undo last waypoint
-  const handleUndoWaypoint = useCallback(() => {
-    if (!map || connectWaypoints.length === 0 || !connectSource) return;
-    const updated = connectWaypoints.slice(0, -1);
-    setConnectWaypoints(updated);
-
-    // Remove last waypoint marker
-    const lastMarker = waypointMarkersRef.current.pop();
-    lastMarker?.remove();
-
-    // Update polyline
-    const allCoords = [connectSource.lngLat, ...updated];
-    const lineId = "connect-line";
-    if (updated.length === 0) {
-      if (map.getLayer(lineId)) map.removeLayer(lineId);
-      if (map.getSource(lineId)) map.removeSource(lineId);
-    } else if (map.getSource(lineId)) {
-      (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
-        type: "Feature",
-        properties: {},
-        geometry: { type: "LineString", coordinates: allCoords },
-      });
-    }
-  }, [connectSource, connectWaypoints, map]);
+  }, [pin, connect, closeFeatureInfo, clearConnectionLines, clearDrawing, clearMeasure]);
 
   const handleZoomToUK = useCallback(() => {
-    if (!map) return;
-    map.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
+    map?.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
   }, [map]);
 
-  // Capture map screenshot - fits bounds to route with 100m buffer on street basemap
-  const handleCaptureMapScreenshot = useCallback(async (): Promise<string | null> => {
-    if (!map || !connectEndpoints) return null;
-
-    // Switch to street basemap so roads, buildings, road names are visible
-    setBasemap("street");
-
-    // Fit map to show full route with ~100m buffer
-    const coords = connectEndpoints.routeCoords;
-    const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
-    coords.forEach((c) => bounds.extend(c));
-
-    const BUFFER_DEG_LAT = 0.0009;
-    const BUFFER_DEG_LNG = 0.0014;
-    bounds.extend([bounds.getWest() - BUFFER_DEG_LNG, bounds.getSouth() - BUFFER_DEG_LAT]);
-    bounds.extend([bounds.getEast() + BUFFER_DEG_LNG, bounds.getNorth() + BUFFER_DEG_LAT]);
-
-    map.fitBounds(bounds, { padding: 40, duration: 0 });
-
-    // Add temporary GeoJSON circle layers for start/end points (DOM markers don't appear on canvas)
-    const startCoord = coords[0];
-    const endCoord = coords[coords.length - 1];
-    const markersSourceId = "screenshot-markers";
-    const markersFillId = "screenshot-markers-fill";
-    const markersStrokeId = "screenshot-markers-stroke";
-
-    if (map.getLayer(markersFillId)) map.removeLayer(markersFillId);
-    if (map.getLayer(markersStrokeId)) map.removeLayer(markersStrokeId);
-    if (map.getSource(markersSourceId)) map.removeSource(markersSourceId);
-
-    map.addSource(markersSourceId, {
-      type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: [
-          { type: "Feature", properties: { role: "start" }, geometry: { type: "Point", coordinates: startCoord } },
-          { type: "Feature", properties: { role: "end" }, geometry: { type: "Point", coordinates: endCoord } },
-        ],
-      },
-    });
-    // White stroke ring
-    map.addLayer({
-      id: markersStrokeId,
-      type: "circle",
-      source: markersSourceId,
-      paint: { "circle-radius": 10, "circle-color": "#ffffff", "circle-opacity": 1 },
-    });
-    // Coloured fill: blue for start, red for end
-    map.addLayer({
-      id: markersFillId,
-      type: "circle",
-      source: markersSourceId,
-      paint: {
-        "circle-radius": 7,
-        "circle-color": ["match", ["get", "role"], "start", "#3498db", "#e74c3c"],
-        "circle-opacity": 1,
-      },
-    });
-
-    // Wait for tiles + markers to render then capture
-    return new Promise((resolve) => {
-      const capture = () => {
-        try {
-          const dataUrl = map.getCanvas().toDataURL("image/png");
-          resolve(dataUrl);
-        } catch (e) {
-          console.warn("Map screenshot capture failed:", e);
-          resolve(null);
-        } finally {
-          // Clean up temporary marker layers
-          if (map.getLayer(markersFillId)) map.removeLayer(markersFillId);
-          if (map.getLayer(markersStrokeId)) map.removeLayer(markersStrokeId);
-          if (map.getSource(markersSourceId)) map.removeSource(markersSourceId);
-        }
-      };
-      const waitForIdle = () => {
-        if (map.areTilesLoaded()) {
-          capture();
-        } else {
-          map.once("idle", capture);
-        }
-      };
-      setTimeout(waitForIdle, 500);
-    });
-  }, [map, connectEndpoints, setBasemap]);
-
-  // Cursor for active tools
-  useEffect(() => {
-    if (!map) return;
-    map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect"
-        ? "crosshair"
-        : "";
-  }, [map, activeTool]);
-
-  // Re-render utilisation layer when heatmap mode toggles
+  // Heatmap toggle
   const handleHeatmapToggle = useCallback(
     (enabled: boolean) => {
       setHeatmapMode(enabled);
       const utilLayer = registryLayers.find((l) => l.slug === "npg_hv_substations_utilisation");
       if (utilLayer && visibility[utilLayer.id] && map) {
         clearLayerCache(utilLayer.id);
-        const bbox = getMapBbox(map);
+        const bounds = map.getBounds();
+        const bbox: [number, number, number, number] = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
         fetchLayerGeoJSON(utilLayer.id, bbox).then((geojson) => {
           const catLayers = registryLayers.filter((l) => l.category === utilLayer.category && l.dno === utilLayer.dno);
           const idx = catLayers.findIndex((l) => l.id === utilLayer.id);
@@ -560,6 +170,12 @@ const MapView = () => {
     [map, registryLayers, visibility]
   );
 
+  // Screenshot handler for ConnectAssessmentPanel
+  const handleCaptureScreenshot = useCallback(async (): Promise<string | null> => {
+    if (!connect.connectEndpoints) return null;
+    return captureScreenshot(connect.connectEndpoints);
+  }, [connect.connectEndpoints, captureScreenshot]);
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
@@ -569,10 +185,7 @@ const MapView = () => {
           <PostcodeSearch onResult={handleSearchResult} />
           <BasemapSwitcher
             active={basemapId}
-            onChange={(id) => {
-              setBasemapId(id);
-              setBasemap(id);
-            }}
+            onChange={(id) => { setBasemapId(id); setBasemap(id); }}
           />
           <LayerTogglePanel
             visibility={visibility}
@@ -590,73 +203,70 @@ const MapView = () => {
           <FeatureInfoPanel
             feature={selectedFeature}
             layerLabel={selectedLayerLabel}
-            onClose={handleCloseFeatureInfo}
+            onClose={closeFeatureInfo}
           />
           <MapToolbar
             activeTool={activeTool}
             onToolChange={(tool) => {
               if (tool !== "connect") {
-                setConnectSource(null);
-                setConnectWaypoints([]);
-                clearWaypointMarkers();
+                connect.setConnectSource(null);
+                connect.clearConnect();
               }
               setActiveTool(tool);
             }}
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
           />
+
           {/* Route drawing controls */}
-          {activeTool === "connect" && connectSource && (
+          {activeTool === "connect" && connect.connectSource && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
               <span className="text-xs text-muted-foreground">
-                {connectWaypoints.length === 0
+                {connect.connectWaypoints.length === 0
                   ? "Click to add route points"
-                  : `${connectWaypoints.length} point${connectWaypoints.length !== 1 ? "s" : ""} — click to add more`}
+                  : `${connect.connectWaypoints.length} point${connect.connectWaypoints.length !== 1 ? "s" : ""} — click to add more`}
               </span>
               <Button
                 variant="outline"
                 size="sm"
                 className="h-7 text-xs"
-                disabled={connectWaypoints.length === 0}
-                onClick={handleUndoWaypoint}
+                disabled={connect.connectWaypoints.length === 0}
+                onClick={connect.undoWaypoint}
               >
                 <Undo2 className="h-3 w-3 mr-1" />Undo
               </Button>
               <Button
                 size="sm"
                 className="h-7 text-xs"
-                disabled={connectWaypoints.length === 0}
-                onClick={handleFinishRoute}
+                disabled={connect.connectWaypoints.length === 0}
+                onClick={() => { connect.finishRoute(); setActiveTool(null); }}
               >
                 <CheckCircle2 className="h-3 w-3 mr-1" />Finish
               </Button>
             </div>
           )}
-          {showSiteCheck && pinLocation && (
+
+          {pin.showSiteCheck && pin.pinLocation && (
             <SiteCheckPanel
-              lng={pinLocation.lng}
-              lat={pinLocation.lat}
-              onClose={() => { setShowSiteCheck(false); clearConnectionLines(); }}
+              lng={pin.pinLocation.lng}
+              lat={pin.pinLocation.lat}
+              onClose={() => { pin.closeSiteCheck(); clearConnectionLines(); }}
               onConnectionLines={handleConnectionLines}
             />
           )}
+
           {drawnPolygon && (
             <PolygonSearchResults
               polygon={drawnPolygon}
               onClose={() => { clearDrawing(); setActiveTool(null); }}
             />
           )}
-          {connectEndpoints && (
+
+          {connect.connectEndpoints && (
             <ConnectAssessmentPanel
-              endpoints={connectEndpoints}
-              onCaptureMapScreenshot={handleCaptureMapScreenshot}
-              onClose={() => {
-                setConnectEndpoints(null);
-                setConnectSource(null);
-                setConnectWaypoints([]);
-                clearWaypointMarkers();
-                handleClear();
-              }}
+              endpoints={connect.connectEndpoints}
+              onCaptureMapScreenshot={handleCaptureScreenshot}
+              onClose={() => { connect.clearConnect(); handleClear(); }}
             />
           )}
         </>

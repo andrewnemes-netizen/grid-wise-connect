@@ -9,8 +9,11 @@ Refactor + intelligence layering on existing Gridwise app. No redesign, no delet
 - **Scoring weights**: connection 0.55, civils 0.35, deployment 0.10
 - **Scoring**: Hybrid — edge function returns raw metrics, client calculates viability_index
 - **Vector tiling**: Not needed. bbox GeoJSON + caching + min_zoom + clustering + feature caps.
-- **Refetch threshold**: bbox overlap <70% OR moved >30-35% bbox dimension. Debounce moveend.
+- **Refetch threshold**: bbox overlap <70% OR moved >30-35% bbox dimension. Debounce 300ms.
 - **Large point layers**: enforce min_zoom + clustering (e.g. SSEN)
+- **min_zoom crossing**: auto-fetch when zoom crosses layer.min_zoom upward; hide when below
+- **DNO filter**: sidebar filtering AND spatial PostGIS ST_Intersects clip via DNO polygon
+- **Feature caps by geometry**: Points 1000, Lines 2000, Polygons 1000
 
 ---
 
@@ -25,7 +28,9 @@ Reduce MapView.tsx from 668 lines to ~100 lines (orchestrator only).
    - Exports: `visibility`, `handleLayerToggle`, `loadingLayers`, `selectedFeature`, `selectedLayerLabel`
    - Implements smart refetch (70% overlap threshold, 30-35% dimension shift)
    - Stores last-fetched bbox per layer
-   - Debounce: 600ms on moveend
+   - Debounce: 300ms on moveend
+   - min_zoom threshold crossing: fetch when zoom >= layer.min_zoom (was below); hide when below
+   - Feature caps: Points 1000, Lines 2000, Polygons 1000
 
 2. **`src/hooks/useConnectTool.ts`**
    - Owns: connectSource, connectWaypoints, connectEndpoints, waypoint markers, connect line
