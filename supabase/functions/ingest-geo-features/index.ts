@@ -66,16 +66,38 @@ Deno.serve(async (req) => {
 
     const storage_table = layerRow.storage_table;
 
+    // Determine the expected geometry family for the target table
+    const TABLE_GEOM_TYPE: Record<string, string> = {
+      geo_substations: "Point",
+      geo_points: "Point",
+      geo_feeders: "MultiLineString",
+      geo_cables: "MultiLineString",
+      geo_polygons: "MultiPolygon",
+      geo_constraints: "Geometry", // accepts anything
+    };
+    const expectedGeomType = TABLE_GEOM_TYPE[storage_table] || "Geometry";
+
     // Build the features JSON for the batch insert RPC
     const mappedFeatures = features.map((f: any) => {
       const props = f.properties || {};
-      // Auto-promote geometry types to match target table expectations
       let geom = f.geometry;
-      if (geom && geom.type === "LineString" && (storage_table === "geo_cables" || storage_table === "geo_feeders")) {
-        geom = { type: "MultiLineString", coordinates: [geom.coordinates] };
-      }
-      if (geom && geom.type === "Polygon" && storage_table === "geo_polygons") {
-        geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
+
+      if (geom) {
+        // Auto-promote single → multi variants
+        if (geom.type === "LineString" && expectedGeomType === "MultiLineString") {
+          geom = { type: "MultiLineString", coordinates: [geom.coordinates] };
+        }
+        if (geom.type === "Polygon" && expectedGeomType === "MultiPolygon") {
+          geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
+        }
+
+        // Validate geometry family matches target table
+        const geomFamily = geom.type.replace("Multi", "");
+        const expectedFamily = expectedGeomType.replace("Multi", "");
+        if (expectedGeomType !== "Geometry" && geomFamily !== expectedFamily) {
+          // Skip this feature — geometry type doesn't match target table
+          return null;
+        }
       }
       return {
         geom_geojson: JSON.stringify(geom),
@@ -100,7 +122,16 @@ Deno.serve(async (req) => {
         // constraint
         constraint_type: props.constraint_type || props.type || null,
       };
-    });
+    }).filter(Boolean); // Remove features with incompatible geometry
+
+    if (mappedFeatures.length === 0) {
+      return new Response(
+        JSON.stringify({ error: `No features have geometry compatible with ${storage_table} (expects ${expectedGeomType}). Your data has incompatible geometry types.`, inserted: 0 }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const skippedCount = features.length - mappedFeatures.length;
 
     const { data: inserted, error: rpcError } = await supabase.rpc("batch_insert_geo_features", {
       _table_name: storage_table,
@@ -127,7 +158,7 @@ Deno.serve(async (req) => {
       .eq("id", layer_id);
 
     return new Response(
-      JSON.stringify({ inserted: inserted ?? features.length, total_in_layer: count }),
+      JSON.stringify({ inserted: inserted ?? mappedFeatures.length, total_in_layer: count, skipped: skippedCount }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
