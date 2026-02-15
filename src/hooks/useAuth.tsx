@@ -28,10 +28,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
   
-  // Refs to track state without causing re-renders
   const rolesRef = useRef<AppRole[]>([]);
   const lastUserIdRef = useRef<string | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const signOutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const explicitSignOutRef = useRef(false);
 
   const fetchRoles = async (userId: string) => {
     if (userId === lastUserIdRef.current && rolesRef.current.length > 0) return;
@@ -59,25 +60,62 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const newUserId = newSession?.user?.id ?? null;
         const currentUserId = lastUserIdRef.current;
 
-        // Same user token refresh — store silently in ref, NO state updates
+        // Same user token refresh — store silently, NO state updates
         if (newUserId && newUserId === currentUserId) {
-          console.log("[Auth] Silent token refresh for same user — no re-render");
+          // Cancel any pending sign-out since we have a valid session
+          if (signOutTimerRef.current) {
+            clearTimeout(signOutTimerRef.current);
+            signOutTimerRef.current = null;
+          }
           sessionRef.current = newSession;
           return;
         }
 
-        console.log("[Auth] Auth state change:", _event, "userId:", newUserId, "prev:", currentUserId);
-        sessionRef.current = newSession;
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-        if (newSession?.user) {
+        // New session with a user (sign-in or different user)
+        if (newUserId) {
+          if (signOutTimerRef.current) {
+            clearTimeout(signOutTimerRef.current);
+            signOutTimerRef.current = null;
+          }
+          sessionRef.current = newSession;
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
           setTimeout(() => {
-            if (isMounted) fetchRoles(newSession.user.id);
+            if (isMounted) fetchRoles(newSession!.user.id);
           }, 0);
-        } else {
+          return;
+        }
+
+        // Sign-out event (newUserId is null)
+        // If it was an explicit sign-out by the user, act immediately
+        if (explicitSignOutRef.current) {
+          explicitSignOutRef.current = false;
+          sessionRef.current = null;
+          setSession(null);
+          setUser(null);
           lastUserIdRef.current = null;
           rolesRef.current = [];
           setRoles([]);
+          return;
+        }
+
+        // Otherwise debounce: Supabase can fire transient SIGNED_OUT during
+        // token refresh. Wait 3 seconds — if a valid session arrives, ignore it.
+        if (!signOutTimerRef.current) {
+          signOutTimerRef.current = setTimeout(() => {
+            signOutTimerRef.current = null;
+            if (!isMounted) return;
+            // If a valid session was restored in the meantime, skip sign-out
+            if (sessionRef.current?.user) {
+              return;
+            }
+            sessionRef.current = null;
+            setSession(null);
+            setUser(null);
+            lastUserIdRef.current = null;
+            rolesRef.current = [];
+            setRoles([]);
+          }, 3000);
         }
       }
     );
@@ -102,17 +140,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => {
       isMounted = false;
+      if (signOutTimerRef.current) clearTimeout(signOutTimerRef.current);
       subscription.unsubscribe();
     };
   }, []);
 
   const signOut = useCallback(async () => {
+    explicitSignOutRef.current = true;
     await supabase.auth.signOut();
   }, []);
 
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
 
-  // Memoize context value to prevent unnecessary re-renders
   const value = useMemo<AuthContextType>(
     () => ({ user, session, loading, roles, hasRole, signOut }),
     [user, session, loading, roles, hasRole, signOut]
