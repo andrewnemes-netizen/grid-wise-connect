@@ -170,7 +170,9 @@ export function useLayerManager(
   // Toggle layer on/off
   const handleLayerToggle = useCallback(
     async (layerId: string, visible: boolean) => {
-      setVisibility((prev) => ({ ...prev, [layerId]: visible }));
+      const newVis = { ...visibilityRef.current, [layerId]: visible };
+      visibilityRef.current = newVis; // Update ref immediately to prevent moveend race
+      setVisibility(newVis);
       if (!map) return;
 
       if (visible) {
