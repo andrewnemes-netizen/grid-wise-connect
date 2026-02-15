@@ -12,11 +12,21 @@ interface FeatureInfoPanelProps {
 
 const HIDDEN_KEYS = ["id", "geometry", "geom", "ogc_fid", "attrs_json", "layer_id", "created_at", "dno", "source_date"];
 
-/** Flatten attrs_json into top-level properties so all CSV columns are accessible */
+/** Flatten attrs_json into top-level properties so all CSV columns are accessible.
+ *  MapLibre serialises nested objects to JSON strings, so we parse first. */
 function flattenFeature(raw: Record<string, unknown>): Record<string, unknown> {
   const result = { ...raw };
-  if (raw.attrs_json && typeof raw.attrs_json === "object" && !Array.isArray(raw.attrs_json)) {
-    const attrs = raw.attrs_json as Record<string, unknown>;
+  let attrs: Record<string, unknown> | null = null;
+
+  if (raw.attrs_json) {
+    if (typeof raw.attrs_json === "string") {
+      try { attrs = JSON.parse(raw.attrs_json); } catch { /* ignore */ }
+    } else if (typeof raw.attrs_json === "object" && !Array.isArray(raw.attrs_json)) {
+      attrs = raw.attrs_json as Record<string, unknown>;
+    }
+  }
+
+  if (attrs) {
     for (const [k, v] of Object.entries(attrs)) {
       if (!(k in result) || result[k] === null || result[k] === undefined) {
         result[k] = v;
