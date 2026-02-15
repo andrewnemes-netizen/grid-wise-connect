@@ -108,7 +108,36 @@ function getRenderType(geometryType: string): "circle" | "line" | "fill" {
   return "circle";
 }
 
-export function addRegistryLayerToMap(
+/**
+ * Wait for the map style to be loaded. Returns a promise that resolves
+ * once isStyleLoaded() is true, with a timeout to prevent infinite waits.
+ */
+function waitForStyleLoaded(map: maplibregl.Map, timeoutMs = 10000): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (map.isStyleLoaded()) {
+      resolve(true);
+      return;
+    }
+    let resolved = false;
+    const onLoad = () => {
+      if (!resolved) {
+        resolved = true;
+        resolve(true);
+      }
+    };
+    map.once("load", onLoad);
+    // Also listen for style.load as a fallback
+    map.once("style.load" as any, onLoad);
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(!!map.isStyleLoaded());
+      }
+    }, timeoutMs);
+  });
+}
+
+export async function addRegistryLayerToMap(
   map: maplibregl.Map,
   layer: RegistryLayer,
   geojson: GeoJSON.FeatureCollection,
@@ -119,13 +148,14 @@ export function addRegistryLayerToMap(
   const layerMapId = `layer-${layer.id}`;
   const color = getLayerColor(layer, colorIndex);
 
-  // Guard: ensure map style is loaded before mutating sources/layers
+  // Wait for style to be loaded — no more infinite defer loop
   if (!map.isStyleLoaded()) {
-    console.warn(`Map style not loaded, deferring layer ${layer.display_name}`);
-    map.once("idle", () => {
-      try { addRegistryLayerToMap(map, layer, geojson, colorIndex, heatmap); } catch {}
-    });
-    return;
+    console.log(`Waiting for map style before adding ${layer.display_name}...`);
+    const loaded = await waitForStyleLoaded(map);
+    if (!loaded) {
+      console.warn(`Map style never loaded, skipping layer ${layer.display_name}`);
+      return;
+    }
   }
 
   // Remove existing

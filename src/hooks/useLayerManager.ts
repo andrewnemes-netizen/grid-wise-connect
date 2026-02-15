@@ -101,7 +101,7 @@ export function useLayerManager(
   const loadLayer = useCallback(
     async (layerId: string, bbox?: [number, number, number, number], showEmptyToast = true) => {
       const layer = layerMap.get(layerId);
-      if (!layer || !map) return;
+      if (!layer || !map || !mapLoaded) return;
 
       // Check min_zoom
       const currentZoom = map.getZoom();
@@ -117,7 +117,7 @@ export function useLayerManager(
         const colorIdx = catLayers.findIndex((l) => l.id === layerId);
         const isUtil = layer.slug === "npg_hv_substations_utilisation";
 
-        addRegistryLayerToMap(map, layer, geojson, colorIdx, isUtil && heatmapMode);
+        await addRegistryLayerToMap(map, layer, geojson, colorIdx, isUtil && heatmapMode);
 
         // Store the bbox we fetched with
         if (bbox) lastBboxMap.current.set(layerId, bbox);
@@ -154,7 +154,7 @@ export function useLayerManager(
         });
       }
     },
-    [map, layerMap, registryLayers, heatmapMode, toast, detachLayerHandlers]
+    [map, mapLoaded, layerMap, registryLayers, heatmapMode, toast, detachLayerHandlers]
   );
 
   // Toggle layer on/off
