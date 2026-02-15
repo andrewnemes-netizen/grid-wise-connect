@@ -78,7 +78,7 @@ export async function fetchLayerGeoJSON(
 
   // Call the RPC directly
   const bboxStr = roundedBbox ? roundedBbox.join(",") : null;
-  const effectiveLimit = featureLimit ?? 5000;
+  const effectiveLimit = featureLimit ?? 20000;
   const { data: features, error } = await supabase.rpc("get_geo_layer_geojson" as any, {
     _layer_id: resolvedLayerId,
     _storage_table: storageTable,

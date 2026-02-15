@@ -74,24 +74,21 @@ export function useLayerManager(
     return m;
   }, [registryLayers]);
 
-  // Zoom-adaptive feature cap — fewer features at wide zoom to keep load times fast
+  // Feature cap — generous limits to ensure all data is visible at any zoom
   const getFeatureCap = useCallback((layer: RegistryLayer, zoom?: number): number => {
     const gt = layer.geometry_type.toLowerCase();
     const z = zoom ?? 10;
     if (gt.includes("line")) {
-      if (z < 7) return 500;
-      if (z < 9) return 1500;
-      if (z < 11) return 3000;
-      return 5000;
+      if (z < 7) return 10000;
+      return 20000;
     }
     if (gt.includes("point")) {
-      if (z < 7) return 2000;
-      if (z < 9) return 5000;
-      return 10000;
+      if (z < 7) return 10000;
+      return 30000;
     }
-    if (z < 7) return 500;
-    if (z < 9) return 1000;
-    return 2000;
+    // Polygons
+    if (z < 7) return 5000;
+    return 10000;
   }, []);
 
   // Detach event handlers for a layer
