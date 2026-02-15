@@ -148,7 +148,7 @@ export async function addRegistryLayerToMap(
   const layerMapId = `layer-${layer.id}`;
   const color = getLayerColor(layer, colorIndex);
 
-  // Wait for style to be loaded — no more infinite defer loop
+  // Wait for style to be loaded
   if (!map.isStyleLoaded()) {
     console.log(`Waiting for map style before adding ${layer.display_name}...`);
     const loaded = await waitForStyleLoaded(map);
@@ -158,19 +158,21 @@ export async function addRegistryLayerToMap(
     }
   }
 
-  // Remove existing
+  // If source already exists, just update data in-place — no flicker
+  const existingSource = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+  if (existingSource && typeof existingSource.setData === "function") {
+    existingSource.setData(geojson);
+    return; // layers are already attached, no need to re-add
+  }
+
+  // Remove any stale remnants (shouldn't happen but safety)
   removeRegistryLayerFromMap(map, layer.id);
 
   try {
     map.addSource(sourceId, { type: "geojson", data: geojson });
   } catch (err) {
     console.warn(`Failed to add source ${sourceId}:`, err);
-    const existing = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
-    if (existing && typeof existing.setData === "function") {
-      existing.setData(geojson);
-    } else {
-      return;
-    }
+    return;
   }
 
   // Heatmap mode for utilisation layer
