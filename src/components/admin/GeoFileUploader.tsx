@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { gmlToGeoJSON, decompressGzip } from "@/lib/gmlParser";
 
 interface GeoFileUploaderProps {
   layerId: string;
@@ -50,8 +51,18 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       } else if (ext === "csv") {
         const text = await file.text();
         geojson = csvToGeoJSON(text);
+      } else if (ext === "gml") {
+        const text = await file.text();
+        setStatus("Parsing GML…");
+        geojson = gmlToGeoJSON(text);
+      } else if (ext === "gz" && file.name.toLowerCase().endsWith(".gml.gz")) {
+        setStatus("Decompressing GML…");
+        const buffer = await file.arrayBuffer();
+        const text = await decompressGzip(buffer);
+        setStatus("Parsing GML…");
+        geojson = gmlToGeoJSON(text);
       } else {
-        throw new Error("Unsupported format. Upload GeoJSON (.geojson/.json) or CSV with lat/lng columns.");
+        throw new Error("Unsupported format. Upload GeoJSON (.geojson/.json), CSV, or GML (.gml/.gml.gz).");
       }
 
       const features = geojson.features;
@@ -110,16 +121,16 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload GeoJSON or CSV (with lat/lng columns). Features will be inserted into <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{layer.storage_table}</code>.
-        Geometries must be in WGS84 (EPSG:4326).
+        Upload GeoJSON, CSV (with lat/lng), or GML (.gml/.gml.gz). Features will be inserted into <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{layer.storage_table}</code>.
+        Geometries in BNG (EPSG:27700) are auto-converted to WGS84.
       </p>
 
-      <input ref={fileRef} type="file" accept=".geojson,.json,.csv" onChange={handleFile} className="hidden" />
+      <input ref={fileRef} type="file" accept=".geojson,.json,.csv,.gml,.gz" onChange={handleFile} className="hidden" />
 
       {!uploading && !done && !error && (
         <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full">
           <Upload className="mr-2 h-4 w-4" />
-          Select File (.geojson, .csv)
+          Select File (.geojson, .csv, .gml)
         </Button>
       )}
 
