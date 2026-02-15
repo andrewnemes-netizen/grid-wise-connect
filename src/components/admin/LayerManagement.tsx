@@ -45,6 +45,8 @@ export function LayerManagement() {
       if (error) throw error;
       return data;
     },
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const dnos = [...new Set(layers.map((l) => l.dno))].sort();
@@ -63,7 +65,13 @@ export function LayerManagement() {
         .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-layers"] }),
+    onSuccess: () => {
+      // Only refetch if the upload dialog is NOT open — refetching while
+      // uploading causes the dialog to unmount and the user sees a "crash"
+      if (!uploadLayerId) {
+        queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
+      }
+    },
   });
 
   const deleteMut = useMutation({
