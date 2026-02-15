@@ -211,6 +211,12 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         connection_options: result.distances || result.distance_bands || [],
         next_steps: result.next_steps,
         created_by: user.id,
+        viability_index: viabilityIndex,
+        grid_readiness: gridReady,
+        deployment_class: deployClass,
+        cost_band: costBand,
+        reinforcement_probability: reinforceProb,
+        raw_score_data: result,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });

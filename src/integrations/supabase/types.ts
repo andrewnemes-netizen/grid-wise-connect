@@ -913,53 +913,71 @@ export type Database = {
         Row: {
           client_org: string | null
           connection_options: Json | null
+          cost_band: string | null
           created_at: string
           created_by: string
+          deployment_class: string | null
           geom: unknown
+          grid_readiness: string | null
           id: string
           next_steps: Json | null
           postcode: string | null
           proposed_kw: number | null
+          raw_score_data: Json | null
+          reinforcement_probability: number | null
           score: string | null
           score_reasons: Json | null
           site_name: string
           site_type: string | null
           status: string
           updated_at: string
+          viability_index: number | null
         }
         Insert: {
           client_org?: string | null
           connection_options?: Json | null
+          cost_band?: string | null
           created_at?: string
           created_by: string
+          deployment_class?: string | null
           geom?: unknown
+          grid_readiness?: string | null
           id?: string
           next_steps?: Json | null
           postcode?: string | null
           proposed_kw?: number | null
+          raw_score_data?: Json | null
+          reinforcement_probability?: number | null
           score?: string | null
           score_reasons?: Json | null
           site_name: string
           site_type?: string | null
           status?: string
           updated_at?: string
+          viability_index?: number | null
         }
         Update: {
           client_org?: string | null
           connection_options?: Json | null
+          cost_band?: string | null
           created_at?: string
           created_by?: string
+          deployment_class?: string | null
           geom?: unknown
+          grid_readiness?: string | null
           id?: string
           next_steps?: Json | null
           postcode?: string | null
           proposed_kw?: number | null
+          raw_score_data?: Json | null
+          reinforcement_probability?: number | null
           score?: string | null
           score_reasons?: Json | null
           site_name?: string
           site_type?: string | null
           status?: string
           updated_at?: string
+          viability_index?: number | null
         }
         Relationships: []
       }
