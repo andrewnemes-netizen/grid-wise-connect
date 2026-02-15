@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, Loader2, CheckCircle, FileUp, AlertCircle } from "lucide-react";
+import { Upload, Loader2, CheckCircle, AlertCircle, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -19,24 +19,41 @@ interface GeoFileUploaderProps {
   onComplete: () => void;
 }
 
+interface FileStatus {
+  name: string;
+  status: "pending" | "uploading" | "done" | "error";
+  progress: number;
+  inserted: number;
+  error?: string;
+}
+
 export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileStatuses, setFileStatuses] = useState<FileStatus[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("");
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [allDone, setAllDone] = useState(false);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files;
+    if (!selected || selected.length === 0) return;
+    const newFiles = Array.from(selected);
+    setFiles((prev) => [...prev, ...newFiles]);
+    setAllDone(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
-    setUploading(true);
-    setProgress(0);
-    setDone(false);
-    setError(null);
-    setStatus("Reading file…");
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const processFile = async (
+    file: File,
+    fileIndex: number,
+    updateStatus: (update: Partial<FileStatus>) => void
+  ) => {
+    updateStatus({ status: "uploading", progress: 0 });
 
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
@@ -53,16 +70,13 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         geojson = csvToGeoJSON(text);
       } else if (ext === "gml") {
         const text = await file.text();
-        setStatus("Parsing GML…");
         geojson = gmlToGeoJSON(text);
       } else if (ext === "gz" && file.name.toLowerCase().endsWith(".gml.gz")) {
-        setStatus("Decompressing GML…");
         const buffer = await file.arrayBuffer();
         const text = await decompressGzip(buffer);
-        setStatus("Parsing GML…");
         geojson = gmlToGeoJSON(text);
       } else {
-        throw new Error("Unsupported format. Upload GeoJSON (.geojson/.json), CSV, or GML (.gml/.gml.gz).");
+        throw new Error("Unsupported format. Upload GeoJSON, CSV, or GML.");
       }
 
       const features = geojson.features;
@@ -70,16 +84,11 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         throw new Error("No features found in file");
       }
 
-      setStatus(`Parsed ${features.length} features. Uploading in batches…`);
-
       const BATCH_SIZE = 500;
       let totalInserted = 0;
 
       for (let i = 0; i < features.length; i += BATCH_SIZE) {
         const batch = features.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(features.length / BATCH_SIZE);
-        setStatus(`Uploading batch ${batchNum} of ${totalBatches}…`);
 
         const res = await supabase.functions.invoke("ingest-geo-features", {
           body: {
@@ -97,20 +106,74 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
           throw new Error(res.error.message || String(res.error));
         }
         totalInserted += res.data?.inserted || 0;
-        setProgress(Math.round(((i + batch.length) / features.length) * 100));
+        updateStatus({
+          progress: Math.round(((i + batch.length) / features.length) * 100),
+        });
       }
 
-      setDone(true);
-      setStatus(`Done! ${totalInserted} features uploaded to "${layer.display_name}".`);
-      toast({ title: "Upload complete", description: `${totalInserted} features ingested.` });
+      updateStatus({ status: "done", progress: 100, inserted: totalInserted });
+      return totalInserted;
     } catch (err: any) {
-      setError(err.message);
-      setStatus("Failed");
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      updateStatus({ status: "error", error: err.message });
+      return 0;
     }
+  };
+
+  const handleUploadAll = async () => {
+    if (files.length === 0) return;
+
+    setUploading(true);
+    setAllDone(false);
+
+    const initialStatuses: FileStatus[] = files.map((f) => ({
+      name: f.name,
+      status: "pending",
+      progress: 0,
+      inserted: 0,
+    }));
+    setFileStatuses(initialStatuses);
+
+    let totalInserted = 0;
+    let hasErrors = false;
+
+    for (let i = 0; i < files.length; i++) {
+      const updateFn = (update: Partial<FileStatus>) => {
+        setFileStatuses((prev) =>
+          prev.map((s, idx) => (idx === i ? { ...s, ...update } : s))
+        );
+      };
+
+      const inserted = await processFile(files[i], i, updateFn);
+      totalInserted += inserted;
+      if (inserted === 0 && files[i]) {
+        // Check if it was an error (not just empty)
+        hasErrors = true;
+      }
+    }
+
+    setUploading(false);
+    setAllDone(true);
+
+    if (totalInserted > 0) {
+      toast({
+        title: "Upload complete",
+        description: `${totalInserted.toLocaleString()} features ingested from ${files.length} file${files.length !== 1 ? "s" : ""}.`,
+      });
+    }
+    if (hasErrors) {
+      toast({
+        title: "Some files had errors",
+        description: "Check individual file statuses below.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReset = () => {
+    setFiles([]);
+    setFileStatuses([]);
+    setAllDone(false);
+    setUploading(false);
   };
 
   return (
@@ -121,53 +184,94 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload GeoJSON, CSV (with lat/lng), or GML (.gml/.gml.gz). Features will be inserted into <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{layer.storage_table}</code>.
-        Geometries in BNG (EPSG:27700) are auto-converted to WGS84.
+        Upload one or more GeoJSON, CSV (with lat/lng or Geo Shape), or GML files.
+        All features will be added to <code className="text-[10px] bg-muted px-1 py-0.5 rounded">{layer.storage_table}</code>.
+        You can combine markers, shapes, and parameters from separate files.
       </p>
 
-      <input ref={fileRef} type="file" accept=".geojson,.json,.csv,.gml,.gz" onChange={handleFile} className="hidden" />
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".geojson,.json,.csv,.gml,.gz"
+        multiple
+        onChange={handleFilesSelected}
+        className="hidden"
+      />
 
-      {!uploading && !done && !error && (
-        <Button onClick={() => fileRef.current?.click()} variant="outline" className="w-full">
-          <Upload className="mr-2 h-4 w-4" />
-          Select File (.geojson, .csv, .gml)
-        </Button>
+      {/* File list */}
+      {files.length > 0 && !uploading && !allDone && (
+        <div className="space-y-1.5 border rounded-md p-2">
+          {files.map((f, idx) => (
+            <div key={`${f.name}-${idx}`} className="flex items-center gap-2 text-xs">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="truncate flex-1">{f.name}</span>
+              <span className="text-muted-foreground shrink-0">
+                {(f.size / 1024).toFixed(0)} KB
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                onClick={() => removeFile(idx)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Progress display during upload */}
+      {(uploading || allDone) && fileStatuses.length > 0 && (
+        <div className="space-y-2 border rounded-md p-2">
+          {fileStatuses.map((fs, idx) => (
+            <div key={idx} className="space-y-1">
+              <div className="flex items-center gap-2 text-xs">
+                {fs.status === "pending" && <Loader2 className="h-3 w-3 text-muted-foreground shrink-0" />}
+                {fs.status === "uploading" && <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />}
+                {fs.status === "done" && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
+                {fs.status === "error" && <AlertCircle className="h-3 w-3 text-destructive shrink-0" />}
+                <span className="truncate flex-1">{fs.name}</span>
+                {fs.status === "done" && (
+                  <span className="text-muted-foreground shrink-0">{fs.inserted.toLocaleString()} features</span>
+                )}
+              </div>
+              {fs.status === "uploading" && <Progress value={fs.progress} className="h-1.5" />}
+              {fs.status === "error" && (
+                <p className="text-[10px] text-destructive pl-5">{fs.error}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Actions */}
+      {!uploading && !allDone && (
+        <div className="flex gap-2">
+          <Button onClick={() => fileRef.current?.click()} variant="outline" className="flex-1">
+            <Upload className="mr-2 h-4 w-4" />
+            {files.length === 0 ? "Select Files" : "Add More Files"}
+          </Button>
+          {files.length > 0 && (
+            <Button onClick={handleUploadAll} className="flex-1">
+              Upload {files.length} File{files.length !== 1 ? "s" : ""}
+            </Button>
+          )}
+        </div>
       )}
 
       {uploading && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-xs">{status}</span>
-          </div>
-          <Progress value={progress} className="h-2" />
-        </div>
+        <p className="text-xs text-muted-foreground text-center">
+          Processing {files.length} file{files.length !== 1 ? "s" : ""}… please wait.
+        </p>
       )}
 
-      {done && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <CheckCircle className="h-4 w-4 text-primary" />
-            <span>{status}</span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => { setDone(false); setStatus(""); }}>
-              Upload More
-            </Button>
-            <Button size="sm" onClick={onComplete}>Done</Button>
-          </div>
-        </div>
-      )}
-
-      {error && !uploading && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4" />
-            <span>{error}</span>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => { setError(null); setStatus(""); }}>
-            Try Again
+      {allDone && (
+        <div className="flex gap-2">
+          <Button variant="ghost" size="sm" onClick={handleReset}>
+            Upload More
           </Button>
+          <Button size="sm" onClick={onComplete}>Done</Button>
         </div>
       )}
     </div>
@@ -179,7 +283,6 @@ function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
   const lines = csvText.trim().split("\n");
   if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
 
-  // Parse CSV header - handle BOM
   const headerLine = lines[0].replace(/^\uFEFF/, "");
   const headers = parseCSVRow(headerLine).map((h) => h.trim().toLowerCase());
 
@@ -203,7 +306,7 @@ function csvToGeoJSON(csvText: string): GeoJSON.FeatureCollection {
       try {
         geometry = JSON.parse(vals[geoShapeIdx]);
       } catch {
-        continue; // skip rows with unparseable geometry
+        continue;
       }
     } else if (latIdx !== -1 && lngIdx !== -1) {
       const lat = parseFloat(vals[latIdx]);
@@ -239,7 +342,7 @@ function parseCSVRow(row: string): string[] {
       if (ch === '"') {
         if (i + 1 < row.length && row[i + 1] === '"') {
           current += '"';
-          i++; // skip escaped quote
+          i++;
         } else {
           inQuotes = false;
         }
