@@ -10,7 +10,22 @@ interface FeatureInfoPanelProps {
   onClose: () => void;
 }
 
-const HIDDEN_KEYS = ["id", "geometry", "geom", "ogc_fid", "attrs_json"];
+const HIDDEN_KEYS = ["id", "geometry", "geom", "ogc_fid", "attrs_json", "layer_id", "created_at", "dno", "source_date"];
+
+/** Flatten attrs_json into top-level properties so all CSV columns are accessible */
+function flattenFeature(raw: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...raw };
+  if (raw.attrs_json && typeof raw.attrs_json === "object" && !Array.isArray(raw.attrs_json)) {
+    const attrs = raw.attrs_json as Record<string, unknown>;
+    for (const [k, v] of Object.entries(attrs)) {
+      if (!(k in result) || result[k] === null || result[k] === undefined) {
+        result[k] = v;
+      }
+    }
+  }
+  delete result.attrs_json;
+  return result;
+}
 
 const utilisationColor: Record<string, string> = {
   Low: "bg-emerald-500",
@@ -131,10 +146,99 @@ function GenericInfo({ feature }: { feature: Record<string, unknown> }) {
   );
 }
 
-export function FeatureInfoPanel({ feature, layerLabel, onClose }: FeatureInfoPanelProps) {
-  if (!feature) return null;
+/** Dedicated info panel for Heat Map Data - Substation Areas */
+function SubstationAreaInfo({ feature }: { feature: Record<string, unknown> }) {
+  const name = (feature.name || feature.Name || "Substation Area") as string;
+  const type = (feature.type || feature.Type || null) as string | null;
+  const demandHeadroom = feature["demand headroom"] ?? feature.demand_headroom ?? null;
+  const genHeadroom = feature["generation headroom"] ?? feature.generation_headroom ?? null;
+  const faultLevelPct = feature["fault level %"] ?? feature["fault level%"] ?? feature.fault_level_pct ?? null;
+  const genConstraints = feature["generation constraints"] ?? feature.generation_constraints ?? null;
+  const demConstraints = feature["demand constraints"] ?? feature.demand_constraints ?? null;
+  const ngConstraint = feature["national grid constraint"] ?? feature.national_grid_constraint ?? null;
+  const firmCapacity = feature["firm capacity"] ?? feature.firm_capacity ?? null;
+  const maxDemand = feature["maximum demand"] ?? feature.maximum_demand ?? null;
+  const minDemand = feature["minimum demand"] ?? feature.minimum_demand ?? null;
+  const downstreamVoltage = feature["downstream voltage"] ?? feature.downstream_voltage ?? null;
+  const upstreamSub = feature["upstream substation"] ?? feature.upstream_substation ?? null;
+  const upstreamGsp = feature["upstream gsp"] ?? feature.upstream_gsp ?? null;
+  const localAuth = feature["local authority"] ?? feature.local_authority ?? null;
 
-  const isSubstation = layerLabel.toLowerCase().includes("substation") || !!feature.utilisation_pct;
+  const constraintColor = (val: string | null) => {
+    if (!val) return "";
+    const lower = val.toString().toLowerCase();
+    if (lower.includes("red")) return "text-red-500 font-semibold";
+    if (lower.includes("amber") || lower.includes("orange")) return "text-amber-500 font-semibold";
+    if (lower.includes("green")) return "text-emerald-500 font-semibold";
+    return "";
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="font-semibold text-sm text-foreground">{name}</h3>
+        <div className="flex items-center gap-2 mt-1">
+          {type && <Badge variant="secondary" className="text-[10px]">{type}</Badge>}
+          {localAuth && <Badge variant="outline" className="text-[10px]">{String(localAuth)}</Badge>}
+        </div>
+      </div>
+
+      {/* Key metrics table matching NPG portal style */}
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs">
+          <tbody>
+            {type && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5 w-1/2">Substation Class</td><td className="px-2 py-1.5">{type}</td></tr>
+            )}
+            {demandHeadroom !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Demand Headroom (MW)</td><td className="px-2 py-1.5">{String(demandHeadroom)}</td></tr>
+            )}
+            {genHeadroom !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Generation Headroom (MW)</td><td className="px-2 py-1.5">{String(genHeadroom)}</td></tr>
+            )}
+            {faultLevelPct !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Fault Level %</td><td className="px-2 py-1.5">{String(faultLevelPct)}</td></tr>
+            )}
+            {firmCapacity !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Firm Capacity (MW)</td><td className="px-2 py-1.5">{String(firmCapacity)}</td></tr>
+            )}
+            {maxDemand !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Maximum Demand (MW)</td><td className="px-2 py-1.5">{String(maxDemand)}</td></tr>
+            )}
+            {minDemand !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Minimum Demand (MW)</td><td className="px-2 py-1.5">{String(minDemand)}</td></tr>
+            )}
+            {downstreamVoltage !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Downstream Voltage</td><td className="px-2 py-1.5">{String(downstreamVoltage)}</td></tr>
+            )}
+            {genConstraints !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Generation Constraints</td><td className={`px-2 py-1.5 ${constraintColor(String(genConstraints))}`}>{String(genConstraints)}</td></tr>
+            )}
+            {demConstraints !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Demand Constraints</td><td className={`px-2 py-1.5 ${constraintColor(String(demConstraints))}`}>{String(demConstraints)}</td></tr>
+            )}
+            {ngConstraint !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">National Grid Constraints</td><td className={`px-2 py-1.5 ${constraintColor(String(ngConstraint))}`}>{String(ngConstraint)}</td></tr>
+            )}
+            {upstreamSub !== null && (
+              <tr className="border-b"><td className="bg-primary/10 font-semibold px-2 py-1.5">Upstream Substation</td><td className="px-2 py-1.5">{String(upstreamSub)}</td></tr>
+            )}
+            {upstreamGsp !== null && (
+              <tr><td className="bg-primary/10 font-semibold px-2 py-1.5">Upstream GSP</td><td className="px-2 py-1.5">{String(upstreamGsp)}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: FeatureInfoPanelProps) {
+  if (!rawFeature) return null;
+
+  const feature = flattenFeature(rawFeature);
+  const isSubstationArea = layerLabel.toLowerCase().includes("heat map") || layerLabel.toLowerCase().includes("substation area");
+  const isSubstation = !isSubstationArea && (layerLabel.toLowerCase().includes("substation") || !!feature.utilisation_pct);
 
   return (
     <div className="absolute bottom-4 left-3 z-10 w-80">
@@ -147,10 +251,11 @@ export function FeatureInfoPanel({ feature, layerLabel, onClose }: FeatureInfoPa
         </div>
         <ScrollArea className="max-h-72">
           <div className="px-3 py-2">
-            {isSubstation ? <SubstationInfo feature={feature} /> : <GenericInfo feature={feature} />}
+            {isSubstationArea ? <SubstationAreaInfo feature={feature} /> : isSubstation ? <SubstationInfo feature={feature} /> : <GenericInfo feature={feature} />}
           </div>
         </ScrollArea>
       </div>
     </div>
   );
 }
+
