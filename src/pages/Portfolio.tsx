@@ -25,7 +25,7 @@ const gridBadge: Record<string, string> = {
   Constrained: "bg-red-100 text-red-800",
 };
 
-type SortKey = "site_name" | "viability_index" | "cost_band" | "reinforcement_probability" | "created_at" | "proposed_kw";
+type SortKey = "site_name" | "viability_index" | "cost_band" | "reinforcement_probability" | "created_at" | "proposed_kw" | "grid_readiness" | "deployment_class";
 type SortDir = "asc" | "desc";
 
 const COST_BAND_ORDER: Record<string, number> = { "£": 1, "££": 2, "£££": 3 };
@@ -38,6 +38,7 @@ const Portfolio = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterGrid, setFilterGrid] = useState("all");
   const [filterCost, setFilterCost] = useState("all");
+  const [filterDeploy, setFilterDeploy] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
@@ -61,6 +62,7 @@ const Portfolio = () => {
       if (filterStatus !== "all" && s.status !== filterStatus) return false;
       if (filterGrid !== "all" && s.grid_readiness !== filterGrid) return false;
       if (filterCost !== "all" && s.cost_band !== filterCost) return false;
+      if (filterDeploy !== "all" && s.deployment_class !== filterDeploy) return false;
       if (search && !s.site_name?.toLowerCase().includes(search.toLowerCase()) && !s.postcode?.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
@@ -81,7 +83,7 @@ const Portfolio = () => {
     });
 
     return list;
-  }, [sites, filterScore, filterStatus, filterGrid, filterCost, search, sortKey, sortDir]);
+  }, [sites, filterScore, filterStatus, filterGrid, filterCost, filterDeploy, search, sortKey, sortDir]);
 
   const compareSites = useMemo(() => sites.filter((s: any) => compareIds.has(s.id)), [sites, compareIds]);
 
@@ -176,6 +178,15 @@ const Portfolio = () => {
             <SelectItem value="£££">£££</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filterDeploy} onValueChange={setFilterDeploy}>
+          <SelectTrigger className="w-40 h-9"><SelectValue placeholder="Deploy" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Deploy</SelectItem>
+            <SelectItem value="Fast Deploy">Fast Deploy</SelectItem>
+            <SelectItem value="Needs Reinforcement">Needs Reinforcement</SelectItem>
+            <SelectItem value="Complex">Complex</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
@@ -245,8 +256,8 @@ const Portfolio = () => {
                 <SortHeader label="kW" k="proposed_kw" />
                 <TableHead>Score</TableHead>
                 <SortHeader label="Viability" k="viability_index" />
-                <TableHead>Grid</TableHead>
-                <TableHead>Deploy</TableHead>
+                <SortHeader label="Grid" k="grid_readiness" />
+                <SortHeader label="Deploy" k="deployment_class" />
                 <SortHeader label="Cost" k="cost_band" />
                 <SortHeader label="Reinforce %" k="reinforcement_probability" />
                 <TableHead>Status</TableHead>
