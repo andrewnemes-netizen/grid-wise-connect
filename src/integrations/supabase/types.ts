@@ -1437,6 +1437,7 @@ export type Database = {
         | {
             Args: {
               _bbox?: string
+              _dno_clip?: string
               _layer_id: string
               _limit?: number
               _storage_table: string
@@ -1446,7 +1447,6 @@ export type Database = {
         | {
             Args: {
               _bbox?: string
-              _dno_clip?: string
               _layer_id: string
               _limit?: number
               _storage_table: string
