@@ -108,10 +108,33 @@ export function LayerTogglePanel({
   const [expanded, setExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
-  // Unique DNO list
-  const dnoList = useMemo(() => {
-    const dnos = new Set(registryLayers.map((l) => l.dno));
-    return Array.from(dnos).sort();
+  // Unique DNO list from licence area polygons
+  const [dnoList, setDnoList] = useState<string[]>([]);
+  useEffect(() => {
+    async function fetchDnos() {
+      // Get the gb_dno_licence_areas layer id
+      const { data: layer } = await supabase
+        .from("layer_registry")
+        .select("id")
+        .eq("slug", "gb_dno_licence_areas")
+        .single();
+      if (!layer) {
+        // Fallback to registry dno field
+        const dnos = new Set(registryLayers.map((l) => l.dno));
+        setDnoList(Array.from(dnos).sort());
+        return;
+      }
+      const { data: rows } = await supabase
+        .from("geo_polygons")
+        .select("name")
+        .eq("layer_id", layer.id)
+        .not("name", "is", null);
+      if (rows) {
+        const unique = Array.from(new Set(rows.map((r: any) => r.name as string))).sort();
+        setDnoList(unique);
+      }
+    }
+    fetchDnos();
   }, [registryLayers]);
 
   // Build tree: DNO → Category → Layers (filtered by selectedDno)
