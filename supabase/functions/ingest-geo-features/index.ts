@@ -41,14 +41,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { layer_id, storage_table, dno, features } = await req.json();
+    const { layer_id, storage_table: _clientTable, dno, features } = await req.json();
 
-    if (!layer_id || !storage_table || !dno || !Array.isArray(features) || !features.length) {
+    if (!layer_id || !dno || !Array.isArray(features) || !features.length) {
       return new Response(
-        JSON.stringify({ error: "layer_id, storage_table, dno, and features[] required" }),
+        JSON.stringify({ error: "layer_id, dno, and features[] required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Always look up the authoritative storage_table from the registry
+    const { data: layerRow, error: layerErr } = await supabase
+      .from("layer_registry")
+      .select("storage_table")
+      .eq("id", layer_id)
+      .single();
+
+    if (layerErr || !layerRow) {
+      return new Response(
+        JSON.stringify({ error: "Layer not found in registry" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const storage_table = layerRow.storage_table;
 
     // Build the features JSON for the batch insert RPC
     const mappedFeatures = features.map((f: any) => {
