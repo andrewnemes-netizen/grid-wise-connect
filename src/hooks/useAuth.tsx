@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, createContext, useContext } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -27,11 +27,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  
+  // Refs to track state without causing re-renders
   const rolesRef = useRef<AppRole[]>([]);
   const lastUserIdRef = useRef<string | null>(null);
+  const sessionRef = useRef<Session | null>(null);
 
   const fetchRoles = async (userId: string) => {
-    // Skip if we already fetched for this user and have roles
     if (userId === lastUserIdRef.current && rolesRef.current.length > 0) return;
     const { data } = await supabase
       .from("user_roles")
@@ -51,18 +53,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     let isMounted = true;
 
-    // Listener for ONGOING auth changes — only update if user actually changed
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         if (!isMounted) return;
-        // Only update state if user ID changed — token refreshes for same user are silent
         const newUserId = newSession?.user?.id ?? null;
         const currentUserId = lastUserIdRef.current;
-        if (newUserId === currentUserId && newSession) {
-          // Same user, just a token refresh — update session silently without triggering re-renders
-          setSession(newSession);
+
+        // Same user token refresh — store silently in ref, NO state updates
+        if (newUserId && newUserId === currentUserId) {
+          sessionRef.current = newSession;
           return;
         }
+
+        // Different user or sign-out — full state update
+        sessionRef.current = newSession;
         setSession(newSession);
         setUser(newSession?.user ?? null);
         if (newSession?.user) {
@@ -77,14 +81,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     );
 
-    // INITIAL load (controls loading state)
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!isMounted) return;
+        sessionRef.current = session;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          lastUserIdRef.current = session.user.id;
           await fetchRoles(session.user.id);
         }
       } finally {
@@ -100,14 +105,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-  };
+  }, []);
 
-  const hasRole = (role: AppRole) => roles.includes(role);
+  const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo<AuthContextType>(
+    () => ({ user, session, loading, roles, hasRole, signOut }),
+    [user, session, loading, roles, hasRole, signOut]
+  );
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, roles, hasRole, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
