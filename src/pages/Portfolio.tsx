@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,10 +6,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FolderOpen, Search, Eye } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X } from "lucide-react";
 import { format } from "date-fns";
 
 const scoreBadge: Record<string, string> = {
@@ -18,12 +19,28 @@ const scoreBadge: Record<string, string> = {
   RED: "bg-red-100 text-red-800 border-red-300",
 };
 
+const gridBadge: Record<string, string> = {
+  Strong: "bg-emerald-100 text-emerald-800",
+  Moderate: "bg-amber-100 text-amber-800",
+  Constrained: "bg-red-100 text-red-800",
+};
+
+type SortKey = "site_name" | "viability_index" | "cost_band" | "reinforcement_probability" | "created_at" | "proposed_kw";
+type SortDir = "asc" | "desc";
+
+const COST_BAND_ORDER: Record<string, number> = { "£": 1, "££": 2, "£££": 3 };
+
 const Portfolio = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [filterScore, setFilterScore] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterGrid, setFilterGrid] = useState("all");
+  const [filterCost, setFilterCost] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("viability_index");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ["sites", user?.id],
@@ -38,21 +55,95 @@ const Portfolio = () => {
     enabled: !!user,
   });
 
-  const filtered = sites.filter((s: any) => {
-    if (filterScore !== "all" && s.score !== filterScore) return false;
-    if (filterStatus !== "all" && s.status !== filterStatus) return false;
-    if (search && !s.site_name?.toLowerCase().includes(search.toLowerCase()) && !s.postcode?.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    let list = sites.filter((s: any) => {
+      if (filterScore !== "all" && s.score !== filterScore) return false;
+      if (filterStatus !== "all" && s.status !== filterStatus) return false;
+      if (filterGrid !== "all" && s.grid_readiness !== filterGrid) return false;
+      if (filterCost !== "all" && s.cost_band !== filterCost) return false;
+      if (search && !s.site_name?.toLowerCase().includes(search.toLowerCase()) && !s.postcode?.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    });
+
+    list.sort((a: any, b: any) => {
+      let av: any, bv: any;
+      if (sortKey === "cost_band") {
+        av = COST_BAND_ORDER[a.cost_band] ?? 99;
+        bv = COST_BAND_ORDER[b.cost_band] ?? 99;
+      } else if (sortKey === "created_at") {
+        av = new Date(a.created_at).getTime();
+        bv = new Date(b.created_at).getTime();
+      } else {
+        av = a[sortKey] ?? -1;
+        bv = b[sortKey] ?? -1;
+      }
+      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
+
+    return list;
+  }, [sites, filterScore, filterStatus, filterGrid, filterCost, search, sortKey, sortDir]);
+
+  const compareSites = useMemo(() => sites.filter((s: any) => compareIds.has(s.id)), [sites, compareIds]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const toggleCompare = (id: string) => {
+    setCompareIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 5) next.add(id);
+      return next;
+    });
+  };
+
+  const exportCsv = () => {
+    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Reinforcement %", "Status", "Created"];
+    const rows = filtered.map((s: any) => [
+      s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
+      s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
+      s.cost_band || "", s.reinforcement_probability ?? "", s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `portfolio-${format(new Date(), "yyyy-MM-dd")}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const SortHeader = ({ label, k }: { label: string; k: SortKey }) => (
+    <TableHead className="cursor-pointer select-none hover:bg-muted/50" onClick={() => toggleSort(k)}>
+      <span className="flex items-center gap-1">
+        {label}
+        <ArrowUpDown className={`h-3 w-3 ${sortKey === k ? "text-primary" : "text-muted-foreground/40"}`} />
+      </span>
+    </TableHead>
+  );
 
   return (
     <div className="p-6 space-y-4 h-full overflow-auto">
-      <div className="flex items-center gap-2">
-        <FolderOpen className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-bold text-foreground">Portfolio</h2>
-        <Badge variant="secondary" className="ml-2">{filtered.length} sites</Badge>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-bold text-foreground">Portfolio</h2>
+          <Badge variant="secondary" className="ml-2">{filtered.length} sites</Badge>
+        </div>
+        <div className="flex gap-2">
+          {compareIds.size >= 2 && (
+            <Button variant="outline" size="sm" onClick={() => setCompareIds(new Set())}>
+              <X className="mr-1 h-3 w-3" />Clear Compare
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={exportCsv}>
+            <Download className="mr-1 h-3 w-3" />Export CSV
+          </Button>
+        </div>
       </div>
 
+      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -65,6 +156,24 @@ const Portfolio = () => {
             <SelectItem value="GREEN">Green</SelectItem>
             <SelectItem value="AMBER">Amber</SelectItem>
             <SelectItem value="RED">Red</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterGrid} onValueChange={setFilterGrid}>
+          <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Grid" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Grid</SelectItem>
+            <SelectItem value="Strong">Strong</SelectItem>
+            <SelectItem value="Moderate">Moderate</SelectItem>
+            <SelectItem value="Constrained">Constrained</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterCost} onValueChange={setFilterCost}>
+          <SelectTrigger className="w-32 h-9"><SelectValue placeholder="Cost" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Costs</SelectItem>
+            <SelectItem value="£">£</SelectItem>
+            <SelectItem value="££">££</SelectItem>
+            <SelectItem value="£££">£££</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -80,42 +189,119 @@ const Portfolio = () => {
         </Select>
       </div>
 
+      {/* Comparison panel */}
+      {compareSites.length >= 2 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <span className="text-sm font-semibold">Comparing {compareSites.length} Sites</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground">
+                    <th className="text-left py-1 pr-4">Metric</th>
+                    {compareSites.map((s: any) => (
+                      <th key={s.id} className="text-center py-1 px-2 min-w-[100px]">{s.site_name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    { label: "Viability", key: "viability_index", fmt: (v: any) => v ?? "—" },
+                    { label: "Score", key: "score", fmt: (v: any) => v || "—" },
+                    { label: "Grid Readiness", key: "grid_readiness", fmt: (v: any) => v || "—" },
+                    { label: "Deployment", key: "deployment_class", fmt: (v: any) => v || "—" },
+                    { label: "Cost Band", key: "cost_band", fmt: (v: any) => v || "—" },
+                    { label: "Reinforcement %", key: "reinforcement_probability", fmt: (v: any) => v != null ? `${v}%` : "—" },
+                    { label: "Proposed kW", key: "proposed_kw", fmt: (v: any) => v || "—" },
+                  ].map(row => (
+                    <tr key={row.label} className="border-t">
+                      <td className="py-1.5 pr-4 text-muted-foreground">{row.label}</td>
+                      {compareSites.map((s: any) => (
+                        <td key={s.id} className="text-center py-1.5 px-2 font-medium">{row.fmt(s[row.key])}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main table */}
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead className="w-10">
+                  <span className="text-[9px] text-muted-foreground">CMP</span>
+                </TableHead>
+                <SortHeader label="Name" k="site_name" />
                 <TableHead>Postcode</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>kW</TableHead>
+                <SortHeader label="kW" k="proposed_kw" />
                 <TableHead>Score</TableHead>
+                <SortHeader label="Viability" k="viability_index" />
+                <TableHead>Grid</TableHead>
+                <TableHead>Deploy</TableHead>
+                <SortHeader label="Cost" k="cost_band" />
+                <SortHeader label="Reinforce %" k="reinforcement_probability" />
                 <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
+                <SortHeader label="Created" k="created_at" />
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
               ) : (
                 filtered.map((site: any) => (
-                  <TableRow key={site.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/site/${site.id}`)}>
-                    <TableCell className="font-medium">{site.site_name}</TableCell>
-                    <TableCell className="text-muted-foreground">{site.postcode || "—"}</TableCell>
-                    <TableCell className="capitalize text-muted-foreground">{site.site_type || "—"}</TableCell>
-                    <TableCell>{site.proposed_kw || "—"}</TableCell>
-                    <TableCell>
+                  <TableRow key={site.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={compareIds.has(site.id)}
+                        onCheckedChange={() => toggleCompare(site.id)}
+                        disabled={!compareIds.has(site.id) && compareIds.size >= 5}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium" onClick={() => navigate(`/site/${site.id}`)}>{site.site_name}</TableCell>
+                    <TableCell className="text-muted-foreground" onClick={() => navigate(`/site/${site.id}`)}>{site.postcode || "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>{site.proposed_kw || "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
                       {site.score ? (
                         <Badge variant="outline" className={scoreBadge[site.score] || ""}>{site.score}</Badge>
                       ) : "—"}
                     </TableCell>
-                    <TableCell><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {site.viability_index != null ? (
+                        <span className={`font-bold ${site.viability_index >= 65 ? "text-emerald-600" : site.viability_index >= 40 ? "text-amber-600" : "text-red-600"}`}>
+                          {site.viability_index}
+                        </span>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {site.grid_readiness ? (
+                        <Badge variant="outline" className={gridBadge[site.grid_readiness] || ""}>{site.grid_readiness}</Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground" onClick={() => navigate(`/site/${site.id}`)}>{site.deployment_class || "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {site.cost_band ? (
+                        <Badge variant={site.cost_band === "£" ? "default" : site.cost_band === "££" ? "secondary" : "destructive"}>{site.cost_band}</Badge>
+                      ) : "—"}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>{site.reinforcement_probability != null ? `${site.reinforcement_probability}%` : "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/site/${site.id}`)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

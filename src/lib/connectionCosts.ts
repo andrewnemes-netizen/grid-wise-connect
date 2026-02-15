@@ -102,7 +102,7 @@ export function estimateConnectionCost(
   const breakdown: CostLineItem[] = [];
 
   // Determine voltage level based on proposed kW
-  const voltageLevel = proposed_kw <= 100 ? "LV" : proposed_kw <= 1000 ? "HV" : "EHV";
+  const voltageLevel = proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
   const cableRate =
     voltageLevel === "LV" ? rates.cable_lv_per_m :
     voltageLevel === "HV" ? rates.cable_hv_per_m :
@@ -218,7 +218,7 @@ export function estimateConnectionCost(
 
 export function generateBom(input: EstimateInput): BomItem[] {
   const { proposed_kw, distances } = input;
-  const voltageLevel = proposed_kw <= 100 ? "LV" : proposed_kw <= 1000 ? "HV" : "EHV";
+  const voltageLevel = proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
   const rawDist =
     voltageLevel === "LV" ? distances.capacity_segment_m :
     voltageLevel === "HV" ? distances.feeder_m : distances.primary_m;
