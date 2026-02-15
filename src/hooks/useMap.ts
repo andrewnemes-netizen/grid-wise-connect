@@ -28,6 +28,7 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
 
 export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
@@ -67,10 +68,12 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
     map.on("load", () => setMapLoaded(true));
 
     mapRef.current = map;
+    setMapInstance(map);
 
     return () => {
       map.remove();
       mapRef.current = null;
+      setMapInstance(null);
       setMapLoaded(false);
     };
   }, [containerRef]);
@@ -107,5 +110,5 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
     );
   }, []);
 
-  return { map: mapRef.current, mapLoaded, setBasemap };
+  return { map: mapInstance, mapLoaded, setBasemap };
 }
