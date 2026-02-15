@@ -6,7 +6,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Legacy layer ID → table mapping (backwards compatibility)
 const LEGACY_MAP: Record<string, { tables: string[]; srid: number }> = {
   site_utilisation: { tables: ["site_utilisation"], srid: 27700 },
   primary_substations: { tables: ["primary_substations_33kv", "primary_substations_66kv"], srid: 27700 },
@@ -18,7 +17,7 @@ const LEGACY_MAP: Record<string, { tables: string[]; srid: number }> = {
   wayleaves: { tables: ["wayleaves"], srid: 27700 },
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,13 +31,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, serviceKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
+    const userResp = await supabase.auth.getUser(token);
+    if (userResp.error || !userResp.data.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -47,35 +46,37 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const layerParam = url.searchParams.get("layer");
-    const layerId = url.searchParams.get("layer_id"); // new: UUID from layer_registry
-    const bboxParam = url.searchParams.get("bbox"); // minLng,minLat,maxLng,maxLat
-    const dnoClip = url.searchParams.get("dno_clip"); // optional: DNO code for spatial filtering
-    const limitParam = parseInt(url.searchParams.get("limit") || "5000");
-    const limit = Math.min(Math.max(limitParam, 1), 10000);
+    const layerId = url.searchParams.get("layer_id");
+    const bboxParam = url.searchParams.get("bbox");
+    const dnoClip = url.searchParams.get("dno_clip");
+    const rawLimit = parseInt(url.searchParams.get("limit") || "5000", 10);
+    const limit = Math.min(Math.max(rawLimit, 1), 10000);
 
-    // --- New dynamic path: query by layer_id (UUID) ---
+    // Dynamic path: query by layer_id (UUID)
     if (layerId) {
-      const { data: layerMeta, error: metaErr } = await supabase
+      const metaResp = await supabase
         .from("layer_registry")
         .select("id, storage_table, slug, enabled")
         .eq("id", layerId)
         .single();
 
-      if (metaErr || !layerMeta) {
+      if (metaResp.error || !metaResp.data) {
         return new Response(
           JSON.stringify({ error: "Layer not found", layer_id: layerId }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
+
+      const layerMeta = metaResp.data;
 
       if (!layerMeta.enabled) {
         return new Response(
           JSON.stringify({ type: "FeatureCollection", features: [] }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } },
         );
       }
 
-      const { data: features, error: rpcErr } = await supabase.rpc("get_geo_layer_geojson", {
+      const rpcResp = await supabase.rpc("get_geo_layer_geojson", {
         _layer_id: layerId,
         _storage_table: layerMeta.storage_table,
         _bbox: bboxParam || null,
@@ -83,45 +84,38 @@ Deno.serve(async (req) => {
         _dno_clip: dnoClip || null,
       });
 
-      if (rpcErr) {
-        console.error("RPC error:", rpcErr);
-        return new Response(
-          JSON.stringify({ error: rpcErr.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (rpcResp.error) {
+        console.error("RPC error:", rpcResp.error);
+        return new Response(JSON.stringify({ error: rpcResp.error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const geojson = {
-        type: "FeatureCollection",
-        features: features || [],
-      };
-
-      return new Response(JSON.stringify(geojson), {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-          "Cache-Control": "public, max-age=300",
-        },
-      });
+      return new Response(
+        JSON.stringify({ type: "FeatureCollection", features: rpcResp.data || [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } },
+      );
     }
 
-    // --- Legacy path: query by slug/layer name ---
+    // Legacy path: query by slug/layer name
     if (!layerParam) {
       return new Response(
         JSON.stringify({ error: "Provide ?layer_id=<uuid> or ?layer=<slug>" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // First try layer_registry by slug
-    const { data: regLayer } = await supabase
+    const regResp = await supabase
       .from("layer_registry")
       .select("id, storage_table, enabled")
       .eq("slug", layerParam)
       .single();
 
-    if (regLayer && regLayer.enabled) {
-      const { data: features, error: rpcErr } = await supabase.rpc("get_geo_layer_geojson", {
+    if (regResp.data && regResp.data.enabled) {
+      const regLayer = regResp.data;
+      const rpcResp = await supabase.rpc("get_geo_layer_geojson", {
         _layer_id: regLayer.id,
         _storage_table: regLayer.storage_table,
         _bbox: bboxParam || null,
@@ -129,17 +123,17 @@ Deno.serve(async (req) => {
         _dno_clip: dnoClip || null,
       });
 
-      if (rpcErr) {
-        console.error("RPC error:", rpcErr);
-        return new Response(
-          JSON.stringify({ error: rpcErr.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (rpcResp.error) {
+        console.error("RPC error:", rpcResp.error);
+        return new Response(JSON.stringify({ error: rpcResp.error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       return new Response(
-        JSON.stringify({ type: "FeatureCollection", features: features || [] }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } }
+        JSON.stringify({ type: "FeatureCollection", features: rpcResp.data || [] }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } },
       );
     }
 
@@ -148,14 +142,18 @@ Deno.serve(async (req) => {
     if (!legacy) {
       return new Response(
         JSON.stringify({ error: "Unknown layer", layer: layerParam }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const allFeatures: any[] = [];
+    const allFeatures: unknown[] = [];
     let bboxFilter = "";
     if (bboxParam) {
-      const [minLng, minLat, maxLng, maxLat] = bboxParam.split(",").map(Number);
+      const parts = bboxParam.split(",").map(Number);
+      const minLng = parts[0];
+      const minLat = parts[1];
+      const maxLng = parts[2];
+      const maxLat = parts[3];
       if (legacy.srid === 27700) {
         bboxFilter = `AND ST_Intersects(geom, ST_Transform(ST_MakeEnvelope(${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 4326), 27700))`;
       } else {
@@ -164,24 +162,24 @@ Deno.serve(async (req) => {
     }
 
     for (const table of legacy.tables) {
-      const { data, error } = await supabase.rpc("get_layer_geojson", {
+      const resp = await supabase.rpc("get_layer_geojson", {
         _table_name: table,
         _bbox_filter: bboxFilter,
         _limit: limit,
       });
 
-      if (error) {
-        console.error(`Error querying ${table}:`, error);
+      if (resp.error) {
+        console.error(`Error querying ${table}:`, resp.error);
         continue;
       }
-      if (data && Array.isArray(data)) {
-        allFeatures.push(...data);
+      if (resp.data && Array.isArray(resp.data)) {
+        allFeatures.push(...resp.data);
       }
     }
 
     return new Response(
       JSON.stringify({ type: "FeatureCollection", features: allFeatures }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } },
     );
   } catch (err) {
     console.error("get-layer-geojson error:", err);
