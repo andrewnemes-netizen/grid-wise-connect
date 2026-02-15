@@ -149,7 +149,7 @@ function GenericInfo({ feature }: { feature: Record<string, unknown> }) {
       {entries.map(([key, value]) => (
         <div key={key} className="flex justify-between gap-2 text-xs py-0.5">
           <span className="text-muted-foreground capitalize shrink-0">{key.replace(/_/g, " ")}</span>
-          <span className="text-foreground text-right truncate font-medium">{String(value ?? "—")}</span>
+          <span className="text-foreground text-right break-all font-medium">{String(value ?? "—")}</span>
         </div>
       ))}
     </div>
@@ -251,7 +251,7 @@ export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: F
   const isSubstation = !isSubstationArea && (layerLabel.toLowerCase().includes("substation") || !!feature.utilisation_pct);
 
   return (
-    <div className="absolute bottom-4 left-3 z-10 w-80">
+    <div className="absolute bottom-4 left-3 z-10 w-[22rem] max-w-[calc(100vw-2rem)]">
       <div className="rounded-lg border bg-background/95 backdrop-blur shadow-lg overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2 border-b bg-primary/5">
           <span className="text-sm font-semibold text-foreground truncate">{layerLabel}</span>
