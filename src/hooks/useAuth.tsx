@@ -60,13 +60,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const currentUserId = lastUserIdRef.current;
 
         // Same user token refresh — store silently in ref, NO state updates
-        // This prevents re-renders that would unmount dialogs/forms mid-operation
         if (newUserId && newUserId === currentUserId) {
+          console.log("[Auth] Silent token refresh for same user — no re-render");
           sessionRef.current = newSession;
           return;
         }
 
-        // Different user or sign-out — full state update
+        console.log("[Auth] Auth state change:", _event, "userId:", newUserId, "prev:", currentUserId);
         sessionRef.current = newSession;
         setSession(newSession);
         setUser(newSession?.user ?? null);
