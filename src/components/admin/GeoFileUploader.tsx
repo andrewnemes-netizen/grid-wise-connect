@@ -97,7 +97,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setOverallStatus("Parsing files…");
 
     try {
-    console.log("[GeoUploader] Phase 1: Parsing files");
+    console.log("[GeoUploader] Phase 1: Parsing files, file names:", files.map(f => f.name));
 
     const statuses: FileStatus[] = files.map((f) => ({
       name: f.name,
@@ -118,12 +118,15 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       setFileStatuses([...statuses]);
 
       try {
+        console.log(`[GeoUploader] Parsing file ${i}: ${files[i].name} (${files[i].size} bytes)`);
         const result = await parseFile(files[i]);
+        console.log(`[GeoUploader] Parsed file ${i}: ${result.geojson.features.length} features, hasSpatial=${result.hasSpatial}`);
         parsed.push(result);
         statuses[i].featureCount = result.geojson.features.length;
         statuses[i].hasSpatial = result.hasSpatial;
         statuses[i].status = "pending";
       } catch (err: any) {
+        console.error(`[GeoUploader] Parse error for file ${i}:`, err);
         parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
         statuses[i].status = "error";
         statuses[i].error = err.message;
@@ -198,20 +201,40 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
           const batch = features.slice(b, b + BATCH_SIZE);
 
           console.log(`[GeoUploader] Sending batch ${b}-${b + batch.length} of ${features.length} for ${files[i].name}`);
-          const res = await supabase.functions.invoke("ingest-geo-features", {
-            body: {
-              layer_id: layerId,
-              storage_table: layer.storage_table,
-              dno: layer.dno,
-              features: batch.map((f) => ({
-                geometry: f.geometry,
-                properties: f.properties || {},
-              })),
-            },
-          });
+          let res: any;
+          try {
+            res = await supabase.functions.invoke("ingest-geo-features", {
+              body: {
+                layer_id: layerId,
+                storage_table: layer.storage_table,
+                dno: layer.dno,
+                features: batch.map((f) => ({
+                  geometry: f.geometry,
+                  properties: f.properties || {},
+                })),
+              },
+            });
+          } catch (invokeErr: any) {
+            console.error(`[GeoUploader] functions.invoke threw:`, invokeErr);
+            throw new Error(`Network error: ${invokeErr.message}`);
+          }
+
+          console.log(`[GeoUploader] Batch response:`, { data: res.data, error: res.error ? String(res.error) : null });
 
           if (res.error) {
-            throw new Error(res.error.message || String(res.error));
+            // Try to extract the actual error message from the response
+            let errorMsg = "Upload failed";
+            try {
+              if (res.error.context) {
+                const body = await res.error.context.json();
+                errorMsg = body?.error || res.error.message || errorMsg;
+              } else {
+                errorMsg = res.error.message || String(res.error);
+              }
+            } catch {
+              errorMsg = res.error.message || String(res.error);
+            }
+            throw new Error(errorMsg);
           }
           fileInserted += res.data?.inserted || 0;
           statuses[i].progress = Math.round(((b + batch.length) / features.length) * 100);
