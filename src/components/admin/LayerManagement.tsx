@@ -214,21 +214,26 @@ export function LayerManagement() {
       </Card>
 
       {/* Upload dialog */}
-      <Dialog open={!!uploadLayerId} onOpenChange={(open) => !open && setUploadLayerId(null)}>
+      <Dialog open={!!uploadLayerId} onOpenChange={(open) => { if (!open) setUploadLayerId(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Upload Features</DialogTitle>
           </DialogHeader>
-          {uploadLayerId && (
-            <GeoFileUploader
-              layerId={uploadLayerId}
-              layer={layers.find((l) => l.id === uploadLayerId)!}
-              onComplete={() => {
-                setUploadLayerId(null);
-                queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
-              }}
-            />
-          )}
+          {uploadLayerId && (() => {
+            const layer = layers.find((l) => l.id === uploadLayerId);
+            if (!layer) return <p className="text-sm text-muted-foreground">Loading layer…</p>;
+            return (
+              <GeoFileUploader
+                key={uploadLayerId}
+                layerId={uploadLayerId}
+                layer={layer}
+                onComplete={() => {
+                  setUploadLayerId(null);
+                  queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
+                }}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
