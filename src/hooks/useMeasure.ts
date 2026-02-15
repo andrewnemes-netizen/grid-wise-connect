@@ -21,7 +21,7 @@ function haversineM(a: [number, number], b: [number, number]): number {
 }
 
 function formatDistance(m: number): string {
-  return `${Math.round(m)} m`;
+  return `${m.toFixed(1)} m`;
 }
 
 const SOURCE_ID = "measure-line";
