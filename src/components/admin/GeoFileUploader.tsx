@@ -89,6 +89,8 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setAllDone(false);
     setOverallStatus("Parsing files…");
 
+    try {
+
     const statuses: FileStatus[] = files.map((f) => ({
       name: f.name,
       status: "pending",
@@ -232,6 +234,17 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       toast({
         title: "Some files had errors",
         description: "Check individual file statuses below.",
+        variant: "destructive",
+      });
+    }
+    } catch (err: any) {
+      console.error("Upload crashed:", err);
+      setUploading(false);
+      setAllDone(false);
+      setOverallStatus("");
+      toast({
+        title: "Upload failed",
+        description: err?.message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     }
