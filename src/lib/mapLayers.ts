@@ -81,7 +81,7 @@ export async function fetchLayerGeoJSON(
     _layer_id: resolvedLayerId,
     _storage_table: storageTable,
     _bbox: bboxStr,
-    _limit: 5000,
+    _limit: 10000,
     _dno_clip: dnoClip || null,
   });
 
