@@ -351,7 +351,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                     <MetricRow label="Cost Band" badge={costBand} badgeVariant={costBand === "£" ? "default" : costBand === "££" ? "secondary" : "destructive"} />
                   )}
                   {result.distances && isInternal && (
-                    <MetricRow label="Cable Length Est." value={`${Math.min(result.distances.capacity_segment_m, pkw <= 100 ? 500 : pkw <= 1000 ? 3000 : 5000).toLocaleString()}m`} />
+                    <MetricRow label="Cable Length Est." value={`${Math.min(pkw <= 80 ? result.distances.capacity_segment_m : pkw <= 1500 ? result.distances.feeder_m : result.distances.primary_m, pkw <= 80 ? 500 : pkw <= 1500 ? 3000 : 5000).toLocaleString()}m`} />
                   )}
                   {rawMetrics.civils.constraint_count > 0 && (
                     <MetricRow label="Civils Complexity" badge={rawMetrics.civils.constraint_count > 1 ? "High" : "Medium"} badgeVariant={rawMetrics.civils.constraint_count > 1 ? "destructive" : "secondary"} />
