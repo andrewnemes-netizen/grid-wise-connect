@@ -15,7 +15,7 @@ import { Layers, Plus, Upload, Loader2, Trash2 } from "lucide-react";
 import { GeoFileUploader } from "./GeoFileUploader";
 
 const CATEGORIES = ["substations", "feeders", "cables", "constraints", "points", "polygons"];
-const GEOMETRY_TYPES = ["Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon", "Geometry"];
+const GEOMETRY_TYPES = ["Auto-detect", "Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon"];
 const STORAGE_TABLES: Record<string, string> = {
   substations: "geo_substations",
   feeders: "geo_feeders",
@@ -261,7 +261,7 @@ function AddLayerForm({ onSuccess }: { onSuccess: () => void }) {
     slug: "",
     dno: "NPG",
     category: "substations",
-    geometry_type: "Point",
+    geometry_type: "Auto-detect",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -271,12 +271,13 @@ function AddLayerForm({ onSuccess }: { onSuccess: () => void }) {
     setSubmitting(true);
     try {
       const storageTable = STORAGE_TABLES[form.category] || "geo_points";
+      const geometryType = form.geometry_type === "Auto-detect" ? "Geometry" : form.geometry_type;
       const { error } = await supabase.from("layer_registry").insert({
         display_name: form.display_name,
         slug: form.slug,
         dno: form.dno,
         category: form.category,
-        geometry_type: form.geometry_type,
+        geometry_type: geometryType,
         storage_table: storageTable,
         style_json: {},
         legend_json: [],

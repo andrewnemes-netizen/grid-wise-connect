@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { gmlToGeoJSON, decompressGzip } from "@/lib/gmlParser";
+import { detectGeometryType } from "@/lib/detectGeometryType";
 
 interface GeoFileUploaderProps {
   layerId: string;
@@ -26,6 +27,7 @@ interface FileStatus {
   inserted: number;
   featureCount: number;
   hasSpatial: boolean;
+  detectedGeomType: string;
   error?: string;
 }
 
@@ -65,20 +67,36 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [detectedTypes, setDetectedTypes] = useState<Record<number, string>>({});
   const [fileStatuses, setFileStatuses] = useState<FileStatus[]>([]);
   const [uploading, setUploading] = useState(false);
   const [allDone, setAllDone] = useState(false);
   const [overallStatus, setOverallStatus] = useState("");
 
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       console.log("[GeoUploader] File input changed");
       const selected = e.target.files;
       if (!selected || selected.length === 0) return;
-      console.log("[GeoUploader] Files selected:", Array.from(selected).map(f => f.name));
-      setFiles((prev) => [...prev, ...Array.from(selected)]);
+      const newFiles = Array.from(selected);
+      console.log("[GeoUploader] Files selected:", newFiles.map(f => f.name));
+      const startIdx = files.length;
+      setFiles((prev) => [...prev, ...newFiles]);
       setAllDone(false);
       if (fileRef.current) fileRef.current.value = "";
+
+      // Eagerly detect geometry types for new files
+      for (let i = 0; i < newFiles.length; i++) {
+        try {
+          const result = await parseFile(newFiles[i]);
+          const geomType = result.hasSpatial
+            ? detectGeometryType(result.geojson.features)
+            : "No geometry";
+          setDetectedTypes((prev) => ({ ...prev, [startIdx + i]: geomType }));
+        } catch {
+          setDetectedTypes((prev) => ({ ...prev, [startIdx + i]: "Error" }));
+        }
+      }
     } catch (err) {
       console.error("[GeoUploader] Error in handleFilesSelected:", err);
     }
@@ -86,6 +104,15 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
 
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
+    setDetectedTypes((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = Number(k);
+        if (ki < index) next[ki] = v;
+        else if (ki > index) next[ki - 1] = v;
+      });
+      return next;
+    });
   };
 
   const handleUploadAll = async () => {
@@ -101,11 +128,12 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
 
     const statuses: FileStatus[] = files.map((f) => ({
       name: f.name,
-      status: "pending",
+      status: "pending" as const,
       progress: 0,
       inserted: 0,
       featureCount: 0,
       hasSpatial: false,
+      detectedGeomType: "",
     }));
     setFileStatuses([...statuses]);
 
@@ -124,6 +152,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         parsed.push(result);
         statuses[i].featureCount = result.geojson.features.length;
         statuses[i].hasSpatial = result.hasSpatial;
+        statuses[i].detectedGeomType = result.hasSpatial
+          ? detectGeometryType(result.geojson.features)
+          : "";
         statuses[i].status = "pending";
       } catch (err: any) {
         console.error(`[GeoUploader] Parse error for file ${i}:`, err);
@@ -256,7 +287,37 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setAllDone(true);
     setOverallStatus("");
 
+    // Phase 4: Auto-update layer_registry geometry_type if needed
     if (totalInserted > 0) {
+      // Determine dominant geometry across all successfully uploaded files
+      const allDetected = statuses
+        .filter((s) => s.status === "done" && s.detectedGeomType && s.detectedGeomType !== "Unknown")
+        .map((s) => s.detectedGeomType);
+
+      if (allDetected.length > 0) {
+        const typeCounts: Record<string, number> = {};
+        allDetected.forEach((t) => { typeCounts[t] = (typeCounts[t] || 0) + 1; });
+        const dominant = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0];
+
+        // Update if current type is generic "Geometry" or mismatched
+        if (
+          dominant !== "Mixed" &&
+          (layer.geometry_type === "Geometry" || layer.geometry_type !== dominant)
+        ) {
+          const { error: updateErr } = await supabase
+            .from("layer_registry")
+            .update({ geometry_type: dominant, updated_at: new Date().toISOString() })
+            .eq("id", layerId);
+
+          if (!updateErr) {
+            toast({
+              title: "Geometry type updated",
+              description: `Layer set to "${dominant}" based on uploaded data.`,
+            });
+          }
+        }
+      }
+
       toast({
         title: "Upload complete",
         description: `${totalInserted.toLocaleString()} features ingested from ${files.length} file${files.length !== 1 ? "s" : ""}.`,
@@ -284,6 +345,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
 
   const handleReset = () => {
     setFiles([]);
+    setDetectedTypes({});
     setFileStatuses([]);
     setAllDone(false);
     setUploading(false);
@@ -319,6 +381,14 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
             <div key={`${f.name}-${idx}`} className="flex items-center gap-2 text-xs">
               <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="truncate flex-1">{f.name}</span>
+              {detectedTypes[idx] && (
+                <Badge
+                  variant={detectedTypes[idx] === "Error" ? "destructive" : "secondary"}
+                  className="text-[9px] shrink-0"
+                >
+                  {detectedTypes[idx]}
+                </Badge>
+              )}
               <span className="text-muted-foreground shrink-0">
                 {(f.size / 1024).toFixed(0)} KB
               </span>
@@ -342,6 +412,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
                 {fs.status === "done" && <CheckCircle className="h-3 w-3 text-primary shrink-0" />}
                 {fs.status === "error" && <AlertCircle className="h-3 w-3 text-destructive shrink-0" />}
                 <span className="truncate flex-1">{fs.name}</span>
+                {fs.detectedGeomType && fs.detectedGeomType !== "Unknown" && (
+                  <Badge variant="secondary" className="text-[9px] shrink-0">{fs.detectedGeomType}</Badge>
+                )}
                 {fs.status === "parsing" && <span className="text-muted-foreground shrink-0">parsing…</span>}
                 {fs.status === "done" && (
                   <span className="text-muted-foreground shrink-0">{fs.inserted.toLocaleString()} features</span>
