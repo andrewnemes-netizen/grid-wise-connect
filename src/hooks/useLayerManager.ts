@@ -178,6 +178,15 @@ export function useLayerManager(
       if (!map) return;
 
       if (visible) {
+        // Check min_zoom before loading — give user feedback if blocked
+        const layer = layerMap.get(layerId);
+        const currentZoom = map.getZoom();
+        if (layer?.min_zoom && currentZoom < layer.min_zoom) {
+          toast({
+            title: layer.display_name,
+            description: `Zoom in to level ${layer.min_zoom} to see this layer`,
+          });
+        }
         const bbox = getMapBbox(map);
         await loadLayer(layerId, bbox);
       } else {
