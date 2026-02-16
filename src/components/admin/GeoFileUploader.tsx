@@ -436,6 +436,31 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <p className="text-xs text-muted-foreground text-center">{overallStatus}</p>
       )}
 
+      {/* Geometry compatibility warning */}
+      {files.length > 0 && !uploading && !allDone && (() => {
+        const EXPECTED_GEOM: Record<string, string[]> = {
+          geo_substations: ["Point"],
+          geo_points: ["Point"],
+          geo_feeders: ["LineString", "MultiLineString"],
+          geo_cables: ["LineString", "MultiLineString"],
+          geo_polygons: ["Polygon", "MultiPolygon"],
+          geo_constraints: [], // accepts anything
+        };
+        const expected = EXPECTED_GEOM[layer.storage_table] || [];
+        if (expected.length === 0) return null;
+        const mismatched = Object.entries(detectedTypes).filter(([, t]) => {
+          if (!t || t === "Error" || t === "No geometry" || t === "Unknown" || t === "Mixed") return false;
+          return !expected.includes(t);
+        });
+        if (mismatched.length === 0) return null;
+        const detectedSet = [...new Set(mismatched.map(([, t]) => t))].join(", ");
+        return (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
+            <strong>Geometry mismatch:</strong> Your file(s) contain <strong>{detectedSet}</strong> but this layer ({layer.storage_table}) expects <strong>{expected.join(" or ")}</strong>. The upload will likely fail. Check you're uploading to the correct layer.
+          </div>
+        );
+      })()}
+
       {/* Action buttons */}
       {!uploading && !allDone && (
         <div className="flex gap-2">
