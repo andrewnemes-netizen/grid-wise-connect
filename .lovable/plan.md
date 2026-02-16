@@ -1,44 +1,35 @@
 
 
-## Auto-Detect Geometry Type During Layer Upload
+## Fix: Support SSEN CSV Files with British National Grid Coordinates
 
-### What Changes
+### The Problem
 
-Currently, the admin must manually choose the geometry type (Point, Polygon, etc.) when registering a layer. This plan adds automatic geometry detection during file upload so the system scans each file, reports what it found, and updates the layer registry accordingly.
+Your SSEN substation file uses columns called **"Location X (m)"** and **"Location Y (m)"** which contain British National Grid (BNG) eastings and northings (e.g. 435797, 123880). The CSV parser currently doesn't recognise these column names, so it reports "No geometry found".
 
-### How It Works
+Even if we add those names to the alias list, BNG coordinates are not latitude/longitude -- they need to be mathematically converted to WGS84 (the coordinate system maps use). The good news is this conversion already exists in the codebase for GML files, so we just need to reuse it for CSVs too.
 
-1. **File Scan Phase** -- After parsing each file in `GeoFileUploader`, the uploader inspects the first N features to determine the geometry type(s) present (Point, LineString, Polygon, etc.).
+### What Will Change
 
-2. **Per-File Geometry Badge** -- Each queued file shows a detected geometry badge (e.g., "Point", "Polygon", "Mixed") in the file list before uploading, so admins can verify at a glance.
+1. **Recognise more column names** -- The parser will match "location x (m)", "location y (m)", "easting", "northing", "long", "location_longitude", "location_latitude", and other common variants.
 
-3. **Auto-Update Layer Registry** -- When uploading to a layer whose `geometry_type` is set to the generic "Geometry" (or mismatched), the system automatically updates the `geometry_type` in `layer_registry` to match what was detected. If multiple geometry types are found across files, it keeps the most common one or warns the user.
+2. **Auto-detect BNG coordinates and convert them** -- If values are larger than 180 (impossible for lat/lng), the system treats them as BNG and converts to lat/lng automatically. This is the same logic already used for GML files.
 
-4. **Multi-File Summary** -- For batches of 5+ files with mixed types, a summary table shows:
-   - File 1: substations.csv -- Point (786 features)
-   - File 2: boundaries.geojson -- Polygon (42 features)
-   - File 3: routes.geojson -- LineString (120 features)
+3. **Reuse existing conversion code** -- The `bngToWgs84` function currently lives inside `gmlParser.ts`. It will be extracted to a shared utility so both the GML parser and CSV parser can use it.
 
 ### Technical Details
 
-**GeoFileUploader.tsx changes:**
-- Add a `detectedGeomType` field to the `FileStatus` interface
-- After `parseFile()`, scan `geojson.features` to extract unique geometry types
-- Pick the dominant type (most frequent) per file
-- Display the detected type as a Badge next to each file in the queue list
-- After successful upload, call `supabase.from("layer_registry").update({ geometry_type })` if the detected type differs from the current setting
+**File: `src/lib/gmlParser.ts`**
+- Export the existing `bngToWgs84` function (and its helpers) so it can be imported elsewhere
 
-**parseFile helper update:**
-- Add a utility function `detectGeometryType(features)` that iterates features, collects `feature.geometry.type`, normalizes Multi variants (e.g., MultiPolygon counts as Polygon), and returns the dominant type
-
-**LayerManagement.tsx changes:**
-- In the `AddLayerForm`, default `geometry_type` to "Auto-detect" which maps to "Geometry" in the database
-- When uploading, if "Geometry" is set, auto-update to the detected type after the first successful batch
-
-**Edge function (ingest-geo-features):**
-- No changes needed -- it already handles geometry promotion and centroid conversion. The auto-detect only affects the registry metadata used for map rendering.
+**File: `src/components/admin/GeoFileUploader.tsx`**
+- Import `bngToWgs84` from `gmlParser.ts`
+- Expand the latitude alias list to include: `northing`, `location y (m)`, `location_latitude`, `loc_lat`, `site_lat`
+- Expand the longitude alias list to include: `easting`, `location x (m)`, `location_longitude`, `loc_long`, `long`, `site_long`
+- Add a fuzzy fallback: if no exact match, find headers containing "lat"/"northing" or "lon"/"lng"/"long"/"easting" as substrings
+- After parsing coordinates, check if values exceed 180; if so, run them through `bngToWgs84` to convert to lat/lng
+- For BNG coordinates, the X column is easting (longitude-like) and Y is northing (latitude-like), so map them accordingly
 
 ### Files Modified
-- `src/components/admin/GeoFileUploader.tsx` -- add detection logic and UI badges
-- `src/components/admin/LayerManagement.tsx` -- add "Auto-detect" default option
+- `src/lib/gmlParser.ts` -- export `bngToWgs84` and helper functions
+- `src/components/admin/GeoFileUploader.tsx` -- expand column recognition and add BNG conversion
 
