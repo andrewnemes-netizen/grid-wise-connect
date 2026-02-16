@@ -455,7 +455,7 @@ function parseSurface(el: Element): GeoJSON.Polygon | null {
  * Approximate British National Grid (EPSG:27700) to WGS84 (EPSG:4326) conversion.
  * Uses a simplified Helmert transformation — accuracy ~5m, sufficient for visualization.
  */
-function bngToWgs84(easting: number, northing: number): [number, number] {
+export function bngToWgs84(easting: number, northing: number): [number, number] {
   // OSGB36 ellipsoid (Airy 1830)
   const a = 6377563.396, b = 6356256.909;
   const F0 = 0.9996012717;

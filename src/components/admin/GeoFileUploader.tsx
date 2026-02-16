@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { gmlToGeoJSON, decompressGzip } from "@/lib/gmlParser";
+import { gmlToGeoJSON, decompressGzip, bngToWgs84 } from "@/lib/gmlParser";
 import { detectGeometryType } from "@/lib/detectGeometryType";
 
 interface GeoFileUploaderProps {
@@ -474,8 +474,30 @@ function csvToGeoJSONFlexible(csvText: string): { geojson: GeoJSON.FeatureCollec
   const headers = parseCSVRow(headerLine).map((h) => h.trim().toLowerCase());
 
   const geoShapeIdx = headers.findIndex((h) => ["geo shape", "geo_shape", "geoshape", "geometry", "geom"].includes(h));
-  const latIdx = headers.findIndex((h) => ["lat", "latitude", "y", "site_northing"].includes(h));
-  const lngIdx = headers.findIndex((h) => ["lng", "lon", "longitude", "x", "site_easting"].includes(h));
+
+  // Expanded alias lists for latitude (northing) and longitude (easting)
+  const LAT_ALIASES = ["lat", "latitude", "y", "site_northing", "northing", "location y (m)", "location_latitude", "loc_lat", "site_lat", "sub_lat", "lat_deg"];
+  const LNG_ALIASES = ["lng", "lon", "longitude", "long", "x", "site_easting", "easting", "location x (m)", "location_longitude", "loc_long", "loc_lng", "site_long", "sub_long", "lng_deg", "lon_deg", "long_deg"];
+
+  let latIdx = headers.findIndex((h) => LAT_ALIASES.includes(h));
+  let lngIdx = headers.findIndex((h) => LNG_ALIASES.includes(h));
+
+  // Fuzzy fallback: find headers containing coordinate-like substrings
+  if (latIdx === -1) {
+    latIdx = headers.findIndex((h) => /\blat\b/.test(h) || /\bnorthing\b/.test(h));
+  }
+  if (lngIdx === -1) {
+    lngIdx = headers.findIndex((h) => /\blon\b/.test(h) || /\blng\b/.test(h) || /\blong\b/.test(h) || /\beasting\b/.test(h));
+  }
+
+  // Detect if coordinates are BNG (easting/northing) vs WGS84
+  // For BNG: X = easting (lng-like), Y = northing (lat-like)
+  const isBNG = latIdx !== -1 && lngIdx !== -1 && LAT_ALIASES.slice(4).concat(["northing"]).some(a => headers[latIdx].includes(a.replace(/\s*\(.*\)/, "").trim()))
+    || (lngIdx !== -1 && LNG_ALIASES.slice(6).concat(["easting"]).some(a => headers[lngIdx].includes(a.replace(/\s*\(.*\)/, "").trim())));
+
+  if (latIdx !== -1 && lngIdx !== -1) {
+    console.log(`[CSV Parser] Matched lat column: "${headers[latIdx]}", lng column: "${headers[lngIdx]}", isBNG hint: ${isBNG}`);
+  }
 
   const hasSpatial = geoShapeIdx !== -1 || (latIdx !== -1 && lngIdx !== -1);
 
@@ -494,10 +516,18 @@ function csvToGeoJSONFlexible(csvText: string): { geojson: GeoJSON.FeatureCollec
         continue;
       }
     } else if (latIdx !== -1 && lngIdx !== -1) {
-      const lat = parseFloat(vals[latIdx]);
-      const lng = parseFloat(vals[lngIdx]);
-      if (isNaN(lat) || isNaN(lng)) continue;
-      geometry = { type: "Point", coordinates: [lng, lat] };
+      let v0 = parseFloat(vals[latIdx]); // lat / northing
+      let v1 = parseFloat(vals[lngIdx]); // lng / easting
+      if (isNaN(v0) || isNaN(v1)) continue;
+
+      // Auto-detect BNG: if either value > 180, treat as BNG easting/northing
+      if (Math.abs(v0) > 180 || Math.abs(v1) > 180) {
+        // v0 = northing (Y), v1 = easting (X) → bngToWgs84(easting, northing)
+        const [lng, lat] = bngToWgs84(v1, v0);
+        geometry = { type: "Point", coordinates: [lng, lat] };
+      } else {
+        geometry = { type: "Point", coordinates: [v1, v0] };
+      }
     }
 
     // Build properties from all non-geometry columns
