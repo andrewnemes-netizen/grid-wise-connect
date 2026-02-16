@@ -82,6 +82,11 @@ Deno.serve(async (req) => {
       const props = f.properties || {};
       let geom = f.geometry;
 
+      // Skip features with no geometry at all
+      if (!geom || !geom.type || !geom.coordinates) {
+        return null;
+      }
+
       if (geom) {
         // Auto-promote single → multi variants
         if (geom.type === "LineString" && expectedGeomType === "MultiLineString") {
