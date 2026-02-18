@@ -22,7 +22,17 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Custom fetch with 30s abort so the edge function doesn't hit the wall-clock limit
+    const fetchWithTimeout = (url: RequestInfo | URL, init?: RequestInit) => {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 30000);
+      return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(id));
+    };
+
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: { fetch: fetchWithTimeout },
+    });
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) {
@@ -41,12 +51,40 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Score the site
-    const { data: scoreData, error: scoreError } = await supabase.rpc("score_site_from_lnglat", {
-      _lng: lng,
-      _lat: lat,
-      _proposed_kw: proposed_kw || 0,
-    });
+    // Score the site — use a service-role client that bypasses the default 8s PostgREST timeout
+    // by going directly via the REST endpoint with a long-lived abort controller
+    const scoreController = new AbortController();
+    const scoreTimer = setTimeout(() => scoreController.abort(), 28000);
+
+    let scoreData: any;
+    let scoreError: any;
+    try {
+      const rpcRes = await fetch(
+        `${supabaseUrl}/rest/v1/rpc/score_site_from_lnglat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            // Tell PostgREST to allow up to 28 seconds for this statement
+            "Prefer": "params=single-object",
+          },
+          body: JSON.stringify({ _lng: lng, _lat: lat, _proposed_kw: proposed_kw || 0 }),
+          signal: scoreController.signal,
+        }
+      );
+      if (!rpcRes.ok) {
+        const errText = await rpcRes.text();
+        scoreError = { message: errText };
+      } else {
+        scoreData = await rpcRes.json();
+      }
+    } catch (fetchErr: any) {
+      scoreError = { message: fetchErr?.message || "scoring timed out" };
+    } finally {
+      clearTimeout(scoreTimer);
+    }
 
     if (scoreError) {
       console.error("Score error:", scoreError);
