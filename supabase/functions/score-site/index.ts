@@ -95,6 +95,7 @@ Deno.serve(async (req) => {
     }
 
     // Adaptive radius search for nearest substations: 2km → 5km → 10km
+    // Also via direct fetch to bypass the 8s PostgREST statement timeout
     let substations: any[] = [];
     const radii = [0.02, 0.05, 0.1]; // ~2km, ~5km, ~10km
 
@@ -110,17 +111,32 @@ Deno.serve(async (req) => {
         ]],
       };
 
-      const { data, error: subError } = await supabase.rpc("search_substations_in_polygon", {
-        _geojson: JSON.stringify(searchPolygon),
-        _limit: 10,
-      });
-
-      if (subError) {
-        console.error("Substation search error:", subError);
+      try {
+        const subRes = await fetch(
+          `${supabaseUrl}/rest/v1/rpc/search_substations_in_polygon`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": supabaseKey,
+              "Authorization": `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ _geojson: JSON.stringify(searchPolygon), _limit: 10 }),
+            signal: AbortSignal.timeout(20000),
+          }
+        );
+        if (subRes.ok) {
+          substations = await subRes.json() || [];
+        } else {
+          const errText = await subRes.text();
+          console.error("Substation search error:", errText);
+          break;
+        }
+      } catch (subErr: any) {
+        console.error("Substation fetch error:", subErr?.message);
         break;
       }
 
-      substations = data || [];
       if (substations.length > 0) break; // Found results, stop expanding
     }
 
@@ -136,7 +152,7 @@ Deno.serve(async (req) => {
       utilisation_band: s.utilisation_band,
     }));
 
-    // Check user roles for output filtering
+    // Check user roles for output filtering — lightweight query, Supabase client is fine here
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
