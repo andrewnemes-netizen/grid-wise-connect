@@ -27,15 +27,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
-  
+
   const rolesRef = useRef<AppRole[]>([]);
   const lastUserIdRef = useRef<string | null>(null);
-  const sessionRef = useRef<Session | null>(null);
-  const signOutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const explicitSignOutRef = useRef(false);
-  const initializedRef = useRef(false);
 
-  const fetchRoles = async (userId: string) => {
+  const fetchRoles = useCallback(async (userId: string) => {
     if (userId === lastUserIdRef.current && rolesRef.current.length > 0) return;
     try {
       const { data } = await supabase
@@ -54,123 +51,60 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {
       console.error("Failed to fetch roles:", e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
+    // Listener for ONGOING auth changes only — does NOT control loading
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         if (!isMounted) return;
-        const newUserId = newSession?.user?.id ?? null;
-        const currentUserId = lastUserIdRef.current;
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
 
-        // Same user token refresh — store silently, NO state updates
-        if (newUserId && newUserId === currentUserId) {
-          if (signOutTimerRef.current) {
-            clearTimeout(signOutTimerRef.current);
-            signOutTimerRef.current = null;
-          }
-          sessionRef.current = newSession;
-          // On first event (initial session), still need to finish loading
-          if (!initializedRef.current) {
-            initializedRef.current = true;
-            setSession(newSession);
-            setUser(newSession?.user ?? null);
-            setTimeout(async () => {
-              if (isMounted) {
-                await fetchRoles(newUserId!);
-                if (isMounted) setLoading(false);
-              }
-            }, 0);
-          }
-          return;
-        }
-
-        // New session with a user (sign-in or different user)
-        if (newUserId) {
-          if (signOutTimerRef.current) {
-            clearTimeout(signOutTimerRef.current);
-            signOutTimerRef.current = null;
-          }
-          sessionRef.current = newSession;
-          setSession(newSession);
-          setUser(newSession?.user ?? null);
-          lastUserIdRef.current = newUserId;
-          setTimeout(async () => {
-            if (isMounted) {
-              await fetchRoles(newUserId);
-              if (!initializedRef.current) {
-                initializedRef.current = true;
-                if (isMounted) setLoading(false);
-              }
-            }
+        if (newSession?.user) {
+          // Defer to avoid Supabase internal lock deadlock
+          setTimeout(() => {
+            if (isMounted) fetchRoles(newSession.user.id);
           }, 0);
-          return;
-        }
-
-        // Sign-out event (newUserId is null)
-        if (explicitSignOutRef.current) {
-          explicitSignOutRef.current = false;
-          sessionRef.current = null;
-          setSession(null);
-          setUser(null);
+        } else {
           lastUserIdRef.current = null;
           rolesRef.current = [];
           setRoles([]);
-          if (!initializedRef.current) {
-            initializedRef.current = true;
-            setLoading(false);
-          }
-          return;
-        }
-
-        // Debounce transient SIGNED_OUT during token refresh
-        if (!signOutTimerRef.current) {
-          signOutTimerRef.current = setTimeout(() => {
-            signOutTimerRef.current = null;
-            if (!isMounted) return;
-            if (sessionRef.current?.user) return;
-            sessionRef.current = null;
-            setSession(null);
-            setUser(null);
-            lastUserIdRef.current = null;
-            rolesRef.current = [];
-            setRoles([]);
-            if (!initializedRef.current) {
-              initializedRef.current = true;
-              setLoading(false);
-            }
-          }, 3000);
-        } else if (!initializedRef.current) {
-          // If debounce is pending but we haven't initialized, set loading false after timeout
         }
       }
     );
 
-    // Safety timeout: if onAuthStateChange never fires (e.g. SDK stuck
-    // retrying an expired refresh token), force loading=false after 5s
-    const safetyTimer = setTimeout(() => {
-      if (!initializedRef.current && isMounted) {
-        console.warn("Auth initialization timed out — clearing stale session");
-        initializedRef.current = true;
-        sessionRef.current = null;
-        setSession(null);
-        setUser(null);
-        setLoading(false);
+    // INITIAL load — this is the sole controller of the loading state
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+        if (initialSession?.user) {
+          await fetchRoles(initialSession.user.id);
+        }
+      } catch (e) {
+        console.error("Auth initialization error:", e);
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    }, 5000);
+    };
+
+    initializeAuth();
 
     return () => {
       isMounted = false;
-      clearTimeout(safetyTimer);
-      if (signOutTimerRef.current) clearTimeout(signOutTimerRef.current);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchRoles]);
 
   const signOut = useCallback(async () => {
     explicitSignOutRef.current = true;
+    lastUserIdRef.current = null;
+    rolesRef.current = [];
     await supabase.auth.signOut();
   }, []);
 
