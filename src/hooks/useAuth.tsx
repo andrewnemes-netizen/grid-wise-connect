@@ -148,8 +148,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     );
 
+    // Safety timeout: if onAuthStateChange never fires (e.g. SDK stuck
+    // retrying an expired refresh token), force loading=false after 5s
+    const safetyTimer = setTimeout(() => {
+      if (!initializedRef.current && isMounted) {
+        console.warn("Auth initialization timed out — clearing stale session");
+        initializedRef.current = true;
+        sessionRef.current = null;
+        setSession(null);
+        setUser(null);
+        setLoading(false);
+      }
+    }, 5000);
+
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
       if (signOutTimerRef.current) clearTimeout(signOutTimerRef.current);
       subscription.unsubscribe();
     };
