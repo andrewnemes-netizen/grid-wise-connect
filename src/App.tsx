@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,16 +9,17 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { toast } from "sonner";
 import Auth from "./pages/Auth";
-import MapView from "./pages/MapView";
-import Portfolio from "./pages/Portfolio";
-import SiteDetail from "./pages/SiteDetail";
-import Admin from "./pages/Admin";
-import LaProgramme from "./pages/LaProgramme";
-import QuickEstimate from "./pages/QuickEstimate";
-import Training from "./pages/Training";
-import Studies from "./pages/Studies";
-import StudyDetail from "./pages/StudyDetail";
-import NotFound from "./pages/NotFound";
+
+const MapView = lazy(() => import("./pages/MapView"));
+const Portfolio = lazy(() => import("./pages/Portfolio"));
+const SiteDetail = lazy(() => import("./pages/SiteDetail"));
+const Admin = lazy(() => import("./pages/Admin"));
+const LaProgramme = lazy(() => import("./pages/LaProgramme"));
+const QuickEstimate = lazy(() => import("./pages/QuickEstimate"));
+const Training = lazy(() => import("./pages/Training"));
+const Studies = lazy(() => import("./pages/Studies"));
+const StudyDetail = lazy(() => import("./pages/StudyDetail"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
@@ -51,20 +52,26 @@ function GlobalErrorCatcher({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const LazyFallback = () => (
+  <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>
+);
+
 const AppRoutes = () => (
-  <Routes>
-    <Route path="/auth" element={<AuthRoute />} />
-    <Route path="/quick-estimate" element={<QuickEstimate />} />
-    <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
-    <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
-    <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
-    <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
-    <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
-    <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
-    <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
-    <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-    <Route path="*" element={<NotFound />} />
-  </Routes>
+  <Suspense fallback={<LazyFallback />}>
+    <Routes>
+      <Route path="/auth" element={<AuthRoute />} />
+      <Route path="/quick-estimate" element={<QuickEstimate />} />
+      <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
+      <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+      <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
+      <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
+      <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
+      <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
+      <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
+      <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  </Suspense>
 );
 
 const App = () => (
