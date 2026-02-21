@@ -108,11 +108,10 @@ Deno.serve(async (req) => {
           geom = computeCentroid(geom);
         }
 
-        // Validate geometry family matches target table (use table's actual type for validation)
-        const effectiveExpected = tableGeomType !== "Geometry" ? tableGeomType : expectedGeomType;
+        // Validate geometry family against the registry's expected type (not the table's column type)
         const geomFamily = geom.type.replace("Multi", "");
-        const expectedFamily = effectiveExpected.replace("Multi", "");
-        if (effectiveExpected !== "Geometry" && geomFamily !== expectedFamily) {
+        const expectedFamily = expectedGeomType.replace("Multi", "");
+        if (expectedGeomType !== "Geometry" && geomFamily !== expectedFamily) {
           return null;
         }
       }
