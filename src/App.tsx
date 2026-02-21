@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense, useState, useCallback } from "react";
+import { useEffect, lazy, Suspense, useState, useCallback, useRef } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,9 +29,15 @@ const queryClient = new QueryClient();
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [profileState, setProfileState] = useState<"loading" | "complete" | "incomplete" | "pending_approval">("loading");
+  const lastCheckedUserId = useRef<string | null>(null);
 
   const checkProfile = useCallback(async () => {
     if (!user) return;
+    // Reset to loading when checking a new/different user
+    if (lastCheckedUserId.current !== user.id) {
+      setProfileState("loading");
+      lastCheckedUserId.current = user.id;
+    }
     const { data } = await supabase
       .from("profiles")
       .select("full_name, company, phone, is_approved")
@@ -61,10 +67,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       checkProfile();
     } else if (!loading && !user) {
       setProfileState("loading");
+      lastCheckedUserId.current = null;
     }
   }, [loading, user, checkProfile]);
 
-  if (loading || (user && profileState === "loading"))
+  // Always show loading until profile check completes
+  if (loading || profileState === "loading")
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   if (!user) return <Navigate to="/auth" replace />;
   if (profileState === "pending_approval") return <PendingApproval />;
