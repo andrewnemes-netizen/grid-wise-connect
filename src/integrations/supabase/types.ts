@@ -49,6 +49,45 @@ export type Database = {
           },
         ]
       }
+      cable_catalogue: {
+        Row: {
+          cable_type: string
+          cost_per_m: number
+          created_at: string
+          current_rating_a: number
+          diameter_mm: number
+          id: string
+          impedance_per_km: number
+          is_default: boolean
+          updated_at: string
+          voltage_class: string
+        }
+        Insert: {
+          cable_type: string
+          cost_per_m?: number
+          created_at?: string
+          current_rating_a?: number
+          diameter_mm?: number
+          id?: string
+          impedance_per_km?: number
+          is_default?: boolean
+          updated_at?: string
+          voltage_class: string
+        }
+        Update: {
+          cable_type?: string
+          cost_per_m?: number
+          created_at?: string
+          current_rating_a?: number
+          diameter_mm?: number
+          id?: string
+          impedance_per_km?: number
+          is_default?: boolean
+          updated_at?: string
+          voltage_class?: string
+        }
+        Relationships: []
+      }
       cables_ehv_ug_capacity: {
         Row: {
           asset_id: string
@@ -124,6 +163,36 @@ export type Database = {
           source_date?: string | null
           status?: string | null
           voltage_kv?: number | null
+        }
+        Relationships: []
+      }
+      dno_rulesets: {
+        Row: {
+          created_at: string
+          dno_code: string
+          id: string
+          is_active: boolean
+          rules_json: Json
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          dno_code: string
+          id?: string
+          is_active?: boolean
+          rules_json?: Json
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          created_at?: string
+          dno_code?: string
+          id?: string
+          is_active?: boolean
+          rules_json?: Json
+          updated_at?: string
+          version?: string
         }
         Relationships: []
       }
@@ -1004,6 +1073,77 @@ export type Database = {
           srtext?: string | null
         }
         Relationships: []
+      }
+      studies: {
+        Row: {
+          bom_json: Json | null
+          boundary_geojson: Json | null
+          cost_estimate_json: Json | null
+          created_at: string
+          created_by: string
+          dno: string | null
+          engine_input_json: Json | null
+          engine_output_json: Json | null
+          id: string
+          mode: string
+          proposed_kw: number | null
+          route_geojson: Json | null
+          ruleset_version: string | null
+          site_id: string | null
+          status: string
+          study_name: string
+          updated_at: string
+          voltage_level: string | null
+        }
+        Insert: {
+          bom_json?: Json | null
+          boundary_geojson?: Json | null
+          cost_estimate_json?: Json | null
+          created_at?: string
+          created_by: string
+          dno?: string | null
+          engine_input_json?: Json | null
+          engine_output_json?: Json | null
+          id?: string
+          mode?: string
+          proposed_kw?: number | null
+          route_geojson?: Json | null
+          ruleset_version?: string | null
+          site_id?: string | null
+          status?: string
+          study_name: string
+          updated_at?: string
+          voltage_level?: string | null
+        }
+        Update: {
+          bom_json?: Json | null
+          boundary_geojson?: Json | null
+          cost_estimate_json?: Json | null
+          created_at?: string
+          created_by?: string
+          dno?: string | null
+          engine_input_json?: Json | null
+          engine_output_json?: Json | null
+          id?: string
+          mode?: string
+          proposed_kw?: number | null
+          route_geojson?: Json | null
+          ruleset_version?: string | null
+          site_id?: string | null
+          status?: string
+          study_name?: string
+          updated_at?: string
+          voltage_level?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "studies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unit_rates: {
         Row: {
