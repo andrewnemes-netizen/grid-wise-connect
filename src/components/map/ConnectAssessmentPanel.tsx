@@ -21,6 +21,8 @@ import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
 import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/electricalEngine";
 import { createSnapshot } from "@/lib/snapshotService";
+import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
+import { VoltageComparisonPanel } from "./VoltageComparisonPanel";
 
 export interface ConnectEndpoints {
   source: {
@@ -106,18 +108,21 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [lastSnapshotId, setLastSnapshotId] = useState<string | null>(null);
   const { data: unitRates } = useUnitRates();
 
-  // Fetch cable catalogue for optimiser
+  // Fetch cable catalogue for optimiser (LV + HV)
   const { data: cableCatalogue } = useQuery({
-    queryKey: ["cable-catalogue-lv"],
+    queryKey: ["cable-catalogue-all"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cable_catalogue")
-        .select("*")
-        .eq("voltage_class", "LV");
+        .select("*");
       if (error) throw error;
       return (data || []) as CableCatalogueEntry[];
     },
   });
+
+  // Voltage comparison state
+  const [comparisonResult, setComparisonResult] = useState<VoltageComparisonResult | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   // Save & compare state
   const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
@@ -460,7 +465,43 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                             </div>
                           ))}
                         </div>
-                      )}
+              )}
+
+              {/* Voltage Comparison */}
+              {Number(proposedKw) > 0 && (
+                <>
+                  <Separator />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={comparisonLoading || !cableCatalogue?.length}
+                    onClick={() => {
+                      if (!cableCatalogue?.length) return;
+                      setComparisonLoading(true);
+                      try {
+                        const res = runVoltageComparison({
+                          proposed_kw: Number(proposedKw),
+                          route_length_m: routeDistanceM,
+                          catalogue: cableCatalogue,
+                          unit_rates: unitRates,
+                        });
+                        setComparisonResult(res);
+                      } catch (err: any) {
+                        toast({ title: "Comparison error", description: err.message, variant: "destructive" });
+                      } finally {
+                        setComparisonLoading(false);
+                      }
+                    }}
+                  >
+                    {comparisonLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Comparing…</>
+                    ) : (
+                      <><Zap className="mr-2 h-4 w-4" />Compare LV vs HV</>
+                    )}
+                  </Button>
+                  {comparisonResult && <VoltageComparisonPanel result={comparisonResult} />}
+                </>
+              )}
                       <p className="text-[9px] text-muted-foreground">Engine {electricalResult.engine_version}{lastSnapshotId ? ` · Snapshot ${lastSnapshotId.slice(0, 8)}` : ""}</p>
                     </div>
                   )}

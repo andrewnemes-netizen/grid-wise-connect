@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.apply-dno-rules]
 verify_jwt = false
+
+[functions.os-places-lookup]
+verify_jwt = false
+
+[functions.dno-capacity-lookup]
+verify_jwt = false
