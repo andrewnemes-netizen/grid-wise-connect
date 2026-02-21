@@ -46,18 +46,24 @@ const utilisationColor: Record<string, string> = {
 };
 
 function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
-  const utilPct = (feature.utilisation_pct ?? null) as number | null;
+  const utilPct = (feature.utilisation_pct ?? feature.fault_level_ ?? null) as number | null;
   const band = (feature.utilisation_band ?? null) as string | null;
-  const headroomKw = (feature.transformer_headroom_kw ?? feature.headroom_kw ?? null) as number | null;
-  const firmCapKw = (feature.firm_capacity_kw ?? feature.capacity_kw ?? null) as number | null;
-  const maxDemandKw = (feature.max_demand_kw ?? feature.demand_kw ?? null) as number | null;
+  const headroomKw = (feature.transformer_headroom_kw ?? feature.headroom_kw ?? feature.demhr ?? null) as number | null;
+  const firmCapKw = (feature.firm_capacity_kw ?? feature.capacity_kw ?? feature.firm_cap ?? null) as number | null;
+  const maxDemandKw = (feature.max_demand_kw ?? feature.demand_kw ?? feature.maxdemand ?? null) as number | null;
   const customers = (feature.connected_customers ?? null) as number | null;
-  const siteName = (feature.site_name ?? feature.name ?? null) as string | null;
+  const siteName = (feature.site_name ?? feature.name ?? feature.psp_name ?? null) as string | null;
   const siteId = (feature.site_id ?? feature.asset_id ?? null) as string | null;
-  const substationType = feature.substation_type as string | null;
+  const substationType = (feature.substation_type ?? feature.typetable ?? null) as string | null;
   const headroomBand = feature.headroom_band as string | null;
   const threePhase = feature.three_phase as string | null;
-  const upstream = feature.upstream_site as string | null;
+  const upstream = (feature.upstream_site ?? feature.upstreamname ?? null) as string | null;
+  const genHeadroom = (feature.genhr ?? null) as number | null;
+  const genConstraint = (feature.genconstraint ?? feature.worst_case_constraint_gen_colour ?? null) as string | null;
+  const demConstraint = (feature.demconstraint ?? feature.worst_case_constraint_dem_colour ?? null) as string | null;
+  const voltageKv = (feature.voltage_kv ?? feature.pvoltage ?? null) as number | null;
+  const gspName = (feature.gsp_name ?? null) as string | null;
+  const faultLevelPct = (feature.fault_level_ ?? null) as number | null;
 
   return (
     <div className="space-y-3">
@@ -126,11 +132,53 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
         )}
       </div>
 
-      {/* Upstream link */}
+      {/* Upstream & GSP */}
       {upstream && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <ArrowUpRight className="h-3 w-3" />
           <span>Upstream: <span className="font-medium text-foreground">{upstream}</span></span>
+        </div>
+      )}
+      {gspName && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ArrowUpRight className="h-3 w-3" />
+          <span>GSP: <span className="font-medium text-foreground">{gspName}</span></span>
+        </div>
+      )}
+
+      {/* Generation headroom */}
+      {genHeadroom !== null && (
+        <div className="rounded-md border bg-muted/20 p-2">
+          <p className="text-[10px] text-muted-foreground">Generation Headroom</p>
+          <p className="text-sm font-semibold">{genHeadroom} MW</p>
+        </div>
+      )}
+
+      {/* Voltage */}
+      {voltageKv !== null && (
+        <div className="text-xs text-muted-foreground">Voltage: <span className="font-medium text-foreground">{voltageKv} kV</span></div>
+      )}
+
+      {/* Fault Level */}
+      {faultLevelPct !== null && (
+        <div className="text-xs text-muted-foreground">Fault Level: <span className="font-medium text-foreground">{typeof faultLevelPct === 'number' ? faultLevelPct.toFixed(1) : faultLevelPct}%</span></div>
+      )}
+
+      {/* Constraints */}
+      {(genConstraint || demConstraint) && (
+        <div className="grid grid-cols-2 gap-2">
+          {genConstraint && (
+            <div className="rounded-md border bg-muted/20 p-2">
+              <p className="text-[10px] text-muted-foreground">Gen Constraint</p>
+              <p className={`text-xs font-semibold ${genConstraint.toLowerCase().includes('red') ? 'text-red-500' : genConstraint.toLowerCase().includes('amber') ? 'text-amber-500' : 'text-emerald-500'}`}>{genConstraint}</p>
+            </div>
+          )}
+          {demConstraint && (
+            <div className="rounded-md border bg-muted/20 p-2">
+              <p className="text-[10px] text-muted-foreground">Dem Constraint</p>
+              <p className={`text-xs font-semibold ${demConstraint.toLowerCase().includes('red') ? 'text-red-500' : demConstraint.toLowerCase().includes('amber') ? 'text-amber-500' : 'text-emerald-500'}`}>{demConstraint}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
