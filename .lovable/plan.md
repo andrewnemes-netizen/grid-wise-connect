@@ -39,6 +39,25 @@
 - ✅ Fetches cable catalogue from DB, uses unit rates from price book
 - ✅ Modular architecture ready for V2 (HV comparison, multi-transformer splitting)
 
-### Phases 4–5: Pending
-- Phase 4: Electrical engine + Design mode
-- Phase 5: Enhanced PDF/JSON export
+### Phase 4: Electrical Engine + Design Mode + Enhanced Export (IN PROGRESS)
+
+#### 4.1 Electrical Validation Engine ✅ COMPLETE
+- ✅ `src/lib/electricalEngine.ts` — Pure calculation module:
+  - Voltage drop: Ib × Zc × L (mains + service)
+  - Current validation: Ib ≤ In ≤ Iz, utilisation >80% warning
+  - Fault level: If = Uo / Zs, prospective fault current
+  - Zs gateway: Ze + R1 + R2 check
+  - Configurable defaults: PF 0.95, diversity 1.0, supply 400V
+  - Structured flags with severity (error/warning/info)
+  - Engine versioning (v1.0)
+- ✅ `study_snapshots` table with immutable RLS (no UPDATE/DELETE for users)
+- ✅ `src/lib/snapshotService.ts` — Create + list immutable snapshots
+  - Stores: electrical inputs, cable config, validation results, cost summary, optimiser output
+  - Version locks: engine_version, ruleset_version, pricebook_version
+- ✅ Wired into ConnectAssessmentPanel: runs electrical validation after LV optimiser
+- ✅ Electrical validation summary displayed with PASS/FAIL badge
+
+#### 4.2 Design Mode on Map — TODO
+#### 4.3 Enhanced PDF/JSON Export — TODO
+
+### Phase 5: Pending
