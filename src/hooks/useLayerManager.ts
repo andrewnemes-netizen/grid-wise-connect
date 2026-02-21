@@ -84,7 +84,7 @@ export function useLayerManager(
     if (gt.includes("line")) {
       if (z < 7) return 3000;
       if (z < 10) return 8000;
-      return 20000;
+      return 5000;
     }
     if (gt.includes("point")) {
       if (z < 7) return 5000;
