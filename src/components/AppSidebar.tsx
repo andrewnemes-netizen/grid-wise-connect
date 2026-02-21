@@ -48,9 +48,9 @@ export function AppSidebar() {
           <SidebarGroupLabel>
             <div className="flex items-center gap-2">
               {collapsed ? (
-                <img src={epeLogo} alt="EPE" className="h-5 w-5 object-contain" />
+                <img src={epeLogo} alt="EPE" className="h-5 w-5 object-contain" width={20} height={20} />
               ) : (
-                <img src={epeLogo} alt="Eco Power Energy" className="h-6 object-contain" />
+                <img src={epeLogo} alt="Eco Power Energy" className="h-6 object-contain" width={102} height={24} />
               )}
             </div>
           </SidebarGroupLabel>
