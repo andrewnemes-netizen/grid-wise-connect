@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: string
+          require_approval: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          require_approval?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          require_approval?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -909,6 +930,8 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
+          is_approved: boolean
+          phone: string | null
           updated_at: string
           user_id: string
         }
@@ -918,6 +941,8 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          is_approved?: boolean
+          phone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -927,6 +952,8 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
+          is_approved?: boolean
+          phone?: string | null
           updated_at?: string
           user_id?: string
         }

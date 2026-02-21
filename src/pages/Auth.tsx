@@ -16,6 +16,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -40,7 +41,7 @@ const Auth = () => {
       password,
       options: {
         emailRedirectTo: window.location.origin,
-        data: { full_name: fullName, company },
+        data: { full_name: fullName, company, phone },
       },
     });
     setLoading(false);
@@ -122,7 +123,11 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-company">Company / Organisation</Label>
-                  <Input id="signup-company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Eco Power Energy" />
+                  <Input id="signup-company" value={company} onChange={(e) => setCompany(e.target.value)} required placeholder="e.g. Eco Power Energy" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-phone">Phone Number</Label>
+                  <Input id="signup-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required placeholder="e.g. 07700 900000" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
