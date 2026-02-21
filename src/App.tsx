@@ -48,7 +48,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!data.full_name || !data.company || !data.phone) {
+    if (!data.full_name?.trim() || !data.company?.trim() || !data.phone?.trim()) {
       setProfileState("incomplete");
       return;
     }
