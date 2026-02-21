@@ -49,13 +49,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!data.is_approved) {
-      setProfileState("pending_approval");
+    // Check profile completeness FIRST — collect data before gating on approval
+    if (!data.full_name?.trim() || !data.company?.trim() || !data.phone?.trim()) {
+      setProfileState("incomplete");
       return;
     }
 
-    if (!data.full_name?.trim() || !data.company?.trim() || !data.phone?.trim()) {
-      setProfileState("incomplete");
+    if (!data.is_approved) {
+      setProfileState("pending_approval");
       return;
     }
 
