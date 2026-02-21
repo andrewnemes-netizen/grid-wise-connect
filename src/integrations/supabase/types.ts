@@ -1198,6 +1198,86 @@ export type Database = {
           },
         ]
       }
+      study_comments: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          parent_id: string | null
+          study_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          study_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          study_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "study_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_comments_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_shares: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          shared_by: string
+          shared_with: string
+          study_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          shared_by: string
+          shared_with: string
+          study_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          shared_by?: string
+          shared_with?: string
+          study_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_shares_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       study_snapshots: {
         Row: {
           cable_configuration: Json
