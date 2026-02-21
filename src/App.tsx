@@ -24,7 +24,13 @@ const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
