@@ -1,36 +1,44 @@
 
-## Fix: Admin Layer Upload "Refreshing" Issue
+## Fix: Admin Layer Upload Refresh Issue
 
-### Problem
-When uploading datasets in the Admin Layers panel, two issues prevent successful uploads:
+### Root Cause
 
-1. **Geometry mismatch false alarm**: The client-side compatibility check shows a red error-like warning when uploading Polygon/MultiPolygon files to a substations layer (`geo_substations`), even though the server-side ingestion function already converts these to Point centroids automatically. This discourages users from proceeding.
+The "refreshing" is caused by the eager file parsing in `handleFilesSelected`. When a file is selected, the component immediately reads and parses the entire file content using synchronous `JSON.parse()` just to detect the geometry type for a preview badge. For large GeoJSON files (thousands of features, several MB), this blocks the browser's main thread for multiple seconds, causing the Vite dev server WebSocket heartbeat to time out. When the heartbeat reconnects, Vite triggers a full page reload -- wiping out all component state including the selected files.
 
-2. **Dialog instability**: Background query refetching can cause the upload dialog to unmount mid-upload, making it appear as though the page "refreshed." While there's a guard on `toggleMut`, other invalidation paths or React Query's `refetchOnMount` behavior when the component re-renders can still trigger this.
+### Solution
+
+Replace the eager full-file parsing with a lightweight geometry detection approach that only reads the first few kilobytes of the file to identify the geometry type. The full parsing will only happen when the user actually clicks "Upload."
+
+This is a minimal, targeted change that will not affect layer rendering, map performance, or the ingestion pipeline.
 
 ### Changes
 
 **File: `src/components/admin/GeoFileUploader.tsx`**
-- Update the `EXPECTED_GEOM` map for `geo_substations` to include `"Polygon"` and `"MultiPolygon"` as accepted types, since the server automatically converts these to Point centroids. This removes the false geometry mismatch warning.
-- Change the warning from a destructive/error style to an informational amber/warning style, and update the text to say the server will auto-convert rather than saying "upload will likely fail."
 
-**File: `src/components/admin/LayerManagement.tsx`**
-- Disable all background refetching of the `admin-layers` query while the upload dialog is open by setting `refetchInterval: false` and `enabled` conditionally, or by wrapping the invalidation calls more carefully.
-- Add `refetchOnMount: false` and `refetchOnReconnect: false` to the layers query to prevent any automatic refetch that could unmount the upload dialog during an active upload.
+1. Replace the eager `parseFile()` call inside `handleFilesSelected` with a new lightweight `detectGeomTypeFromFile()` function that:
+   - For GeoJSON/JSON files: reads only the first 10KB of the file using `file.slice(0, 10240).text()`, then uses a regex to find the first `"type": "Point"` (or LineString, Polygon, etc.) pattern -- no full JSON.parse needed
+   - For CSV files: reads just the header row to check for lat/lng columns, returns "Point" or "No geometry"
+   - For GML files: reads the first few KB and looks for geometry element names (`<gml:Point>`, `<gml:Polygon>`, etc.)
+   - Returns the detected type string immediately without blocking
 
-### Technical Details
+2. Keep the full `parseFile()` call only in `handleUploadAll` (Phase 1) where it already exists -- no change needed there
 
-The `EXPECTED_GEOM` map change (GeoFileUploader lines 441-448):
-```typescript
-// Before
-geo_substations: ["Point"],
+### What This Does NOT Change
 
-// After  
-geo_substations: ["Point", "Polygon", "MultiPolygon"],
+- The upload logic, batch processing, and progress bar remain identical
+- The ingestion edge function is untouched
+- The layer registry, map rendering, and layer toggle behavior are all unchanged
+- The Dialog stability fixes (pointer/interact/focus outside prevention) remain in place
+- No new dependencies needed
+
+### Technical Detail
+
+```text
+Current flow (blocks main thread):
+  File selected -> file.text() -> JSON.parse(full file) -> detectGeometryType(all features) -> setState
+
+New flow (non-blocking):
+  File selected -> file.slice(0, 10KB).text() -> regex match first geometry type -> setState
 ```
 
-The warning style change (line 458):
-- Change from `border-destructive/50 bg-destructive/10 text-destructive` to `border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400`
-- Update text to: "Your file(s) contain {detectedSet} geometry. The server will auto-convert to Point centroids for this layer."
-
-For dialog stability, ensure the layers query has `refetchOnWindowFocus: false` (already present), add `refetchOnReconnect: false`, and wrap the upload dialog's `onComplete` callback to only invalidate after the dialog is fully closed.
+The full parse still runs when "Upload" is clicked, but at that point the user expects processing time and the upload spinner is visible.
