@@ -65,6 +65,11 @@
 - ✅ Map click placement with coloured markers + symbols
 - ✅ "Design" tool in MapToolbar (requires active study)
 - ✅ Wired into MapView click dispatcher
-#### 4.3 Enhanced PDF/JSON Export — TODO
+#### 4.3 Enhanced PDF/JSON Export ✅ COMPLETE
+- ✅ PDF now includes: electrical validation section (VD, Ib, If, Zs with PASS/FAIL badge), snapshot ID in header + footer + site details, design elements summary
+- ✅ `exportAssessmentJson()` — structured JSON export with `gridwise-assessment-v1` format
+- ✅ JSON includes: site details, feasibility, distances, constraints, electrical validation, cost estimate, BOM, design elements, route geometry
+- ✅ JSON export button added to ConnectAssessmentPanel (FileJson icon)
+- ✅ Snapshot ID used as PDF reference number (SNP-XXXXXXXX) for audit trail
 
 ### Phase 5: Pending
