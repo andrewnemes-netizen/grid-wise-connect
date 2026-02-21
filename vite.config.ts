@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     hmr: {
       overlay: false,
+      timeout: 60000,
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
