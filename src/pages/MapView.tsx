@@ -1,8 +1,9 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect } from "react";
 import maplibregl from "maplibre-gl";
-import { Undo2, CheckCircle2, Trash2 } from "lucide-react";
+import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
 import { useConnectTool } from "@/hooks/useConnectTool";
@@ -11,6 +12,7 @@ import { useMapScreenshot } from "@/hooks/useMapScreenshot";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { useBoundaryDraw } from "@/hooks/useBoundaryDraw";
 import { useMeasure } from "@/hooks/useMeasure";
+import { useActiveStudy } from "@/hooks/useActiveStudy";
 import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
 import { LayerTogglePanel } from "@/components/map/LayerTogglePanel";
@@ -47,6 +49,25 @@ const MapView = () => {
   const boundary = useBoundaryDraw(map, activeTool === "boundary");
   const { captureScreenshot } = useMapScreenshot(map, setBasemap, boundary.vertices.length > 0 ? boundary.vertices : null);
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
+  const activeStudy = useActiveStudy();
+
+  // Auto-save boundary to study when finished
+  useEffect(() => {
+    if (boundary.polygon && activeStudy.study) {
+      activeStudy.saveBoundary(boundary.polygon);
+    }
+  }, [boundary.polygon]);
+
+  // Auto-save route to study when connect finishes
+  useEffect(() => {
+    if (connect.connectEndpoints && activeStudy.study) {
+      const lineString: GeoJSON.LineString = {
+        type: "LineString",
+        coordinates: connect.connectEndpoints.routeCoords,
+      };
+      activeStudy.saveRoute(lineString);
+    }
+  }, [connect.connectEndpoints]);
 
   // Map click dispatcher
   useEffect(() => {
@@ -192,6 +213,18 @@ const MapView = () => {
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Active study bar */}
+      {activeStudy.study && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-1.5">
+          <FlaskConical className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium">{activeStudy.study.study_name}</span>
+          <Badge variant="outline" className="text-xs">{activeStudy.study.status}</Badge>
+          {activeStudy.study.engine_output_json && (
+            <Badge variant="secondary" className="text-xs">Rules ✓</Badge>
+          )}
+        </div>
+      )}
 
       {mapLoaded && (
         <>
