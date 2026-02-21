@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
 }
 
 const tools = [
+  { id: "boundary" as const, icon: SquareDashedBottom, label: "Boundary" },
   { id: "pin" as const, icon: MapPin, label: "Drop Pin" },
   { id: "connect" as const, icon: Cable, label: "Connect" },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },

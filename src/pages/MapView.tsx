@@ -1,7 +1,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect } from "react";
 import maplibregl from "maplibre-gl";
-import { Undo2, CheckCircle2 } from "lucide-react";
+import { Undo2, CheckCircle2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
@@ -9,6 +9,7 @@ import { useConnectTool } from "@/hooks/useConnectTool";
 import { usePinDrop } from "@/hooks/usePinDrop";
 import { useMapScreenshot } from "@/hooks/useMapScreenshot";
 import { usePolygonDraw } from "@/hooks/usePolygonDraw";
+import { useBoundaryDraw } from "@/hooks/useBoundaryDraw";
 import { useMeasure } from "@/hooks/useMeasure";
 import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
@@ -27,7 +28,7 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -42,14 +43,19 @@ const MapView = () => {
 
   const connect = useConnectTool(map, layerMap);
   const pin = usePinDrop(map);
-  const { captureScreenshot } = useMapScreenshot(map, setBasemap);
   const { isDrawing, polygon: drawnPolygon, clearDrawing } = usePolygonDraw(map, activeTool === "polygon");
+  const boundary = useBoundaryDraw(map, activeTool === "boundary");
+  const { captureScreenshot } = useMapScreenshot(map, setBasemap, boundary.vertices.length > 0 ? boundary.vertices : null);
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
 
   // Map click dispatcher
   useEffect(() => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "boundary") {
+        boundary.handleBoundaryClick(e);
+        return;
+      }
       if (activeToolRef.current === "connect") {
         connect.handleConnectClick(e);
         return;
@@ -61,6 +67,11 @@ const MapView = () => {
       }
     };
     const dblHandler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "boundary") {
+        boundary.handleBoundaryDblClick(e);
+        setActiveTool(null);
+        return;
+      }
       if (activeToolRef.current === "connect") {
         connect.handleDblClick(e);
         setActiveTool(null);
@@ -72,13 +83,13 @@ const MapView = () => {
       map.off("click", handler);
       map.off("dblclick", dblHandler);
     };
-  }, [map, connect, pin]);
+  }, [map, connect, pin, boundary]);
 
   // Cursor for active tools
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary"
         ? "crosshair"
         : "";
   }, [map, activeTool]);
@@ -146,7 +157,8 @@ const MapView = () => {
     clearConnectionLines();
     clearDrawing();
     clearMeasure();
-  }, [pin, connect, closeFeatureInfo, clearConnectionLines, clearDrawing, clearMeasure]);
+    boundary.clearBoundary();
+  }, [pin, connect, closeFeatureInfo, clearConnectionLines, clearDrawing, clearMeasure, boundary]);
 
   const handleZoomToUK = useCallback(() => {
     map?.flyTo({ center: UK_CENTER, zoom: 6, duration: 1200 });
@@ -243,6 +255,42 @@ const MapView = () => {
                 className="h-7 text-xs"
                 disabled={connect.connectWaypoints.length === 0}
                 onClick={() => { connect.finishRoute(); setActiveTool(null); }}
+              >
+                <CheckCircle2 className="h-3 w-3 mr-1" />Finish
+              </Button>
+            </div>
+          )}
+
+          {/* Boundary drawing controls */}
+          {activeTool === "boundary" && boundary.isDrawing && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
+              <span className="text-xs text-muted-foreground">
+                {boundary.vertices.length === 0
+                  ? "Click to start boundary"
+                  : `${boundary.vertices.length} point${boundary.vertices.length !== 1 ? "s" : ""} — click to add more`}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={boundary.vertices.length === 0}
+                onClick={boundary.undoPoint}
+              >
+                <Undo2 className="h-3 w-3 mr-1" />Undo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => { boundary.clearBoundary(); setActiveTool(null); }}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />Clear
+              </Button>
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                disabled={boundary.vertices.length < 3}
+                onClick={() => { boundary.finishBoundary(); setActiveTool(null); }}
               >
                 <CheckCircle2 className="h-3 w-3 mr-1" />Finish
               </Button>
