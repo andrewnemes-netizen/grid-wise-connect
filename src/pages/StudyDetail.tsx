@@ -10,6 +10,7 @@ import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
+import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
@@ -282,6 +283,13 @@ export default function StudyDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Activity Feed */}
+      <Card>
+        <CardContent className="pt-6">
+          <StudyActivityFeed studyId={study.id} />
+        </CardContent>
+      </Card>
 
       {/* Comments section */}
       <Card>

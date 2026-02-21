@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageSquare, Send, Trash2 } from "lucide-react";
+import { createNotification } from "@/hooks/useNotifications";
 
 interface StudyComment {
   id: string;
@@ -46,8 +47,18 @@ export function StudyCommentsPanel({ studyId }: StudyCommentsPanelProps) {
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["study-comments", studyId] });
+      // Notify study owner and shared users about the new comment
+      const { data: study } = await supabase.from("studies").select("created_by, study_name").eq("id", studyId).maybeSingle();
+      if (study && study.created_by !== user!.id) {
+        await createNotification({
+          userId: study.created_by,
+          studyId,
+          type: "comment_added",
+          message: `New comment on "${study.study_name}"`,
+        });
+      }
       setNewComment("");
     },
   });
