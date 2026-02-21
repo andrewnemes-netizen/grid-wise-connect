@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     // Always look up the authoritative storage_table from the registry
     const { data: layerRow, error: layerErr } = await supabase
       .from("layer_registry")
-      .select("storage_table")
+      .select("storage_table, geometry_type")
       .eq("id", layer_id)
       .single();
 
@@ -66,16 +66,20 @@ Deno.serve(async (req) => {
 
     const storage_table = layerRow.storage_table;
 
-    // Determine the expected geometry family for the target table
+    // Use the layer's registered geometry_type first; fall back to table defaults
     const TABLE_GEOM_TYPE: Record<string, string> = {
       geo_substations: "Point",
       geo_points: "Point",
       geo_feeders: "MultiLineString",
       geo_cables: "MultiLineString",
       geo_polygons: "MultiPolygon",
-      geo_constraints: "Geometry", // accepts anything
+      geo_constraints: "Geometry",
     };
-    const expectedGeomType = TABLE_GEOM_TYPE[storage_table] || "Geometry";
+    const registeredType = layerRow.geometry_type;
+    // If the registry says "Geometry" (auto-detect) or is missing, use the table default
+    const expectedGeomType = (registeredType && registeredType !== "Geometry")
+      ? registeredType
+      : (TABLE_GEOM_TYPE[storage_table] || "Geometry");
 
     // Build the features JSON for the batch insert RPC
     const mappedFeatures = features.map((f: any) => {
@@ -88,23 +92,27 @@ Deno.serve(async (req) => {
       }
 
       if (geom) {
+        // The actual PostGIS column type for the table — always promote to Multi for tables that need it
+        const tableGeomType = TABLE_GEOM_TYPE[storage_table] || "Geometry";
+
         // Auto-promote single → multi variants
-        if (geom.type === "LineString" && expectedGeomType === "MultiLineString") {
+        if (geom.type === "LineString" && (expectedGeomType === "MultiLineString" || expectedGeomType === "LineString" || tableGeomType === "MultiLineString")) {
           geom = { type: "MultiLineString", coordinates: [geom.coordinates] };
         }
-        if (geom.type === "Polygon" && expectedGeomType === "MultiPolygon") {
+        if (geom.type === "Polygon" && (expectedGeomType === "MultiPolygon" || expectedGeomType === "Polygon" || tableGeomType === "MultiPolygon")) {
           geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
         }
 
         // Auto-convert Polygon/MultiPolygon → Point (centroid) when target expects Point
-        if (expectedGeomType === "Point" && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
+        if ((expectedGeomType === "Point" || tableGeomType === "Point") && (geom.type === "Polygon" || geom.type === "MultiPolygon")) {
           geom = computeCentroid(geom);
         }
 
-        // Validate geometry family matches target table
+        // Validate geometry family matches target table (use table's actual type for validation)
+        const effectiveExpected = tableGeomType !== "Geometry" ? tableGeomType : expectedGeomType;
         const geomFamily = geom.type.replace("Multi", "");
-        const expectedFamily = expectedGeomType.replace("Multi", "");
-        if (expectedGeomType !== "Geometry" && geomFamily !== expectedFamily) {
+        const expectedFamily = effectiveExpected.replace("Multi", "");
+        if (effectiveExpected !== "Geometry" && geomFamily !== expectedFamily) {
           return null;
         }
       }
@@ -134,8 +142,10 @@ Deno.serve(async (req) => {
     }).filter(Boolean); // Remove features with incompatible geometry
 
     if (mappedFeatures.length === 0) {
+      // Collect the geometry types found in the source data for a helpful error
+      const foundTypes = [...new Set(features.map((f: any) => f.geometry?.type).filter(Boolean))];
       return new Response(
-        JSON.stringify({ error: `No features have geometry compatible with ${storage_table} (expects ${expectedGeomType}). Your data has incompatible geometry types.`, inserted: 0 }),
+        JSON.stringify({ error: `No features have geometry compatible with ${storage_table} (expects ${expectedGeomType}). Found geometry types: ${foundTypes.join(", ") || "none"}`, inserted: 0 }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
