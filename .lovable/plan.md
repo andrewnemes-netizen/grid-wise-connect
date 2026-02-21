@@ -1,23 +1,17 @@
 
 
-## Phase 7: Portfolio Analytics, Enhanced Reporting, and Plan Update — COMPLETE
+## Fix: Map Toolbar Overlap with Preview Controls
 
-### 7.1 Notifications and Activity Feed (Stage 1) — ✅ COMPLETE
-- `notifications` table with RLS policies
-- In-app notification bell with unread count and polling
-- `StudyActivityFeed` component on StudyDetail page
-- Auto-notifications for study shares and comments
+### Problem
+The map toolbar is positioned at `bottom-4 right-4` (16px from bottom-right). On mobile devices, the Lovable preview bar overlaps with the bottom toolbar buttons (Clear all / Reset view).
 
-### 7.2 Portfolio Analytics Dashboard — ✅ COMPLETE
-- Stat cards: Total Sites, Avg Viability, Pass Rate, Avg Reinforcement
-- Charts: Score Distribution pie, Cost Band bar, Grid Readiness bar, Monthly Pipeline line
-- All charts respect current filters; derived from existing `sites` query
-- New component: `src/components/portfolio/PortfolioAnalytics.tsx`
+### Solution
+Increase the bottom offset of the toolbar so it sits above the preview controls.
 
-### 7.3 Enhanced PDF Reporting — ✅ COMPLETE
-- **Branded Cover Page**: Full-page EcoPower branded cover with site name, date, and ref ID
-- **Section Toggle**: `PdfSections` interface with boolean flags for all report sections
-- **Section Toggle UI**: Checkboxes in export dialog on `StudyDetail` page
-- **Batch Export (ZIP)**: Checkbox selection on Studies page + JSZip bundling
-- **Return type**: `generateAssessmentPdf` now returns the jsPDF instance for programmatic use
-- New dependency: `jszip`
+### Changes
+
+**File: `src/components/map/MapToolbar.tsx`**
+- Change the container positioning from `bottom-4` to `bottom-16` to move the toolbar up and clear the preview/navigation bar area.
+
+This is a single-line CSS class change that preserves all existing functionality.
+
