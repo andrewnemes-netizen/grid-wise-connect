@@ -1,98 +1,56 @@
 
 
-## Training Brochure for Gridwise Connect
+## Add Visual Screenshots to Training Guide
 
-### Approach
+### The Challenge
+The app requires authentication, so automated screenshot capture isn't possible from the AI browser. We need an alternative approach to add visuals.
 
-I'll build an in-app training guide page (`/training`) that serves as both a viewable reference and a downloadable PDF. The page will include annotated screenshots captured from the live app, structured into logical sections covering every feature.
+### Recommended Approach: AI-Generated Illustration Images
 
-### How Screenshots Will Work
+I'll use Lovable AI's image generation (Gemini model) to create clean, annotated UI mockup illustrations for each section of the training guide. These will be professional diagram-style images showing the key UI elements with callouts and labels.
 
-Since I can capture screenshots of each page/feature directly from the app using browser tools, I'll:
-1. Navigate to each key view and capture screenshots
-2. Store them as base64 images embedded in the training page
-3. Use them alongside descriptive text
+### What Will Be Generated (9 images)
 
-For the **ChatGPT collaboration** you mentioned -- once the training page is built with screenshots and structure, you can easily copy the content or export the PDF and refine the wording in ChatGPT.
-
-### Training Guide Structure
-
-The brochure will cover these sections:
-
-**1. Getting Started**
-- Logging in
-- Sidebar navigation (Map, Portfolio, LA Programme, Admin)
-- User roles and what each can access
-
-**2. Map View -- Core Navigation**
-- Postcode search bar
-- Basemap switcher (Street, Satellite, Light, Dark)
-- Zoom controls and scale bar
-- DNO filter dropdown
-- Layer toggle panel (switching data layers on/off)
-- Map legend
-- Heatmap mode toggle
-
-**3. Map Tools**
-- Drop Pin -- click to assess a site location
-- Boundary -- draw a site boundary polygon
-- Connect -- draw a cable route between points
-- Polygon Search -- search for assets within an area
-- Measure -- measure distances on the map
-- Clear All / Reset View buttons
-
-**4. Site Intelligence Panel**
-- What appears when you drop a pin
-- Viability scoring (Green/Amber/Red)
-- Grid readiness and deployment class
-- Connection cost estimates
-- Saving a site assessment
-- Downloading a PDF report
-
-**5. Connect Assessment**
-- Drawing a cable route
-- Undo/finish controls
-- Route cost breakdown
-- Comparison with saved assessments
-
-**6. Portfolio**
-- Viewing saved sites
-- Filtering and sorting
-- Comparing assessments
-- Navigating to site detail
-
-**7. Quick Estimate (Public)**
-- Entering a postcode and proposed kW
-- Understanding the result
-
-**8. LA Programme (Internal)**
-- CSV upload for batch scoring
-- Programme dashboard
-
-**9. Admin (Admin only)**
-- Data upload
-- Layer management
-- Unit rate settings
+1. **Login Screen** -- Annotated view of the auth page with email/password fields
+2. **Map View Overview** -- Bird's-eye layout showing search bar, basemap switcher, layer panel, legend positions
+3. **Map Toolbar** -- Close-up of the tool buttons with labels (Pin, Boundary, Connect, Polygon, Measure)
+4. **Site Intelligence Panel** -- Mock of the panel showing viability score, grid readiness, cost estimate sections
+5. **Connect Assessment** -- Illustration of a cable route with cost breakdown panel
+6. **Portfolio Table** -- Mock table view with filters, columns, and action buttons
+7. **Quick Estimate** -- Simple form with postcode and kW input fields
+8. **LA Programme Dashboard** -- CSV upload area and dashboard charts
+9. **Admin Panel** -- Layer management table and unit rate settings
 
 ### Technical Implementation
 
-| Item | Detail |
+| Step | Detail |
 |------|--------|
-| New page | `src/pages/Training.tsx` |
-| Route | `/training` (inside ProtectedRoute) |
-| Sidebar entry | "Training" with BookOpen icon |
-| Screenshot capture | Browser tool screenshots embedded as images |
-| PDF export | "Download PDF" button using jsPDF (already installed) |
-| Styling | Clean document layout with numbered sections, cards for each feature |
+| Create edge function | `generate-training-images` -- calls AI image generation for each section |
+| Store images | Save generated images to a Lovable Cloud storage bucket |
+| Update Training.tsx | Add image components between section header and content cards |
+| Fallback | Graceful placeholder if images haven't loaded yet |
+| Caching | Images generated once and stored permanently, not regenerated on each page load |
 
 ### Files to Create/Modify
-- **Create** `src/pages/Training.tsx` -- the main training guide page with all content and embedded screenshots
-- **Modify** `src/components/AppSidebar.tsx` -- add Training nav item
-- **Modify** `src/App.tsx` -- add `/training` route
 
-### Workflow
-1. First, I'll capture screenshots by navigating through the app
-2. Then build the Training page with embedded screenshots and descriptions
-3. Add the route and sidebar link
-4. Include a "Download as PDF" button for offline use
+- **Create** `supabase/functions/generate-training-images/index.ts` -- Edge function to generate and store images
+- **Create** Storage bucket `training-images` for persistent image storage
+- **Modify** `src/pages/Training.tsx` -- Add image display for each section, with a "Generate Screenshots" admin button and loading states
+
+### How It Works
+
+1. An admin clicks "Generate Visual Guides" button on the training page
+2. The edge function calls the AI image model to create annotated UI illustrations for each section
+3. Images are saved to cloud storage
+4. The training page loads images from storage and displays them inline with each section
+5. PDF export will also include the images
+
+### Alternative: Manual Screenshots
+
+If you'd prefer real screenshots instead of AI illustrations:
+- You can take screenshots yourself from your browser
+- Upload them via the Admin data upload area or share them here
+- I'll embed them into the training page
+
+This hybrid approach means we can get a visual guide working immediately with AI illustrations, and you can replace individual images with real screenshots later if needed.
 
