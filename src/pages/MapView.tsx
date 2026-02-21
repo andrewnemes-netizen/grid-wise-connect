@@ -13,6 +13,7 @@ import { usePolygonDraw } from "@/hooks/usePolygonDraw";
 import { useBoundaryDraw } from "@/hooks/useBoundaryDraw";
 import { useMeasure } from "@/hooks/useMeasure";
 import { useActiveStudy } from "@/hooks/useActiveStudy";
+import { useDesignMode } from "@/hooks/useDesignMode";
 import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
 import { LayerTogglePanel } from "@/components/map/LayerTogglePanel";
@@ -22,6 +23,7 @@ import { MapToolbar } from "@/components/map/MapToolbar";
 import { UnifiedIntelligencePanel, type ConnectionLine } from "@/components/map/UnifiedIntelligencePanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
+import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
@@ -30,7 +32,7 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -50,6 +52,7 @@ const MapView = () => {
   const { captureScreenshot } = useMapScreenshot(map, setBasemap, boundary.vertices.length > 0 ? boundary.vertices : null);
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
   const activeStudy = useActiveStudy();
+  const design = useDesignMode(map, activeStudy.studyId);
 
   // Auto-save boundary to study when finished
   useEffect(() => {
@@ -73,6 +76,10 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "design") {
+        design.placeElement(e.lngLat.lng, e.lngLat.lat);
+        return;
+      }
       if (activeToolRef.current === "boundary") {
         boundary.handleBoundaryClick(e);
         return;
@@ -104,13 +111,13 @@ const MapView = () => {
       map.off("click", handler);
       map.off("dblclick", dblHandler);
     };
-  }, [map, connect, pin, boundary]);
+  }, [map, connect, pin, boundary, design]);
 
   // Cursor for active tools
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design"
         ? "crosshair"
         : "";
   }, [map, activeTool]);
@@ -260,10 +267,14 @@ const MapView = () => {
                 connect.setConnectSource(null);
                 connect.clearConnect();
               }
+              if (tool !== "design") {
+                design.setPlacingType(null);
+              }
               setActiveTool(tool);
             }}
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
+            hasActiveStudy={!!activeStudy.study}
           />
 
           {/* Route drawing controls */}
@@ -351,6 +362,18 @@ const MapView = () => {
               endpoints={connect.connectEndpoints}
               onCaptureMapScreenshot={handleCaptureScreenshot}
               onClose={() => { connect.clearConnect(); handleClear(); }}
+            />
+          )}
+
+          {activeTool === "design" && activeStudy.study && (
+            <DesignModePanel
+              studyName={activeStudy.study.study_name}
+              elements={design.elements}
+              placingType={design.placingType}
+              onSelectType={design.setPlacingType}
+              onRemove={design.removeElement}
+              onClearAll={design.clearAll}
+              onClose={() => setActiveTool(null)}
             />
           )}
         </>
