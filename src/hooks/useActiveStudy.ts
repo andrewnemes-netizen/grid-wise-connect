@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
+import { estimateConnectionCost, generateBom } from "@/lib/connectionCosts";
+import type { VoltageOverride } from "@/lib/connectionCosts";
 
 export interface ActiveStudy {
   id: string;
@@ -96,6 +98,27 @@ export function useActiveStudy() {
 
       // Auto-run rules engine
       runRulesEngine(routeGeoJson, dno || study.dno || "UK_ALL", voltageLevel || study.voltage_level || "LV");
+
+      // Auto-compute and save cost estimate if proposed_kw is set
+      const kw = study.proposed_kw;
+      if (kw && kw > 0) {
+        const routeLen = computeRouteLength(routeGeoJson);
+        const distances = { primary_m: routeLen, feeder_m: routeLen, capacity_segment_m: routeLen };
+        const vOverride = (voltageLevel || study.voltage_level || "Auto") as VoltageOverride;
+        const costEst = estimateConnectionCost({ proposed_kw: kw, distances, voltage_override: vOverride });
+        const bomItems = generateBom({ proposed_kw: kw, distances, voltage_override: vOverride });
+        await supabase
+          .from("studies")
+          .update({
+            cost_estimate_json: costEst as unknown as Json,
+            bom_json: bomItems as unknown as Json,
+          })
+          .eq("id", study.id);
+        setStudy((s) =>
+          s ? { ...s, cost_estimate_json: costEst as unknown as Json, bom_json: bomItems as unknown as Json } : s
+        );
+        toast.success("Cost estimate saved to study");
+      }
     },
     [study]
   );
@@ -178,6 +201,15 @@ export function useActiveStudy() {
   );
 
   return { study, studyId, loading, saveBoundary, saveRoute, saveResults };
+}
+
+function computeRouteLength(route: GeoJSON.LineString): number {
+  let total = 0;
+  const coords = route.coordinates;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineM(coords[i - 1] as [number, number], coords[i] as [number, number]);
+  }
+  return Math.round(total);
 }
 
 function haversineM(a: [number, number], b: [number, number]): number {

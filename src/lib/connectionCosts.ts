@@ -93,6 +93,18 @@ export interface BomItem {
   notes?: string;
 }
 
+export interface SurfaceSplit {
+  footway_pct: number;
+  carriageway_pct: number;
+  verge_pct: number;
+}
+
+export const DEFAULT_SURFACE_SPLIT: SurfaceSplit = {
+  footway_pct: 0.6,
+  carriageway_pct: 0.3,
+  verge_pct: 0.1,
+};
+
 interface EstimateInput {
   proposed_kw: number;
   distances: { primary_m: number; feeder_m: number; capacity_segment_m: number };
@@ -103,6 +115,30 @@ interface EstimateInput {
   };
   nearest_headroom_kw?: number;
   voltage_override?: VoltageOverride;
+  surface_split?: SurfaceSplit;
+}
+
+/**
+ * Derive surface split from highway constraint data when available.
+ * If min_footway_m and min_carriageway_m are present, compute proportional split.
+ * Otherwise fall back to defaults.
+ */
+function deriveSurfaceSplit(constraints?: EstimateInput["constraints"]): SurfaceSplit {
+  if (!constraints?.min_footway_m || !constraints?.min_carriageway_m) {
+    return DEFAULT_SURFACE_SPLIT;
+  }
+  const fw = constraints.min_footway_m;
+  const cw = constraints.min_carriageway_m;
+  const total = fw + cw;
+  if (total <= 0) return DEFAULT_SURFACE_SPLIT;
+  // Derive proportional split with 10% verge minimum
+  const verge = 0.1;
+  const remaining = 0.9;
+  return {
+    footway_pct: Math.round((fw / total) * remaining * 100) / 100,
+    carriageway_pct: Math.round((cw / total) * remaining * 100) / 100,
+    verge_pct: verge,
+  };
 }
 
 function resolveVoltageLevel(proposed_kw: number, voltage_override?: VoltageOverride): "LV" | "HV" | "EHV" {
@@ -142,10 +178,11 @@ export function estimateConnectionCost(
     total: cableCost,
   });
 
-  // Excavation — assume 60% footway, 30% carriageway, 10% verge
-  const footwayM = Math.round(cableDistance * 0.6);
-  const carriagewayM = Math.round(cableDistance * 0.3);
-  const vergeM = Math.round(cableDistance * 0.1);
+  // Excavation — use surface split (defaults to 60/30/10 if not provided)
+  const split = input.surface_split || deriveSurfaceSplit(input.constraints);
+  const footwayM = Math.round(cableDistance * split.footway_pct);
+  const carriagewayM = Math.round(cableDistance * split.carriageway_pct);
+  const vergeM = Math.round(cableDistance * split.verge_pct);
   const excavationCost =
     footwayM * rates.excavation_footway_per_m +
     carriagewayM * rates.excavation_carriageway_per_m +

@@ -5,8 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield } from "lucide-react";
+import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText } from "lucide-react";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
+
+function formatGBP(amount: number): string {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
+}
 
 const statusColors: Record<string, string> = {
   draft: "bg-yellow-100 text-yellow-800 border-yellow-200",
@@ -36,8 +41,8 @@ export default function StudyDetail() {
   if (!study) return <div className="p-6 text-muted-foreground">Study not found.</div>;
 
   const engineOutput = study.engine_output_json as Record<string, any> | null;
-  const costEstimate = study.cost_estimate_json as Record<string, any> | null;
-  const bom = study.bom_json as Record<string, any> | null;
+  const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
+  const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
 
   const handleExportPdf = () => {
     generateAssessmentPdf({
@@ -51,6 +56,18 @@ export default function StudyDetail() {
       distances: { primary_m: 0, feeder_m: 0, capacity_segment_m: 0 },
     });
   };
+
+  const groupedBreakdown = costEstimate?.breakdown?.reduce<Record<string, CostLineItem[]>>((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {}) || {};
+
+  const groupedBom = bomItems.reduce<Record<string, BomItem[]>>((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -163,13 +180,66 @@ export default function StudyDetail() {
         {/* Cost Estimate */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Cost Estimate</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <PoundSterling className="h-4 w-4" />Cost Estimate
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-sm">
             {costEstimate ? (
-              <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-60">{JSON.stringify(costEstimate, null, 2)}</pre>
+              <div className="space-y-3">
+                <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-3">
+                  <p className="text-[10px] text-muted-foreground uppercase">Estimated Total</p>
+                  <p className="text-xl font-bold text-foreground">{formatGBP(costEstimate.total_estimate)}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-[10px]">{costEstimate.voltage_level}</Badge>
+                    <Badge variant="outline" className="text-[10px] capitalize">{costEstimate.confidence} confidence</Badge>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  {[
+                    { label: "Cable", value: costEstimate.cable_cost, color: "bg-blue-500" },
+                    { label: "Excavation", value: costEstimate.excavation_cost, color: "bg-amber-500" },
+                    { label: "Equipment", value: costEstimate.equipment_cost, color: "bg-purple-500" },
+                    ...(costEstimate.reinforcement_cost > 0 ? [{ label: "Reinforcement", value: costEstimate.reinforcement_cost, color: "bg-red-500" }] : []),
+                  ].map((bar) => (
+                    <div key={bar.label} className="flex items-center gap-2 text-[10px]">
+                      <span className="w-20 text-muted-foreground">{bar.label}</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className={`h-full rounded-full ${bar.color}`} style={{ width: `${(bar.value / costEstimate.subtotal) * 100}%` }} />
+                      </div>
+                      <span className="w-16 text-right font-medium">{formatGBP(bar.value)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Separator />
+                <p className="text-xs font-semibold text-muted-foreground uppercase">Breakdown</p>
+                {Object.entries(groupedBreakdown).map(([category, items]) => (
+                  <div key={category}>
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{category}</p>
+                    {items.map((item, i) => (
+                      <div key={i} className="flex justify-between text-[10px] py-0.5">
+                        <span className="text-foreground">{item.description}</span>
+                        <span className="font-medium">{formatGBP(item.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div className="rounded border bg-muted/20 px-2 py-1.5">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="float-right font-semibold">{formatGBP(costEstimate.subtotal)}</span>
+                  </div>
+                  <div className="rounded border bg-muted/20 px-2 py-1.5">
+                    <span className="text-muted-foreground">Fees + Contingency</span>
+                    <span className="float-right font-semibold">{formatGBP(costEstimate.design_fee + costEstimate.project_management + costEstimate.contingency)}</span>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <p className="text-muted-foreground">No cost estimate yet. Run a feasibility assessment from the map.</p>
+              <p className="text-muted-foreground">No cost estimate yet. Draw a route on the map with a proposed load set.</p>
             )}
           </CardContent>
         </Card>
@@ -177,11 +247,32 @@ export default function StudyDetail() {
         {/* BOM */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Bill of Materials</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <FileText className="h-4 w-4" />Bill of Materials
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-sm">
-            {bom ? (
-              <pre className="text-xs bg-muted p-2 rounded overflow-auto max-h-60">{JSON.stringify(bom, null, 2)}</pre>
+            {bomItems.length > 0 ? (
+              <div className="space-y-3">
+                {Object.entries(groupedBom).map(([category, items]) => (
+                  <div key={category}>
+                    <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">{category}</p>
+                    <div className="space-y-0.5">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex justify-between text-[10px] py-0.5">
+                          <span className="text-foreground truncate max-w-[50%]">{item.item}</span>
+                          <span className="text-muted-foreground">{item.quantity} {item.unit}</span>
+                          <span className="font-medium w-14 text-right">{formatGBP(item.total_cost)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-between text-xs font-semibold border-t pt-1">
+                  <span>BoM Total</span>
+                  <span>{formatGBP(bomItems.reduce((s, b) => s + b.total_cost, 0))}</span>
+                </div>
+              </div>
             ) : (
               <p className="text-muted-foreground">No BOM generated yet.</p>
             )}
