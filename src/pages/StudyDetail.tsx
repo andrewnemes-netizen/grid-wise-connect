@@ -8,6 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText } from "lucide-react";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
+import { StudyShareDialog } from "@/components/study/StudyShareDialog";
+import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
@@ -87,6 +89,7 @@ export default function StudyDetail() {
           </div>
         </div>
         <div className="flex gap-2">
+          <StudyShareDialog studyId={study.id} studyName={study.study_name} />
           <Button variant="outline" onClick={() => navigate(`/?study=${study.id}`)}>
             <Map className="h-4 w-4 mr-2" />Open on Map
           </Button>
@@ -279,6 +282,13 @@ export default function StudyDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Comments section */}
+      <Card>
+        <CardContent className="pt-6">
+          <StudyCommentsPanel studyId={study.id} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

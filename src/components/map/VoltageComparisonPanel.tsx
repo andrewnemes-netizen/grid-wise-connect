@@ -2,12 +2,17 @@ import { useState } from "react";
 import { Zap, CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronUp, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import type { VoltageComparisonResult, VoltageComparisonTier } from "@/lib/voltageComparison";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
 }
+
+const voltageBadgeVariant: Record<string, "secondary" | "default" | "outline"> = {
+  LV: "secondary",
+  HV: "default",
+  EHV: "outline",
+};
 
 interface VoltageComparisonPanelProps {
   result: VoltageComparisonResult;
@@ -21,8 +26,8 @@ function TierCard({ tier, isRecommended }: { tier: VoltageComparisonTier; isReco
     <div className={`rounded-lg border p-3 space-y-2 ${isRecommended ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "bg-muted/20"}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant={tier.voltage === "LV" ? "secondary" : "default"} className="text-[10px]">
-            {tier.voltage}
+          <Badge variant={voltageBadgeVariant[tier.voltage] ?? "outline"} className="text-[10px]">
+            {tier.voltage}{tier.voltage === "EHV" ? " (33kV)" : tier.voltage === "HV" ? " (11kV)" : ""}
           </Badge>
           {isRecommended && (
             <Badge className="text-[9px] bg-primary text-primary-foreground gap-1">
@@ -40,7 +45,6 @@ function TierCard({ tier, isRecommended }: { tier: VoltageComparisonTier; isReco
         )}
       </div>
 
-      {/* Key details */}
       <div className="grid grid-cols-2 gap-1 text-[10px]">
         <span className="text-muted-foreground">Cable</span>
         <span className="font-medium text-right truncate">{tier.cable_type ?? "—"}</span>
@@ -58,7 +62,6 @@ function TierCard({ tier, isRecommended }: { tier: VoltageComparisonTier; isReco
         )}
       </div>
 
-      {/* Flags */}
       {tier.constraint_flags.length > 0 && (
         <>
           <Button
@@ -113,7 +116,7 @@ export function VoltageComparisonPanel({ result }: VoltageComparisonPanelProps) 
         <p className="text-[10px] text-muted-foreground mt-0.5">{result.recommendation_reason}</p>
         {result.cost_difference_pct !== null && (
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            Cost difference: <span className="font-medium">{Math.abs(result.cost_difference_pct)}%</span>
+            Saving vs next option: <span className="font-medium">{Math.abs(result.cost_difference_pct)}%</span>
           </p>
         )}
       </div>
@@ -130,7 +133,7 @@ export function VoltageComparisonPanel({ result }: VoltageComparisonPanelProps) 
       </div>
 
       <p className="text-[9px] text-muted-foreground italic">
-        Comparison uses same route ({result.lv_result.meta.route_length_m}m) and demand ({result.lv_result.meta.proposed_kw}kW) for both voltage tiers.
+        Comparison uses same route ({result.lv_result.meta.route_length_m}m) and demand ({result.lv_result.meta.proposed_kw}kW) for all voltage tiers.
       </p>
     </div>
   );

@@ -108,4 +108,30 @@
   - Scaffold responses with metadata when APIs not yet connected
   - Ready to plug in real DNO API endpoints as they become available
 
-### Phase 6: Pending
+### Phase 6: EHV (33kV) Tier + Collaboration & Sharing ✅ COMPLETE
+
+#### 6.1 EHV (33kV) Comparison Engine ✅ COMPLETE
+- ✅ `src/lib/ehvOptimiser.ts` — EHV cable feasibility engine:
+  - 33kV supply voltage, very low Ze (0.05Ω)
+  - Auto transformer sizing: 5000/10000/15000/20000 kVA (33/11kV primary)
+  - Multi-transformer support for very large loads
+  - EHV-specific costing: cable + duct + excavation + jointing + circuit breaker + CT metering + earthing/civils + protection relay
+  - Full electrical validation: VD%, ampacity, Zs, fault current
+  - Cost minimisation across EHV cable candidates
+- ✅ `src/lib/voltageComparison.ts` — Extended to 3-tier comparison:
+  - Runs LV + HV + EHV optimisers in parallel
+  - Recommends cheapest passing tier across all three
+  - Cost difference percentage vs next cheapest
+- ✅ `VoltageComparisonPanel` UI — updated for LV / HV (11kV) / EHV (33kV) display
+- ✅ "Compare All Voltages" button in ConnectAssessmentPanel
+
+#### 6.2 Collaboration & Sharing ✅ COMPLETE
+- ✅ `study_shares` table with RLS (owner manages, shared user can view)
+- ✅ `study_comments` table with RLS (threaded, user owns)
+- ✅ Shared study access: viewer and editor roles on studies table
+- ✅ `StudyShareDialog` — share studies with other platform users
+- ✅ `StudyCommentsPanel` — threaded comments on study detail page
+- ✅ Studies page: "Shared with me" tab showing studies shared by others
+- ✅ Study detail page: Share button + comments section
+
+### Phase 7: Pending
