@@ -4,7 +4,8 @@ import type { ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
 
 export function useMapScreenshot(
   map: maplibregl.Map | null,
-  setBasemap: (id: "street") => void
+  setBasemap: (id: "street") => void,
+  boundaryCoords?: [number, number][] | null
 ) {
   const captureScreenshot = useCallback(
     async (endpoints: ConnectEndpoints): Promise<string | null> => {
@@ -16,6 +17,11 @@ export function useMapScreenshot(
       const coords = endpoints.routeCoords;
       const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
       coords.forEach((c) => bounds.extend(c));
+
+      // Also include boundary coords in bounds if they exist
+      if (boundaryCoords && boundaryCoords.length > 0) {
+        boundaryCoords.forEach((c) => bounds.extend(c));
+      }
 
       // ~100m buffer
       const BUFFER_DEG_LAT = 0.0009;
@@ -87,7 +93,7 @@ export function useMapScreenshot(
         setTimeout(waitForIdle, 500);
       });
     },
-    [map, setBasemap]
+    [map, setBasemap, boundaryCoords]
   );
 
   return { captureScreenshot };
