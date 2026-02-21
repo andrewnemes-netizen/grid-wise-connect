@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Clock, UserCheck, UserX, ShieldAlert, Phone } from "lucide-react";
+import { Check, X, Plus, Clock, UserCheck, UserX, ShieldAlert, Phone, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format } from "date-fns";
 
 const ROLES = ["admin", "engineer", "client"] as const;
@@ -162,6 +163,23 @@ export function UserRolesManagement() {
       qc.invalidateQueries({ queryKey: ["admin-role-requests"] });
       qc.invalidateQueries({ queryKey: ["admin-user-roles"] });
       toast({ title: `Request ${vars.action}` });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Delete user mutation
+  const deleteUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-profiles"] });
+      qc.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      toast({ title: "User deleted" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -396,15 +414,47 @@ export function UserRolesManagement() {
                             <X className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 text-xs"
-                          onClick={() => setAddingRoleFor(uid)}
-                        >
-                          <Plus className="h-3.5 w-3.5 mr-1" /> Add Role
-                        </Button>
+                       ) : (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => setAddingRoleFor(uid)}
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Add Role
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                title="Delete user"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete user?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently remove <strong>{profile?.full_name || uid.slice(0, 8)}</strong> and all their roles from the system. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  onClick={() => deleteUser.mutate(uid)}
+                                  disabled={deleteUser.isPending}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       )}
                     </TableCell>
                   </TableRow>
