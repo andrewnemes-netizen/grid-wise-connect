@@ -1,43 +1,64 @@
 
 
-## Fix: App Stuck on "Loading..." -- Auth Deadlock
+## Add Boundary Drawing Tool to the Map
 
-### Problem
+### What You Get
 
-The app is permanently stuck showing "Loading..." because of a deadlock in the authentication initialization.
+A new **Boundary** button on the map toolbar (above Pin Drop) that lets you draw a red boundary outline around any area. Click to place points, double-click to close the shape. The boundary stays visible while you use other tools and is included in PDF screenshot exports.
 
-With `@supabase/supabase-js` v2.46+, `getSession()` uses the Web Locks API internally. The current code in `src/hooks/useAuth.tsx` sets up `onAuthStateChange` first (which fires an `INITIAL_SESSION` event and acquires a lock), then calls `getSession()` which tries to acquire the same lock. This creates a deadlock, so `loading` never becomes `false` and the app never loads.
+### Changes Overview
 
-### Solution
+**4 files touched** (1 new, 3 modified)
 
-Restructure the auth initialization to rely **solely on `onAuthStateChange`** for both the initial session and ongoing auth changes. Remove the separate `getSession()` call entirely.
+---
 
-The `onAuthStateChange` callback already fires an `INITIAL_SESSION` event with the current session (or null). We handle `loading` directly inside that callback.
+### 1. New file: `src/hooks/useBoundaryDraw.ts`
 
-### Changes
+A new hook following the same pattern as `usePolygonDraw`, but with distinct layer IDs and red styling:
 
-**File: `src/hooks/useAuth.tsx`**
+- **Source/layer IDs**: `boundary-draw-source`, `boundary-draw-fill`, `boundary-draw-line`, `boundary-draw-points` (no conflict with polygon search)
+- **Styling**: Red line (`#dc2626`, 3px, solid), subtle red fill (12% opacity), red vertex circles with white stroke
+- **State**: `isDrawing`, `vertices`, `polygon` (closed GeoJSON.Polygon or null)
+- **Methods**: `clearBoundary`, `undoPoint`, `finishBoundary`
+- Click adds a vertex; double-click closes the polygon (requires 3+ points)
+- The boundary persists after drawing completes -- it is NOT cleared when the tool is deactivated, only when explicitly cleared
+- Latest boundary replaces any previous one (re-activating the tool clears the old boundary and starts fresh)
 
-Replace the current dual-path approach (onAuthStateChange + getSession) with a single-path approach:
+### 2. Update: `src/components/map/MapToolbar.tsx`
 
-1. Handle the **first** auth state change event as the "initial load" -- set `loading` to `false` after processing it
-2. Remove the separate `initializeAuth` / `getSession()` call entirely
-3. Wrap `fetchRoles` in try/catch so a failed roles fetch doesn't prevent the app from loading
+- Add `"boundary"` to the tool type union
+- Add a new tool entry at position 0 (above Pin Drop) using the `SquareDashedBottom` icon from lucide-react with label "Boundary"
 
+### 3. Update: `src/pages/MapView.tsx`
+
+- Add `"boundary"` to the `activeTool` state type
+- Import and wire `useBoundaryDraw(map, activeTool === "boundary")`
+- Add `"boundary"` to the click dispatcher: route clicks to `boundary.handleBoundaryClick`, double-clicks to `boundary.handleBoundaryDblClick`
+- Add `"boundary"` to the crosshair cursor condition
+- Add `boundary.clearBoundary()` to `handleClear`
+- Add floating drawing controls (Undo / Finish) when boundary tool is active and has vertices, matching the connect tool's control bar pattern
+- When deactivating boundary tool (switching to another tool), do NOT clear boundary layers -- they persist
+
+### 4. Update: `src/hooks/useMapScreenshot.ts`
+
+- Accept an optional `boundaryCoords` parameter (`[number, number][] | null`)
+- When calculating screenshot bounds:
+  - If route coords AND boundary coords exist: fit bounds to both
+  - If only route coords: current behavior
+  - If only boundary coords: fit to boundary bbox
+- Boundary layers are NOT removed during capture -- they render naturally on the canvas
+- Screenshot markers are added on top (after boundary layers)
+
+### Technical Details
+
+**Layer ordering**: Boundary layers are added to the map without a `beforeId`, so they sit on top of data layers. The screenshot's temporary start/end markers are added last, ensuring they appear above the boundary.
+
+**Boundary vs Polygon Search**: These are completely separate -- different source IDs, different layer IDs, different hooks. Both can coexist on the map. The polygon search tool uses green dashed lines; the boundary tool uses solid red lines.
+
+**Drawing flow**:
 ```text
-Current flow (deadlocks):
-  onAuthStateChange (acquires lock) --> getSession (waits for same lock) --> DEADLOCK
-
-Fixed flow:
-  onAuthStateChange fires INITIAL_SESSION --> handle session + roles --> set loading=false
+Activate tool -> click (add vertex) -> click (add vertex) -> ... -> double-click (close polygon)
+                                                                  -> boundary stays on map
+                                                                  -> tool deactivates
 ```
 
-**Specific code changes:**
-
-- Add an `initializedRef` boolean ref to track whether the first event has been processed
-- In the `onAuthStateChange` callback, after processing each event, check if `!initializedRef.current` -- if so, set `loading = false` and mark as initialized
-- For the initial event with a user, fetch roles and THEN set loading to false (using async handling with setTimeout to avoid the Supabase deadlock warning)
-- Remove the `initializeAuth` async function and its call
-- Add try/catch around `fetchRoles` so that if the user_roles query fails, the app still loads
-
-No other files need changes. The ProtectedRoute and the rest of the app will work correctly once `loading` transitions to `false`.
