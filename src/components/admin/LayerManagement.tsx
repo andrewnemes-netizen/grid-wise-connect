@@ -47,6 +47,8 @@ export function LayerManagement() {
     },
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
   });
 
   const dnos = [...new Set(layers.map((l) => l.dno))].sort();

@@ -439,7 +439,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       {/* Geometry compatibility warning */}
       {files.length > 0 && !uploading && !allDone && (() => {
         const EXPECTED_GEOM: Record<string, string[]> = {
-          geo_substations: ["Point"],
+          geo_substations: ["Point", "Polygon", "MultiPolygon"],
           geo_points: ["Point"],
           geo_feeders: ["LineString", "MultiLineString"],
           geo_cables: ["LineString", "MultiLineString"],
@@ -455,8 +455,8 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         if (mismatched.length === 0) return null;
         const detectedSet = [...new Set(mismatched.map(([, t]) => t))].join(", ");
         return (
-          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive">
-            <strong>Geometry mismatch:</strong> Your file(s) contain <strong>{detectedSet}</strong> but this layer ({layer.storage_table}) expects <strong>{expected.join(" or ")}</strong>. The upload will likely fail. Check you're uploading to the correct layer.
+          <div className="rounded-md border border-amber-500/50 bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+            <strong>Note:</strong> Your file(s) contain <strong>{detectedSet}</strong> geometry. The server will auto-convert to the expected format for this layer.
           </div>
         );
       })()}
