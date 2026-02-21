@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +12,13 @@ import type { VoltageOverride, CostEstimate } from "@/lib/connectionCosts";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useUnitRates } from "@/hooks/useUnitRates";
 import { CostEstimatePanel } from "./CostEstimatePanel";
+import { OptimiserResultPanel } from "./OptimiserResultPanel";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
 import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
+import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
 
 export interface ConnectEndpoints {
   source: {
@@ -92,6 +96,24 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [voltageOverride, setVoltageOverride] = useState<VoltageOverride>("Auto");
+
+  // LV Optimiser state
+  const [optimiserResult, setOptimiserResult] = useState<OptimiserResult | null>(null);
+  const [optimiserLoading, setOptimiserLoading] = useState(false);
+  const { data: unitRates } = useUnitRates();
+
+  // Fetch cable catalogue for optimiser
+  const { data: cableCatalogue } = useQuery({
+    queryKey: ["cable-catalogue-lv"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cable_catalogue")
+        .select("*")
+        .eq("voltage_class", "LV");
+      if (error) throw error;
+      return (data || []) as CableCatalogueEntry[];
+    },
+  });
 
   // Save & compare state
   const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
@@ -353,7 +375,42 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                 </>
               )}
 
-              {/* Reasons */}
+              {/* LV Optimiser */}
+              {Number(proposedKw) > 0 && (voltageOverride === "Auto" || voltageOverride === "LV") && (
+                <>
+                  <Separator />
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={optimiserLoading || !cableCatalogue?.length}
+                    onClick={() => {
+                      if (!cableCatalogue?.length) return;
+                      setOptimiserLoading(true);
+                      try {
+                        const res = runLvOptimiser({
+                          proposed_kw: Number(proposedKw),
+                          route_length_m: routeDistanceM,
+                          catalogue: cableCatalogue,
+                          unit_rates: unitRates,
+                        });
+                        setOptimiserResult(res);
+                      } catch (err: any) {
+                        toast({ title: "Optimiser error", description: err.message, variant: "destructive" });
+                      } finally {
+                        setOptimiserLoading(false);
+                      }
+                    }}
+                  >
+                    {optimiserLoading ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running…</>
+                    ) : (
+                      <><Activity className="mr-2 h-4 w-4" />Run LV Feasibility</>
+                    )}
+                  </Button>
+                  {optimiserResult && <OptimiserResultPanel result={optimiserResult} />}
+                </>
+              )}
+
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assessment Reasons</p>
                 <ul className="space-y-1">

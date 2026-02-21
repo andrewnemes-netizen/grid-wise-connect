@@ -59,6 +59,8 @@ export type Database = {
           id: string
           impedance_per_km: number
           is_default: boolean
+          mains_allowed: boolean
+          service_allowed: boolean
           updated_at: string
           voltage_class: string
         }
@@ -71,6 +73,8 @@ export type Database = {
           id?: string
           impedance_per_km?: number
           is_default?: boolean
+          mains_allowed?: boolean
+          service_allowed?: boolean
           updated_at?: string
           voltage_class: string
         }
@@ -83,6 +87,8 @@ export type Database = {
           id?: string
           impedance_per_km?: number
           is_default?: boolean
+          mains_allowed?: boolean
+          service_allowed?: boolean
           updated_at?: string
           voltage_class?: string
         }

@@ -17,15 +17,28 @@
 
 ### Phase 2: Price Book + Surface-Aware Costing ✅ COMPLETE
 
-- ✅ Surface-aware excavation: `deriveSurfaceSplit()` uses `min_footway_m` / `min_carriageway_m` from highway_widths constraints to compute proportional splits instead of fixed 60/30/10
-- ✅ `SurfaceSplit` interface + `DEFAULT_SURFACE_SPLIT` constant exported from connectionCosts.ts
-- ✅ `estimateConnectionCost` accepts optional `surface_split` parameter
-- ✅ Auto-save `cost_estimate_json` and `bom_json` to studies when route is saved (if proposed_kw is set)
-- ✅ StudyDetail page renders formatted cost breakdowns with visual bars, grouped line items, and fees summary
-- ✅ StudyDetail page renders grouped BOM table with per-category totals
-- ✅ Admin Unit Rates settings panel for managing price book (existing `unit_rates` table)
+- ✅ Surface-aware excavation: `deriveSurfaceSplit()` uses constraint data for proportional splits
+- ✅ `SurfaceSplit` interface + `DEFAULT_SURFACE_SPLIT` constant
+- ✅ Auto-save `cost_estimate_json` and `bom_json` to studies on route save
+- ✅ StudyDetail renders formatted cost breakdowns with visual bars and grouped BOM
+- ✅ Admin Unit Rates settings panel for price book management
 
-### Phases 3–5: Pending
-- Phase 3: Hybrid LV optimiser
+### Phase 3: Hybrid LV Optimiser ✅ COMPLETE
+
+- ✅ `cable_catalogue` extended with `service_allowed` and `mains_allowed` boolean columns
+- ✅ `src/lib/lvOptimiser.ts` — modular engine with:
+  - Mains/service route split (DNO service length cap, default 30m fallback)
+  - Cable candidate iteration from catalogue (max 10 mains candidates)
+  - Electrical validation: voltage drop ≤ 5%, Ib ≤ Iz ampacity, Zs gateway check
+  - Utilisation >80% warnings
+  - Cost minimisation: cable + duct + excavation + jointing + commercial uplift
+  - Structured JSON output: network_edges, split_point, electrical summary, cost summary, ranked alternatives, constraint flags
+  - `NO_PASSING_SOLUTION` status with constraint failure details when no cable passes
+- ✅ `OptimiserResultPanel` UI component — displays selected solution, alternatives, cost breakdowns, electrical figures, constraint flags
+- ✅ "Run LV Feasibility" button in ConnectAssessmentPanel (only shows for LV/Auto voltage)
+- ✅ Fetches cable catalogue from DB, uses unit rates from price book
+- ✅ Modular architecture ready for V2 (HV comparison, multi-transformer splitting)
+
+### Phases 4–5: Pending
 - Phase 4: Electrical engine + Design mode
 - Phase 5: Enhanced PDF/JSON export
