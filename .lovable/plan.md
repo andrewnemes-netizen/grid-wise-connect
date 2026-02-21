@@ -1,73 +1,64 @@
 
 
-## Save and Compare Connection Assessments
+## Fix: Remove Transformer, Earthing, and Plinth from LV Connections
 
-This feature adds the ability to save completed connection assessments and compare up to 4 of them side by side in a comparison table.
+### The Issue
 
-### How It Works
+The cost engine currently includes a dedicated transformer (plus associated earthing and plinth civils) for **all** connections, including LV. In reality:
 
-1. After running an assessment, a "Save Assessment" button appears in the results area
-2. Saved assessments are stored in-session (React state) and listed in a collapsible drawer at the bottom of the panel
-3. Selecting 2-4 saved assessments opens a full-width comparison view showing key metrics side by side
-4. The comparison view includes score, cost, voltage level, distance, constraints, and BOM summary
+- **LV connections** (up to 80kW) connect to an **existing** distribution transformer on the DNO network. No new transformer is needed.
+- **HV connections** require a new dedicated transformer to step down from 11kV to LV.
+- **EHV connections** require transformer(s) to step down from 33kV.
+
+This bug inflates every LV estimate by approximately £29,700.
 
 ### Changes
 
-**1. New file: `src/components/map/SavedAssessmentsDrawer.tsx`**
-- A collapsible list of saved assessments shown at the bottom of `ConnectAssessmentPanel`
-- Each saved item shows: label, score badge, total cost, voltage level, date/time
-- Delete button per item
-- "Compare Selected" button when 2-4 items are checked
-- Checkboxes for multi-select
+**File: `src/lib/connectionCosts.ts`**
 
-**2. New file: `src/components/map/AssessmentComparisonPanel.tsx`**
-- Full-width overlay panel (replaces the assessment panel temporarily)
-- Side-by-side table comparing selected assessments
-- Rows: Source asset, Destination coords, Route distance, Proposed kW, Voltage level, Score (with color), Total cost, Cable cost, Excavation cost, Equipment cost, Reinforcement cost, Confidence, Key constraints (NDP, Wayleave, Capacity)
-- Highlights the best value in each row (lowest cost, best score)
-- "Back" button to return to the assessment panel
-- "Export Comparison PDF" button
+1. **`estimateConnectionCost()` function (lines 184-198)** -- Wrap the transformer block so it only applies when `voltageLevel !== "LV"`:
+   - LV connections: no transformer cost
+   - HV/EHV connections: existing transformer logic unchanged
 
-**3. Modified: `src/components/map/ConnectAssessmentPanel.tsx`**
-- Add `savedAssessments` state array holding completed assessment snapshots
-- After results load, show a "Save This Assessment" button that captures: endpoints, proposedKw, voltageOverride, result, distances, timestamp, and a user-editable label
-- Render `SavedAssessmentsDrawer` below the results section
-- When comparison mode is activated, render `AssessmentComparisonPanel` instead of the normal panel content
+2. **`generateBom()` function (lines 288-296)** -- Same change: only include transformer BOM item for HV/EHV.
 
-**4. New type: `SavedAssessment`** (defined in ConnectAssessmentPanel.tsx)
+3. **`generateBom()` function (lines 305-309)** -- Make earthing and transformer plinth conditional on HV/EHV only, since these are transformer-associated civils. For LV, earthing at the cutout/pillar is included in the feeder pillar cost.
+
+### Impact on the 69kW Example from the PDF
+
+| Item | Before | After |
+|------|--------|-------|
+| Cable (25m LV) | £2,125 | £2,125 |
+| Excavation | £3,675 | £3,675 |
+| LV joints (2x) | £3,600 | £3,600 |
+| Feeder pillar | £3,200 | £3,200 |
+| 100A cutout | £850 | £850 |
+| 500kVA transformer | £22,000 | **Removed** |
+| Whole current meter | £1,200 | £1,200 |
+| Earthing | (in BoM £3,500) | **Removed** |
+| Transformer plinth | (in BoM £4,200) | **Removed** |
+| Subtotal | £36,650 | £14,650 |
+| Fees + Contingency (24%) | £8,796 | £3,516 |
+| **Total** | **£45,446** | **£18,166** |
+
+### Technical Detail
+
 ```text
-interface SavedAssessment {
-  id: string;              // crypto.randomUUID()
-  label: string;           // e.g. "Option A - LV 50kW"
-  timestamp: Date;
-  endpoints: ConnectEndpoints;
-  proposedKw: number;
-  voltageOverride: VoltageOverride;
-  result: ScoreResult;
-  distances: { primary_m; feeder_m; capacity_segment_m };
-  totalEstimate: number;   // from CostEstimatePanel calculation
-  voltageLevel: string;    // resolved LV/HV/EHV
-  confidence: string;
+// estimateConnectionCost() - transformer block becomes:
+if (voltageLevel !== "LV" && proposed_kw > 0) {
+  // existing transformer sizing logic (500/1000/1500 kVA)
+}
+
+// generateBom() - transformer block becomes:
+if (voltageLevel !== "LV") {
+  // existing transformer BOM items
+}
+
+// generateBom() - earthing & plinth become conditional:
+if (voltageLevel !== "LV") {
+  items.push(earthing);
+  items.push(transformer plinth);
 }
 ```
 
-### Technical Details
-
-- All state is client-side (React useState) -- no database tables needed
-- Assessments persist only for the current session; closing the panel clears them
-- The comparison panel uses a responsive CSS grid/table layout
-- Cost calculations for comparison are done using `estimateConnectionCost()` from `connectionCosts.ts` with each assessment's saved parameters
-- Maximum 10 saved assessments to keep UI manageable
-- The comparison panel reuses existing UI components (Badge, Card, Table, ScrollArea)
-
-### User Flow
-
-1. User draws a connection route and runs assessment
-2. Results appear with a new "Save as Option" button
-3. User saves it (auto-labeled "Option A"), then closes or modifies parameters
-4. User draws another route or changes kW/voltage and runs again
-5. Saves as "Option B"
-6. At the bottom of the panel, saved options are listed with checkboxes
-7. User selects 2+ options and clicks "Compare"
-8. Side-by-side comparison table opens highlighting differences
-
+No database changes required. This is a pure logic fix in `connectionCosts.ts`.
