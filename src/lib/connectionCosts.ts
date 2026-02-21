@@ -183,7 +183,7 @@ export function estimateConnectionCost(
 
   // Transformer
   let transformerCost = 0;
-  if (proposed_kw > 0) {
+  if (voltageLevel !== "LV" && proposed_kw > 0) {
     if (proposed_kw <= 500) {
       transformerCost = rates.transformer_500kva;
       breakdown.push({ category: "Equipment", description: "500kVA transformer", quantity: 1, unit: "ea", unit_rate: rates.transformer_500kva, total: rates.transformer_500kva });
@@ -286,13 +286,15 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   }
 
   // Transformer
-  if (proposed_kw <= 500) {
-    items.push({ category: "Transformer", item: "500kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_500kva, total_cost: rates.transformer_500kva });
-  } else if (proposed_kw <= 1000) {
-    items.push({ category: "Transformer", item: "1000kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_1000kva, total_cost: rates.transformer_1000kva });
-  } else {
-    const count = Math.ceil(proposed_kw / 1500);
-    items.push({ category: "Transformer", item: "1500kVA ground-mounted transformer", quantity: count, unit: "ea", unit_cost: rates.transformer_1500kva, total_cost: count * rates.transformer_1500kva });
+  if (voltageLevel !== "LV") {
+    if (proposed_kw <= 500) {
+      items.push({ category: "Transformer", item: "500kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_500kva, total_cost: rates.transformer_500kva });
+    } else if (proposed_kw <= 1000) {
+      items.push({ category: "Transformer", item: "1000kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_1000kva, total_cost: rates.transformer_1000kva });
+    } else {
+      const count = Math.ceil(proposed_kw / 1500);
+      items.push({ category: "Transformer", item: "1500kVA ground-mounted transformer", quantity: count, unit: "ea", unit_cost: rates.transformer_1500kva, total_cost: count * rates.transformer_1500kva });
+    }
   }
 
   // Metering
@@ -302,11 +304,11 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     items.push({ category: "Metering", item: "CT metering panel", quantity: 1, unit: "ea", unit_cost: rates.metering_ct, total_cost: rates.metering_ct });
   }
 
-  // Earthing
-  items.push({ category: "Earthing", item: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_cost: 3500, total_cost: 3500 });
-
-  // Civils
-  items.push({ category: "Civils", item: "Transformer plinth", quantity: 1, unit: "ea", unit_cost: 4200, total_cost: 4200 });
+  // Earthing & transformer civils — HV/EHV only
+  if (voltageLevel !== "LV") {
+    items.push({ category: "Earthing", item: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_cost: 3500, total_cost: 3500 });
+    items.push({ category: "Civils", item: "Transformer plinth", quantity: 1, unit: "ea", unit_cost: 4200, total_cost: 4200 });
+  }
   items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: 2, total_cost: cableDistance * 2 });
 
   return items;
