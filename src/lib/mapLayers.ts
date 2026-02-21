@@ -21,7 +21,7 @@ export async function fetchLayerGeoJSON(
   if (bbox) {
     const lngSpan = bbox[2] - bbox[0];
     const latSpan = bbox[3] - bbox[1];
-    const MIN_SPAN = 0.1;
+    const MIN_SPAN = 0.02;
     if (lngSpan < MIN_SPAN || latSpan < MIN_SPAN) {
       const cLng = (bbox[0] + bbox[2]) / 2;
       const cLat = (bbox[1] + bbox[3]) / 2;

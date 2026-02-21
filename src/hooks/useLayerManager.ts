@@ -82,19 +82,19 @@ export function useLayerManager(
     const gt = layer.geometry_type.toLowerCase();
     const z = zoom ?? 10;
     if (gt.includes("line")) {
-      if (z < 7) return 3000;
-      if (z < 10) return 8000;
+      if (z < 7) return 1000;
+      if (z < 10) return 3000;
       return 5000;
     }
     if (gt.includes("point")) {
-      if (z < 7) return 5000;
-      if (z < 10) return 15000;
-      return 30000;
+      if (z < 7) return 2000;
+      if (z < 10) return 5000;
+      return 10000;
     }
     // Polygons
-    if (z < 7) return 2000;
-    if (z < 10) return 5000;
-    return 10000;
+    if (z < 7) return 1000;
+    if (z < 10) return 3000;
+    return 5000;
   }, []);
 
   // Detach event handlers for a layer
