@@ -2481,6 +2481,18 @@ export type Database = {
         }
         Returns: string
       }
+      user_can_access_study: {
+        Args: { _study_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_has_study_editor_share: {
+        Args: { _study_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_has_study_share: {
+        Args: { _study_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "engineer" | "client"
