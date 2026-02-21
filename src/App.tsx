@@ -15,6 +15,7 @@ import SiteDetail from "./pages/SiteDetail";
 import Admin from "./pages/Admin";
 import LaProgramme from "./pages/LaProgramme";
 import QuickEstimate from "./pages/QuickEstimate";
+import Training from "./pages/Training";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,6 +57,7 @@ const AppRoutes = () => (
     <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
     <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
     <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
+    <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

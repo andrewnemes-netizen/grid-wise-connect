@@ -1,4 +1,4 @@
-import { Map, FolderOpen, Settings, LogOut, Building2 } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 import epeLogo from "@/assets/epe-logo.png";
@@ -23,6 +23,10 @@ const navItems = [
 
 const internalItems = [
   { title: "LA Programme", url: "/la-programme", icon: Building2 },
+];
+
+const commonItems = [
+  { title: "Training", url: "/training", icon: BookOpen },
 ];
 
 const adminItems = [
@@ -62,6 +66,16 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               ))}
               {showInternal && internalItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+              {commonItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
