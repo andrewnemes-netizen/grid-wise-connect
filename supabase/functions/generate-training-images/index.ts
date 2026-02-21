@@ -23,6 +23,9 @@ const IMAGE_PROMPTS: Record<string, string> = {
   "connect-assessment":
     "Create a clean UI mockup illustration showing a cable route drawn on a map between two points, with waypoints along roads. On the right side show a Connect Assessment panel with: Route Length (450m), Cable Cost breakdown (LV cable £12,000), Excavation costs (Carriageway £8,000, Footway £3,000), Jointing (£2,500), Switchgear (£15,000), subtotals, Design Fee 8%, PM Fee 5%, Contingency 10%, and Total £52,000. Annotate with callout labels. Professional flat design, 16:9 aspect ratio.",
 
+  "studies":
+    "Create a clean UI mockup illustration of a Studies management page. Show a list of study cards, each with a study name, status badge (draft/complete), mode badge (Connect/Design), DNO badge, and action buttons (eye icon for detail, arrow for open on map, trash for delete). At the top show a 'New Study' button and a batch 'Export as ZIP' button. Include a 'Shared with me' tab. One card shows a proposed load of 250 kW. Annotate with callout labels: 'Study card', 'Status badge', 'Mode badge', 'New Study', 'Batch Export', 'Shared tab'. Professional flat design, 16:9 aspect ratio.",
+
   "portfolio":
     "Create a clean UI mockup illustration of a portfolio table view. Show a data table with columns: Site Name, Postcode, Proposed kW, Score (with coloured badges GREEN/AMBER/RED), Grid Readiness, Deployment Class, Cost Band, Status. Show 5 example rows with realistic UK site data. Above the table show filter dropdowns and a search bar. Include action buttons: Compare, Export CSV. Each row has an eye icon for detail view. Professional flat design, 16:9 aspect ratio.",
 
