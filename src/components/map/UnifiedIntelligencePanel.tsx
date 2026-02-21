@@ -364,6 +364,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 {/* Full cost estimate expandable */}
                 {result.distances && pkw > 0 && (
                   <CostEstimatePanel
+                    voltageOverride="Auto"
                     proposed_kw={pkw}
                     distances={result.distances}
                     constraints={result.constraints}

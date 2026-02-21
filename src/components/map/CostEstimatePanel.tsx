@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import { PoundSterling, ChevronDown, ChevronUp, AlertCircle, CheckCircle, HelpCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem, type VoltageOverride } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
@@ -16,6 +14,7 @@ interface CostEstimatePanelProps {
     min_carriageway_m?: number | null;
   };
   nearest_headroom_kw?: number;
+  voltageOverride: VoltageOverride;
 }
 
 const CONFIDENCE_CONFIG = {
@@ -28,10 +27,9 @@ function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
 }
 
-export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw }: CostEstimatePanelProps) {
+export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw, voltageOverride }: CostEstimatePanelProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showBom, setShowBom] = useState(false);
-  const [voltageOverride, setVoltageOverride] = useState<VoltageOverride>("Auto");
   const { data: unitRates } = useUnitRates();
 
   const estimate = useMemo<CostEstimate>(
@@ -70,24 +68,10 @@ export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Budget Estimate</p>
       </div>
 
-      {/* Voltage selector */}
-      <div className="space-y-1">
-        <Label className="text-xs">Connection Voltage</Label>
-        <Select value={voltageOverride} onValueChange={(v) => setVoltageOverride(v as VoltageOverride)}>
-          <SelectTrigger className="h-8 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Auto">Auto (from kW)</SelectItem>
-            <SelectItem value="LV">LV — Feeder pillar + cutout</SelectItem>
-            <SelectItem value="HV">HV — RMU + CT metering</SelectItem>
-            <SelectItem value="EHV">EHV</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground">
-          Using: <span className="font-medium">{estimate.voltage_level}</span>
-        </p>
-      </div>
+      {/* Active voltage indicator */}
+      <p className="text-[10px] text-muted-foreground">
+        Using: <span className="font-medium">{estimate.voltage_level}</span>
+      </p>
 
       {/* Total cost card */}
       <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4">
