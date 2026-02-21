@@ -68,6 +68,7 @@ export function useLayerManager(
   const moveEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastBboxMap = useRef<Map<string, [number, number, number, number]>>(new Map());
   const lastZoomRef = useRef<number>(6);
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
 
   // Registry layer lookup
   const layerMap = useMemo(() => {
@@ -76,20 +77,23 @@ export function useLayerManager(
     return m;
   }, [registryLayers]);
 
-  // Feature cap — generous limits to ensure all data is visible at any zoom
+  // Feature cap — tiered by zoom to prevent timeouts at wide zoom
   const getFeatureCap = useCallback((layer: RegistryLayer, zoom?: number): number => {
     const gt = layer.geometry_type.toLowerCase();
     const z = zoom ?? 10;
     if (gt.includes("line")) {
-      if (z < 7) return 10000;
+      if (z < 7) return 3000;
+      if (z < 10) return 8000;
       return 20000;
     }
     if (gt.includes("point")) {
-      if (z < 7) return 10000;
+      if (z < 7) return 5000;
+      if (z < 10) return 15000;
       return 30000;
     }
     // Polygons
-    if (z < 7) return 5000;
+    if (z < 7) return 2000;
+    if (z < 10) return 5000;
     return 10000;
   }, []);
 
@@ -122,6 +126,12 @@ export function useLayerManager(
       }
 
       const cap = getFeatureCap(layer, currentZoom);
+      // Abort any in-flight request for this layer
+      const prevController = abortControllersRef.current.get(layerId);
+      if (prevController) prevController.abort();
+      const controller = new AbortController();
+      abortControllersRef.current.set(layerId, controller);
+
       setLoadingLayers((prev) => new Set(prev).add(layerId));
       try {
         const geojson = await fetchLayerGeoJSON(layerId, bbox, selectedDnoRef.current, cap);
@@ -206,6 +216,8 @@ export function useLayerManager(
 
     const onMoveEnd = () => {
       if (moveEndTimerRef.current) clearTimeout(moveEndTimerRef.current);
+      const currentZoom = map.getZoom();
+      const debounceMs = currentZoom < 8 ? 600 : 300;
       moveEndTimerRef.current = setTimeout(() => {
         const newBbox = getMapBbox(map);
         const newZoom = map.getZoom();
@@ -221,7 +233,6 @@ export function useLayerManager(
           const layer = layerMap.get(id);
           if (!layer) return;
 
-          // min_zoom threshold crossing
           if (layer.min_zoom) {
             const wasBelow = prevZoom < layer.min_zoom;
             const isAbove = newZoom >= layer.min_zoom;
@@ -232,13 +243,11 @@ export function useLayerManager(
               return;
             }
             if (wasBelow && isAbove) {
-              // Just crossed into eligible zoom — force fetch (no cache clear)
               loadLayer(id, newBbox, false);
               return;
             }
           }
 
-          // Check overlap with last-fetched bbox
           const lastBbox = lastBboxMap.current.get(id);
           if (!lastBbox) {
             loadLayer(id, newBbox, false);
@@ -248,12 +257,11 @@ export function useLayerManager(
           const overlap = bboxOverlap(lastBbox, newBbox);
           const shifted = bboxDimensionShifted(lastBbox, newBbox, 0.32);
 
-          // Only refetch if overlap < 70% OR shifted > 32% — DON'T clear cache, let fetchLayerGeoJSON cache handle it
           if (overlap < 0.7 || shifted) {
             loadLayer(id, newBbox, false);
           }
         });
-      }, 300); // 300ms debounce
+      }, debounceMs);
     };
 
     map.on("moveend", onMoveEnd);
