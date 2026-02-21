@@ -8,6 +8,39 @@ import { useToast } from "@/hooks/use-toast";
 import { gmlToGeoJSON, decompressGzip, bngToWgs84 } from "@/lib/gmlParser";
 import { detectGeometryType } from "@/lib/detectGeometryType";
 
+const GEOM_TYPE_RE = /"type"\s*:\s*"(Multi)?(Point|LineString|Polygon|GeometryCollection)"/i;
+const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon|MultiSurface|MultiCurve)/i;
+
+/** Lightweight geometry type detection — reads only the first 10 KB of the file. */
+async function detectGeomTypeFromFile(file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "csv") {
+    const header = await file.slice(0, 1024).text();
+    const cols = header.split(/[\r\n]/)[0].toLowerCase();
+    if (/\b(lat|latitude|northing|y)\b/.test(cols) && /\b(lng|lon|longitude|easting|x)\b/.test(cols)) {
+      return "Point";
+    }
+    if (/\bgeo[_ ]?shape\b/.test(cols) || /\bgeometry\b/.test(cols) || /\bwkt\b/.test(cols)) {
+      return "Geometry";
+    }
+    return "No geometry";
+  }
+
+  if (ext === "gml" || (ext === "gz" && file.name.toLowerCase().endsWith(".gml.gz"))) {
+    const chunk = await file.slice(0, 10240).text();
+    const m = chunk.match(GML_GEOM_RE);
+    if (m) return m[1].replace(/^Multi(Surface|Curve)$/, (_, s) => s === "Surface" ? "MultiPolygon" : "MultiLineString").replace(/^Multi/, "");
+    return "Unknown";
+  }
+
+  // GeoJSON / JSON
+  const chunk = await file.slice(0, 10240).text();
+  const m = chunk.match(GEOM_TYPE_RE);
+  if (m) return m[2]; // base type without Multi prefix
+  return "Unknown";
+}
+
 interface GeoFileUploaderProps {
   layerId: string;
   layer: {
@@ -88,13 +121,10 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       setAllDone(false);
       if (fileRef.current) fileRef.current.value = "";
 
-      // Eagerly detect geometry types for new files
+      // Lightweight geometry sniff — reads only the first 10 KB per file
       for (let i = 0; i < newFiles.length; i++) {
         try {
-          const result = await parseFile(newFiles[i]);
-          const geomType = result.hasSpatial
-            ? detectGeometryType(result.geojson.features)
-            : "No geometry";
+          const geomType = await detectGeomTypeFromFile(newFiles[i]);
           setDetectedTypes((prev) => ({ ...prev, [startIdx + i]: geomType }));
         } catch {
           setDetectedTypes((prev) => ({ ...prev, [startIdx + i]: "Error" }));
