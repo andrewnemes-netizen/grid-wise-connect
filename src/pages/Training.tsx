@@ -45,10 +45,11 @@ function generateTrainingPdf(sectionImages: Record<string, string>) {
     // Add image if available
     const imgUrl = sectionImages[section.id];
     if (imgUrl) {
-      checkSpace(70);
+      const imgHeight = maxWidth * (9 / 16); // preserve 16:9 aspect ratio
+      checkSpace(imgHeight + 5);
       try {
-        doc.addImage(imgUrl, "PNG", margin, y, maxWidth, 60);
-        y += 65;
+        doc.addImage(imgUrl, "PNG", margin, y, maxWidth, imgHeight);
+        y += imgHeight + 5;
       } catch { /* skip if image fails */ }
     }
 
