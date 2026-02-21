@@ -112,16 +112,16 @@ Deno.serve(async (req) => {
         geom_geojson: JSON.stringify(geom),
         layer_id,
         dno,
-        name: props.name || props.site_name || props.Name || props.SITE_NAME || null,
+        name: props.name || props.site_name || props.Name || props.SITE_NAME || props.psp_name || props["Substation Name"] || null,
         asset_id: props.asset_id || props.ASSET_ID || props.site_id || props.SITE_ID || null,
         attrs_json: props,
         status: props.status || "unknown",
         // substation
-        capacity_kw: parseNum(props.firm_capacity_kw || props.capacity_kw),
-        demand_kw: parseNum(props.max_demand_kw || props.demand_kw),
-        headroom_kw: parseNum(props.transformer_headroom_kw || props.headroom_kw),
-        utilisation_pct: parseNum(props.utilisation_pct),
-        voltage_kv: parseNum(props.voltage_kv || props.voltage),
+        capacity_kw: parseNum(props.firm_capacity_kw || props.capacity_kw || props.firm_cap || props["Firm Capacity"]),
+        demand_kw: parseNum(props.max_demand_kw || props.demand_kw || props.maxdemand || props["Maximum Demand"]),
+        headroom_kw: parseNum(props.transformer_headroom_kw || props.headroom_kw || props.demhr || props["Demand Headroom"]),
+        utilisation_pct: parseNum(props.utilisation_pct || props.fault_level_  || props["Fault Level %"]),
+        voltage_kv: parseNum(props.voltage_kv || props.voltage || props.pvoltage || props["Downstream Voltage"]),
         // feeder
         feeder_ref: props.feeder_ref || props.circuit_id || props["circuit id"] || null,
         // cable
