@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { OptimiserResultPanel } from "./OptimiserResultPanel";
-import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { generateAssessmentPdf, exportAssessmentJson } from "@/lib/generateAssessmentPdf";
 import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
 import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
@@ -521,10 +521,41 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       distances,
                       constraints: result.constraints,
                       mapScreenshot,
+                      electricalResult: electricalResult,
+                      snapshotId: lastSnapshotId,
                     });
                   }}
                 >
-                  <Download className="mr-2 h-4 w-4" />Export PDF
+                  <Download className="mr-2 h-4 w-4" />PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  title="Export JSON"
+                  onClick={() => {
+                    const kw = Number(proposedKw) || 0;
+                    const costEst = kw > 0
+                      ? estimateConnectionCost({ proposed_kw: kw, distances, constraints: result.constraints, nearest_headroom_kw: sourceHeadroomKw, voltage_override: voltageOverride })
+                      : null;
+                    exportAssessmentJson({
+                      siteName: `Connection from ${sourceName}`,
+                      proposedKw: kw,
+                      lat: endpoints.destination.lngLat[1],
+                      lng: endpoints.destination.lngLat[0],
+                      score: result.score,
+                      reasons: result.reasons,
+                      nextSteps: result.next_steps,
+                      distances,
+                      constraints: result.constraints,
+                      electricalResult,
+                      snapshotId: lastSnapshotId,
+                      costEstimate: costEst,
+                      routeCoords: endpoints.routeCoords,
+                    });
+                  }}
+                >
+                  <FileJson className="h-4 w-4" />
                 </Button>
               </div>
             </>
