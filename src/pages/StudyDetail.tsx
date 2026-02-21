@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,8 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText } from "lucide-react";
-import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2 } from "lucide-react";
+import { generateAssessmentPdf, type PdfSections } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
@@ -25,6 +29,22 @@ const statusColors: Record<string, string> = {
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [pdfSections, setPdfSections] = useState<PdfSections>({
+    coverPage: true,
+    executiveSummary: true,
+    siteDetails: true,
+    routeMap: true,
+    electricalValidation: true,
+    costBreakdown: true,
+    bom: true,
+    designElements: true,
+    keyFindings: true,
+    nextSteps: true,
+  });
+
+  const toggleSection = (key: keyof PdfSections) => {
+    setPdfSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const { data: study, isLoading } = useQuery({
     queryKey: ["study", id],
@@ -57,8 +77,21 @@ export default function StudyDetail() {
       reasons: engineOutput?.warnings || [],
       nextSteps: engineOutput?.compliance_flags || [],
       distances: { primary_m: 0, feeder_m: 0, capacity_segment_m: 0 },
+      sections: pdfSections,
     });
   };
+
+  const sectionLabels: { key: keyof PdfSections; label: string }[] = [
+    { key: "coverPage", label: "Cover Page" },
+    { key: "siteDetails", label: "Site Details" },
+    { key: "routeMap", label: "Route Map" },
+    { key: "electricalValidation", label: "Electrical Validation" },
+    { key: "costBreakdown", label: "Cost Breakdown" },
+    { key: "bom", label: "Bill of Materials" },
+    { key: "designElements", label: "Design Elements" },
+    { key: "keyFindings", label: "Key Findings" },
+    { key: "nextSteps", label: "Next Steps" },
+  ];
 
   const groupedBreakdown = costEstimate?.breakdown?.reduce<Record<string, CostLineItem[]>>((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
@@ -94,9 +127,36 @@ export default function StudyDetail() {
           <Button variant="outline" onClick={() => navigate(`/?study=${study.id}`)}>
             <Map className="h-4 w-4 mr-2" />Open on Map
           </Button>
-          <Button onClick={handleExportPdf}>
-            <Download className="h-4 w-4 mr-2" />Export PDF
-          </Button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>
+                <Download className="h-4 w-4 mr-2" />Export PDF
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Export PDF Report</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 pt-2">
+                <p className="text-sm text-muted-foreground">Select sections to include:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {sectionLabels.map(({ key, label }) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`sec-${key}`}
+                        checked={pdfSections[key]}
+                        onCheckedChange={() => toggleSection(key)}
+                      />
+                      <Label htmlFor={`sec-${key}`} className="text-sm cursor-pointer">{label}</Label>
+                    </div>
+                  ))}
+                </div>
+                <Button className="w-full" onClick={handleExportPdf}>
+                  <Download className="h-4 w-4 mr-2" />Generate PDF
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

@@ -7,12 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, FileText, Trash2, ArrowRight, Eye, Users } from "lucide-react";
+import { Plus, FileText, Trash2, ArrowRight, Eye, Users, Package } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import JSZip from "jszip";
+import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 
 type Study = {
   id: string;
@@ -40,12 +43,20 @@ const statusColors: Record<string, string> = {
   archived: "bg-muted text-muted-foreground",
 };
 
-function StudyCard({ s, onDelete, navigate, showSharedBadge }: { s: Study; onDelete?: (id: string) => void; navigate: (path: string) => void; showSharedBadge?: string }) {
+function StudyCard({ s, onDelete, navigate, showSharedBadge, selectable, selected, onToggleSelect }: { s: Study; onDelete?: (id: string) => void; navigate: (path: string) => void; showSharedBadge?: string; selectable?: boolean; selected?: boolean; onToggleSelect?: (id: string) => void }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <div className="space-y-1">
+          <div className="flex items-start gap-3">
+            {selectable && (
+              <Checkbox
+                checked={selected}
+                onCheckedChange={() => onToggleSelect?.(s.id)}
+                className="mt-1"
+              />
+            )}
+            <div className="space-y-1">
             <CardTitle className="text-lg">{s.study_name}</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className={statusColors[s.status] || ""}>{s.status}</Badge>
@@ -58,6 +69,7 @@ function StudyCard({ s, onDelete, navigate, showSharedBadge }: { s: Study; onDel
                 </Badge>
               )}
             </div>
+          </div>
           </div>
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" onClick={() => navigate(`/study/${s.id}`)} title="View study details">
@@ -92,6 +104,51 @@ export default function Studies() {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<string>("connect");
   const [proposedKw, setProposedKw] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBatchExport = async () => {
+    if (!studies || selectedIds.size === 0) return;
+    setExporting(true);
+    try {
+      const zip = new JSZip();
+      const selected = studies.filter(s => selectedIds.has(s.id));
+      for (const s of selected) {
+        const doc = generateAssessmentPdf({
+          siteName: s.study_name,
+          proposedKw: s.proposed_kw || 0,
+          score: "GREEN",
+          reasons: [],
+          nextSteps: [],
+          skipSave: true,
+        });
+        const pdfBlob = doc.output("blob");
+        zip.file(`${s.study_name.replace(/\s+/g, "-")}.pdf`, pdfBlob);
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `gridwise-reports-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${selected.length} reports`);
+      setSelectedIds(new Set());
+    } catch (e: any) {
+      toast.error("Export failed: " + e.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data: studies, isLoading } = useQuery({
     queryKey: ["studies"],
@@ -176,10 +233,16 @@ export default function Studies() {
           <h1 className="text-2xl font-bold text-foreground">Studies</h1>
           <p className="text-sm text-muted-foreground">Manage connection and design studies</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> New Study</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <Button variant="outline" onClick={handleBatchExport} disabled={exporting}>
+              <Package className="h-4 w-4 mr-2" />{exporting ? "Exporting…" : `Export ${selectedIds.size} as ZIP`}
+            </Button>
+          )}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button><Plus className="h-4 w-4 mr-2" /> New Study</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Study</DialogTitle>
@@ -208,7 +271,8 @@ export default function Studies() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {hasShared ? (
@@ -224,7 +288,7 @@ export default function Studies() {
             </TabsTrigger>
           </TabsList>
           <TabsContent value="my-studies" className="mt-4">
-            <StudyList studies={studies} isLoading={isLoading} onDelete={(id) => deleteStudy.mutate(id)} navigate={navigate} />
+            <StudyList studies={studies} isLoading={isLoading} onDelete={(id) => deleteStudy.mutate(id)} navigate={navigate} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
           </TabsContent>
           <TabsContent value="shared" className="mt-4">
             {!sharedStudies?.length ? (
@@ -244,13 +308,13 @@ export default function Studies() {
           </TabsContent>
         </Tabs>
       ) : (
-        <StudyList studies={studies} isLoading={isLoading} onDelete={(id) => deleteStudy.mutate(id)} navigate={navigate} />
+        <StudyList studies={studies} isLoading={isLoading} onDelete={(id) => deleteStudy.mutate(id)} navigate={navigate} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
       )}
     </div>
   );
 }
 
-function StudyList({ studies, isLoading, onDelete, navigate }: { studies: Study[] | undefined; isLoading: boolean; onDelete: (id: string) => void; navigate: (path: string) => void }) {
+function StudyList({ studies, isLoading, onDelete, navigate, selectedIds, onToggleSelect }: { studies: Study[] | undefined; isLoading: boolean; onDelete: (id: string) => void; navigate: (path: string) => void; selectedIds?: Set<string>; onToggleSelect?: (id: string) => void }) {
   if (isLoading) return <p className="text-muted-foreground text-sm">Loading studies…</p>;
   if (!studies?.length) {
     return (
@@ -265,7 +329,7 @@ function StudyList({ studies, isLoading, onDelete, navigate }: { studies: Study[
   return (
     <div className="grid gap-4">
       {studies.map((s) => (
-        <StudyCard key={s.id} s={s} onDelete={onDelete} navigate={navigate} />
+        <StudyCard key={s.id} s={s} onDelete={onDelete} navigate={navigate} selectable={!!onToggleSelect} selected={selectedIds?.has(s.id)} onToggleSelect={onToggleSelect} />
       ))}
     </div>
   );

@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X } from "lucide-react";
 import { format } from "date-fns";
+import { PortfolioAnalytics } from "@/components/portfolio/PortfolioAnalytics";
 
 const scoreBadge: Record<string, string> = {
   GREEN: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -199,6 +200,9 @@ const Portfolio = () => {
           </SelectContent>
         </Select>
       </div>
+
+      {/* Analytics Dashboard */}
+      <PortfolioAnalytics sites={filtered} />
 
       {/* Comparison panel */}
       {compareSites.length >= 2 && (
