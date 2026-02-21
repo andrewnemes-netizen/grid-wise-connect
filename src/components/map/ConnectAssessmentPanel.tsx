@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { VoltageOverride } from "@/lib/connectionCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { CostEstimatePanel } from "./CostEstimatePanel";
@@ -69,6 +71,7 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
+  const [voltageOverride, setVoltageOverride] = useState<VoltageOverride>("Auto");
 
   // Calculate route distance (sum of all segments)
   const routeDistanceM = useMemo(() => {
@@ -192,6 +195,22 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
             />
           </div>
 
+          {/* Connection Voltage selector */}
+          <div className="space-y-1">
+            <Label className="text-xs">Connection Voltage</Label>
+            <Select value={voltageOverride} onValueChange={(v) => setVoltageOverride(v as VoltageOverride)}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Auto">Auto (from kW)</SelectItem>
+                <SelectItem value="LV">LV — Feeder pillar + cutout</SelectItem>
+                <SelectItem value="HV">HV — RMU + CT metering</SelectItem>
+                <SelectItem value="EHV">EHV</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button onClick={handleAssess} disabled={loading} className="w-full">
             {loading ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Assessing…</>
@@ -250,6 +269,7 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                     distances={distances}
                     constraints={result.constraints}
                     nearest_headroom_kw={sourceHeadroomKw}
+                    voltageOverride={voltageOverride}
                   />
                 </>
               )}

@@ -294,6 +294,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }
                 <>
                   <Separator />
                   <CostEstimatePanel
+                    voltageOverride="Auto"
                     proposed_kw={Number(proposedKw)}
                     distances={result.distances}
                     constraints={result.constraints}
