@@ -1,4 +1,4 @@
-import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 import epeLogo from "@/assets/epe-logo.png";
@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { title: "Map", url: "/", icon: Map },
+  { title: "Studies", url: "/studies", icon: FlaskConical },
   { title: "Portfolio", url: "/portfolio", icon: FolderOpen },
 ];
 
