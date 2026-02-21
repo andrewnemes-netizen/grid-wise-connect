@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download } from "lucide-react";
+import { useState, useMemo } from "react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +7,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { VoltageOverride } from "@/lib/connectionCosts";
+import type { VoltageOverride, CostEstimate } from "@/lib/connectionCosts";
+import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
+import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 
 export interface ConnectEndpoints {
   source: {
@@ -22,13 +25,28 @@ export interface ConnectEndpoints {
   destination: {
     lngLat: [number, number];
   };
-  routeCoords: [number, number][]; // All points: source → waypoints → destination
+  routeCoords: [number, number][];
 }
 
 interface ConnectAssessmentPanelProps {
   endpoints: ConnectEndpoints;
   onClose: () => void;
   onCaptureMapScreenshot?: () => Promise<string | null>;
+}
+
+export interface SavedAssessment {
+  id: string;
+  label: string;
+  timestamp: Date;
+  endpoints: ConnectEndpoints;
+  proposedKw: number;
+  voltageOverride: VoltageOverride;
+  result: ScoreResult;
+  distances: { primary_m: number; feeder_m: number; capacity_segment_m: number };
+  totalEstimate: number;
+  voltageLevel: string;
+  confidence: string;
+  costEstimate?: CostEstimate;
 }
 
 /** Haversine distance in metres */
@@ -66,6 +84,8 @@ const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg:
   RED: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Challenging" },
 };
 
+const OPTION_LETTERS = "ABCDEFGHIJ";
+
 export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot }: ConnectAssessmentPanelProps) {
   const { toast } = useToast();
   const [proposedKw, setProposedKw] = useState("");
@@ -73,7 +93,11 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [voltageOverride, setVoltageOverride] = useState<VoltageOverride>("Auto");
 
-  // Calculate route distance (sum of all segments)
+  // Save & compare state
+  const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
+  const [comparisonIds, setComparisonIds] = useState<string[] | null>(null);
+
+  // Calculate route distance
   const routeDistanceM = useMemo(() => {
     const coords = endpoints.routeCoords;
     let total = 0;
@@ -97,7 +121,6 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const sourceHeadroomKw = endpoints.source.properties.transformer_headroom_kw as number | undefined ??
     endpoints.source.properties.headroom_kw as number | undefined;
 
-  // Auto-run feasibility from the destination point
   const handleAssess = async () => {
     setLoading(true);
     try {
@@ -133,6 +156,62 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   }, [result, routeDistanceM]);
 
   const sc = result ? scoreConfig[result.score] || scoreConfig.AMBER : null;
+
+  // Save current assessment
+  const handleSave = () => {
+    if (!result) return;
+    if (savedAssessments.length >= 10) {
+      toast({ title: "Max 10 saved", description: "Delete an option before saving more.", variant: "destructive" });
+      return;
+    }
+    const kw = Number(proposedKw) || 0;
+    const costEst = kw > 0
+      ? estimateConnectionCost({
+          proposed_kw: kw,
+          distances,
+          constraints: result.constraints,
+          nearest_headroom_kw: sourceHeadroomKw,
+          voltage_override: voltageOverride,
+        })
+      : undefined;
+
+    const letter = OPTION_LETTERS[savedAssessments.length] ?? String(savedAssessments.length + 1);
+    const saved: SavedAssessment = {
+      id: crypto.randomUUID(),
+      label: `Option ${letter} — ${voltageOverride === "Auto" ? (costEst?.voltage_level ?? "Auto") : voltageOverride} ${kw}kW`,
+      timestamp: new Date(),
+      endpoints: { ...endpoints },
+      proposedKw: kw,
+      voltageOverride,
+      result,
+      distances,
+      totalEstimate: costEst?.total_estimate ?? 0,
+      voltageLevel: costEst?.voltage_level ?? voltageOverride,
+      confidence: costEst?.confidence ?? "low",
+      costEstimate: costEst,
+    };
+    setSavedAssessments((prev) => [...prev, saved]);
+    toast({ title: `Saved as ${saved.label}` });
+  };
+
+  const handleDelete = (id: string) => {
+    setSavedAssessments((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleCompare = (ids: string[]) => {
+    setComparisonIds(ids);
+  };
+
+  // Comparison mode
+  if (comparisonIds) {
+    const selected = savedAssessments.filter((a) => comparisonIds.includes(a.id));
+    return (
+      <AssessmentComparisonPanel
+        assessments={selected}
+        onBack={() => setComparisonIds(null)}
+      />
+    );
+  }
 
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-96 border-l bg-background shadow-xl flex flex-col">
@@ -300,34 +379,50 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                 </ul>
               </div>
 
-              {/* Export */}
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={async () => {
-                  let mapScreenshot: string | undefined;
-                  if (onCaptureMapScreenshot) {
-                    const screenshot = await onCaptureMapScreenshot();
-                    if (screenshot) mapScreenshot = screenshot;
-                  }
-                  generateAssessmentPdf({
-                    siteName: `Connection from ${sourceName}`,
-                    proposedKw: Number(proposedKw) || 0,
-                    lat: endpoints.destination.lngLat[1],
-                    lng: endpoints.destination.lngLat[0],
-                    score: result.score,
-                    reasons: result.reasons,
-                    nextSteps: result.next_steps,
-                    distances,
-                    constraints: result.constraints,
-                    mapScreenshot,
-                  });
-                }}
-              >
-                <Download className="mr-2 h-4 w-4" />Export PDF
-              </Button>
+              {/* Save & Export buttons */}
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={handleSave}
+                >
+                  <Save className="mr-2 h-4 w-4" />Save Option
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={async () => {
+                    let mapScreenshot: string | undefined;
+                    if (onCaptureMapScreenshot) {
+                      const screenshot = await onCaptureMapScreenshot();
+                      if (screenshot) mapScreenshot = screenshot;
+                    }
+                    generateAssessmentPdf({
+                      siteName: `Connection from ${sourceName}`,
+                      proposedKw: Number(proposedKw) || 0,
+                      lat: endpoints.destination.lngLat[1],
+                      lng: endpoints.destination.lngLat[0],
+                      score: result.score,
+                      reasons: result.reasons,
+                      nextSteps: result.next_steps,
+                      distances,
+                      constraints: result.constraints,
+                      mapScreenshot,
+                    });
+                  }}
+                >
+                  <Download className="mr-2 h-4 w-4" />Export PDF
+                </Button>
+              </div>
             </>
           )}
+
+          {/* Saved assessments drawer */}
+          <SavedAssessmentsDrawer
+            assessments={savedAssessments}
+            onDelete={handleDelete}
+            onCompare={handleCompare}
+          />
         </div>
       </ScrollArea>
     </div>
