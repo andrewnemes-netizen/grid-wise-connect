@@ -2,3 +2,6 @@ project_id = "xqmrnfimcuktyyltikoy"
 
 [functions.generate-training-images]
 verify_jwt = false
+
+[functions.apply-dno-rules]
+verify_jwt = false
