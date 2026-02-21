@@ -343,7 +343,10 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         const dominant = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0][0];
 
         // Update if current type is generic "Geometry" or mismatched
-        if (dominant !== "Mixed" && layer.geometry_type === "Geometry") {
+        if (
+          dominant !== "Mixed" &&
+          (layer.geometry_type === "Geometry" || layer.geometry_type !== dominant)
+        ) {
           const { error: updateErr } = await supabase
             .from("layer_registry")
             .update({ geometry_type: dominant, updated_at: new Date().toISOString() })

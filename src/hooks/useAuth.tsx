@@ -60,26 +60,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
         if (!isMounted) return;
-
-        // Only update state if user actually changed — prevents cascading
-        // re-renders when Supabase refreshes the token on window focus
-        const newUserId = newSession?.user?.id ?? null;
-        const prevUserId = lastUserIdRef.current;
-
         setSession(newSession);
+        setUser(newSession?.user ?? null);
 
-        if (newUserId !== prevUserId) {
-          setUser(newSession?.user ?? null);
-
-          if (newSession?.user) {
-            setTimeout(() => {
-              if (isMounted) fetchRoles(newSession.user.id);
-            }, 0);
-          } else {
-            lastUserIdRef.current = null;
-            rolesRef.current = [];
-            setRoles([]);
-          }
+        if (newSession?.user) {
+          // Defer to avoid Supabase internal lock deadlock
+          setTimeout(() => {
+            if (isMounted) fetchRoles(newSession.user.id);
+          }, 0);
+        } else {
+          lastUserIdRef.current = null;
+          rolesRef.current = [];
+          setRoles([]);
         }
       }
     );

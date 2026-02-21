@@ -32,7 +32,6 @@ export function LayerManagement() {
   const [catFilter, setCatFilter] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
   const [uploadLayerId, setUploadLayerId] = useState<string | null>(null);
-  const [uploadLayer, setUploadLayer] = useState<any>(null);
 
   const { data: layers = [], isLoading } = useQuery({
     queryKey: ["admin-layers"],
@@ -199,11 +198,7 @@ export function LayerManagement() {
                           size="sm"
                           variant="ghost"
                           className="h-7 px-2 text-xs"
-                          onClick={() => {
-                            const l = layers.find((x) => x.id === layer.id);
-                            setUploadLayer(l || layer);
-                            setUploadLayerId(layer.id);
-                          }}
+                          onClick={() => setUploadLayerId(layer.id)}
                         >
                           <Upload className="h-3 w-3 mr-1" />Upload
                         </Button>
@@ -230,7 +225,7 @@ export function LayerManagement() {
       </Card>
 
       {/* Upload dialog */}
-      <Dialog open={!!uploadLayerId} onOpenChange={(open) => { if (!open) { setUploadLayerId(null); setUploadLayer(null); } }}>
+      <Dialog open={!!uploadLayerId} onOpenChange={(open) => { if (!open) setUploadLayerId(null); }}>
         <DialogContent
           className="max-w-lg"
           onPointerDownOutside={(e) => e.preventDefault()}
@@ -240,18 +235,21 @@ export function LayerManagement() {
           <DialogHeader>
             <DialogTitle>Upload Features</DialogTitle>
           </DialogHeader>
-          {uploadLayerId && uploadLayer && (
-            <GeoFileUploader
-              key={uploadLayerId}
-              layerId={uploadLayerId}
-              layer={uploadLayer}
-              onComplete={() => {
-                setUploadLayerId(null);
-                setUploadLayer(null);
-                queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
-              }}
-            />
-          )}
+          {uploadLayerId && (() => {
+            const layer = layers.find((l) => l.id === uploadLayerId);
+            if (!layer) return <p className="text-sm text-muted-foreground">Loading layer…</p>;
+            return (
+              <GeoFileUploader
+                key={uploadLayerId}
+                layerId={uploadLayerId}
+                layer={layer}
+                onComplete={() => {
+                  setUploadLayerId(null);
+                  queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
+                }}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
