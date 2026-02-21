@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, FileText, Trash2, ArrowRight } from "lucide-react";
+import { Plus, FileText, Trash2, ArrowRight, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -153,6 +153,9 @@ export default function Studies() {
                     </div>
                   </div>
                   <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => navigate(`/study/${s.id}`)} title="View study details">
+                      <Eye className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={() => navigate(`/?study=${s.id}`)} title="Open on map">
                       <ArrowRight className="h-4 w-4" />
                     </Button>
