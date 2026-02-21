@@ -1151,6 +1151,65 @@ export type Database = {
           },
         ]
       }
+      study_snapshots: {
+        Row: {
+          cable_configuration: Json
+          cost_summary: Json
+          created_at: string
+          created_by: string
+          electrical_inputs: Json
+          engine_version: string
+          id: string
+          notes: string | null
+          optimiser_output: Json | null
+          pricebook_version: string
+          ruleset_version: string
+          snapshot_label: string | null
+          study_id: string
+          validation_results: Json
+        }
+        Insert: {
+          cable_configuration?: Json
+          cost_summary?: Json
+          created_at?: string
+          created_by: string
+          electrical_inputs?: Json
+          engine_version?: string
+          id?: string
+          notes?: string | null
+          optimiser_output?: Json | null
+          pricebook_version?: string
+          ruleset_version?: string
+          snapshot_label?: string | null
+          study_id: string
+          validation_results?: Json
+        }
+        Update: {
+          cable_configuration?: Json
+          cost_summary?: Json
+          created_at?: string
+          created_by?: string
+          electrical_inputs?: Json
+          engine_version?: string
+          id?: string
+          notes?: string | null
+          optimiser_output?: Json | null
+          pricebook_version?: string
+          ruleset_version?: string
+          snapshot_label?: string | null
+          study_id?: string
+          validation_results?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_snapshots_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unit_rates: {
         Row: {
           cable_ehv_per_m: number

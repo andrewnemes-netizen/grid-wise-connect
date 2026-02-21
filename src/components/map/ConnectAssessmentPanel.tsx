@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,8 @@ import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
 import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
+import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/electricalEngine";
+import { createSnapshot } from "@/lib/snapshotService";
 
 export interface ConnectEndpoints {
   source: {
@@ -99,7 +101,9 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
 
   // LV Optimiser state
   const [optimiserResult, setOptimiserResult] = useState<OptimiserResult | null>(null);
+  const [electricalResult, setElectricalResult] = useState<ElectricalValidationResult | null>(null);
   const [optimiserLoading, setOptimiserLoading] = useState(false);
+  const [lastSnapshotId, setLastSnapshotId] = useState<string | null>(null);
   const { data: unitRates } = useUnitRates();
 
   // Fetch cable catalogue for optimiser
@@ -387,13 +391,31 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       if (!cableCatalogue?.length) return;
                       setOptimiserLoading(true);
                       try {
-                        const res = runLvOptimiser({
-                          proposed_kw: Number(proposedKw),
+                        const kw = Number(proposedKw);
+                        const optRes = runLvOptimiser({
+                          proposed_kw: kw,
                           route_length_m: routeDistanceM,
                           catalogue: cableCatalogue,
                           unit_rates: unitRates,
                         });
-                        setOptimiserResult(res);
+                        setOptimiserResult(optRes);
+
+                        // Run electrical validation using selected solution
+                        const sel = optRes.selected;
+                        if (sel) {
+                          const mains = sel.network_edges.find(e => e.section === "mains")!;
+                          const service = sel.network_edges.find(e => e.section === "service")!;
+                          const elecRes = runElectricalValidation({
+                            proposed_kw: kw,
+                            mains_length_m: mains.length_m,
+                            service_length_m: service.length_m,
+                            mains_impedance_per_km: mains.impedance_per_km,
+                            service_impedance_per_km: service.impedance_per_km,
+                            mains_rating_a: mains.current_rating_a,
+                            service_rating_a: service.current_rating_a,
+                          });
+                          setElectricalResult(elecRes);
+                        }
                       } catch (err: any) {
                         toast({ title: "Optimiser error", description: err.message, variant: "destructive" });
                       } finally {
@@ -408,6 +430,40 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                     )}
                   </Button>
                   {optimiserResult && <OptimiserResultPanel result={optimiserResult} />}
+
+                  {/* Electrical validation summary */}
+                  {electricalResult && (
+                    <div className="rounded-lg border p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-primary" />
+                        <span className="text-xs font-semibold uppercase tracking-wider">Electrical Validation</span>
+                        <Badge variant={electricalResult.overall_pass ? "outline" : "destructive"} className="ml-auto text-[10px]">
+                          {electricalResult.overall_pass ? "PASS" : "FAIL"}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-[10px]">
+                        <span className="text-muted-foreground">VD Total</span>
+                        <span className="font-medium text-right">{electricalResult.voltage_drop.total_vd_pct}%</span>
+                        <span className="text-muted-foreground">Design Current</span>
+                        <span className="font-medium text-right">{electricalResult.current.design_current_a}A</span>
+                        <span className="text-muted-foreground">Fault Current</span>
+                        <span className="font-medium text-right">{electricalResult.fault_level.prospective_fault_current_a}A</span>
+                        <span className="text-muted-foreground">Zs</span>
+                        <span className="font-medium text-right">{electricalResult.fault_level.zs_total_ohms}Ω</span>
+                      </div>
+                      {electricalResult.flags.length > 0 && (
+                        <div className="space-y-0.5">
+                          {electricalResult.flags.map((f, i) => (
+                            <div key={i} className={`text-[10px] flex items-start gap-1 ${f.severity === "error" ? "text-destructive" : "text-amber-600"}`}>
+                              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                              {f.message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[9px] text-muted-foreground">Engine {electricalResult.engine_version}{lastSnapshotId ? ` · Snapshot ${lastSnapshotId.slice(0, 8)}` : ""}</p>
+                    </div>
+                  )}
                 </>
               )}
 
