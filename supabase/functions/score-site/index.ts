@@ -68,8 +68,6 @@ Deno.serve(async (req) => {
             "apikey": supabaseKey,
             "Authorization": `Bearer ${supabaseKey}`,
             "Prefer": "params=single-object",
-            // Raise the Postgres statement timeout for this heavy spatial query
-            "X-Statement-Timeout": "25000",
           },
           body: JSON.stringify({ _lng: lng, _lat: lat, _proposed_kw: proposed_kw || 0 }),
           signal: scoreController.signal,
