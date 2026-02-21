@@ -39,7 +39,7 @@
 - ✅ Fetches cable catalogue from DB, uses unit rates from price book
 - ✅ Modular architecture ready for V2 (HV comparison, multi-transformer splitting)
 
-### Phase 4: Electrical Engine + Design Mode + Enhanced Export (IN PROGRESS)
+### Phase 4: Electrical Engine + Design Mode + Enhanced Export ✅ COMPLETE
 
 #### 4.1 Electrical Validation Engine ✅ COMPLETE
 - ✅ `src/lib/electricalEngine.ts` — Pure calculation module:
@@ -72,4 +72,40 @@
 - ✅ JSON export button added to ConnectAssessmentPanel (FileJson icon)
 - ✅ Snapshot ID used as PDF reference number (SNP-XXXXXXXX) for audit trail
 
-### Phase 5: Pending
+### Phase 5: HV Comparison Engine + External Integrations ✅ COMPLETE
+
+#### 5.1 HV (11kV) Comparison Engine ✅ COMPLETE
+- ✅ `src/lib/hvOptimiser.ts` — HV cable feasibility engine:
+  - Single HV cable run (no mains/service split)
+  - 11kV supply voltage, lower Ze (0.1Ω)
+  - Auto transformer sizing: 500/1000/1500 kVA from demand
+  - Multi-transformer support (>1500kW → multiple 1500kVA units)
+  - HV-specific costing: cable + duct + excavation + jointing + RMU + transformer + CT metering + earthing/civils
+  - Full electrical validation: VD%, ampacity, Zs, fault current
+  - Cost minimisation across HV cable candidates
+- ✅ `src/lib/voltageComparison.ts` — Voltage comparison engine:
+  - Runs LV + HV optimisers in parallel on same route
+  - Builds tier summaries with cost, electrical, and pass/fail status
+  - Recommends cheapest passing voltage tier
+  - Calculates cost difference percentage
+- ✅ `VoltageComparisonPanel` UI — side-by-side LV vs HV comparison:
+  - Recommendation banner with reasoning
+  - Per-tier cards: cable type, design current, VD%, transformer info
+  - Expandable constraint flags
+  - Crown badge on recommended tier
+- ✅ "Compare LV vs HV" button in ConnectAssessmentPanel
+- ✅ Cable catalogue query updated to fetch LV + HV entries
+
+#### 5.2 External Integrations ✅ COMPLETE
+- ✅ `os-places-lookup` edge function — OS Places API integration:
+  - Postcode lookup: `?postcode=SW1A+1AA`
+  - Free-text search: `?query=10+Downing+Street`
+  - Returns UPRN, address, lat/lng, classification, local authority
+  - Requires `OS_DATA_HUB_KEY` secret
+- ✅ `dno-capacity-lookup` edge function — DNO open data scaffold:
+  - Unified interface for all 6 UK DNOs (UKPN, NGED, SSEN, SPEN, NPG, ENWL)
+  - Query by lat/lng with radius
+  - Scaffold responses with metadata when APIs not yet connected
+  - Ready to plug in real DNO API endpoints as they become available
+
+### Phase 6: Pending
