@@ -1,9 +1,8 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers } from "lucide-react";
@@ -11,6 +10,7 @@ import { format } from "date-fns";
 import { DataUploader } from "@/components/admin/DataUploader";
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
 import { LayerManagement } from "@/components/admin/LayerManagement";
+import { UserRolesManagement } from "@/components/admin/UserRolesManagement";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -53,7 +53,7 @@ const Admin = () => {
           <UnitRatesSettings />
         </TabsContent>
         <TabsContent value="users" className="mt-4">
-          <UserRolesTab />
+          <UserRolesManagement />
         </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
@@ -63,74 +63,7 @@ const Admin = () => {
   );
 };
 
-function UserRolesTab() {
-  const { data: roles = [], isLoading } = useQuery({
-    queryKey: ["admin-user-roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("user_roles").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["admin-profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Group roles by user
-  const userMap = new Map<string, { profile: any; roles: string[] }>();
-  for (const p of profiles) {
-    userMap.set(p.user_id, { profile: p, roles: [] });
-  }
-  for (const r of roles) {
-    const entry = userMap.get(r.user_id);
-    if (entry) entry.roles.push(r.role);
-    else userMap.set(r.user_id, { profile: null, roles: [r.role] });
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>Roles</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
-            ) : userMap.size === 0 ? (
-              <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">No users found</TableCell></TableRow>
-            ) : (
-              Array.from(userMap.entries()).map(([uid, { profile, roles }]) => (
-                <TableRow key={uid}>
-                  <TableCell>{profile?.full_name || uid.slice(0, 8)}</TableCell>
-                  <TableCell className="text-muted-foreground">{profile?.company || "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {roles.map((r) => (
-                        <Badge key={r} variant="outline" className="capitalize text-xs">{r}</Badge>
-                      ))}
-                      {roles.length === 0 && <span className="text-xs text-muted-foreground">No roles</span>}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
+// UserRolesTab moved to src/components/admin/UserRolesManagement.tsx
 
 function AuditLogTab() {
   const { data: logs = [], isLoading } = useQuery({
