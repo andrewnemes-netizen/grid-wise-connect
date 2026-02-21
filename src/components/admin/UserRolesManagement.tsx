@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Trash2, Clock, UserCheck, UserX } from "lucide-react";
+import { Check, X, Plus, Clock, UserCheck, UserX, ShieldAlert, Phone } from "lucide-react";
 import { format } from "date-fns";
 
 const ROLES = ["admin", "engineer", "client"] as const;
@@ -17,6 +19,32 @@ export function UserRolesManagement() {
   const qc = useQueryClient();
   const [addingRoleFor, setAddingRoleFor] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>("");
+
+  // Fetch app settings
+  const { data: appSettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("app_settings").select("*").limit(1).single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Toggle approval requirement
+  const toggleApproval = useMutation({
+    mutationFn: async (require: boolean) => {
+      const { error } = await supabase
+        .from("app_settings")
+        .update({ require_approval: require, updated_at: new Date().toISOString() })
+        .eq("id", appSettings!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["app-settings"] });
+      toast({ title: "Setting updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
 
   // Fetch all profiles (admin policy allows this)
   const { data: profiles = [], isLoading: profilesLoading } = useQuery({
@@ -62,6 +90,32 @@ export function UserRolesManagement() {
     if (entry) entry.roles.push(r.role);
   }
 
+  // Approve user account
+  const approveUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.from("profiles").update({ is_approved: true }).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-profiles"] });
+      toast({ title: "User approved" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Revoke user approval
+  const revokeUser = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.from("profiles").update({ is_approved: false }).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-profiles"] });
+      toast({ title: "User access revoked" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   // Add role mutation
   const addRole = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
@@ -93,14 +147,12 @@ export function UserRolesManagement() {
   // Approve/reject role request
   const resolveRequest = useMutation({
     mutationFn: async ({ requestId, action, userId, role }: { requestId: string; action: "approved" | "rejected"; userId: string; role: string }) => {
-      // Update request status
       const { error: updateErr } = await supabase
         .from("role_requests")
         .update({ status: action, resolved_at: new Date().toISOString() })
         .eq("id", requestId);
       if (updateErr) throw updateErr;
 
-      // If approved, add the role
       if (action === "approved") {
         const { error: roleErr } = await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
         if (roleErr && !roleErr.message.includes("duplicate")) throw roleErr;
@@ -114,20 +166,89 @@ export function UserRolesManagement() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  // Get profile for a role request
   const getProfileName = (userId: string) => {
     const entry = userMap.get(userId);
     return entry?.profile?.full_name || userId.slice(0, 8);
   };
 
+  const pendingUsers = profiles.filter((p: any) => !p.is_approved);
+
   return (
     <div className="space-y-4">
-      {/* Pending Role Requests */}
-      {roleRequests.length > 0 && (
+      {/* Approval Toggle */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-5 w-5 text-primary" />
+              <div>
+                <Label className="text-sm font-medium">Require Account Approval</Label>
+                <p className="text-xs text-muted-foreground">When enabled, new signups need admin approval before accessing the platform.</p>
+              </div>
+            </div>
+            <Switch
+              checked={appSettings?.require_approval ?? false}
+              onCheckedChange={(checked) => toggleApproval.mutate(checked)}
+              disabled={toggleApproval.isPending}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pending Account Approvals */}
+      {pendingUsers.length > 0 && (
         <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Clock className="h-4 w-4 text-amber-600" />
+              Pending Account Approvals ({pendingUsers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Signed Up</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingUsers.map((p: any) => (
+                  <TableRow key={p.user_id}>
+                    <TableCell className="font-medium">{p.full_name || "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">{p.company || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.phone || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {format(new Date(p.created_at), "dd MMM yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => approveUser.mutate(p.user_id)}
+                        disabled={approveUser.isPending}
+                      >
+                        <UserCheck className="h-3.5 w-3.5 mr-1" /> Approve
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Role Requests */}
+      {roleRequests.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600" />
               Pending Role Requests ({roleRequests.length})
             </CardTitle>
           </CardHeader>
@@ -165,7 +286,7 @@ export function UserRolesManagement() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="h-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => resolveRequest.mutate({ requestId: req.id, action: "rejected", userId: req.user_id, role: req.requested_role })}
                           disabled={resolveRequest.isPending}
                         >
@@ -189,7 +310,9 @@ export function UserRolesManagement() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>Phone</TableHead>
                 <TableHead>Joined</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Roles</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -197,19 +320,31 @@ export function UserRolesManagement() {
             <TableBody>
               {profilesLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Loading…</TableCell>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell>
                 </TableRow>
               ) : userMap.size === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No users found</TableCell>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No users found</TableCell>
                 </TableRow>
               ) : (
                 Array.from(userMap.entries()).map(([uid, { profile, roles: userRoles }]) => (
                   <TableRow key={uid}>
                     <TableCell className="font-medium">{profile?.full_name || uid.slice(0, 8)}</TableCell>
                     <TableCell className="text-muted-foreground">{profile?.company || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{profile?.phone || "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {profile?.created_at ? format(new Date(profile.created_at), "dd MMM yyyy") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {profile?.is_approved ? (
+                        <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => revokeUser.mutate(uid)}>
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 cursor-pointer" onClick={() => approveUser.mutate(uid)}>
+                          Pending
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
