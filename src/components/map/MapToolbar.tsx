@@ -1,49 +1,55 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
+  hasActiveStudy?: boolean;
 }
 
 const tools = [
   { id: "boundary" as const, icon: SquareDashedBottom, label: "Boundary" },
   { id: "pin" as const, icon: MapPin, label: "Drop Pin" },
   { id: "connect" as const, icon: Cable, label: "Connect" },
+  { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
 ] as const;
 
-export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK }: MapToolbarProps) {
+export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   return (
     <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1 items-end">
-      {tools.map((tool) => (
-        <div
-          key={tool.id}
-          className="flex items-center gap-1.5"
-          onMouseEnter={() => setHoveredTool(tool.id)}
-          onMouseLeave={() => setHoveredTool(null)}
-        >
-          {hoveredTool === tool.id && (
-            <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
-              {tool.label}
-            </span>
-          )}
-          <Button
-            size="icon"
-            variant={activeTool === tool.id ? "default" : "outline"}
-            className="h-9 w-9 shadow-md bg-background/95 backdrop-blur"
-            onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
+      {tools.map((tool) => {
+        const disabled = 'requiresStudy' in tool && tool.requiresStudy && !hasActiveStudy;
+        return (
+          <div
+            key={tool.id}
+            className="flex items-center gap-1.5"
+            onMouseEnter={() => setHoveredTool(tool.id)}
+            onMouseLeave={() => setHoveredTool(null)}
           >
-            <tool.icon className="h-4 w-4" />
-          </Button>
-        </div>
-      ))}
+            {hoveredTool === tool.id && (
+              <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
+                {tool.label}{disabled ? " (needs study)" : ""}
+              </span>
+            )}
+            <Button
+              size="icon"
+              variant={activeTool === tool.id ? "default" : "outline"}
+              className="h-9 w-9 shadow-md bg-background/95 backdrop-blur"
+              disabled={disabled}
+              onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
+            >
+              <tool.icon className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      })}
 
       <div className="h-px bg-border my-0.5 w-9" />
 

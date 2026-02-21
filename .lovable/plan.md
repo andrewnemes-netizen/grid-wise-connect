@@ -57,7 +57,14 @@
 - ✅ Wired into ConnectAssessmentPanel: runs electrical validation after LV optimiser
 - ✅ Electrical validation summary displayed with PASS/FAIL badge
 
-#### 4.2 Design Mode on Map — TODO
+#### 4.2 Design Mode on Map ✅ COMPLETE
+- ✅ `design_elements` table with RLS (user owns via study, admin/engineer can view)
+- ✅ `useDesignMode` hook — CRUD for equipment markers, persisted to DB per study
+- ✅ `DesignModePanel` UI — equipment palette (6 types), placed items list, clear all
+- ✅ Equipment types: Transformer, RMU, Feeder Pillar, Cutout, Joint, Pole
+- ✅ Map click placement with coloured markers + symbols
+- ✅ "Design" tool in MapToolbar (requires active study)
+- ✅ Wired into MapView click dispatcher
 #### 4.3 Enhanced PDF/JSON Export — TODO
 
 ### Phase 5: Pending

@@ -172,6 +172,53 @@ export type Database = {
         }
         Relationships: []
       }
+      design_elements: {
+        Row: {
+          created_at: string
+          created_by: string
+          element_type: string
+          id: string
+          label: string | null
+          lat: number
+          lng: number
+          properties_json: Json
+          study_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          element_type: string
+          id?: string
+          label?: string | null
+          lat: number
+          lng: number
+          properties_json?: Json
+          study_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          element_type?: string
+          id?: string
+          label?: string | null
+          lat?: number
+          lng?: number
+          properties_json?: Json
+          study_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_elements_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dno_rulesets: {
         Row: {
           created_at: string
