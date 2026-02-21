@@ -7,6 +7,32 @@ import jsPDF from "jspdf";
 import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem } from "./connectionCosts";
 import type { ElectricalValidationResult } from "./electricalEngine";
 
+export interface PdfSections {
+  coverPage?: boolean;
+  executiveSummary?: boolean;
+  siteDetails?: boolean;
+  routeMap?: boolean;
+  electricalValidation?: boolean;
+  costBreakdown?: boolean;
+  bom?: boolean;
+  designElements?: boolean;
+  keyFindings?: boolean;
+  nextSteps?: boolean;
+}
+
+const DEFAULT_SECTIONS: PdfSections = {
+  coverPage: true,
+  executiveSummary: true,
+  siteDetails: true,
+  routeMap: true,
+  electricalValidation: true,
+  costBreakdown: true,
+  bom: true,
+  designElements: true,
+  keyFindings: true,
+  nextSteps: true,
+};
+
 interface PdfInput {
   siteName?: string;
   postcode?: string;
@@ -32,6 +58,10 @@ interface PdfInput {
   snapshotId?: string | null;
   /** Design elements summary */
   designElements?: { type: string; count: number }[];
+  /** Sections to include */
+  sections?: PdfSections;
+  /** Skip auto-save (for batch export) */
+  skipSave?: boolean;
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -58,7 +88,8 @@ function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
 }
 
-export function generateAssessmentPdf(input: PdfInput): void {
+export function generateAssessmentPdf(input: PdfInput): jsPDF {
+  const sec = { ...DEFAULT_SECTIONS, ...input.sections };
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW = 210;
   const margin = 18;
@@ -72,6 +103,49 @@ export function generateAssessmentPdf(input: PdfInput): void {
     doc.setLineWidth(0.3);
     doc.line(margin, yPos, pageW - margin, yPos);
   };
+
+  const refId = input.snapshotId
+    ? `SNP-${input.snapshotId.slice(0, 8).toUpperCase()}`
+    : `EPE-${Date.now().toString(36).toUpperCase()}`;
+  const dateStr = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+
+  // ── COVER PAGE ──
+  if (sec.coverPage) {
+    doc.setFillColor(BRAND.darkGreen);
+    doc.rect(0, 0, pageW, 297, "F");
+
+    doc.setTextColor(BRAND.white);
+    doc.setFontSize(32);
+    doc.setFont("helvetica", "bold");
+    doc.text("ECOPOWER", pageW / 2, 90, { align: "center" });
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "normal");
+    doc.text("ENERGY", pageW / 2, 102, { align: "center" });
+
+    doc.setDrawColor(BRAND.green);
+    doc.setLineWidth(1);
+    doc.line(pageW / 2 - 30, 112, pageW / 2 + 30, 112);
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.white);
+    doc.text("Connection Feasibility Report", pageW / 2, 130, { align: "center" });
+
+    if (input.siteName) {
+      doc.setFontSize(20);
+      doc.text(input.siteName, pageW / 2, 155, { align: "center" });
+    }
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(dateStr, pageW / 2, 180, { align: "center" });
+    doc.text(`Ref: ${refId}`, pageW / 2, 188, { align: "center" });
+
+    doc.setFontSize(8);
+    doc.text("Confidential — For Internal Use Only", pageW / 2, 270, { align: "center" });
+
+    addPage();
+  }
 
   // ── HEADER BAR ──
   doc.setFillColor(BRAND.darkGreen);
@@ -87,10 +161,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   doc.text("Connection Feasibility Report", margin, 18);
 
   doc.setFontSize(8);
-  const refId = input.snapshotId
-    ? `SNP-${input.snapshotId.slice(0, 8).toUpperCase()}`
-    : `EPE-${Date.now().toString(36).toUpperCase()}`;
-  doc.text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, pageW - margin, 12, { align: "right" });
+  doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
   doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
 
   y = 36;
@@ -118,7 +189,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   y += 26;
 
   // ── ROUTE MAP SCREENSHOT ──
-  if (input.mapScreenshot) {
+  if (sec.routeMap && input.mapScreenshot) {
     checkPage(90);
     doc.setTextColor(BRAND.black);
     doc.setFontSize(11);
@@ -139,6 +210,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── SITE DETAILS ──
+  if (sec.siteDetails) {
   doc.setTextColor(BRAND.black);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
@@ -168,6 +240,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   });
 
   y += 4;
+  } // end siteDetails
 
   // ── CONNECTION PROXIMITY ──
   if (input.distances || input.distanceBands) {
@@ -210,7 +283,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── ELECTRICAL VALIDATION ──
-  if (input.electricalResult) {
+  if (sec.electricalValidation && input.electricalResult) {
     const er = input.electricalResult;
     checkPage(50);
     doc.setTextColor(BRAND.black);
@@ -278,7 +351,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   let estimate: CostEstimate | null = null;
   let bom: BomItem[] = [];
 
-  if (input.distances && input.proposedKw > 0) {
+  if (sec.costBreakdown && input.distances && input.proposedKw > 0) {
     estimate = estimateConnectionCost({
       proposed_kw: input.proposedKw,
       distances: input.distances,
@@ -371,7 +444,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── BILL OF MATERIALS ──
-  if (bom.length > 0) {
+  if (sec.bom && bom.length > 0) {
     checkPage(30);
     doc.setTextColor(BRAND.black);
     doc.setFontSize(11);
@@ -429,7 +502,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── DESIGN ELEMENTS SUMMARY ──
-  if (input.designElements && input.designElements.length > 0) {
+  if (sec.designElements && input.designElements && input.designElements.length > 0) {
     checkPage(20);
     doc.setTextColor(BRAND.black);
     doc.setFontSize(11);
@@ -453,6 +526,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── KEY FINDINGS ──
+  if (sec.keyFindings) {
   checkPage(20 + input.reasons.length * 5);
   doc.setTextColor(BRAND.black);
   doc.setFontSize(11);
@@ -475,8 +549,10 @@ export function generateAssessmentPdf(input: PdfInput): void {
   });
 
   y += 4;
+  } // end keyFindings
 
   // ── NEXT STEPS ──
+  if (sec.nextSteps) {
   checkPage(20 + input.nextSteps.length * 5);
   doc.setTextColor(BRAND.black);
   doc.setFontSize(11);
@@ -497,6 +573,7 @@ export function generateAssessmentPdf(input: PdfInput): void {
     doc.text(lines, margin + 8, y);
     y += lines.length * 4 + 1;
   });
+  } // end nextSteps
 
   // ── FOOTER ──
   const totalPages = doc.getNumberOfPages();
@@ -522,11 +599,13 @@ export function generateAssessmentPdf(input: PdfInput): void {
   }
 
   // ── SAVE ──
-  const fileName = input.siteName
-    ? `EPE-Assessment-${input.siteName.replace(/\s+/g, "-")}.pdf`
-    : `EPE-Assessment-${input.postcode?.replace(/\s+/g, "") || "report"}.pdf`;
-
-  doc.save(fileName);
+  if (!input.skipSave) {
+    const fileName = input.siteName
+      ? `EPE-Assessment-${input.siteName.replace(/\s+/g, "-")}.pdf`
+      : `EPE-Assessment-${input.postcode?.replace(/\s+/g, "") || "report"}.pdf`;
+    doc.save(fileName);
+  }
+  return doc;
 }
 
 /**
