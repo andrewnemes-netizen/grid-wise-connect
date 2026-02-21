@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { PoundSterling, ChevronDown, ChevronUp, AlertCircle, CheckCircle, HelpCircle, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem } from "@/lib/connectionCosts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem, type VoltageOverride } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
 interface CostEstimatePanelProps {
@@ -29,16 +31,17 @@ function formatGBP(amount: number): string {
 export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw }: CostEstimatePanelProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showBom, setShowBom] = useState(false);
+  const [voltageOverride, setVoltageOverride] = useState<VoltageOverride>("Auto");
   const { data: unitRates } = useUnitRates();
 
   const estimate = useMemo<CostEstimate>(
-    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw }, unitRates),
-    [proposed_kw, distances, constraints, nearest_headroom_kw, unitRates]
+    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw, voltage_override: voltageOverride }, unitRates),
+    [proposed_kw, distances, constraints, nearest_headroom_kw, unitRates, voltageOverride]
   );
 
   const bom = useMemo<BomItem[]>(
-    () => generateBom({ proposed_kw, distances, constraints }),
-    [proposed_kw, distances, constraints]
+    () => generateBom({ proposed_kw, distances, constraints, voltage_override: voltageOverride }, unitRates),
+    [proposed_kw, distances, constraints, voltageOverride, unitRates]
   );
 
   const conf = CONFIDENCE_CONFIG[estimate.confidence];
@@ -65,6 +68,25 @@ export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest
       <div className="flex items-center gap-2">
         <PoundSterling className="h-3.5 w-3.5 text-primary" />
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Budget Estimate</p>
+      </div>
+
+      {/* Voltage selector */}
+      <div className="space-y-1">
+        <Label className="text-xs">Connection Voltage</Label>
+        <Select value={voltageOverride} onValueChange={(v) => setVoltageOverride(v as VoltageOverride)}>
+          <SelectTrigger className="h-8 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Auto">Auto (from kW)</SelectItem>
+            <SelectItem value="LV">LV — Feeder pillar + cutout</SelectItem>
+            <SelectItem value="HV">HV — RMU + CT metering</SelectItem>
+            <SelectItem value="EHV">EHV</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">
+          Using: <span className="font-medium">{estimate.voltage_level}</span>
+        </p>
       </div>
 
       {/* Total cost card */}

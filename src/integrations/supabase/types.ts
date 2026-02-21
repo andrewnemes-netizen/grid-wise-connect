@@ -1011,12 +1011,15 @@ export type Database = {
           cable_hv_per_m: number
           cable_lv_per_m: number
           contingency_pct: number
+          cutout_100a_3ph: number
           design_fee_pct: number
           excavation_carriageway_per_m: number
           excavation_footway_per_m: number
           excavation_verge_per_m: number
+          feeder_pillar_each: number
           id: string
           jointing_each: number
+          jointing_lv_each: number
           metering_ct: number
           metering_wc: number
           project_management_pct: number
@@ -1034,12 +1037,15 @@ export type Database = {
           cable_hv_per_m?: number
           cable_lv_per_m?: number
           contingency_pct?: number
+          cutout_100a_3ph?: number
           design_fee_pct?: number
           excavation_carriageway_per_m?: number
           excavation_footway_per_m?: number
           excavation_verge_per_m?: number
+          feeder_pillar_each?: number
           id?: string
           jointing_each?: number
+          jointing_lv_each?: number
           metering_ct?: number
           metering_wc?: number
           project_management_pct?: number
@@ -1057,12 +1063,15 @@ export type Database = {
           cable_hv_per_m?: number
           cable_lv_per_m?: number
           contingency_pct?: number
+          cutout_100a_3ph?: number
           design_fee_pct?: number
           excavation_carriageway_per_m?: number
           excavation_footway_per_m?: number
           excavation_verge_per_m?: number
+          feeder_pillar_each?: number
           id?: string
           jointing_each?: number
+          jointing_lv_each?: number
           metering_ct?: number
           metering_wc?: number
           project_management_pct?: number

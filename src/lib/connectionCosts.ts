@@ -3,6 +3,8 @@
  * Industry-standard unit rates for EV charging / ICP connections
  */
 
+export type VoltageOverride = "Auto" | "LV" | "HV" | "EHV";
+
 export interface UnitRates {
   // Cable costs £/m
   cable_lv_per_m: number;
@@ -14,6 +16,7 @@ export interface UnitRates {
   excavation_verge_per_m: number;
   // Fixed costs
   jointing_each: number;
+  jointing_lv_each: number;
   switchgear_ring_main: number;
   switchgear_circuit_breaker: number;
   transformer_500kva: number;
@@ -21,6 +24,9 @@ export interface UnitRates {
   transformer_1500kva: number;
   metering_ct: number;
   metering_wc: number;
+  // LV endpoint equipment
+  feeder_pillar_each: number;
+  cutout_100a_3ph: number;
   // Design & project management
   design_fee_pct: number;
   project_management_pct: number;
@@ -37,6 +43,7 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   excavation_carriageway_per_m: 210,
   excavation_verge_per_m: 65,
   jointing_each: 2800,
+  jointing_lv_each: 1800,
   switchgear_ring_main: 18500,
   switchgear_circuit_breaker: 35000,
   transformer_500kva: 22000,
@@ -44,6 +51,8 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   transformer_1500kva: 52000,
   metering_ct: 4500,
   metering_wc: 1200,
+  feeder_pillar_each: 3200,
+  cutout_100a_3ph: 850,
   design_fee_pct: 0.08,
   project_management_pct: 0.06,
   contingency_pct: 0.10,
@@ -62,6 +71,7 @@ export interface CostEstimate {
   total_estimate: number;
   confidence: "high" | "medium" | "low";
   breakdown: CostLineItem[];
+  voltage_level: "LV" | "HV" | "EHV";
 }
 
 export interface CostLineItem {
@@ -92,6 +102,12 @@ interface EstimateInput {
     min_carriageway_m?: number | null;
   };
   nearest_headroom_kw?: number;
+  voltage_override?: VoltageOverride;
+}
+
+function resolveVoltageLevel(proposed_kw: number, voltage_override?: VoltageOverride): "LV" | "HV" | "EHV" {
+  if (voltage_override && voltage_override !== "Auto") return voltage_override;
+  return proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
 }
 
 export function estimateConnectionCost(
@@ -101,8 +117,7 @@ export function estimateConnectionCost(
   const { proposed_kw, distances, constraints, nearest_headroom_kw } = input;
   const breakdown: CostLineItem[] = [];
 
-  // Determine voltage level based on proposed kW
-  const voltageLevel = proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
+  const voltageLevel = resolveVoltageLevel(proposed_kw, input.voltage_override);
   const cableRate =
     voltageLevel === "LV" ? rates.cable_lv_per_m :
     voltageLevel === "HV" ? rates.cable_hv_per_m :
@@ -142,16 +157,28 @@ export function estimateConnectionCost(
     { category: "Excavation", description: "Verge trenching", quantity: vergeM, unit: "m", unit_rate: rates.excavation_verge_per_m, total: vergeM * rates.excavation_verge_per_m },
   );
 
-  // Joints — 1 every 250m
+  // Joints — 1 every 250m, voltage-specific rates
   const joints = Math.max(2, Math.ceil(cableDistance / 250));
-  const jointCost = joints * rates.jointing_each;
-  breakdown.push({ category: "Equipment", description: "Cable joints", quantity: joints, unit: "ea", unit_rate: rates.jointing_each, total: jointCost });
+  const jointRate = voltageLevel === "LV" ? rates.jointing_lv_each : rates.jointing_each;
+  const jointDesc = voltageLevel === "LV" ? "LV cable joints (DNO-specific)" : "Cable joints";
+  const jointCost = joints * jointRate;
+  breakdown.push({ category: "Equipment", description: jointDesc, quantity: joints, unit: "ea", unit_rate: jointRate, total: jointCost });
 
-  // Switchgear
+  // Switchgear — HV/EHV only
   let switchgearCost = 0;
   if (voltageLevel === "HV" || voltageLevel === "EHV") {
     switchgearCost = rates.switchgear_ring_main;
     breakdown.push({ category: "Equipment", description: "Ring main unit", quantity: 1, unit: "ea", unit_rate: rates.switchgear_ring_main, total: rates.switchgear_ring_main });
+  }
+
+  // LV endpoint equipment — feeder pillar + cutout
+  let lvEndpointCost = 0;
+  if (voltageLevel === "LV") {
+    lvEndpointCost = rates.feeder_pillar_each + rates.cutout_100a_3ph;
+    breakdown.push(
+      { category: "Equipment", description: "LV feeder pillar", quantity: 1, unit: "ea", unit_rate: rates.feeder_pillar_each, total: rates.feeder_pillar_each },
+      { category: "Equipment", description: "100A 3-phase cutout", quantity: 1, unit: "ea", unit_rate: rates.cutout_100a_3ph, total: rates.cutout_100a_3ph },
+    );
   }
 
   // Transformer
@@ -174,7 +201,7 @@ export function estimateConnectionCost(
   const meteringCost = voltageLevel === "LV" ? rates.metering_wc : rates.metering_ct;
   breakdown.push({ category: "Equipment", description: voltageLevel === "LV" ? "Whole current meter" : "CT metering", quantity: 1, unit: "ea", unit_rate: meteringCost, total: meteringCost });
 
-  const equipmentCost = jointCost + switchgearCost + transformerCost + meteringCost;
+  const equipmentCost = jointCost + switchgearCost + lvEndpointCost + transformerCost + meteringCost;
 
   // Reinforcement
   let reinforcementCost = 0;
@@ -213,12 +240,13 @@ export function estimateConnectionCost(
     total_estimate: total,
     confidence,
     breakdown,
+    voltage_level: voltageLevel,
   };
 }
 
-export function generateBom(input: EstimateInput): BomItem[] {
+export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNIT_RATES): BomItem[] {
   const { proposed_kw, distances } = input;
-  const voltageLevel = proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
+  const voltageLevel = resolveVoltageLevel(proposed_kw, input.voltage_override);
   const rawDist =
     voltageLevel === "LV" ? distances.capacity_segment_m :
     voltageLevel === "HV" ? distances.feeder_m : distances.primary_m;
@@ -229,39 +257,49 @@ export function generateBom(input: EstimateInput): BomItem[] {
 
   // Cable
   const cableType = voltageLevel === "LV" ? "185mm² 4-core XLPE" : voltageLevel === "HV" ? "300mm² 3-core XLPE 11kV" : "300mm² 3-core XLPE 33kV";
-  const cableRate = voltageLevel === "LV" ? 85 : voltageLevel === "HV" ? 145 : 280;
+  const cableRate = voltageLevel === "LV" ? rates.cable_lv_per_m : voltageLevel === "HV" ? rates.cable_hv_per_m : rates.cable_ehv_per_m;
   items.push({ category: "Cable", item: cableType, quantity: cableDistance, unit: "m", unit_cost: cableRate, total_cost: cableDistance * cableRate });
 
   // Ducting
   items.push({ category: "Cable", item: "150mm HDPE duct", quantity: cableDistance, unit: "m", unit_cost: 12, total_cost: cableDistance * 12 });
 
-  // Cable joints
+  // Cable joints — voltage-specific
   const joints = Math.max(2, Math.ceil(cableDistance / 250));
-  items.push({ category: "Jointing", item: `${voltageLevel} straight joint`, quantity: joints, unit: "ea", unit_cost: 2800, total_cost: joints * 2800 });
+  const jointRate = voltageLevel === "LV" ? rates.jointing_lv_each : rates.jointing_each;
+  const jointLabel = voltageLevel === "LV" ? "LV straight joint (DNO-specific)" : `${voltageLevel} straight joint`;
+  items.push({ category: "Jointing", item: jointLabel, quantity: joints, unit: "ea", unit_cost: jointRate, total_cost: joints * jointRate });
 
   // Terminations
   items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_cost: 1500, total_cost: 3000 });
 
-  // Switchgear
+  // Switchgear — HV/EHV only
   if (voltageLevel !== "LV") {
-    items.push({ category: "Switchgear", item: "Ring main unit (RMU)", quantity: 1, unit: "ea", unit_cost: 18500, total_cost: 18500 });
+    items.push({ category: "Switchgear", item: "Ring main unit (RMU)", quantity: 1, unit: "ea", unit_cost: rates.switchgear_ring_main, total_cost: rates.switchgear_ring_main });
+  }
+
+  // LV endpoint — feeder pillar + cutout
+  if (voltageLevel === "LV") {
+    items.push(
+      { category: "LV Endpoint", item: "LV feeder pillar", quantity: 1, unit: "ea", unit_cost: rates.feeder_pillar_each, total_cost: rates.feeder_pillar_each },
+      { category: "LV Endpoint", item: "100A 3-phase cutout", quantity: 1, unit: "ea", unit_cost: rates.cutout_100a_3ph, total_cost: rates.cutout_100a_3ph },
+    );
   }
 
   // Transformer
   if (proposed_kw <= 500) {
-    items.push({ category: "Transformer", item: "500kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: 22000, total_cost: 22000 });
+    items.push({ category: "Transformer", item: "500kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_500kva, total_cost: rates.transformer_500kva });
   } else if (proposed_kw <= 1000) {
-    items.push({ category: "Transformer", item: "1000kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: 38000, total_cost: 38000 });
+    items.push({ category: "Transformer", item: "1000kVA ground-mounted transformer", quantity: 1, unit: "ea", unit_cost: rates.transformer_1000kva, total_cost: rates.transformer_1000kva });
   } else {
     const count = Math.ceil(proposed_kw / 1500);
-    items.push({ category: "Transformer", item: "1500kVA ground-mounted transformer", quantity: count, unit: "ea", unit_cost: 52000, total_cost: count * 52000 });
+    items.push({ category: "Transformer", item: "1500kVA ground-mounted transformer", quantity: count, unit: "ea", unit_cost: rates.transformer_1500kva, total_cost: count * rates.transformer_1500kva });
   }
 
   // Metering
   if (voltageLevel === "LV") {
-    items.push({ category: "Metering", item: "Whole current meter", quantity: 1, unit: "ea", unit_cost: 1200, total_cost: 1200 });
+    items.push({ category: "Metering", item: "Whole current meter", quantity: 1, unit: "ea", unit_cost: rates.metering_wc, total_cost: rates.metering_wc });
   } else {
-    items.push({ category: "Metering", item: "CT metering panel", quantity: 1, unit: "ea", unit_cost: 4500, total_cost: 4500 });
+    items.push({ category: "Metering", item: "CT metering panel", quantity: 1, unit: "ea", unit_cost: rates.metering_ct, total_cost: rates.metering_ct });
   }
 
   // Earthing
