@@ -496,7 +496,7 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                     {comparisonLoading ? (
                       <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Comparing…</>
                     ) : (
-                      <><Zap className="mr-2 h-4 w-4" />Compare LV vs HV</>
+                      <><Zap className="mr-2 h-4 w-4" />Compare All Voltages</>
                     )}
                   </Button>
                   {comparisonResult && <VoltageComparisonPanel result={comparisonResult} />}
