@@ -72,6 +72,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
   const [uploading, setUploading] = useState(false);
   const [allDone, setAllDone] = useState(false);
   const [overallStatus, setOverallStatus] = useState("");
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [overallInserted, setOverallInserted] = useState(0);
+  const [overallTotal, setOverallTotal] = useState(0);
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
@@ -210,6 +213,13 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     // Phase 3: Upload features from each file
     let totalInserted = 0;
 
+    // Compute total features for overall progress
+    const totalFeatures = parsed.reduce((sum, p, i) => sum + (statuses[i].status !== "error" ? p.geojson.features.length : 0), 0);
+    setOverallTotal(totalFeatures);
+    setOverallInserted(0);
+    setOverallProgress(0);
+    let cumulativeUploaded = 0;
+
     for (let i = 0; i < parsed.length; i++) {
       if (statuses[i].status === "error") continue;
 
@@ -268,7 +278,10 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
             throw new Error(errorMsg);
           }
           fileInserted += res.data?.inserted || 0;
+          cumulativeUploaded += batch.length;
           statuses[i].progress = Math.round(((b + batch.length) / features.length) * 100);
+          setOverallProgress(totalFeatures > 0 ? Math.round((cumulativeUploaded / totalFeatures) * 100) : 0);
+          setOverallInserted(fileInserted + totalInserted);
           setFileStatuses([...statuses]);
         }
 
@@ -350,6 +363,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     setAllDone(false);
     setUploading(false);
     setOverallStatus("");
+    setOverallProgress(0);
+    setOverallInserted(0);
+    setOverallTotal(0);
   };
 
   return (
@@ -432,8 +448,16 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         </div>
       )}
 
-      {overallStatus && uploading && (
-        <p className="text-xs text-muted-foreground text-center">{overallStatus}</p>
+      {uploading && (
+        <div className="space-y-1.5 border rounded-md p-3 bg-muted/30">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground font-medium">{overallStatus || "Uploading…"}</span>
+            <span className="tabular-nums font-medium text-foreground">
+              {overallInserted.toLocaleString()} / {overallTotal.toLocaleString()} features ({overallProgress}%)
+            </span>
+          </div>
+          <Progress value={overallProgress} className="h-2" />
+        </div>
       )}
 
       {/* Geometry compatibility warning */}
