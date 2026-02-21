@@ -41,7 +41,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { layer_id, storage_table: _clientTable, dno, features } = await req.json();
+    const body = await req.json();
+    const { layer_id, storage_table: _clientTable, dno, features } = body;
+
+    console.log("[ingest] Received layer_id:", layer_id, "dno:", dno, "features count:", Array.isArray(features) ? features.length : "not-array");
 
     if (!layer_id || !dno || !Array.isArray(features) || !features.length) {
       return new Response(
@@ -58,8 +61,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (layerErr || !layerRow) {
+      console.error("[ingest] Layer lookup failed. layer_id:", layer_id, "error:", layerErr);
       return new Response(
-        JSON.stringify({ error: "Layer not found in registry" }),
+        JSON.stringify({ error: "Layer not found in registry", layer_id }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
