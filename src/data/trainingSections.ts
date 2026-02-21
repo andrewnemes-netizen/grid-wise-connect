@@ -1,4 +1,4 @@
-import { BookOpen, Map, MapPin, Cable, Eye, FolderOpen, Zap, Building2, Settings } from "lucide-react";
+import { BookOpen, Map, MapPin, Cable, Eye, FolderOpen, Zap, Building2, Settings, FlaskConical, PencilRuler } from "lucide-react";
 
 export interface SubSection {
   heading: string;
@@ -23,11 +23,12 @@ export const trainingSections: Section[] = [
     content: [
       {
         heading: "Logging In",
-        body: "Navigate to the app URL and enter your email and password. If you don't have an account, contact your administrator to be provisioned.",
+        body: "Navigate to the app URL and sign in using your email and password, or use one of the social sign-in options. Gridwise Connect supports Sign in with Google and Sign in with Apple for quick, passwordless access. If you don't have an account, contact your administrator to be provisioned.",
+        tips: ["Use 'Continue with Google' or 'Continue with Apple' for the fastest login experience."],
       },
       {
         heading: "Sidebar Navigation",
-        body: "The left-hand sidebar provides access to all main areas of the app: Map, Portfolio, LA Programme (internal users), and Admin (admin users only). Click the collapse icon at the top to minimise the sidebar and gain more map space.",
+        body: "The left-hand sidebar provides access to all main areas of the app: Map, Portfolio, Studies, LA Programme (internal users), and Admin (admin users only). Click the collapse icon at the top to minimise the sidebar and gain more map space.",
       },
       {
         heading: "User Roles",
@@ -81,12 +82,12 @@ export const trainingSections: Section[] = [
     content: [
       {
         heading: "Tool Toolbar",
-        body: "The vertical toolbar on the bottom-right of the map provides five core tools. Click a tool to activate it; click again to deactivate. Only one tool can be active at a time.",
+        body: "The vertical toolbar on the bottom-right of the map provides six core tools. Click a tool to activate it; click again to deactivate. Only one tool can be active at a time.",
       },
       {
         heading: "Boundary Tool",
-        body: "Draw a site boundary polygon on the map. Click to add vertices and double-click to close the shape. The boundary is used to define the extent of a potential site.",
-        tips: ["The boundary can be used in conjunction with the Drop Pin tool for a more accurate site assessment."],
+        body: "Draw a site boundary polygon on the map. Click to add vertices and double-click to close the shape. The boundary is used to define the extent of a potential site. When a study is active, drawn boundaries are automatically saved to the study.",
+        tips: ["The boundary can be used in conjunction with the Drop Pin tool for a more accurate site assessment.", "Use the Undo button during drawing to remove the last point."],
       },
       {
         heading: "Drop Pin",
@@ -95,7 +96,12 @@ export const trainingSections: Section[] = [
       },
       {
         heading: "Connect Tool",
-        body: "Draw a cable route between two or more points on the map. Click to add waypoints along the route, then double-click to finish. The tool calculates the total route length and estimated connection costs based on the cable type and excavation surface.",
+        body: "Draw a cable route between two or more points on the map. Click to add waypoints along the route, then double-click to finish. The tool calculates the total route length and estimated connection costs based on the cable type and excavation surface. Routes drawn while a study is active are automatically saved to the study.",
+      },
+      {
+        heading: "Design Mode",
+        body: "Design Mode is an advanced tool available only when a study is active. It allows you to place electrical infrastructure elements (substations, cable joints, switchgear, etc.) directly onto the map. Each element is saved to the study and can be removed individually or cleared entirely.",
+        tips: ["You must have an active study to use Design Mode.", "Select an element type from the Design Mode panel, then click on the map to place it.", "Design elements appear in the study detail page and can be included in PDF exports."],
       },
       {
         heading: "Polygon Search",
@@ -169,8 +175,46 @@ export const trainingSections: Section[] = [
     ],
   },
   {
-    id: "portfolio",
+    id: "studies",
     number: "6",
+    title: "Studies",
+    icon: FlaskConical,
+    content: [
+      {
+        heading: "Overview",
+        body: "Studies are collaborative workspaces for connection or design projects. Each study stores boundary drawings, cable routes, design elements, cost estimates, DNO rules engine output, and a bill of materials in one place.",
+      },
+      {
+        heading: "Creating a Study",
+        body: "Navigate to the Studies page and click 'New Study'. Provide a name, choose a mode (Connect for feasibility or Design for engineering), and optionally set a proposed load in kW. The study is created in 'draft' status.",
+      },
+      {
+        heading: "Working with a Study on the Map",
+        body: "Open a study on the map by clicking the arrow icon on the study card. The study name and status appear in a banner at the top of the map. While a study is active:\n• Boundaries you draw are automatically saved to the study\n• Cable routes are automatically saved to the study\n• Design Mode becomes available for placing infrastructure elements",
+        tips: ["Look for the study name banner at the top of the map to confirm which study is active."],
+      },
+      {
+        heading: "Study Detail Page",
+        body: "Click the eye icon on a study card to open the detail page. This shows:\n• Study parameters (mode, load, dates, boundary/route status)\n• DNO Rules Engine output (duct sizes, cover depths, compliance flags)\n• Cost estimate with visual breakdown\n• Bill of Materials\n• Activity feed and comments",
+      },
+      {
+        heading: "Sharing & Collaboration",
+        body: "Share a study with colleagues using the Share button on the study detail page. Shared studies appear in the 'Shared with me' tab. Comments can be added to any study for team discussion.",
+        tips: ["Shared users see the study in their own Studies list under a separate tab.", "Use comments to discuss findings and decisions directly within the study."],
+      },
+      {
+        heading: "Batch Export",
+        body: "Select multiple studies using the checkboxes and click 'Export as ZIP' to download PDF reports for all selected studies in a single archive.",
+      },
+      {
+        heading: "PDF Export",
+        body: "From the study detail page, click 'Export PDF' to generate a comprehensive report. You can customise which sections to include: cover page, site details, route map, electrical validation, cost breakdown, bill of materials, design elements, key findings, and next steps.",
+      },
+    ],
+  },
+  {
+    id: "portfolio",
+    number: "7",
     title: "Portfolio",
     icon: FolderOpen,
     content: [
@@ -198,7 +242,7 @@ export const trainingSections: Section[] = [
   },
   {
     id: "quick-estimate",
-    number: "7",
+    number: "8",
     title: "Quick Estimate (Public)",
     icon: Zap,
     content: [
@@ -218,7 +262,7 @@ export const trainingSections: Section[] = [
   },
   {
     id: "la-programme",
-    number: "8",
+    number: "9",
     title: "LA Programme (Internal)",
     icon: Building2,
     content: [
@@ -235,7 +279,7 @@ export const trainingSections: Section[] = [
   },
   {
     id: "admin",
-    number: "9",
+    number: "10",
     title: "Admin (Admin Only)",
     icon: Settings,
     content: [
