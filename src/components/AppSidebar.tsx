@@ -1,6 +1,7 @@
 import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
+import { RoleRequestDialog } from "@/components/RoleRequestDialog";
 import epeLogo from "@/assets/epe-logo.png";
 import {
   Sidebar,
@@ -101,6 +102,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
+        {!collapsed && <RoleRequestDialog />}
         <div className="flex items-center gap-2 px-2 py-1">
           {!collapsed && (
             <span className="truncate text-xs text-sidebar-foreground/70">
