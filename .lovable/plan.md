@@ -1,74 +1,42 @@
 
 
-## Fix Layer Loading Timeouts at Low Zoom Levels
+## Speed Up HV Cable Loading at Close Zoom
 
-### Problem
-Loading HV Underground Cables (101k rows, 142MB) and HV Substations (27k rows, 53MB) at zoom 5 causes repeated statement timeouts. Three compounding issues:
+### Root Cause
+Database logs show the cable query takes **12-24 seconds** for ~1,752 features at close zoom. The bottleneck is JSON serialization, not the spatial query itself. Three compounding factors:
 
-1. The database query plan ignores the spatial index (GiST) and scans all rows by layer_id first
-2. Feature limits are too high at wide zoom levels (10,000 LineStrings with jsonb serialization)
-3. No request cancellation -- panning spawns concurrent duplicate queries that all time out
+1. **Excessive coordinate precision**: `ST_AsGeoJSON` defaults to 15 decimal places. At 100m zoom, 6 decimals (0.11m accuracy) is more than sufficient. This roughly halves the payload size for dense LineStrings.
+2. **Double JSON parsing**: `jsonb_agg(... jsonb_build_object(...) ...)` parses the GeoJSON string into jsonb, then re-serializes it. Using `json_agg` + `json_build_object` avoids this overhead.
+3. **No simplification at close zoom**: Currently, viewports under 1 degree width get zero simplification. Even at 100m scale, a tiny tolerance (0.00002) removes redundant vertices without visible loss.
 
 ### Changes
 
-**1. Database: Add composite indexes (migration)**
+**1. Database migration: Optimise `get_geo_layer_geojson` RPC**
 
-Create compound indexes on `(layer_id, geom)` using GiST so the planner can filter by both layer_id AND spatial bbox in a single index scan:
+Update the function to:
+- Add `maxdecimaldigits := 6` parameter to all `ST_AsGeoJSON` calls (reduces coordinate string length by ~60%)
+- Switch from `jsonb_agg`/`jsonb_build_object` to `json_agg`/`json_build_object` (avoids re-parsing overhead)
+- Add a micro-simplification tier: tolerance 0.00005 for bbox width between 0.1 and 1 degree, and 0.00002 for narrower viewports (removes colinear points without visible impact)
+- Return type stays `jsonb` for API compatibility (the final result is cast at the end)
 
-```text
-CREATE INDEX idx_geo_cables_layer_geom ON geo_cables USING gist (geom) WHERE geom IS NOT NULL;
-CREATE INDEX idx_geo_substations_layer_geom ON geo_substations USING gist (geom) WHERE geom IS NOT NULL;
-CREATE INDEX idx_geo_feeders_layer_geom ON geo_feeders USING gist (geom) WHERE geom IS NOT NULL;
-```
+**2. Frontend: Cap cable features at close zoom (`src/hooks/useLayerManager.ts`)**
 
-Also add partial btree+gist composite approach:
-```text
-CREATE INDEX idx_geo_cables_lid_geom ON geo_cables (layer_id) INCLUDE (id) WHERE geom IS NOT NULL;
-```
+Reduce the line feature cap from 20,000 to 5,000 at zoom >= 10. At street-level zoom the viewport is small enough that 5,000 is more than sufficient, and it prevents the database from serializing unnecessarily large result sets.
 
-**2. Reduce feature caps at low zoom (`src/hooks/useLayerManager.ts`)**
+**3. Frontend: Exclude `attrs_json` merge for large layers (`src/lib/mapLayers.ts`)**
 
-Current caps at zoom <7: 10,000 for lines, 10,000 for points. At zoom 5 this means serializing thousands of complex geometries. New caps:
-
-| Zoom | Lines | Points | Polygons |
-|------|-------|--------|----------|
-| < 7  | 3,000 | 5,000  | 2,000    |
-| 7-9  | 8,000 | 15,000 | 5,000    |
-| 10+  | 20,000| 30,000 | 10,000   |
-
-**3. Add request abort logic (`src/hooks/useLayerManager.ts`)**
-
-Track an AbortController per layer. When a new fetch starts for the same layer, abort the previous in-flight request. This prevents cascading concurrent queries when panning:
-
-- Add `abortControllersRef` map keyed by layerId
-- Before each `fetchLayerGeoJSON` call, abort any existing controller for that layer
-- Pass the abort signal through to the RPC call
-
-**4. Increase simplification at wide zoom (`get_geo_layer_geojson` RPC)**
-
-Add a more aggressive simplification tier for very wide viewports (bbox > 6 degrees):
-
-| Viewport width | Tolerance |
-|----------------|-----------|
-| > 6 degrees    | 0.005     |
-| > 3 degrees    | 0.002     |
-| > 1 degree     | 0.0005    |
-
-This reduces vertex counts significantly for cables at national zoom without visible quality loss.
-
-**5. Add moveend debounce increase for low zoom**
-
-Increase the moveend debounce from 300ms to 600ms when zoom < 8, giving the map more time to settle before triggering fetches.
+No change needed here -- the attrs_json merge happens server-side and the fields are useful for click popups. The coordinate precision fix alone will have the biggest impact.
 
 ### Expected Impact
 
-- Cables at zoom 5: query drops from timeout (>30s) to ~2-3 seconds with composite index + 3,000 feature cap + aggressive simplification
-- Substations at zoom 5: should load in <1 second (point data, simpler serialization)
-- No more cascading duplicate requests when panning
+| Metric | Before | After |
+|--------|--------|-------|
+| Coordinate string size per feature | ~800 bytes | ~300 bytes |
+| JSON aggregation method | jsonb (double parse) | json (single pass) |
+| Query time (1,752 cables) | 12-24 seconds | ~2-4 seconds |
+| Simplification at close zoom | None | Micro (0.00002) |
 
 ### Files Modified
-
-- **Database migration**: composite GiST indexes on geo_cables, geo_substations, geo_feeders
-- **`src/hooks/useLayerManager.ts`**: reduced zoom-5 caps, abort controller logic, adaptive debounce
-- **Database function `get_geo_layer_geojson`**: extra simplification tier for wide viewports
+- **Database migration**: Updated `get_geo_layer_geojson` function with precision limits, json_agg, and micro-simplification
+- **`src/hooks/useLayerManager.ts`**: Reduced line feature cap at high zoom from 20,000 to 5,000
 
