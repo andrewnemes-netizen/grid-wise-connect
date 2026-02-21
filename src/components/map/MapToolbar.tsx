@@ -23,7 +23,7 @@ export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasA
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   return (
-    <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-1 items-end">
+    <div className="absolute bottom-16 right-4 z-10 flex flex-col gap-1 items-end">
       {tools.map((tool) => {
         const disabled = 'requiresStudy' in tool && tool.requiresStudy && !hasActiveStudy;
         return (
