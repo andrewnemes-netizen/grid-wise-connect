@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Share2, UserPlus, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
+import { createNotification } from "@/hooks/useNotifications";
 
 interface StudyShareDialogProps {
   studyId: string;
@@ -73,6 +74,24 @@ export function StudyShareDialog({ studyId, studyName }: StudyShareDialogProps) 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["study-shares", studyId] });
+      // Find the shared user id from the last mutation context
+      const profileLookup = async () => {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .or(`full_name.ilike.%${email}%`)
+          .limit(1)
+          .maybeSingle();
+        if (profile) {
+          await createNotification({
+            userId: profile.user_id,
+            studyId,
+            type: "study_share",
+            message: `You were given ${role} access to "${studyName}"`,
+          });
+        }
+      };
+      profileLookup();
       setEmail("");
       toast.success("Study shared successfully");
     },

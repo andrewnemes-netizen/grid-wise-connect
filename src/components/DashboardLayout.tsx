@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { NotificationBell } from "@/components/NotificationBell";
 import epeLogo from "@/assets/epe-logo.png";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -13,6 +14,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <div className="ml-3 flex items-center gap-2">
               <img src={epeLogo} alt="Eco Power Energy" className="h-5 object-contain" />
               <span className="text-sm font-semibold text-foreground">Gridwise Connect</span>
+            </div>
+            <div className="ml-auto">
+              <NotificationBell />
             </div>
           </header>
           <div className="flex-1">{children}</div>
