@@ -1,6 +1,19 @@
 /**
  * Module H: Split BOQ Generator
  * Engineering outputs only quantities — no pricing.
+ *
+ * BOQ Item Code Registry (for rate-card alignment):
+ * ──────────────────────────────────────────────────
+ * E001 = Service cable run
+ * E002 = LV main cable run
+ * E003 = Cable termination
+ * E004 = Feeder pillar
+ * E005 = Earthing installation
+ * E006 = CT metering
+ * E007 = LV main cable extension
+ * E008 = Service/main cable joint
+ * E009 = Earthing allowance (non-standard)
+ * ──────────────────────────────────────────────────
  */
 import type { SplitBoq, BoqItem, RouteQuantities, ElectricalSizingResult, EarthingResult, EvHubRules } from "./types";
 
