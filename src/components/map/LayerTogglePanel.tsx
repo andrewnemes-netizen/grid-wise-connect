@@ -256,12 +256,19 @@ export function LayerTogglePanel({
                                       style={{ backgroundColor: color }}
                                     />
                                   )}
-                                  <Label
-                                    htmlFor={`layer-${layer.id}`}
-                                    className="text-xs font-normal truncate cursor-pointer"
-                                  >
-                                    {layer.display_name}
-                                  </Label>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Label
+                                        htmlFor={`layer-${layer.id}`}
+                                        className="text-xs font-normal truncate cursor-pointer"
+                                      >
+                                        {layer.display_name}
+                                      </Label>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left">
+                                      {layer.display_name}
+                                    </TooltipContent>
+                                  </Tooltip>
                                   {layer.feature_count > 0 && (
                                     <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
                                       {layer.feature_count > 999
