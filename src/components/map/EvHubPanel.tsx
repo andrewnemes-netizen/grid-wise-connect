@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   lng: number;
@@ -62,8 +63,30 @@ export function EvHubPanel({ lng, lat, onClose }: Props) {
   const handleRun = useCallback(async () => {
     setLoading(true);
     try {
+      let dnoLookupResult: string | undefined;
+
+      if (dnoOverride === "auto") {
+        const { data, error } = await supabase.rpc("lookup_dno_by_location", {
+          p_lat: lat,
+          p_lng: lng,
+        });
+        if (error) {
+          toast({ title: "DNO lookup failed", description: error.message, variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+        dnoLookupResult = data ?? undefined;
+        if (!dnoLookupResult) {
+          toast({ title: "DNO not found", description: "No DNO licence area found for this location. Please select a DNO manually.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+      } else {
+        dnoLookupResult = dnoOverride;
+      }
+
       const context: EngineContext = {
-        dnoLookupResult: dnoOverride !== "auto" ? dnoOverride : undefined,
+        dnoLookupResult,
       };
 
       const output = await runEvHubEngine(
