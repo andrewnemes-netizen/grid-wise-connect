@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Loader2, Plus, AlertTriangle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Save, Loader2, Plus, AlertTriangle, History, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 const DNO_OPTIONS = ["UK_ALL", "UKPN", "NPG", "ENWL", "NGED", "SPEN", "SSEN"];
@@ -38,6 +39,7 @@ const RULE_FIELDS: RuleFieldEditor[] = [
   { key: "transformer_loading_thresholds", label: "Transformer Loading Thresholds", type: "json", group: "Reinforcement" },
   { key: "reinforcement_mitigation_sequence", label: "Mitigation Sequence", type: "json", group: "Reinforcement" },
   { key: "cable_scoring_weights", label: "Cable Scoring Weights", type: "json", group: "Cable Selection" },
+  { key: "max_service_length_m", label: "Max Service Length (m)", type: "number", group: "Electrical" },
 ];
 
 export function EvHubRulesEditor() {
@@ -71,16 +73,57 @@ export function EvHubRulesEditor() {
     }
   }, [currentRuleset?.id, selectedDno]);
 
+  // Fetch change history for current ruleset
+  const { data: changeHistory = [] } = useQuery({
+    queryKey: ["ruleset-change-log", currentRuleset?.id],
+    queryFn: async () => {
+      if (!currentRuleset?.id) return [];
+      const { data, error } = await (supabase as any)
+        .from("ruleset_change_log")
+        .select("*")
+        .eq("ruleset_id", currentRuleset.id)
+        .order("changed_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!currentRuleset?.id,
+  });
+
   const saveMutation = useMutation({
     mutationFn: async (rulesJson: Record<string, any>) => {
-      if (currentRuleset) {
+      const isUpdate = !!currentRuleset;
+      const prevVersion = currentRuleset?.version || "v0";
+      const versionNum = parseInt(prevVersion.replace("v", "")) || 0;
+      const newVersion = `v${versionNum + 1}`;
+
+      // Compute simple diff (list of changed field keys)
+      const prevRules = currentRuleset?.rules_json || {};
+      const changedKeys = Object.keys(rulesJson).filter(
+        (k) => JSON.stringify(rulesJson[k]) !== JSON.stringify(prevRules[k])
+      );
+
+      if (isUpdate) {
         const { error } = await (supabase as any)
           .from("ev_hub_rulesets")
-          .update({ rules_json: rulesJson, updated_at: new Date().toISOString() })
+          .update({ rules_json: rulesJson, version: newVersion, updated_at: new Date().toISOString() })
           .eq("id", currentRuleset.id);
         if (error) throw error;
+
+        // Insert change log entry
+        await (supabase as any)
+          .from("ruleset_change_log")
+          .insert({
+            ruleset_id: currentRuleset.id,
+            changed_by: user?.id,
+            change_type: "UPDATE",
+            previous_version: prevVersion,
+            new_version: newVersion,
+            change_summary: `Updated ${changedKeys.length} field(s): ${changedKeys.join(", ") || "no changes"}`,
+            diff_json: { changed_fields: changedKeys },
+          });
       } else {
-        const { error } = await (supabase as any)
+        const { data: inserted, error } = await (supabase as any)
           .from("ev_hub_rulesets")
           .insert({
             dno_key: selectedDno,
@@ -89,12 +132,27 @@ export function EvHubRulesEditor() {
             is_active: true,
             rules_json: rulesJson,
             created_by: user?.id,
-          });
+          })
+          .select("id")
+          .single();
         if (error) throw error;
+
+        // Insert change log entry for creation
+        await (supabase as any)
+          .from("ruleset_change_log")
+          .insert({
+            ruleset_id: inserted.id,
+            changed_by: user?.id,
+            change_type: "CREATE",
+            new_version: "v1",
+            change_summary: `Created ${selectedDno} ruleset with ${Object.keys(rulesJson).length} field(s)`,
+            diff_json: { changed_fields: Object.keys(rulesJson) },
+          });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ev-hub-rulesets"] });
+      queryClient.invalidateQueries({ queryKey: ["ruleset-change-log"] });
       toast.success("EV Hub rules saved");
     },
     onError: (err: any) => {
@@ -275,6 +333,32 @@ export function EvHubRulesEditor() {
             Save Rules
           </Button>
         </div>
+
+        {/* Change History */}
+        {currentRuleset && changeHistory.length > 0 && (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full justify-between text-xs">
+                <span className="flex items-center gap-1"><History className="h-3 w-3" />Change History ({changeHistory.length})</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-2">
+              {changeHistory.map((entry: any) => (
+                <div key={entry.id} className="border rounded p-2 text-[10px] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[9px]">{entry.change_type}</Badge>
+                    <span className="text-muted-foreground">
+                      {entry.previous_version ? `${entry.previous_version} → ` : ""}{entry.new_version}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">{entry.change_summary}</p>
+                  <p className="text-muted-foreground/60">{new Date(entry.changed_at).toLocaleString()}</p>
+                </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </CardContent>
     </Card>
   );

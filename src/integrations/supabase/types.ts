@@ -1025,6 +1025,50 @@ export type Database = {
         }
         Relationships: []
       }
+      ruleset_change_log: {
+        Row: {
+          change_summary: string
+          change_type: string
+          changed_at: string
+          changed_by: string
+          diff_json: Json | null
+          id: string
+          new_version: string
+          previous_version: string | null
+          ruleset_id: string
+        }
+        Insert: {
+          change_summary: string
+          change_type: string
+          changed_at?: string
+          changed_by: string
+          diff_json?: Json | null
+          id?: string
+          new_version: string
+          previous_version?: string | null
+          ruleset_id: string
+        }
+        Update: {
+          change_summary?: string
+          change_type?: string
+          changed_at?: string
+          changed_by?: string
+          diff_json?: Json | null
+          id?: string
+          new_version?: string
+          previous_version?: string | null
+          ruleset_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ruleset_change_log_ruleset_id_fkey"
+            columns: ["ruleset_id"]
+            isOneToOne: false
+            referencedRelation: "ev_hub_rulesets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_notes: {
         Row: {
           created_at: string
