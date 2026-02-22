@@ -222,6 +222,13 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.text("Map Key", margin, y);
     y += 4;
 
+    // Route symbols (match actual map markers)
+    const routeSymbols: { label: string; color: string; type: "filled-circle" | "dashed-line" }[] = [
+      { label: "Point of Connection (Source)", color: "#3498db", type: "filled-circle" },
+      { label: "New Supply Point", color: "#e74c3c", type: "filled-circle" },
+      { label: "Proposed Cable Route", color: "#2ecc71", type: "dashed-line" },
+    ];
+
     // Network layers legend
     const networkLegend: { label: string; color: string; type: "line" | "circle" }[] = [
       { label: "HV Underground Cables", color: "#e74c3c", type: "line" },
@@ -229,7 +236,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       { label: "HV Feeders (33kV)", color: "#f59e0b", type: "line" },
       { label: "HV Feeders (66kV)", color: "#06b6d4", type: "line" },
       { label: "Primary Substations", color: "#3b82f6", type: "circle" },
-      { label: "Connection Route", color: "#e74c3c", type: "line" },
     ];
 
     // Equipment symbols legend
@@ -243,9 +249,40 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     ];
 
     const colW = contentW / 2;
-    const startY = y;
 
-    // Left column: Network layers
+    // ── Left column: Route Symbols + Network Layers ──
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.grey);
+    doc.text("ROUTE SYMBOLS", margin + 2, y);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.black);
+    routeSymbols.forEach((item) => {
+      if (item.type === "filled-circle") {
+        // White stroke ring
+        doc.setFillColor("#ffffff");
+        doc.circle(margin + 6, y - 1.2, 2.4, "F");
+        // Coloured fill
+        doc.setFillColor(item.color);
+        doc.circle(margin + 6, y - 1.2, 1.8, "F");
+      } else {
+        // Dashed green line
+        doc.setDrawColor(item.color);
+        doc.setLineWidth(1.2);
+        (doc as any).setLineDashPattern([1.5, 1], 0);
+        doc.line(margin + 2, y - 1, margin + 10, y - 1);
+        (doc as any).setLineDashPattern([], 0);
+      }
+      doc.setFontSize(7);
+      doc.setTextColor(BRAND.black);
+      doc.text(item.label, margin + 13, y);
+      y += 4;
+    });
+
+    // Sub-section: Network Layers
+    y += 1;
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(BRAND.grey);
@@ -269,8 +306,9 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       y += 4;
     });
 
-    // Right column: Equipment symbols
-    let rightY = startY;
+    // ── Right column: Equipment symbols ──
+    const rightStartY = y - ((routeSymbols.length * 4) + 5 + (networkLegend.length * 4) + 4);
+    let rightY = rightStartY;
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(BRAND.grey);
@@ -279,7 +317,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     doc.setFont("helvetica", "normal");
     equipmentLegend.forEach((item) => {
-      // Draw a small circle with letter
       doc.setFillColor(item.color);
       doc.circle(margin + colW + 6, rightY - 1.2, 2.2, "F");
       doc.setFontSize(5);
