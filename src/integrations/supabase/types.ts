@@ -1437,9 +1437,12 @@ export type Database = {
           cable_ehv_per_m: number
           cable_hv_per_m: number
           cable_lv_per_m: number
+          cable_marker_tape_per_m: number
           contingency_pct: number
           cutout_100a_3ph: number
           design_fee_pct: number
+          duct_per_m: number
+          earthing_lot: number
           excavation_carriageway_per_m: number
           excavation_footway_per_m: number
           excavation_verge_per_m: number
@@ -1453,9 +1456,11 @@ export type Database = {
           reinforcement_per_kw_over_capacity: number
           switchgear_circuit_breaker: number
           switchgear_ring_main: number
+          termination_each: number
           transformer_1000kva: number
           transformer_1500kva: number
           transformer_500kva: number
+          transformer_plinth_each: number
           updated_at: string
           updated_by: string | null
         }
@@ -1463,9 +1468,12 @@ export type Database = {
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
           cable_lv_per_m?: number
+          cable_marker_tape_per_m?: number
           contingency_pct?: number
           cutout_100a_3ph?: number
           design_fee_pct?: number
+          duct_per_m?: number
+          earthing_lot?: number
           excavation_carriageway_per_m?: number
           excavation_footway_per_m?: number
           excavation_verge_per_m?: number
@@ -1479,9 +1487,11 @@ export type Database = {
           reinforcement_per_kw_over_capacity?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
+          termination_each?: number
           transformer_1000kva?: number
           transformer_1500kva?: number
           transformer_500kva?: number
+          transformer_plinth_each?: number
           updated_at?: string
           updated_by?: string | null
         }
@@ -1489,9 +1499,12 @@ export type Database = {
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
           cable_lv_per_m?: number
+          cable_marker_tape_per_m?: number
           contingency_pct?: number
           cutout_100a_3ph?: number
           design_fee_pct?: number
+          duct_per_m?: number
+          earthing_lot?: number
           excavation_carriageway_per_m?: number
           excavation_footway_per_m?: number
           excavation_verge_per_m?: number
@@ -1505,9 +1518,11 @@ export type Database = {
           reinforcement_per_kw_over_capacity?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
+          termination_each?: number
           transformer_1000kva?: number
           transformer_1500kva?: number
           transformer_500kva?: number
+          transformer_plinth_each?: number
           updated_at?: string
           updated_by?: string | null
         }

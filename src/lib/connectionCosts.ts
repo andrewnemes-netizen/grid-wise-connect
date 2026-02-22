@@ -10,6 +10,8 @@ export interface UnitRates {
   cable_lv_per_m: number;
   cable_hv_per_m: number;
   cable_ehv_per_m: number;
+  // Ducting
+  duct_per_m: number;
   // Excavation costs £/m
   excavation_footway_per_m: number;
   excavation_carriageway_per_m: number;
@@ -17,6 +19,7 @@ export interface UnitRates {
   // Fixed costs
   jointing_each: number;
   jointing_lv_each: number;
+  termination_each: number;
   switchgear_ring_main: number;
   switchgear_circuit_breaker: number;
   transformer_500kva: number;
@@ -27,6 +30,10 @@ export interface UnitRates {
   // LV endpoint equipment
   feeder_pillar_each: number;
   cutout_100a_3ph: number;
+  // Civils & earthing
+  earthing_lot: number;
+  transformer_plinth_each: number;
+  cable_marker_tape_per_m: number;
   // Design & project management
   design_fee_pct: number;
   project_management_pct: number;
@@ -39,11 +46,13 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   cable_lv_per_m: 85,
   cable_hv_per_m: 145,
   cable_ehv_per_m: 280,
+  duct_per_m: 12,
   excavation_footway_per_m: 120,
   excavation_carriageway_per_m: 210,
   excavation_verge_per_m: 65,
   jointing_each: 2800,
   jointing_lv_each: 1800,
+  termination_each: 1500,
   switchgear_ring_main: 18500,
   switchgear_circuit_breaker: 35000,
   transformer_500kva: 22000,
@@ -53,6 +62,9 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   metering_wc: 1200,
   feeder_pillar_each: 3200,
   cutout_100a_3ph: 850,
+  earthing_lot: 3500,
+  transformer_plinth_each: 4200,
+  cable_marker_tape_per_m: 2,
   design_fee_pct: 0.08,
   project_management_pct: 0.06,
   contingency_pct: 0.10,
@@ -179,14 +191,13 @@ export function estimateConnectionCost(
   });
 
   // Ducting
-  const ductRate = 12;
-  const ductCost = cableDistance * ductRate;
+  const ductCost = cableDistance * rates.duct_per_m;
   breakdown.push({
     category: "Cable",
     description: `HDPE duct (${cableDistance}m)`,
     quantity: cableDistance,
     unit: "m",
-    unit_rate: ductRate,
+    unit_rate: rates.duct_per_m,
     total: ductCost,
   });
 
@@ -214,8 +225,8 @@ export function estimateConnectionCost(
   breakdown.push({ category: "Equipment", description: jointDesc, quantity: joints, unit: "ea", unit_rate: jointRate, total: jointCost });
 
   // Cable terminations
-  const terminationCost = 2 * 1500;
-  breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_rate: 1500, total: terminationCost });
+  const terminationCost = 2 * rates.termination_each;
+  breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_rate: rates.termination_each, total: terminationCost });
 
   // Switchgear — HV/EHV only
   let switchgearCost = 0;
@@ -258,17 +269,17 @@ export function estimateConnectionCost(
   let earthingCost = 0;
   let plinthCost = 0;
   if (voltageLevel !== "LV") {
-    earthingCost = 3500;
-    plinthCost = 4200;
+    earthingCost = rates.earthing_lot;
+    plinthCost = rates.transformer_plinth_each;
     breakdown.push(
-      { category: "Equipment", description: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_rate: 3500, total: earthingCost },
-      { category: "Equipment", description: "Transformer plinth", quantity: 1, unit: "ea", unit_rate: 4200, total: plinthCost },
+      { category: "Equipment", description: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_rate: rates.earthing_lot, total: earthingCost },
+      { category: "Equipment", description: "Transformer plinth", quantity: 1, unit: "ea", unit_rate: rates.transformer_plinth_each, total: plinthCost },
     );
   }
 
   // Cable marker tape
-  const markerTapeCost = cableDistance * 2;
-  breakdown.push({ category: "Equipment", description: "Cable marker tape", quantity: cableDistance, unit: "m", unit_rate: 2, total: markerTapeCost });
+  const markerTapeCost = cableDistance * rates.cable_marker_tape_per_m;
+  breakdown.push({ category: "Equipment", description: "Cable marker tape", quantity: cableDistance, unit: "m", unit_rate: rates.cable_marker_tape_per_m, total: markerTapeCost });
 
   const equipmentCost = jointCost + terminationCost + switchgearCost + lvEndpointCost + transformerCost + meteringCost + earthingCost + plinthCost + markerTapeCost;
 
@@ -331,7 +342,7 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   items.push({ category: "Cable", item: cableType, quantity: cableDistance, unit: "m", unit_cost: cableRate, total_cost: cableDistance * cableRate });
 
   // Ducting
-  items.push({ category: "Cable", item: "150mm HDPE duct", quantity: cableDistance, unit: "m", unit_cost: 12, total_cost: cableDistance * 12 });
+  items.push({ category: "Cable", item: "150mm HDPE duct", quantity: cableDistance, unit: "m", unit_cost: rates.duct_per_m, total_cost: cableDistance * rates.duct_per_m });
 
   // Cable joints — voltage-specific
   const joints = Math.max(2, Math.ceil(cableDistance / 250));
@@ -340,7 +351,7 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   items.push({ category: "Jointing", item: jointLabel, quantity: joints, unit: "ea", unit_cost: jointRate, total_cost: joints * jointRate });
 
   // Terminations
-  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_cost: 1500, total_cost: 3000 });
+  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each });
 
   // Switchgear — HV/EHV only
   if (voltageLevel !== "LV") {
@@ -376,10 +387,10 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
 
   // Earthing & transformer civils — HV/EHV only
   if (voltageLevel !== "LV") {
-    items.push({ category: "Earthing", item: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_cost: 3500, total_cost: 3500 });
-    items.push({ category: "Civils", item: "Transformer plinth", quantity: 1, unit: "ea", unit_cost: 4200, total_cost: 4200 });
+    items.push({ category: "Earthing", item: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_cost: rates.earthing_lot, total_cost: rates.earthing_lot });
+    items.push({ category: "Civils", item: "Transformer plinth", quantity: 1, unit: "ea", unit_cost: rates.transformer_plinth_each, total_cost: rates.transformer_plinth_each });
   }
-  items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: 2, total_cost: cableDistance * 2 });
+  items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: rates.cable_marker_tape_per_m, total_cost: cableDistance * rates.cable_marker_tape_per_m });
 
   return items;
 }
