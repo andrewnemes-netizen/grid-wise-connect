@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { NetworkVisibilityPanel } from "./NetworkVisibilityPanel";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { useUnitRates } from "@/hooks/useUnitRates";
 
 interface SiteCheckPanelProps {
   lng: number | null;
@@ -72,6 +73,7 @@ const STEPS = [
 export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }: SiteCheckPanelProps) {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
+  const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");
 
   const [siteName, setSiteName] = useState("");
@@ -345,6 +347,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }
                     distances: result.distances,
                     distanceBands: result.distance_bands,
                     constraints: result.constraints,
+                    unitRates,
                   })}
                 >
                   <Download className="mr-2 h-4 w-4" />Export PDF
