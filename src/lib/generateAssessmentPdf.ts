@@ -64,6 +64,10 @@ interface PdfInput {
   skipSave?: boolean;
   /** Unit rates from database (uses defaults if not provided) */
   unitRates?: UnitRates;
+  /** Voltage override (Auto/LV/HV/EHV) */
+  voltageOverride?: import("./connectionCosts").VoltageOverride;
+  /** Nearest headroom for reinforcement calc */
+  nearestHeadroomKw?: number;
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -358,11 +362,14 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       proposed_kw: input.proposedKw,
       distances: input.distances,
       constraints: input.constraints,
+      voltage_override: input.voltageOverride,
+      nearest_headroom_kw: input.nearestHeadroomKw,
     }, input.unitRates);
     bom = generateBom({
       proposed_kw: input.proposedKw,
       distances: input.distances,
       constraints: input.constraints,
+      voltage_override: input.voltageOverride,
     }, input.unitRates);
 
     checkPage(50);
@@ -606,14 +613,26 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       ? `EPE-Assessment-${input.siteName.replace(/\s+/g, "-")}.pdf`
       : `EPE-Assessment-${input.postcode?.replace(/\s+/g, "") || "report"}.pdf`;
     const pdfBlob = doc.output("blob");
-    const url = URL.createObjectURL(pdfBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 100);
+    const blobUrl = URL.createObjectURL(pdfBlob);
+    // Use an invisible iframe for download to avoid any page navigation/refresh
+    try {
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = fileName;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      // Delay cleanup so the download starts
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 500);
+    } catch {
+      // Fallback: open in new tab
+      window.open(blobUrl, "_blank");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+    }
   }
   return doc;
 }

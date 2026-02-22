@@ -334,6 +334,12 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   const maxDist = voltageLevel === "LV" ? 500 : voltageLevel === "HV" ? 3000 : 5000;
   const cableDistance = Math.min(rawDist, maxDist);
 
+  // Surface split for excavation (same logic as estimateConnectionCost)
+  const split = input.surface_split || deriveSurfaceSplit(input.constraints);
+  const footwayM = Math.round(cableDistance * split.footway_pct);
+  const carriagewayM = Math.round(cableDistance * split.carriageway_pct);
+  const vergeM = Math.round(cableDistance * split.verge_pct);
+
   const items: BomItem[] = [];
 
   // Cable
@@ -343,6 +349,13 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
 
   // Ducting
   items.push({ category: "Cable", item: "150mm HDPE duct", quantity: cableDistance, unit: "m", unit_cost: rates.duct_per_m, total_cost: cableDistance * rates.duct_per_m });
+
+  // Excavation
+  items.push(
+    { category: "Excavation", item: "Footway trenching", quantity: footwayM, unit: "m", unit_cost: rates.excavation_footway_per_m, total_cost: footwayM * rates.excavation_footway_per_m },
+    { category: "Excavation", item: "Carriageway trenching", quantity: carriagewayM, unit: "m", unit_cost: rates.excavation_carriageway_per_m, total_cost: carriagewayM * rates.excavation_carriageway_per_m },
+    { category: "Excavation", item: "Verge trenching", quantity: vergeM, unit: "m", unit_cost: rates.excavation_verge_per_m, total_cost: vergeM * rates.excavation_verge_per_m },
+  );
 
   // Cable joints — voltage-specific
   const joints = Math.max(2, Math.ceil(cableDistance / 250));

@@ -565,6 +565,8 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       electricalResult: electricalResult,
                       snapshotId: lastSnapshotId,
                       unitRates,
+                      voltageOverride,
+                      nearestHeadroomKw: sourceHeadroomKw,
                     });
                   }}
                 >
