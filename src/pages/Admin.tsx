@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers } from "lucide-react";
+import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { DataUploader } from "@/components/admin/DataUploader";
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
 import { LayerManagement } from "@/components/admin/LayerManagement";
 import { UserRolesManagement } from "@/components/admin/UserRolesManagement";
+import { EvHubRulesEditor } from "@/components/admin/EvHubRulesEditor";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -39,6 +40,7 @@ const Admin = () => {
           <TabsTrigger value="layers"><Layers className="h-3.5 w-3.5 mr-1.5" />Layers</TabsTrigger>
           <TabsTrigger value="data"><Database className="h-3.5 w-3.5 mr-1.5" />Site Data</TabsTrigger>
           <TabsTrigger value="rates"><SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Unit Rates</TabsTrigger>
+          <TabsTrigger value="evhub"><Zap className="h-3.5 w-3.5 mr-1.5" />EV Hub Rules</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
         </TabsList>
@@ -51,6 +53,9 @@ const Admin = () => {
         </TabsContent>
         <TabsContent value="rates" className="mt-4">
           <UnitRatesSettings />
+        </TabsContent>
+        <TabsContent value="evhub" className="mt-4">
+          <EvHubRulesEditor />
         </TabsContent>
         <TabsContent value="users" className="mt-4">
           <UserRolesManagement />

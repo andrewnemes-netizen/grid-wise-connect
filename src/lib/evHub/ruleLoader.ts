@@ -54,7 +54,7 @@ export async function loadRuleSet(
   ruleSetId: string = "DNO_EV_HUB_V1"
 ): Promise<EvHubRuleSet> {
   // Try DNO-specific first
-  let { data: row } = await supabase
+  let { data: row } = await (supabase as any)
     .from("ev_hub_rulesets")
     .select("*")
     .eq("dno_key", dnoKey)
@@ -66,7 +66,7 @@ export async function loadRuleSet(
 
   // Fall back to UK_ALL
   if (!row) {
-    const { data: baseline } = await supabase
+    const { data: baseline } = await (supabase as any)
       .from("ev_hub_rulesets")
       .select("*")
       .eq("dno_key", "UK_ALL")
