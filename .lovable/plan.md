@@ -1,50 +1,84 @@
 
-# Fix: Auto-detect DNO from Site Location
 
-## Problem
-When "Auto-detect" is selected in the EV Hub Feasibility panel, the engine throws "Unable to determine DNO licence area for site location" because the spatial lookup against `gb_dno_licence_areas` polygons is not wired up.
+# Add Cable Drawing to Design Mode
 
-## Root Cause
-In `EvHubPanel.tsx` line 66, when `dnoOverride` is `"auto"`, both `dnoLookupResult` and `dno_override` are set to `undefined`. The `resolveDnoAnchor` function in `dnoAnchor.ts` then has no input to work with and throws.
+## What This Adds
+The ability to draw cable routes between equipment or arbitrary points on the map, with cable type selection and automatic distance calculation.
 
-## Solution
-Add a spatial query in the `handleRun` function of `EvHubPanel.tsx` that runs a PostGIS `ST_Intersects` against the `geo_polygons` table (filtered to `layer_id` for `gb_dno_licence_areas`) to find which DNO licence area the pin-drop location falls within. Pass the result as `dnoLookupResult` to the engine context.
+## User Workflow
+1. Open Design Mode (already working)
+2. Place equipment as before (already working)
+3. Select a cable type from a new "Draw Cable" section (e.g. LV Main, LV Service, HV Cable)
+4. Click points on the map to draw a cable route (multi-point, like the existing Connect tool)
+5. Double-click to finish the cable
+6. Cable appears as a coloured line on the map with length shown
+7. Cables listed in the panel with type, length, and delete option
 
 ## Technical Details
 
-### 1. Modify `EvHubPanel.tsx` - `handleRun` function
+### 1. New database table: `design_cables`
 
-Before calling `runEvHubEngine`, when `dnoOverride === "auto"`:
-- Query `layer_registry` for the `gb_dno_licence_areas` layer ID
-- Run a PostGIS `ST_Intersects` query against `geo_polygons` to find the polygon containing the site coordinates
-- Extract `attrs_json->>'DNO'` (e.g., "UKPN", "NPG") from the matching polygon
-- Pass this as `context.dnoLookupResult`
-
-The SQL (via Supabase RPC or raw query):
-```sql
-SELECT attrs_json->>'DNO' as dno
-FROM geo_polygons
-WHERE layer_id = '<gb_dno_licence_areas_id>'
-AND ST_Intersects(geom::geometry, ST_SetSRID(ST_Point(lng, lat), 4326))
-LIMIT 1
+```text
+design_cables
+  id            uuid PK
+  study_id      uuid FK -> studies
+  cable_type    text (lv_main, lv_service, hv_cable, pilot_cable)
+  label         text
+  coordinates   jsonb (array of [lng, lat] arrays)
+  length_m      float8
+  properties_json jsonb default '{}'
+  created_by    uuid
+  created_at    timestamptz
 ```
 
-Since `supabase-js` doesn't support raw PostGIS queries directly, we'll use an RPC function or perform the query via the existing `geo_polygons` table with a `.rpc()` call.
+With RLS policies matching `design_elements`.
 
-### 2. Create a database function for the spatial lookup
+### 2. New cable types config
 
-Create an RPC function `lookup_dno_by_location(p_lat float8, p_lng float8)` that:
-- Finds the `gb_dno_licence_areas` layer ID from `layer_registry`
-- Runs `ST_Intersects` against `geo_polygons`
-- Returns the DNO code string
+```text
+Cable Types:
+  lv_main      -> colour: #e74c3c (red),       dash: solid,  label: "LV Main"
+  lv_service   -> colour: #3498db (blue),       dash: dashed, label: "LV Service"  
+  hv_cable     -> colour: #f39c12 (orange),     dash: solid,  label: "HV Cable"
+  pilot_cable  -> colour: #9b59b6 (purple),     dash: dotted, label: "Pilot Cable"
+```
 
-### 3. Update `EvHubPanel.tsx`
+### 3. Update `useDesignMode` hook
 
-- Import `supabase` client
-- In `handleRun`, call the RPC when auto-detect is selected
-- Pass the result to `context.dnoLookupResult`
-- Show the detected DNO in the UI (already handled since `result.dno_anchor.dno_key` is displayed)
+- Add `drawingCable` state (cable type being drawn, or null)
+- Add `cableVertices` state (array of [lng, lat] during drawing)
+- Add `cables` state (loaded from DB)
+- Add `addCableVertex(lng, lat)` -- appends point during drawing
+- Add `finishCable()` -- saves to DB, calculates length using Haversine, renders line on map
+- Add `undoCableVertex()` -- removes last point
+- Add `removeCable(id)` -- deletes from DB
+- Render cables as GeoJSON LineString layers on the map (colour/dash per cable type)
+- Load existing cables when study changes
 
-### Files changed
-- **New migration**: Create `lookup_dno_by_location` PostgreSQL function
-- **`src/components/map/EvHubPanel.tsx`**: Add spatial lookup call before engine execution
+### 4. Update `DesignModePanel` UI
+
+- Add a "Draw Cable" section below equipment palette
+- Cable type buttons (same grid style as equipment)
+- When a cable type is selected, instructions change to "Click to add cable points, double-click to finish"
+- Listed cables section showing type, length (m), and delete button
+
+### 5. Update `MapView` click dispatcher
+
+- When `activeTool === "design"` and a cable type is being drawn:
+  - Single click adds a vertex
+  - Double-click finishes the cable
+- When equipment type is selected, existing behaviour (place point)
+- Mutually exclusive: selecting a cable type deselects equipment, and vice versa
+
+### 6. Drawing feedback on map
+
+- While drawing, show a temporary GeoJSON line following the vertices
+- Show vertex dots at each click point
+- Show running distance in the bottom bar (similar to connect/boundary tools)
+
+### Files Changed
+- **New migration**: Create `design_cables` table with RLS
+- **`src/hooks/useDesignMode.ts`**: Add cable state, drawing, persistence, and map rendering
+- **`src/components/map/DesignModePanel.tsx`**: Add cable type palette and cable list UI
+- **`src/pages/MapView.tsx`**: Update click dispatcher for cable drawing + bottom bar controls
+
