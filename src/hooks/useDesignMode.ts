@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export type EquipmentType = "transformer" | "rmu" | "feeder_pillar" | "cutout" | "joint" | "pole";
+export type CableType = "lv_main" | "lv_service" | "hv_cable" | "pilot_cable";
 
 export interface DesignElement {
   id: string;
@@ -16,6 +17,18 @@ export interface DesignElement {
   created_at: string;
 }
 
+export interface DesignCable {
+  id: string;
+  study_id: string;
+  cable_type: CableType;
+  label: string | null;
+  coordinates: [number, number][];
+  length_m: number;
+  properties_json: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+}
+
 const EQUIPMENT_CONFIG: Record<EquipmentType, { color: string; symbol: string; label: string }> = {
   transformer: { color: "#e74c3c", symbol: "T", label: "Transformer" },
   rmu: { color: "#3498db", symbol: "R", label: "Ring Main Unit" },
@@ -25,7 +38,30 @@ const EQUIPMENT_CONFIG: Record<EquipmentType, { color: string; symbol: string; l
   pole: { color: "#1abc9c", symbol: "P", label: "Pole" },
 };
 
-export { EQUIPMENT_CONFIG };
+const CABLE_CONFIG: Record<CableType, { color: string; label: string; dasharray: number[] }> = {
+  lv_main: { color: "#e74c3c", label: "LV Main", dasharray: [] },
+  lv_service: { color: "#3498db", label: "LV Service", dasharray: [6, 4] },
+  hv_cable: { color: "#f39c12", label: "HV Cable", dasharray: [] },
+  pilot_cable: { color: "#9b59b6", label: "Pilot Cable", dasharray: [2, 3] },
+};
+
+export { EQUIPMENT_CONFIG, CABLE_CONFIG };
+
+function haversineDistance(coords: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const [lon1, lat1] = coords[i - 1];
+    const [lon2, lat2] = coords[i];
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    total += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return total;
+}
 
 export function useDesignMode(map: maplibregl.Map | null, studyId: string | null) {
   const [elements, setElements] = useState<DesignElement[]>([]);
@@ -33,33 +69,64 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
   const [loading, setLoading] = useState(false);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
 
+  // Cable state
+  const [cables, setCables] = useState<DesignCable[]>([]);
+  const [drawingCableType, setDrawingCableType] = useState<CableType | null>(null);
+  const [cableVertices, setCableVertices] = useState<[number, number][]>([]);
+  const vertexMarkersRef = useRef<maplibregl.Marker[]>([]);
+
+  // Mutually exclusive: selecting cable deselects equipment and vice versa
+  const selectPlacingType = useCallback((type: EquipmentType | null) => {
+    setPlacingType(type);
+    if (type) setDrawingCableType(null);
+  }, []);
+
+  const selectCableType = useCallback((type: CableType | null) => {
+    setDrawingCableType(type);
+    if (type) setPlacingType(null);
+    // Clear any in-progress vertices when switching
+    setCableVertices([]);
+    vertexMarkersRef.current.forEach((m) => m.remove());
+    vertexMarkersRef.current = [];
+    if (map) {
+      if (map.getLayer("design-cable-drawing")) map.removeLayer("design-cable-drawing");
+      if (map.getSource("design-cable-drawing")) map.removeSource("design-cable-drawing");
+    }
+  }, [map]);
+
   // Load existing elements when study changes
   useEffect(() => {
     if (!studyId) {
       setElements([]);
+      setCables([]);
       return;
     }
     setLoading(true);
-    supabase
-      .from("design_elements")
-      .select("*")
-      .eq("study_id", studyId)
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Failed to load design elements", error);
-        }
-        setElements((data as DesignElement[]) || []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase
+        .from("design_elements")
+        .select("*")
+        .eq("study_id", studyId)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("design_cables")
+        .select("*")
+        .eq("study_id", studyId)
+        .order("created_at", { ascending: true }),
+    ]).then(([elemResult, cableResult]) => {
+      if (elemResult.error) console.error("Failed to load design elements", elemResult.error);
+      if (cableResult.error) console.error("Failed to load design cables", cableResult.error);
+      setElements((elemResult.data as DesignElement[]) || []);
+      setCables((cableResult.data as DesignCable[]) || []);
+      setLoading(false);
+    });
   }, [studyId]);
 
-  // Sync markers to map
+  // Sync equipment markers to map
   useEffect(() => {
     if (!map) return;
     const currentIds = new Set(elements.map((e) => e.id));
 
-    // Remove markers for deleted elements
     markersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
@@ -67,7 +134,6 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
       }
     });
 
-    // Add/update markers for existing elements
     elements.forEach((el) => {
       if (markersRef.current.has(el.id)) return;
       const cfg = EQUIPMENT_CONFIG[el.element_type];
@@ -87,17 +153,61 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
         .addTo(map);
       markersRef.current.set(el.id, marker);
     });
-
-    return () => {
-      // Cleanup all on unmount
-    };
   }, [map, elements]);
+
+  // Sync cable lines to map
+  useEffect(() => {
+    if (!map) return;
+
+    // Remove old cable layers
+    const existingSources = Object.keys((map.getStyle()?.sources) || {}).filter((s) => s.startsWith("design-cable-"));
+    existingSources.forEach((srcId) => {
+      if (srcId === "design-cable-drawing") return; // Don't remove the drawing layer
+      const layerId = srcId;
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(srcId)) map.removeSource(srcId);
+    });
+
+    cables.forEach((cable) => {
+      const srcId = `design-cable-${cable.id}`;
+      const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
+
+      if (map.getSource(srcId)) return;
+
+      map.addSource(srcId, {
+        type: "geojson",
+        data: {
+          type: "Feature",
+          properties: { label: cable.label, length_m: cable.length_m },
+          geometry: { type: "LineString", coordinates: cable.coordinates },
+        },
+      });
+
+      const paint: Record<string, unknown> = {
+        "line-color": cfg.color,
+        "line-width": 3,
+        "line-opacity": 0.9,
+      };
+      if (cfg.dasharray.length > 0) {
+        paint["line-dasharray"] = cfg.dasharray;
+      }
+
+          map.addLayer({
+            id: srcId,
+            type: "line",
+            source: srcId,
+            paint: paint as any,
+          });
+    });
+  }, [map, cables]);
 
   // Cleanup all markers on unmount
   useEffect(() => {
     return () => {
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
+      vertexMarkersRef.current.forEach((m) => m.remove());
+      vertexMarkersRef.current = [];
     };
   }, []);
 
@@ -139,54 +249,199 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     [placingType, studyId, elements]
   );
 
-  const removeElement = useCallback(
-    async (id: string) => {
-      const { error } = await supabase
-        .from("design_elements")
-        .delete()
-        .eq("id", id);
+  const removeElement = useCallback(async (id: string) => {
+    const { error } = await supabase.from("design_elements").delete().eq("id", id);
+    if (error) {
+      toast.error("Failed to remove element");
+      return;
+    }
+    const marker = markersRef.current.get(id);
+    marker?.remove();
+    markersRef.current.delete(id);
+    setElements((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
-      if (error) {
-        toast.error("Failed to remove element");
-        return;
+  const clearAll = useCallback(async () => {
+    if (!studyId) return;
+    const { error } = await supabase.from("design_elements").delete().eq("study_id", studyId);
+    if (error) {
+      toast.error("Failed to clear elements");
+      return;
+    }
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current.clear();
+    setElements([]);
+
+    // Also clear cables
+    const { error: cableError } = await supabase.from("design_cables").delete().eq("study_id", studyId);
+    if (cableError) {
+      toast.error("Failed to clear cables");
+      return;
+    }
+    // Remove cable layers from map
+    if (map) {
+      cables.forEach((cable) => {
+        const srcId = `design-cable-${cable.id}`;
+        if (map.getLayer(srcId)) map.removeLayer(srcId);
+        if (map.getSource(srcId)) map.removeSource(srcId);
+      });
+    }
+    setCables([]);
+    toast.success("Design cleared");
+  }, [studyId, map, cables]);
+
+  // Cable drawing functions
+  const addCableVertex = useCallback(
+    (lng: number, lat: number) => {
+      if (!drawingCableType || !map) return;
+      const newPoint: [number, number] = [lng, lat];
+      const updated = [...cableVertices, newPoint];
+      setCableVertices(updated);
+
+      // Add vertex marker
+      const el = document.createElement("div");
+      el.style.cssText = "width:8px;height:8px;background:#fff;border:2px solid #333;border-radius:50%;";
+      const m = new maplibregl.Marker({ element: el }).setLngLat(newPoint).addTo(map);
+      vertexMarkersRef.current.push(m);
+
+      // Update drawing line
+      const cfg = CABLE_CONFIG[drawingCableType];
+      const lineId = "design-cable-drawing";
+      if (updated.length >= 2) {
+        if (map.getSource(lineId)) {
+          (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
+            type: "Feature",
+            properties: {},
+            geometry: { type: "LineString", coordinates: updated },
+          });
+        } else {
+          map.addSource(lineId, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: { type: "LineString", coordinates: updated },
+            },
+          });
+          const paint: Record<string, unknown> = {
+            "line-color": cfg.color,
+            "line-width": 3,
+            "line-opacity": 0.7,
+          };
+          if (cfg.dasharray.length > 0) {
+            paint["line-dasharray"] = cfg.dasharray;
+          }
+          map.addLayer({
+            id: lineId,
+            type: "line",
+            source: lineId,
+            paint: paint as any,
+          });
+        }
       }
-
-      const marker = markersRef.current.get(id);
-      marker?.remove();
-      markersRef.current.delete(id);
-      setElements((prev) => prev.filter((e) => e.id !== id));
     },
-    []
+    [drawingCableType, cableVertices, map]
   );
 
-  const clearAll = useCallback(
-    async () => {
-      if (!studyId) return;
-      const { error } = await supabase
-        .from("design_elements")
-        .delete()
-        .eq("study_id", studyId);
+  const undoCableVertex = useCallback(() => {
+    if (!map || cableVertices.length === 0) return;
+    const updated = cableVertices.slice(0, -1);
+    setCableVertices(updated);
 
+    const lastMarker = vertexMarkersRef.current.pop();
+    lastMarker?.remove();
+
+    const lineId = "design-cable-drawing";
+    if (updated.length < 2) {
+      if (map.getLayer(lineId)) map.removeLayer(lineId);
+      if (map.getSource(lineId)) map.removeSource(lineId);
+    } else if (map.getSource(lineId)) {
+      (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
+        type: "Feature",
+        properties: {},
+        geometry: { type: "LineString", coordinates: updated },
+      });
+    }
+  }, [cableVertices, map]);
+
+  const finishCable = useCallback(async () => {
+    if (!drawingCableType || !studyId || cableVertices.length < 2) return;
+
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      toast.error("You must be logged in");
+      return;
+    }
+
+    const cfg = CABLE_CONFIG[drawingCableType];
+    const length_m = Math.round(haversineDistance(cableVertices) * 10) / 10;
+    const label = `${cfg.label} ${cables.filter((c) => c.cable_type === drawingCableType).length + 1}`;
+
+    const { data, error } = await supabase
+      .from("design_cables")
+      .insert({
+        study_id: studyId,
+        cable_type: drawingCableType,
+        label,
+        coordinates: cableVertices as any,
+        length_m,
+        created_by: user.user.id,
+      } as any)
+      .select()
+      .single();
+
+    if (error) {
+      toast.error("Failed to save cable");
+      console.error(error);
+      return;
+    }
+
+    setCables((prev) => [...prev, data as unknown as DesignCable]);
+    toast.success(`${label} — ${length_m.toLocaleString()}m`);
+
+    // Clean up drawing state
+    setCableVertices([]);
+    vertexMarkersRef.current.forEach((m) => m.remove());
+    vertexMarkersRef.current = [];
+    if (map) {
+      if (map.getLayer("design-cable-drawing")) map.removeLayer("design-cable-drawing");
+      if (map.getSource("design-cable-drawing")) map.removeSource("design-cable-drawing");
+    }
+  }, [drawingCableType, studyId, cableVertices, cables, map]);
+
+  const removeCable = useCallback(
+    async (id: string) => {
+      const { error } = await supabase.from("design_cables").delete().eq("id", id);
       if (error) {
-        toast.error("Failed to clear elements");
+        toast.error("Failed to remove cable");
         return;
       }
-
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current.clear();
-      setElements([]);
-      toast.success("Design cleared");
+      if (map) {
+        const srcId = `design-cable-${id}`;
+        if (map.getLayer(srcId)) map.removeLayer(srcId);
+        if (map.getSource(srcId)) map.removeSource(srcId);
+      }
+      setCables((prev) => prev.filter((c) => c.id !== id));
     },
-    [studyId]
+    [map]
   );
 
   return {
     elements,
     placingType,
-    setPlacingType,
+    setPlacingType: selectPlacingType,
     placeElement,
     removeElement,
     clearAll,
     loading,
+    // Cable API
+    cables,
+    drawingCableType,
+    setDrawingCableType: selectCableType,
+    cableVertices,
+    addCableVertex,
+    undoCableVertex,
+    finishCable,
+    removeCable,
   };
 }

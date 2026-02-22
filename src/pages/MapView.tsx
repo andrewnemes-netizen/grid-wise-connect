@@ -29,6 +29,37 @@ import { EvHubPanel } from "@/components/map/EvHubPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
+function calcRouteLength(coords: [number, number][]): number {
+  let t = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const [lon1, lat1] = coords[i - 1];
+    const [lon2, lat2] = coords[i];
+    const R = 6371000;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    t += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return t;
+}
+
+function CableDrawingBar({ vertices, onUndo, onFinish }: { vertices: [number, number][]; onUndo: () => void; onFinish: () => void }) {
+  const dist = vertices.length >= 2 ? Math.round(calcRouteLength(vertices)) : 0;
+  return (
+    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
+      <span className="text-xs text-muted-foreground">
+        {vertices.length} point{vertices.length !== 1 ? "s" : ""} — {dist.toLocaleString()}m
+      </span>
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onUndo}>
+        <Undo2 className="h-3 w-3 mr-1" />Undo
+      </Button>
+      <Button size="sm" className="h-7 text-xs" disabled={vertices.length < 2} onClick={onFinish}>
+        <CheckCircle2 className="h-3 w-3 mr-1" />Finish
+      </Button>
+    </div>
+  );
+}
+
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
@@ -79,7 +110,11 @@ const MapView = () => {
     if (!map) return;
     const handler = (e: maplibregl.MapMouseEvent) => {
       if (activeToolRef.current === "design") {
-        design.placeElement(e.lngLat.lng, e.lngLat.lat);
+        if (design.drawingCableType) {
+          design.addCableVertex(e.lngLat.lng, e.lngLat.lat);
+        } else {
+          design.placeElement(e.lngLat.lng, e.lngLat.lat);
+        }
         return;
       }
       if (activeToolRef.current === "boundary") {
@@ -102,6 +137,11 @@ const MapView = () => {
       }
     };
     const dblHandler = (e: maplibregl.MapMouseEvent) => {
+      if (activeToolRef.current === "design" && design.drawingCableType) {
+        e.preventDefault();
+        design.finishCable();
+        return;
+      }
       if (activeToolRef.current === "boundary") {
         boundary.handleBoundaryDblClick(e);
         setActiveTool(null);
@@ -276,6 +316,7 @@ const MapView = () => {
               }
               if (tool !== "design") {
                 design.setPlacingType(null);
+                design.setDrawingCableType(null);
               }
               setActiveTool(tool);
             }}
@@ -348,6 +389,15 @@ const MapView = () => {
             </div>
           )}
 
+          {/* Cable drawing controls */}
+          {activeTool === "design" && design.drawingCableType && design.cableVertices.length > 0 && (
+            <CableDrawingBar
+              vertices={design.cableVertices}
+              onUndo={design.undoCableVertex}
+              onFinish={() => design.finishCable()}
+            />
+          )}
+
           {pin.showSiteCheck && pin.pinLocation && (
             <UnifiedIntelligencePanel
               lng={pin.pinLocation.lng}
@@ -381,6 +431,11 @@ const MapView = () => {
               onRemove={design.removeElement}
               onClearAll={design.clearAll}
               onClose={() => setActiveTool(null)}
+              cables={design.cables}
+              drawingCableType={design.drawingCableType}
+              onSelectCableType={design.setDrawingCableType}
+              cableVertexCount={design.cableVertices.length}
+              onRemoveCable={design.removeCable}
             />
           )}
 
