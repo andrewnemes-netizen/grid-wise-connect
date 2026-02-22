@@ -147,14 +147,28 @@ Deno.serve(async (req) => {
     const totalRouteLength = route_segments.reduce((s: number, seg: any) => s + (seg.length_m || 0), 0);
 
     // ── H) Split BOQ ──
+    const maxServiceLength = (rules.max_service_length_m?.value as number) ?? 25;
+    const needsMainExtension = totalRouteLength > maxServiceLength;
+
+    const electricalBoq: any[] = [
+      { item_code: "E001", description: "Service cable", unit: "m", quantity: needsMainExtension ? maxServiceLength : totalRouteLength, category: "electrical" },
+      { item_code: "E003", description: "Cable termination", unit: "ea", quantity: 2, category: "electrical" },
+      { item_code: "E004", description: "Feeder pillar", unit: "ea", quantity: 1, category: "electrical" },
+      { item_code: "E005", description: "Earthing installation", unit: "lot", quantity: 1, category: "electrical" },
+      { item_code: "E006", description: "CT metering", unit: "ea", quantity: 1, category: "electrical" },
+    ];
+
+    if (needsMainExtension) {
+      electricalBoq.push({ item_code: "E007", description: "LV main cable extension", unit: "m", quantity: totalRouteLength - maxServiceLength, category: "electrical" });
+      electricalBoq.push({ item_code: "E008", description: "Service/main cable joint", unit: "ea", quantity: 1, category: "electrical" });
+    }
+
+    if (earthing.review_required && earthing.selected === "UNCONFIRMED") {
+      electricalBoq.push({ item_code: "E009", description: "Earthing allowance (non-standard, TBC)", unit: "lot", quantity: 1, category: "electrical" });
+    }
+
     const boq = {
-      electrical: [
-        { item_code: "E001", description: "Service cable", unit: "m", quantity: totalRouteLength, category: "electrical" },
-        { item_code: "E003", description: "Cable termination", unit: "ea", quantity: 2, category: "electrical" },
-        { item_code: "E004", description: "Feeder pillar", unit: "ea", quantity: 1, category: "electrical" },
-        { item_code: "E005", description: "Earthing installation", unit: "lot", quantity: 1, category: "electrical" },
-        { item_code: "E006", description: "CT metering", unit: "ea", quantity: 1, category: "electrical" },
-      ],
+      electrical: electricalBoq,
       civils: route_segments.map((seg: any, i: number) => ({
         item_code: `C_SEG_${i + 1}`,
         description: `Excavation — ${seg.surface_type || "FOOTWAY"}`,

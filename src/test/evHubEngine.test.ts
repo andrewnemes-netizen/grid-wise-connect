@@ -233,7 +233,7 @@ describe("BOQ Generator", () => {
     }, rules);
     const earthing = assessEarthingRisk({ extraneous_within_2p5m: false, site_has_metallic_services: false }, rules);
 
-    const boq = generateSplitBoq(route, electrical, earthing, 4);
+    const boq = generateSplitBoq(route, electrical, earthing, 4, rules);
     expect(boq.electrical.length).toBeGreaterThan(0);
     expect(boq.civils.length).toBeGreaterThan(0);
     expect(boq.fees.length).toBe(3);
@@ -250,8 +250,94 @@ describe("BOQ Generator", () => {
     }, rules);
     const earthing = assessEarthingRisk({ extraneous_within_2p5m: false, site_has_metallic_services: false }, rules);
 
-    const boq = generateSplitBoq(route, electrical, earthing, 2);
+    const boq = generateSplitBoq(route, electrical, earthing, 2, rules);
     expect(boq.traffic_mgmt.length).toBeGreaterThan(0);
+  });
+
+  it("generates LV main extension BOQ when route exceeds max service length", () => {
+    const enwlRules = {
+      ...rules,
+      max_service_length_m: makeRuleField(25, "HIGH", "ENWL_ES281"),
+      service_cable_default: makeRuleField("185mm2 Al Wavecon", "HIGH", "test"),
+      lv_main_cables: makeRuleField(["185mm2 Al"], "HIGH", "test"),
+      protection_grading: makeRuleField({ type: "HRC" }, "HIGH", "test"),
+    };
+    const route = segmentRoute(
+      [{ coordinates: [], surface_type: "FOOTWAY", length_m: 55 }],
+      [], enwlRules
+    );
+    const electrical = computeElectricalSizing({
+      charger_count: 4, charger_kw_each: 50, diversity_factor: 0.8,
+      extraneous_within_2p5m: false, network_headroom_kva: null, transformer_loading_pct: null,
+    }, enwlRules);
+    const earthing = assessEarthingRisk({ extraneous_within_2p5m: false, site_has_metallic_services: false }, enwlRules);
+
+    const boq = generateSplitBoq(route, electrical, earthing, 4, enwlRules);
+    const e001 = boq.electrical.find(i => i.item_code === "E001");
+    const e007 = boq.electrical.find(i => i.item_code === "E007");
+    const e008 = boq.electrical.find(i => i.item_code === "E008");
+    expect(e001?.quantity).toBe(25);
+    expect(e007?.quantity).toBe(30);
+    expect(e008?.quantity).toBe(1);
+  });
+
+  it("no main extension when route under threshold", () => {
+    const enwlRules = {
+      ...rules,
+      max_service_length_m: makeRuleField(25, "HIGH", "ENWL_ES281"),
+      service_cable_default: makeRuleField("185mm2 Al Wavecon", "HIGH", "test"),
+      lv_main_cables: makeRuleField(["185mm2 Al"], "HIGH", "test"),
+      protection_grading: makeRuleField({ type: "HRC" }, "HIGH", "test"),
+    };
+    const route = segmentRoute(
+      [{ coordinates: [], surface_type: "FOOTWAY", length_m: 20 }],
+      [], enwlRules
+    );
+    const electrical = computeElectricalSizing({
+      charger_count: 4, charger_kw_each: 50, diversity_factor: 0.8,
+      extraneous_within_2p5m: false, network_headroom_kva: null, transformer_loading_pct: null,
+    }, enwlRules);
+    const earthing = assessEarthingRisk({ extraneous_within_2p5m: false, site_has_metallic_services: false }, enwlRules);
+
+    const boq = generateSplitBoq(route, electrical, earthing, 4, enwlRules);
+    const e001 = boq.electrical.find(i => i.item_code === "E001");
+    const e007 = boq.electrical.find(i => i.item_code === "E007");
+    expect(e001?.quantity).toBe(20);
+    expect(e007).toBeUndefined();
+  });
+
+  it("adds EARTHING_ALLOWANCE_NR when review required and unconfirmed", () => {
+    const earthing = assessEarthingRisk({ extraneous_within_2p5m: true, site_has_metallic_services: false }, rules);
+    const route = segmentRoute([{ coordinates: [], surface_type: "FOOTWAY", length_m: 20 }], [], rules);
+    const electrical = computeElectricalSizing({
+      charger_count: 4, charger_kw_each: 50, diversity_factor: 0.8,
+      extraneous_within_2p5m: true, network_headroom_kva: null, transformer_loading_pct: null,
+    }, rules);
+
+    const boq = generateSplitBoq(route, electrical, earthing, 4, rules);
+    const e009 = boq.electrical.find(i => i.item_code === "E009");
+    expect(e009).toBeDefined();
+    expect(e009?.description).toContain("non-standard");
+  });
+
+  it("ENWL rules allow LV_OK state", () => {
+    const enwlRules = {
+      ...rules,
+      lv_max_demand_kva: makeRuleField(276, "HIGH", "ENWL_ES281"),
+      service_cable_default: makeRuleField("185mm2 Al Wavecon", "HIGH", "ENWL_ES281"),
+      lv_main_cables: makeRuleField(["185mm2 Al", "300mm2 Al"], "HIGH", "ENWL_ES281"),
+      headroom_factor: makeRuleField(0.2, "HIGH", "ENWL_ES281"),
+      fault_level_thresholds: makeRuleField({ minimum_ka: 5, maximum_ka: 25 }, "HIGH", "ENWL_ES281"),
+      transformer_loading_thresholds: makeRuleField({ max_loading_pct: 80 }, "HIGH", "ENWL_ES281"),
+      reinforcement_mitigation_sequence: makeRuleField(["LOAD_MANAGEMENT"], "HIGH", "ENWL_ES281"),
+      protection_grading: makeRuleField({ type: "HRC", rating_a: 315 }, "HIGH", "ENWL_ES281"),
+      max_service_length_m: makeRuleField(25, "HIGH", "ENWL_ES281"),
+    };
+    const result = computeElectricalSizing({
+      charger_count: 4, charger_kw_each: 50, diversity_factor: 0.8,
+      extraneous_within_2p5m: false, network_headroom_kva: null, transformer_loading_pct: null,
+    }, enwlRules);
+    expect(result.state).toBe("LV_OK");
   });
 });
 

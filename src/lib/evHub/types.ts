@@ -57,6 +57,8 @@ export interface EvHubRules {
   protection_grading: RuleField;
   /** Traffic management rules */
   traffic_management_rules: RuleField;
+  /** Max service cable length before LV main extension triggered (m) */
+  max_service_length_m?: RuleField;
   /** Additional DNO-specific rules */
   [key: string]: RuleField;
 }
