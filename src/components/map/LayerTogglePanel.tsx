@@ -247,7 +247,7 @@ export function LayerTogglePanel({
                           return (
                             <div key={layer.id} className="space-y-0.5 pl-4">
                               <div className="flex items-center justify-between gap-2 py-0.5">
-                                <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none">
+                                <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
                                   {isLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                                   ) : (
