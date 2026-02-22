@@ -370,6 +370,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       distances: input.distances,
       constraints: input.constraints,
       voltage_override: input.voltageOverride,
+      nearest_headroom_kw: input.nearestHeadroomKw,
     }, input.unitRates);
 
     checkPage(50);

@@ -405,5 +405,23 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   }
   items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: rates.cable_marker_tape_per_m, total_cost: cableDistance * rates.cable_marker_tape_per_m });
 
+  // Reinforcement — must match estimateConnectionCost logic
+  const nearest_headroom_kw = input.nearest_headroom_kw;
+  if (nearest_headroom_kw !== undefined && proposed_kw > nearest_headroom_kw) {
+    const overCapacity = proposed_kw - nearest_headroom_kw;
+    items.push({ category: "Reinforcement", item: `Network reinforcement (${overCapacity}kW over headroom)`, quantity: overCapacity, unit: "kW", unit_cost: rates.reinforcement_per_kw_over_capacity, total_cost: Math.round(overCapacity * rates.reinforcement_per_kw_over_capacity) });
+  }
+
+  // Fees & contingency — so BOM total matches the estimate total
+  const bomSubtotal = items.reduce((s, i) => s + i.total_cost, 0);
+  const designFee = Math.round(bomSubtotal * rates.design_fee_pct);
+  const pmFee = Math.round(bomSubtotal * rates.project_management_pct);
+  const contingency = Math.round(bomSubtotal * rates.contingency_pct);
+  items.push(
+    { category: "Fees", item: `Design fee (${(rates.design_fee_pct * 100).toFixed(0)}%)`, quantity: 1, unit: "lot", unit_cost: designFee, total_cost: designFee },
+    { category: "Fees", item: `Project management (${(rates.project_management_pct * 100).toFixed(0)}%)`, quantity: 1, unit: "lot", unit_cost: pmFee, total_cost: pmFee },
+    { category: "Fees", item: `Contingency (${(rates.contingency_pct * 100).toFixed(0)}%)`, quantity: 1, unit: "lot", unit_cost: contingency, total_cost: contingency },
+  );
+
   return items;
 }
