@@ -25,6 +25,7 @@ import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
 import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
+import { EvHubPanel } from "@/components/map/EvHubPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
@@ -32,9 +33,10 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
+  const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
@@ -86,6 +88,11 @@ const MapView = () => {
       }
       if (activeToolRef.current === "connect") {
         connect.handleConnectClick(e);
+        return;
+      }
+      if (activeToolRef.current === "evhub") {
+        setEvHubLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
         return;
       }
       if (activeToolRef.current === "pin") {
@@ -374,6 +381,14 @@ const MapView = () => {
               onRemove={design.removeElement}
               onClearAll={design.clearAll}
               onClose={() => setActiveTool(null)}
+            />
+          )}
+
+          {evHubLocation && (
+            <EvHubPanel
+              lng={evHubLocation.lng}
+              lat={evHubLocation.lat}
+              onClose={() => setEvHubLocation(null)}
             />
           )}
         </>
