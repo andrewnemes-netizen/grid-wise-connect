@@ -38,8 +38,8 @@ export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest
   );
 
   const bom = useMemo<BomItem[]>(
-    () => generateBom({ proposed_kw, distances, constraints, voltage_override: voltageOverride }, unitRates),
-    [proposed_kw, distances, constraints, voltageOverride, unitRates]
+    () => generateBom({ proposed_kw, distances, constraints, voltage_override: voltageOverride, nearest_headroom_kw: nearest_headroom_kw }, unitRates),
+    [proposed_kw, distances, constraints, voltageOverride, nearest_headroom_kw, unitRates]
   );
 
   const conf = CONFIDENCE_CONFIG[estimate.confidence];
