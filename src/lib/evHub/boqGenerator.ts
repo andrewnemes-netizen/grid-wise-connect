@@ -2,14 +2,17 @@
  * Module H: Split BOQ Generator
  * Engineering outputs only quantities — no pricing.
  */
-import type { SplitBoq, BoqItem, RouteQuantities, ElectricalSizingResult, EarthingResult } from "./types";
+import type { SplitBoq, BoqItem, RouteQuantities, ElectricalSizingResult, EarthingResult, EvHubRules } from "./types";
 
 export function generateSplitBoq(
   route: RouteQuantities,
   electrical: ElectricalSizingResult,
   earthing: EarthingResult,
-  chargerCount: number
+  chargerCount: number,
+  rules?: EvHubRules
 ): SplitBoq {
+  const maxServiceLength = (rules?.max_service_length_m?.value as number) ?? 25;
+  const needsMainExtension = route.total_length_m > maxServiceLength;
   const elec: BoqItem[] = [];
   const civils: BoqItem[] = [];
   const traffic: BoqItem[] = [];
@@ -21,7 +24,7 @@ export function generateSplitBoq(
       item_code: "E001",
       description: `Service cable (${electrical.service_cable})`,
       unit: "m",
-      quantity: route.total_length_m,
+      quantity: needsMainExtension ? maxServiceLength : route.total_length_m,
       category: "electrical",
     });
   }
@@ -32,6 +35,24 @@ export function generateSplitBoq(
       description: `LV main cable (${electrical.lv_main_cable})`,
       unit: "m",
       quantity: route.total_length_m,
+      category: "electrical",
+    });
+  }
+
+  // LV main extension when route exceeds max service length
+  if (needsMainExtension) {
+    elec.push({
+      item_code: "E007",
+      description: "LV main cable extension",
+      unit: "m",
+      quantity: route.total_length_m - maxServiceLength,
+      category: "electrical",
+    });
+    elec.push({
+      item_code: "E008",
+      description: "Service/main cable joint",
+      unit: "ea",
+      quantity: 1,
       category: "electrical",
     });
   }
@@ -81,6 +102,17 @@ export function generateSplitBoq(
     quantity: 1,
     category: "electrical",
   });
+
+  // Earthing allowance for non-standard review
+  if (earthing.review_required && earthing.selected === "UNCONFIRMED") {
+    elec.push({
+      item_code: "E009",
+      description: "Earthing allowance (non-standard, TBC)",
+      unit: "lot",
+      quantity: 1,
+      category: "electrical",
+    });
+  }
 
   // ── Civils items ──
   for (const seg of route.segments) {

@@ -109,7 +109,8 @@ export async function runEvHubEngine(
     routeQuantities,
     electricalSizing,
     earthing,
-    input.charger_count
+    input.charger_count,
+    rules
   );
 
   // ── I) Audit Trace ──

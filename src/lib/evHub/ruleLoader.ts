@@ -42,6 +42,7 @@ export function getBaselineRules(): EvHubRules {
       "MEDIUM",
       "UK_baseline"
     ),
+    max_service_length_m: makeRuleField(25, "LOW", "UK_baseline", true),
   };
 }
 
