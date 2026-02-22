@@ -213,6 +213,88 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     } catch (e) {
       console.warn("Failed to add map screenshot to PDF:", e);
     }
+
+    // ── MAP LEGEND / KEY ──
+    checkPage(40);
+    doc.setTextColor(BRAND.black);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Map Key", margin, y);
+    y += 4;
+
+    // Network layers legend
+    const networkLegend: { label: string; color: string; type: "line" | "circle" }[] = [
+      { label: "HV Underground Cables", color: "#e74c3c", type: "line" },
+      { label: "EHV Feeders", color: "#8b5cf6", type: "line" },
+      { label: "HV Feeders (33kV)", color: "#f59e0b", type: "line" },
+      { label: "HV Feeders (66kV)", color: "#06b6d4", type: "line" },
+      { label: "Primary Substations", color: "#3b82f6", type: "circle" },
+      { label: "Connection Route", color: "#e74c3c", type: "line" },
+    ];
+
+    // Equipment symbols legend
+    const equipmentLegend: { label: string; color: string; symbol: string }[] = [
+      { label: "Transformer", color: "#e74c3c", symbol: "T" },
+      { label: "Ring Main Unit", color: "#3498db", symbol: "R" },
+      { label: "Feeder Pillar", color: "#2ecc71", symbol: "F" },
+      { label: "Cutout", color: "#f39c12", symbol: "C" },
+      { label: "Joint", color: "#9b59b6", symbol: "J" },
+      { label: "Pole", color: "#1abc9c", symbol: "P" },
+    ];
+
+    const colW = contentW / 2;
+    const startY = y;
+
+    // Left column: Network layers
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.grey);
+    doc.text("NETWORK LAYERS", margin + 2, y);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.black);
+    networkLegend.forEach((item) => {
+      if (item.type === "line") {
+        doc.setDrawColor(item.color);
+        doc.setLineWidth(1.2);
+        doc.line(margin + 2, y - 1, margin + 10, y - 1);
+      } else {
+        doc.setFillColor(item.color);
+        doc.circle(margin + 6, y - 1.2, 1.8, "F");
+      }
+      doc.setFontSize(7);
+      doc.setTextColor(BRAND.black);
+      doc.text(item.label, margin + 13, y);
+      y += 4;
+    });
+
+    // Right column: Equipment symbols
+    let rightY = startY;
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.grey);
+    doc.text("DESIGN EQUIPMENT", margin + colW + 2, rightY);
+    rightY += 4;
+
+    doc.setFont("helvetica", "normal");
+    equipmentLegend.forEach((item) => {
+      // Draw a small circle with letter
+      doc.setFillColor(item.color);
+      doc.circle(margin + colW + 6, rightY - 1.2, 2.2, "F");
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.white);
+      doc.text(item.symbol, margin + colW + 6, rightY - 0.4, { align: "center" });
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.black);
+      doc.text(item.label, margin + colW + 13, rightY);
+      rightY += 4;
+    });
+
+    y = Math.max(y, rightY) + 4;
   }
 
   // ── SITE DETAILS ──
