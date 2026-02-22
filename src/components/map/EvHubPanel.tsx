@@ -90,7 +90,7 @@ export function EvHubPanel({ lng, lat, onClose }: Props) {
   const stateConfig = result ? STATE_CONFIG[result.feasibility_state] : null;
 
   return (
-    <div className="absolute top-0 right-0 z-20 h-full w-[420px] border-l bg-background shadow-xl flex flex-col">
+    <div className="absolute top-0 right-0 z-20 h-full w-[420px] border-l bg-background shadow-xl flex flex-col pointer-events-auto">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
         <div className="flex items-center gap-2">
@@ -144,10 +144,6 @@ export function EvHubPanel({ lng, lat, onClose }: Props) {
               <Switch checked={extraneous} onCheckedChange={setExtraneous} />
             </div>
           </div>
-
-          <Button onClick={handleRun} disabled={loading} className="w-full">
-            {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running Engine…</> : <><Zap className="mr-2 h-4 w-4" />Run Feasibility</>}
-          </Button>
 
           {/* ── RESULTS ── */}
           {result && stateConfig && (
@@ -283,6 +279,13 @@ export function EvHubPanel({ lng, lat, onClose }: Props) {
           )}
         </div>
       </ScrollArea>
+
+      {/* Sticky footer button */}
+      <div className="p-4 border-t">
+        <Button onClick={handleRun} disabled={loading} className="w-full">
+          {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Running Engine…</> : <><Zap className="mr-2 h-4 w-4" />Run Feasibility</>}
+        </Button>
+      </div>
     </div>
   );
 }
