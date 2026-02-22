@@ -1,30 +1,54 @@
 
+## EV Hub Feasibility Flow -- End-to-End Test Results
 
-## Update PDF Map Key to Match Actual Route Map Symbols
+### What was tested
 
-The current map key shows generic network layer types (HV Underground Cables, EHV Feeders, etc.) that don't correspond to what's actually visible on the route map screenshot. The user needs the key to explain the three main symbols they can see:
+1. **Map loads correctly** -- Confirmed. The map view loads at `/` with all layers, toolbar, and sidebar.
 
-1. **Blue circle** -- Point of Connection (the source/existing network asset)
-2. **Red circle** -- New Supply Point (the destination/customer connection)
-3. **Green dashed line** -- Proposed Cable Route
+2. **EV Hub tool button appears and activates** -- Confirmed. The Zap icon button in the right toolbar highlights green when clicked, with "EV Hub Feasibility" tooltip.
 
-### Changes
+3. **Pin drop triggers EvHubPanel** -- Confirmed. Clicking the map with the EV Hub tool active opens the panel with:
+   - Location coordinates (54.00000, -1.50000)
+   - Charger Count: 4
+   - kW per Charger: 50
+   - Diversity Factor: 0.8
+   - DNO: Auto-detect dropdown (with UKPN, NPG, ENWL, NGED, SPEN, SSEN options)
+   - Extraneous conductive parts toggle
 
-**File: `src/lib/generateAssessmentPdf.ts`** (lines 225-243)
+4. **Edge function (backend) works** -- Confirmed via direct API call. Returns complete `EV_HUB_ENGINE_V1_FRAMEWORK` payload:
+   - Feasibility state: `DNO_STUDY_REQUIRED` (due to pending rule fields)
+   - Total demand: 168.42 kVA (4 chargers x 50 kW x 0.8 diversity / 0.95 PF)
+   - Earthing: review not required (extraneous flag was false)
+   - Reinforcement: `STUDY_REQUIRED` (no headroom data)
+   - BOQ: 5 electrical items, 3 fee items
+   - Audit: 7 pending fields, confidence tracking across 12 rule fields
 
-Replace the current `networkLegend` array with a new "Route Map Symbols" section that matches the actual markers rendered on the screenshot:
+5. **Database ruleset** -- Confirmed. `ev_hub_rulesets` table contains the UK_ALL baseline with correct RLS policies.
 
-- **Blue filled circle** (`#3498db`) labelled "Point of Connection (Source)"
-- **Red filled circle** (`#e74c3c`) labelled "New Supply Point"
-- **Green dashed line** (`#2ecc71`) labelled "Proposed Cable Route"
+6. **Unit tests** -- All 26 tests pass covering all engine modules.
 
-Keep the existing network layers (HV Underground Cables, EHV Feeders, etc.) as a separate sub-section below, since those red lines from the network data are also visible on the map.
+### Issue found
 
-The right column (Design Equipment) stays as-is since those symbols are relevant when design elements are placed.
+The "Run Feasibility" button inside the EvHubPanel does not respond to clicks. The browser automation repeatedly clicked it without any network request or console error appearing. This suggests the button click event is being swallowed -- likely because:
 
-### Technical Detail
+- The panel uses `ScrollArea` which creates an internal viewport div
+- The panel is `position: absolute` inside a map container where the map canvas has aggressive pointer-event handling
+- The button's `onClick` handler never fires
 
-- The blue and red circles will be drawn as filled circles using `doc.circle(x, y, r, "F")` with a white stroke ring to match the actual map markers.
-- The green cable route line will be drawn as a dashed line using `doc.setLineDashPattern([1.5, 1], 0)` to match the dashed style used on the map.
-- The section header will be renamed from "NETWORK LAYERS" to "ROUTE SYMBOLS" for the connection-specific items, with "NETWORK LAYERS" kept for the background data layers.
+### Recommended fix
 
+Move the "Run Feasibility" button **outside** the `ScrollArea` (into the panel's fixed footer area), and ensure the panel container has `pointer-events: auto` to prevent the map canvas from intercepting clicks. This is a small structural change:
+
+1. In `EvHubPanel.tsx`, move the `<Button onClick={handleRun}>` out of `<ScrollArea>` into a sticky footer `div` below it
+2. Add `pointer-events-auto` class to the panel's root `div` to ensure it captures clicks above the map canvas
+
+### Technical details
+
+**File: `src/components/map/EvHubPanel.tsx`**
+
+- Extract the "Run Feasibility" button from inside `<ScrollArea>` (currently line 148)
+- Place it in a new `<div className="p-4 border-t">` after the `</ScrollArea>` closing tag
+- Add `pointer-events-auto` to the root panel div (line 93)
+- Move the results section to remain inside ScrollArea (it should scroll)
+
+This ensures the primary action button is always visible and clickable regardless of scroll position or map canvas pointer events.
