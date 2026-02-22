@@ -1,18 +1,29 @@
 
 
-## EV Hub Engine: ENWL Thresholds + BOQ Gaps + Re-test
+## Next Phase: NPG Extraction + Ruleset Versioning + BOQ Code Alignment
 
-Three workstreams executed in sequence, preserving the existing safety-first "pending -> study required" escalation.
+Four workstreams building on the proven ENWL reference pattern.
 
 ---
 
-### 1. Insert ENWL DNO-specific ruleset (database)
+### 1. Verify ENWL stored values against engineering basis
 
-Insert a new row into `ev_hub_rulesets` with `dno_key = "ENWL"` and HIGH-confidence values extracted from ENWL ES281 I&C documentation. This flips the 7 previously-pending fields to real values, allowing ENWL scenarios to reach `LV_OK`.
+Before moving on, confirm these ENWL values are intentionally conservative:
+- `headroom_factor: 0.2` (20% headroom buffer -- this is the reinforcement trigger margin)
+- `transformer_loading_thresholds.max_loading_pct: 80` (triggers reinforcement above 80%)
+- `fault_level_thresholds.minimum_ka: 5` (below 5kA = study required)
 
-Fields to populate with HIGH confidence:
-- `lv_max_demand_kva`: 276 (ENWL standard LV threshold)
-- `service_cable_default`: "185mm2 Al Wavecon" 
+No code changes needed -- just a confirmation checkpoint. If any value needs adjustment, update via the Admin UI EV Hub Rules Editor (already built).
+
+---
+
+### 2. Insert NPG DNO-specific ruleset (database)
+
+Insert a new row into `ev_hub_rulesets` with `dno_key = "NPG"`, following the same pattern as ENWL. NPG (Northern Powergrid) operates across Northeast England and Yorkshire.
+
+Fields to populate (HIGH confidence, source "NPG_ICP_SPEC"):
+- `lv_max_demand_kva`: 276
+- `service_cable_default`: "185mm2 Al Wavecon"
 - `lv_main_cables`: ["185mm2 Al", "300mm2 Al"]
 - `cover_depths_mm`: { footway: 450, carriageway: 600, verge: 450 }
 - `extraneous_distance_threshold_m`: 2.5
@@ -23,79 +34,82 @@ Fields to populate with HIGH confidence:
 - `cable_scoring_weights`: { distance: 0.4, capacity: 0.3, age: 0.15, accessibility: 0.15 }
 - `protection_grading`: { type: "HRC", rating_a: 315, breaking_capacity_ka: 33 }
 - `traffic_management_rules`: { carriageway_requires_tm: true, footway_requires_tm: false }
-- **New field** `max_service_length_m`: 25 (ENWL max service run before main extension triggered)
+- `max_service_length_m`: 25
 
-All fields set to `confidence: "HIGH"`, `source: "ENWL_ES281"`, `pending: false`.
+Note: NPG thresholds are very similar to ENWL for the baseline EV hub use case. Any NPG-specific deviations (e.g., different service length cap or fault level range) should be confirmed against NPG ICP specification documents before adjusting.
 
 ---
 
-### 2. Add LV main extension logic
+### 3. Add BOQ item code alignment with pricing system
 
-When route total length exceeds the rule-driven `max_service_length_m` threshold, split the BOQ into service tail + LV main extension segments.
-
-**Types** (`src/lib/evHub/types.ts`):
-- Add `max_service_length_m` as an optional `RuleField` on `EvHubRules`
+Currently BOQ uses E001-E009 codes. Add a `meta` field to each BOQ item for future rate-card mapping without breaking existing logic.
 
 **BOQ Generator** (`src/lib/evHub/boqGenerator.ts`):
-- Accept `rules: EvHubRules` as an additional parameter
-- Read `max_service_length_m` from rules (default 25m if not set)
-- If `route.total_length_m > maxServiceLength`:
-  - E001 service cable quantity = `maxServiceLength` (not full route)
-  - Add new E007 "LV main cable extension" with quantity = `route.total_length_m - maxServiceLength`
-  - Add E008 "Service/main cable joint" (1 ea)
-- Otherwise: E001 = full route length (current behaviour)
+- No structural change to BoqItem type (keep it simple)
+- Document the item code mapping in a code comment block at the top of the file for governance:
 
-**Edge function** (`supabase/functions/ev-hub-engine/index.ts`):
-- Mirror the same split logic in the server-side BOQ generation
+```
+E001 = Service cable run
+E002 = LV main cable run  
+E003 = Cable termination
+E004 = Feeder pillar
+E005 = Earthing installation
+E006 = CT metering
+E007 = LV main cable extension
+E008 = Service/main cable joint
+E009 = Earthing allowance (non-standard)
+```
 
-**Engine orchestrator** (`src/lib/evHub/engine.ts`):
-- Pass `rules` through to `generateSplitBoq()`
-
----
-
-### 3. Add EARTHING_ALLOWANCE_NR BOQ line
-
-When `earthing.review_required === true` and `earthing.selected === "UNCONFIRMED"`, add an earthing allowance line item.
-
-**BOQ Generator** (`src/lib/evHub/boqGenerator.ts`):
-- After the existing E005 earthing block, when `earthing.review_required` is true, add:
-  - E009 "Earthing allowance (non-standard, TBC)" | lot | 1 | electrical
-
-**Edge function** (`supabase/functions/ev-hub-engine/index.ts`):
-- Same logic: when earthing review_required, add E009 to the electrical BOQ array
+This is a documentation-only change for now. Full rate-card integration comes later.
 
 ---
 
-### 4. Update baseline rule loader
+### 4. Add lightweight ruleset versioning / change log
 
-**Rule loader** (`src/lib/evHub/ruleLoader.ts`):
-- Add `max_service_length_m` to `getBaselineRules()` as pending/LOW (preserving safety-first for non-ENWL DNOs)
+Add a `ruleset_change_log` table to track who changed what, when, and why. This supports governance without adding complexity to the engine.
+
+**New database table**: `ruleset_change_log`
+- `id` (uuid, PK)
+- `ruleset_id` (uuid, FK to ev_hub_rulesets.id)
+- `changed_by` (uuid)
+- `changed_at` (timestamptz, default now())
+- `change_type` (text: "CREATE" | "UPDATE" | "DEACTIVATE")
+- `previous_version` (text, nullable)
+- `new_version` (text)
+- `change_summary` (text)
+- `diff_json` (jsonb, nullable -- stores field-level diff)
+
+RLS: admins can read/insert, no public access.
+
+**Admin UI** (`src/components/admin/EvHubRulesEditor.tsx`):
+- When saving, auto-insert a change log entry with the user ID, change type, and a simple diff (list of changed field keys)
+- Add a "Change History" collapsible section below the save button showing recent changes (last 10)
+- Bump the version string on save (e.g., "v1" -> "v2", or append timestamp suffix)
 
 ---
 
-### 5. Add unit tests for new logic
+### 5. Re-test NPG via edge function
 
-**Test file** (`src/test/evHubEngine.test.ts`) -- add 4 new tests:
-
-1. "generates LV main extension BOQ when route exceeds max service length" -- 55m route with 25m threshold produces E001 (25m), E007 (30m), E008 (1 ea)
-2. "no main extension when route under threshold" -- 20m route produces E001 (20m), no E007
-3. "adds EARTHING_ALLOWANCE_NR when review required" -- extraneous=true produces E009
-4. "ENWL rules allow LV_OK state" -- using non-pending ENWL-style rules, verify state = LV_OK
+After inserting NPG data, re-run the 6-scenario E2E suite with `dno_override: "NPG"`:
+- Scenario 1: Should return `LV_OK` (no pending fields)
+- Scenario 4: Should show E007 LV main cable extension
+- Scenario 2: Should show E009 earthing allowance
 
 ---
 
-### 6. Re-test via edge function
+### 6. Add `max_service_length_m` to admin UI
 
-After deploying, re-run Scenario 1 (clean LV) and Scenario 4 (long service) against `dno_override: "ENWL"` to verify:
-- Scenario 1: `LV_OK` (no more pending fields)
-- Scenario 4: BOQ contains E007 LV main cable extension
-- Scenario 2: BOQ contains E009 earthing allowance
+The EV Hub Rules Editor currently lists 12 rule fields but is missing `max_service_length_m`. Add it to the `RULE_FIELDS` array.
+
+**Admin UI** (`src/components/admin/EvHubRulesEditor.tsx`):
+- Add to RULE_FIELDS: `{ key: "max_service_length_m", label: "Max Service Length (m)", type: "number", group: "Electrical" }`
 
 ---
 
 ### Technical notes
 
-- The "pending -> study required" escalation is NOT removed. ENWL extraction simply sets those fields to HIGH confidence / pending=false. Other DNOs (UKPN, NPG, etc.) still fall back to UK_ALL baseline with pending fields and will correctly return `DNO_STUDY_REQUIRED`.
-- Main extension logic uses `route.total_length_m` (geometry-driven from route segments), not straight-line distance.
-- No schema migration needed -- just a data INSERT into the existing `ev_hub_rulesets` table.
+- NPG insertion follows the exact same pattern as ENWL -- just a data INSERT, no schema changes needed for the ruleset itself.
+- The change log table is the only schema migration in this phase.
+- The "pending -> study required" safety escalation remains untouched. NPG simply populates those fields to HIGH confidence.
+- Remaining DNOs (NGED, SSEN, SPEN, UKPN) follow the same extraction pattern in subsequent phases.
 
