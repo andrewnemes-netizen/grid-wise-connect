@@ -499,6 +499,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                     distances: result.distances,
                     distanceBands: result.distance_bands,
                     constraints: result.constraints,
+                    unitRates,
                   })}
                 >
                   <Download className="mr-2 h-4 w-4" />Export PDF

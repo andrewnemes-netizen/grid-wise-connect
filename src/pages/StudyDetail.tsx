@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2 } from "lucide-react";
 import { generateAssessmentPdf, type PdfSections } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
 import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
@@ -29,6 +30,7 @@ const statusColors: Record<string, string> = {
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { data: unitRates } = useUnitRates();
   const [pdfSections, setPdfSections] = useState<PdfSections>({
     coverPage: true,
     executiveSummary: true,
@@ -78,6 +80,7 @@ export default function StudyDetail() {
       nextSteps: engineOutput?.compliance_flags || [],
       distances: { primary_m: 0, feeder_m: 0, capacity_segment_m: 0 },
       sections: pdfSections,
+      unitRates,
     });
   };
 

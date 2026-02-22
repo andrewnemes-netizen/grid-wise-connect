@@ -564,6 +564,7 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       mapScreenshot,
                       electricalResult: electricalResult,
                       snapshotId: lastSnapshotId,
+                      unitRates,
                     });
                   }}
                 >

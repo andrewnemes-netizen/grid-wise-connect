@@ -305,6 +305,7 @@ export default function QuickEstimate() {
                     nextSteps: result.next_steps,
                     distances: result.distances,
                     distanceBands: result.distance_bands,
+                    unitRates,
                   })}
                 >
                   <Download className="mr-2 h-4 w-4" /> Download Report

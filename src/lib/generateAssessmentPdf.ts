@@ -4,7 +4,7 @@
  * Enhanced with electrical validation results and snapshot traceability.
  */
 import jsPDF from "jspdf";
-import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem } from "./connectionCosts";
+import { estimateConnectionCost, generateBom, type CostEstimate, type BomItem, type UnitRates } from "./connectionCosts";
 import type { ElectricalValidationResult } from "./electricalEngine";
 
 export interface PdfSections {
@@ -62,6 +62,8 @@ interface PdfInput {
   sections?: PdfSections;
   /** Skip auto-save (for batch export) */
   skipSave?: boolean;
+  /** Unit rates from database (uses defaults if not provided) */
+  unitRates?: UnitRates;
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -356,12 +358,12 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       proposed_kw: input.proposedKw,
       distances: input.distances,
       constraints: input.constraints,
-    });
+    }, input.unitRates);
     bom = generateBom({
       proposed_kw: input.proposedKw,
       distances: input.distances,
       constraints: input.constraints,
-    });
+    }, input.unitRates);
 
     checkPage(50);
     doc.setTextColor(BRAND.black);
@@ -598,12 +600,20 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.text(footerLeft, margin, 293);
   }
 
-  // ── SAVE ──
+  // ── SAVE (blob-based to avoid mobile page refresh) ──
   if (!input.skipSave) {
     const fileName = input.siteName
       ? `EPE-Assessment-${input.siteName.replace(/\s+/g, "-")}.pdf`
       : `EPE-Assessment-${input.postcode?.replace(/\s+/g, "") || "report"}.pdf`;
-    doc.save(fileName);
+    const pdfBlob = doc.output("blob");
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
   return doc;
 }
