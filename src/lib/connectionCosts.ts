@@ -178,6 +178,18 @@ export function estimateConnectionCost(
     total: cableCost,
   });
 
+  // Ducting
+  const ductRate = 12;
+  const ductCost = cableDistance * ductRate;
+  breakdown.push({
+    category: "Cable",
+    description: `HDPE duct (${cableDistance}m)`,
+    quantity: cableDistance,
+    unit: "m",
+    unit_rate: ductRate,
+    total: ductCost,
+  });
+
   // Excavation — use surface split (defaults to 60/30/10 if not provided)
   const split = input.surface_split || deriveSurfaceSplit(input.constraints);
   const footwayM = Math.round(cableDistance * split.footway_pct);
@@ -200,6 +212,10 @@ export function estimateConnectionCost(
   const jointDesc = voltageLevel === "LV" ? "LV cable joints (DNO-specific)" : "Cable joints";
   const jointCost = joints * jointRate;
   breakdown.push({ category: "Equipment", description: jointDesc, quantity: joints, unit: "ea", unit_rate: jointRate, total: jointCost });
+
+  // Cable terminations
+  const terminationCost = 2 * 1500;
+  breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_rate: 1500, total: terminationCost });
 
   // Switchgear — HV/EHV only
   let switchgearCost = 0;
@@ -238,7 +254,23 @@ export function estimateConnectionCost(
   const meteringCost = voltageLevel === "LV" ? rates.metering_wc : rates.metering_ct;
   breakdown.push({ category: "Equipment", description: voltageLevel === "LV" ? "Whole current meter" : "CT metering", quantity: 1, unit: "ea", unit_rate: meteringCost, total: meteringCost });
 
-  const equipmentCost = jointCost + switchgearCost + lvEndpointCost + transformerCost + meteringCost;
+  // Earthing & transformer civils — HV/EHV only
+  let earthingCost = 0;
+  let plinthCost = 0;
+  if (voltageLevel !== "LV") {
+    earthingCost = 3500;
+    plinthCost = 4200;
+    breakdown.push(
+      { category: "Equipment", description: "Earth electrode & bonding", quantity: 1, unit: "lot", unit_rate: 3500, total: earthingCost },
+      { category: "Equipment", description: "Transformer plinth", quantity: 1, unit: "ea", unit_rate: 4200, total: plinthCost },
+    );
+  }
+
+  // Cable marker tape
+  const markerTapeCost = cableDistance * 2;
+  breakdown.push({ category: "Equipment", description: "Cable marker tape", quantity: cableDistance, unit: "m", unit_rate: 2, total: markerTapeCost });
+
+  const equipmentCost = jointCost + terminationCost + switchgearCost + lvEndpointCost + transformerCost + meteringCost + earthingCost + plinthCost + markerTapeCost;
 
   // Reinforcement
   let reinforcementCost = 0;
@@ -248,7 +280,8 @@ export function estimateConnectionCost(
     breakdown.push({ category: "Reinforcement", description: `Network reinforcement (${overCapacity}kW over headroom)`, quantity: overCapacity, unit: "kW", unit_rate: rates.reinforcement_per_kw_over_capacity, total: reinforcementCost });
   }
 
-  const subtotal = cableCost + excavationCost + equipmentCost + reinforcementCost;
+  const totalCableCost = cableCost + ductCost;
+  const subtotal = totalCableCost + excavationCost + equipmentCost + reinforcementCost;
   const designFee = Math.round(subtotal * rates.design_fee_pct);
   const pmFee = Math.round(subtotal * rates.project_management_pct);
   const contingency = Math.round(subtotal * rates.contingency_pct);
@@ -266,7 +299,7 @@ export function estimateConnectionCost(
     cableDistance < 1500 ? "medium" : "low";
 
   return {
-    cable_cost: cableCost,
+    cable_cost: totalCableCost,
     excavation_cost: Math.round(excavationCost),
     equipment_cost: equipmentCost,
     reinforcement_cost: reinforcementCost,
