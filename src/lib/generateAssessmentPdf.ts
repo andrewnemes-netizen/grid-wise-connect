@@ -209,6 +209,61 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       const imgW = contentW;
       const imgH = imgW * 0.6;
       doc.addImage(input.mapScreenshot, "PNG", margin, y, imgW, imgH);
+
+      // ── North Arrow (top-right of map image) ──
+      const naX = margin + imgW - 8;
+      const naY = y + 6;
+      doc.setFillColor(BRAND.white);
+      doc.circle(naX, naY, 5, "F");
+      doc.setDrawColor(BRAND.grey);
+      doc.setLineWidth(0.3);
+      doc.circle(naX, naY, 5, "S");
+      // Arrow pointing up
+      doc.setFillColor(BRAND.black);
+      doc.triangle(naX, naY - 4, naX - 1.8, naY + 0.5, naX + 1.8, naY + 0.5, "F");
+      doc.setFillColor(BRAND.grey);
+      doc.triangle(naX, naY + 4, naX - 1.8, naY + 0.5, naX + 1.8, naY + 0.5, "F");
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.black);
+      doc.text("N", naX, naY - 5.5, { align: "center" });
+
+      // ── Scale Bar (bottom-left of map image) ──
+      const sbX = margin + 4;
+      const sbY = y + imgH - 5;
+      // Pick a round scale distance based on primary distance
+      const totalDistM = input.distances?.primary_m ?? 500;
+      let scaleM = 100;
+      if (totalDistM > 2000) scaleM = 500;
+      else if (totalDistM > 800) scaleM = 200;
+      else if (totalDistM > 300) scaleM = 100;
+      else scaleM = 50;
+      // Approximate bar width: assume map covers ~3x primary distance across imgW
+      const mapSpanM = Math.max(totalDistM * 2.5, scaleM * 3);
+      const barW = (scaleM / mapSpanM) * imgW;
+      const clampedBarW = Math.min(Math.max(barW, 12), 40);
+
+      // Background
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "F");
+      doc.setDrawColor(BRAND.grey);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "S");
+
+      // Bar
+      doc.setDrawColor(BRAND.black);
+      doc.setLineWidth(0.6);
+      doc.line(sbX, sbY, sbX + clampedBarW, sbY);
+      // End ticks
+      doc.line(sbX, sbY - 1.5, sbX, sbY + 0.5);
+      doc.line(sbX + clampedBarW, sbY - 1.5, sbX + clampedBarW, sbY + 0.5);
+      // Label
+      const scaleLabel = scaleM >= 1000 ? `${scaleM / 1000} km` : `${scaleM} m`;
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.black);
+      doc.text(scaleLabel, sbX + clampedBarW / 2, sbY - 1.5, { align: "center" });
+
       y += imgH + 4;
     } catch (e) {
       console.warn("Failed to add map screenshot to PDF:", e);
