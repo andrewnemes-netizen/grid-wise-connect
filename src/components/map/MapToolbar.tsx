@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
@@ -13,6 +13,7 @@ interface MapToolbarProps {
 const tools = [
   { id: "boundary" as const, icon: SquareDashedBottom, label: "Boundary" },
   { id: "pin" as const, icon: MapPin, label: "Drop Pin" },
+  { id: "evhub" as const, icon: Zap, label: "EV Hub Feasibility" },
   { id: "connect" as const, icon: Cable, label: "Connect" },
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
