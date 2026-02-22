@@ -1,27 +1,30 @@
 
 
-## Fix: Make Layer Names Scrollable in Map Layers Panel
+## Update PDF Map Key to Match Actual Route Map Symbols
 
-### Problem
-The horizontal scroll doesn't work because the inner container holding the layer name has `min-w-0` and `overflow-x-auto`, but it's inside a `justify-between` flex row competing with the Switch toggle. The flex layout never lets the inner div overflow -- it just clips or wraps instead.
+The current map key shows generic network layer types (HV Underground Cables, EHV Feeders, etc.) that don't correspond to what's actually visible on the route map screenshot. The user needs the key to explain the three main symbols they can see:
 
-### Solution
-Give the inner name container `flex-1` and `overflow-x-auto` so it actually gets a constrained width from the flex layout and can scroll horizontally. Also ensure `min-w-0` is present (it already is) so flex shrinking works.
+1. **Blue circle** -- Point of Connection (the source/existing network asset)
+2. **Red circle** -- New Supply Point (the destination/customer connection)
+3. **Green dashed line** -- Proposed Cable Route
 
-### Technical Change
+### Changes
 
-**File: `src/components/map/LayerTogglePanel.tsx` (line 250)**
+**File: `src/lib/generateAssessmentPdf.ts`** (lines 225-243)
 
-Change the inner div class from:
-```
-flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none
-```
-to:
-```
-flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none
-```
+Replace the current `networkLegend` array with a new "Route Map Symbols" section that matches the actual markers rendered on the screenshot:
 
-Adding `flex-1` ensures the div takes available space but is constrained by the parent, allowing `overflow-x-auto` to actually trigger horizontal scrolling when the label is wider than the available space.
+- **Blue filled circle** (`#3498db`) labelled "Point of Connection (Source)"
+- **Red filled circle** (`#e74c3c`) labelled "New Supply Point"
+- **Green dashed line** (`#2ecc71`) labelled "Proposed Cable Route"
 
-This is a single class addition on one line.
+Keep the existing network layers (HV Underground Cables, EHV Feeders, etc.) as a separate sub-section below, since those red lines from the network data are also visible on the map.
+
+The right column (Design Equipment) stays as-is since those symbols are relevant when design elements are placed.
+
+### Technical Detail
+
+- The blue and red circles will be drawn as filled circles using `doc.circle(x, y, r, "F")` with a white stroke ring to match the actual map markers.
+- The green cable route line will be drawn as a dashed line using `doc.setLineDashPattern([1.5, 1], 0)` to match the dashed style used on the map.
+- The section header will be renamed from "NETWORK LAYERS" to "ROUTE SYMBOLS" for the connection-specific items, with "NETWORK LAYERS" kept for the background data layers.
 
