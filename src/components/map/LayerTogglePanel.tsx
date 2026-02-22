@@ -247,7 +247,7 @@ export function LayerTogglePanel({
                           return (
                             <div key={layer.id} className="space-y-0.5 pl-4">
                               <div className="flex items-center justify-between gap-2 py-0.5">
-                                <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none">
                                   {isLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
                                   ) : (
@@ -256,19 +256,12 @@ export function LayerTogglePanel({
                                       style={{ backgroundColor: color }}
                                     />
                                   )}
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Label
-                                        htmlFor={`layer-${layer.id}`}
-                                        className="text-xs font-normal truncate cursor-pointer"
-                                      >
-                                        {layer.display_name}
-                                      </Label>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left">
-                                      {layer.display_name}
-                                    </TooltipContent>
-                                  </Tooltip>
+                                  <Label
+                                    htmlFor={`layer-${layer.id}`}
+                                    className="text-xs font-normal whitespace-nowrap cursor-pointer"
+                                  >
+                                    {layer.display_name}
+                                  </Label>
                                   {layer.feature_count > 0 && (
                                     <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
                                       {layer.feature_count > 999
@@ -281,7 +274,7 @@ export function LayerTogglePanel({
                                   id={`layer-${layer.id}`}
                                   checked={isVisible}
                                   onCheckedChange={(checked) => onToggle(layer.id, checked)}
-                                  className="scale-75"
+                                  className="scale-75 shrink-0"
                                 />
                               </div>
 
