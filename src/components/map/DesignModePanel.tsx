@@ -1,10 +1,10 @@
-import { X, Trash2, PencilRuler } from "lucide-react";
+import { X, Trash2, PencilRuler, Cable } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import type { EquipmentType, DesignElement } from "@/hooks/useDesignMode";
-import { EQUIPMENT_CONFIG } from "@/hooks/useDesignMode";
+import type { EquipmentType, DesignElement, CableType, DesignCable } from "@/hooks/useDesignMode";
+import { EQUIPMENT_CONFIG, CABLE_CONFIG } from "@/hooks/useDesignMode";
 
 interface DesignModePanelProps {
   studyName: string;
@@ -14,6 +14,12 @@ interface DesignModePanelProps {
   onRemove: (id: string) => void;
   onClearAll: () => void;
   onClose: () => void;
+  // Cable props
+  cables: DesignCable[];
+  drawingCableType: CableType | null;
+  onSelectCableType: (type: CableType | null) => void;
+  cableVertexCount: number;
+  onRemoveCable: (id: string) => void;
 }
 
 const equipmentTypes: EquipmentType[] = [
@@ -25,6 +31,8 @@ const equipmentTypes: EquipmentType[] = [
   "pole",
 ];
 
+const cableTypes: CableType[] = ["lv_main", "lv_service", "hv_cable", "pilot_cable"];
+
 export function DesignModePanel({
   studyName,
   elements,
@@ -33,6 +41,11 @@ export function DesignModePanel({
   onRemove,
   onClearAll,
   onClose,
+  cables,
+  drawingCableType,
+  onSelectCableType,
+  cableVertexCount,
+  onRemoveCable,
 }: DesignModePanelProps) {
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-80 border-l bg-background shadow-xl flex flex-col">
@@ -91,13 +104,58 @@ export function DesignModePanel({
 
           <Separator />
 
+          {/* Cable palette */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              <Cable className="h-3.5 w-3.5 text-muted-foreground" />
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Draw Cable
+              </p>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {drawingCableType
+                ? cableVertexCount > 0
+                  ? `${cableVertexCount} point${cableVertexCount !== 1 ? "s" : ""} — click to add more, double-click to finish.`
+                  : `Click on the map to start drawing a ${CABLE_CONFIG[drawingCableType].label}. Double-click to finish.`
+                : "Select cable type, then click on the map to draw a route."}
+            </p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {cableTypes.map((type) => {
+                const cfg = CABLE_CONFIG[type];
+                const isActive = drawingCableType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => onSelectCableType(isActive ? null : type)}
+                    className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors text-xs
+                      ${isActive ? "border-primary bg-primary/10 ring-1 ring-primary" : "hover:bg-muted/50"}`}
+                  >
+                    <span className="flex items-center shrink-0">
+                      <svg width="24" height="6" viewBox="0 0 24 6">
+                        <line
+                          x1="0" y1="3" x2="24" y2="3"
+                          stroke={cfg.color}
+                          strokeWidth="3"
+                          strokeDasharray={cfg.dasharray.length > 0 ? cfg.dasharray.join(",") : undefined}
+                        />
+                      </svg>
+                    </span>
+                    <span className="font-medium">{cfg.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Separator />
+
           {/* Placed elements list */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Placed ({elements.length})
               </p>
-              {elements.length > 0 && (
+              {(elements.length > 0 || cables.length > 0) && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -148,8 +206,53 @@ export function DesignModePanel({
             )}
           </div>
 
+          {/* Cables list */}
+          {cables.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Cables ({cables.length})
+              </p>
+              <div className="space-y-1">
+                {cables.map((cable) => {
+                  const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
+                  return (
+                    <div
+                      key={cable.id}
+                      className="flex items-center gap-2 rounded-md border p-2 text-xs group"
+                    >
+                      <span className="shrink-0">
+                        <svg width="16" height="6" viewBox="0 0 16 6">
+                          <line
+                            x1="0" y1="3" x2="16" y2="3"
+                            stroke={cfg.color}
+                            strokeWidth="3"
+                            strokeDasharray={cfg.dasharray.length > 0 ? cfg.dasharray.join(",") : undefined}
+                          />
+                        </svg>
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{cable.label || cfg.label}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">
+                          {Math.round(cable.length_m).toLocaleString()}m
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                        onClick={() => onRemoveCable(cable.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Summary badges */}
-          {elements.length > 0 && (
+          {(elements.length > 0 || cables.length > 0) && (
             <>
               <Separator />
               <div className="space-y-1">
@@ -162,6 +265,17 @@ export function DesignModePanel({
                     return (
                       <Badge key={type} variant="outline" className="text-[10px]">
                         {cfg.label}: {count}
+                      </Badge>
+                    );
+                  })}
+                  {cableTypes.map((type) => {
+                    const matching = cables.filter((c) => c.cable_type === type);
+                    if (matching.length === 0) return null;
+                    const cfg = CABLE_CONFIG[type];
+                    const totalLength = Math.round(matching.reduce((s, c) => s + c.length_m, 0));
+                    return (
+                      <Badge key={type} variant="outline" className="text-[10px]">
+                        {cfg.label}: {matching.length} ({totalLength.toLocaleString()}m)
                       </Badge>
                     );
                   })}

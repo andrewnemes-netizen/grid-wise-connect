@@ -193,6 +193,50 @@ export type Database = {
         }
         Relationships: []
       }
+      design_cables: {
+        Row: {
+          cable_type: string
+          coordinates: Json
+          created_at: string
+          created_by: string
+          id: string
+          label: string | null
+          length_m: number
+          properties_json: Json
+          study_id: string
+        }
+        Insert: {
+          cable_type: string
+          coordinates?: Json
+          created_at?: string
+          created_by: string
+          id?: string
+          label?: string | null
+          length_m?: number
+          properties_json?: Json
+          study_id: string
+        }
+        Update: {
+          cable_type?: string
+          coordinates?: Json
+          created_at?: string
+          created_by?: string
+          id?: string
+          label?: string | null
+          length_m?: number
+          properties_json?: Json
+          study_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_cables_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_elements: {
         Row: {
           created_at: string
