@@ -270,6 +270,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ev_hub_rulesets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dno_key: string
+          id: string
+          is_active: boolean
+          rule_set_id: string
+          rules_json: Json
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dno_key: string
+          id?: string
+          is_active?: boolean
+          rule_set_id?: string
+          rules_json?: Json
+          updated_at?: string
+          version?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dno_key?: string
+          id?: string
+          is_active?: boolean
+          rule_set_id?: string
+          rules_json?: Json
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
+      }
       feeders_ehv: {
         Row: {
           asset_id: string
