@@ -79,7 +79,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // INITIAL load — this is the sole controller of the loading state
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        // Race getSession against a timeout to prevent hanging in sandboxed environments
+        const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 5000)
+        );
+        const { data: { session: initialSession } } = await Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise,
+        ]);
         if (!isMounted) return;
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
