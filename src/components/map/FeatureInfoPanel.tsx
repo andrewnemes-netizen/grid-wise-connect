@@ -48,9 +48,15 @@ const utilisationColor: Record<string, string> = {
 function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
   const utilPct = (feature.utilisation_pct ?? feature.fault_level_ ?? null) as number | null;
   const band = (feature.utilisation_band ?? null) as string | null;
-  const headroomKw = (feature.transformer_headroom_kw ?? feature.headroom_kw ?? feature.demhr ?? null) as number | null;
-  const firmCapKw = (feature.firm_capacity_kw ?? feature.capacity_kw ?? feature.firm_cap ?? null) as number | null;
-  const maxDemandKw = (feature.max_demand_kw ?? feature.demand_kw ?? feature.maxdemand ?? null) as number | null;
+
+  // Detect whether values come from attrs_json MW fields (firm_cap, demhr, maxdemand)
+  // or from direct kW columns (transformer_headroom_kw, firm_capacity_kw, max_demand_kw)
+  const hasMwFields = feature.firm_cap != null || feature.demhr != null || feature.maxdemand != null;
+  const unit = hasMwFields ? "MW" : "kW";
+
+  const headroomRaw = (feature.transformer_headroom_kw ?? feature.headroom_kw ?? feature.demhr ?? null) as number | null;
+  const firmCapRaw = (feature.firm_capacity_kw ?? feature.capacity_kw ?? feature.firm_cap ?? null) as number | null;
+  const maxDemandRaw = (feature.max_demand_kw ?? feature.demand_kw ?? feature.maxdemand ?? null) as number | null;
   const customers = (feature.connected_customers ?? null) as number | null;
   const siteName = (feature.site_name ?? feature.name ?? feature.psp_name ?? null) as string | null;
   const siteId = (feature.site_id ?? feature.asset_id ?? null) as string | null;
@@ -99,26 +105,26 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
 
       {/* Key metrics */}
       <div className="grid grid-cols-2 gap-2">
-        {headroomKw !== null && (
+        {headroomRaw !== null && (
           <div className="rounded-md border bg-muted/20 p-2">
             <p className="text-[10px] text-muted-foreground">Headroom</p>
             <p className="text-sm font-semibold flex items-center gap-1">
               <Zap className="h-3 w-3 text-primary" />
-              {headroomKw?.toLocaleString() ?? "—"} kW
+              {headroomRaw?.toLocaleString() ?? "—"} {unit}
             </p>
             {headroomBand && <p className="text-[10px] text-muted-foreground">{headroomBand}</p>}
           </div>
         )}
-        {firmCapKw !== null && (
+        {firmCapRaw !== null && (
           <div className="rounded-md border bg-muted/20 p-2">
             <p className="text-[10px] text-muted-foreground">Firm Capacity</p>
-            <p className="text-sm font-semibold">{firmCapKw?.toLocaleString() ?? "—"} kW</p>
+            <p className="text-sm font-semibold">{firmCapRaw?.toLocaleString() ?? "—"} {unit}</p>
           </div>
         )}
-        {maxDemandKw !== null && (
+        {maxDemandRaw !== null && (
           <div className="rounded-md border bg-muted/20 p-2">
             <p className="text-[10px] text-muted-foreground">Max Demand</p>
-            <p className="text-sm font-semibold">{maxDemandKw?.toLocaleString() ?? "—"} kW</p>
+            <p className="text-sm font-semibold">{maxDemandRaw?.toLocaleString() ?? "—"} {unit}</p>
           </div>
         )}
         {customers !== null && (
