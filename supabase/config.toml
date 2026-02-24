@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.dno-capacity-lookup]
 verify_jwt = false
+
+[functions.ingest-geo-features]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
