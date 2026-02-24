@@ -38,44 +38,52 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       setProfileState("loading");
       lastCheckedUserId.current = user.id;
     }
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, company, phone, is_approved")
-      .eq("user_id", user.id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("full_name, company, phone, is_approved")
+        .eq("user_id", user.id)
+        .single();
 
-    if (!data) {
+      if (error || !data) {
+        setProfileState("incomplete");
+        return;
+      }
+
+      if (!data.full_name?.trim() || !data.company?.trim() || !data.phone?.trim()) {
+        setProfileState("incomplete");
+        return;
+      }
+
+      if (!data.is_approved) {
+        setProfileState("pending_approval");
+        return;
+      }
+
+      setProfileState("complete");
+    } catch {
+      // Fail closed: never leave user in infinite loading
       setProfileState("incomplete");
-      return;
     }
-
-    // Check profile completeness FIRST — collect data before gating on approval
-    if (!data.full_name?.trim() || !data.company?.trim() || !data.phone?.trim()) {
-      setProfileState("incomplete");
-      return;
-    }
-
-    if (!data.is_approved) {
-      setProfileState("pending_approval");
-      return;
-    }
-
-    setProfileState("complete");
   }, [user]);
 
   useEffect(() => {
     if (!loading && user) {
       checkProfile();
     } else if (!loading && !user) {
-      setProfileState("loading");
+      // Don't set profileState to "loading" — that would block the redirect
       lastCheckedUserId.current = null;
     }
   }, [loading, user, checkProfile]);
 
-  // Always show loading until profile check completes
-  if (loading || profileState === "loading")
+  // 1. Wait for auth to finish
+  if (loading)
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
+  // 2. Redirect unauthenticated users immediately — never depend on profileState
   if (!user) return <Navigate to="/auth" replace />;
+  // 3. Wait for profile check to finish (only for authenticated users)
+  if (profileState === "loading")
+    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   if (profileState === "pending_approval") return <PendingApproval />;
   if (profileState === "incomplete") return <CompleteProfile onComplete={checkProfile} />;
   return <DashboardLayout>{children}</DashboardLayout>;
