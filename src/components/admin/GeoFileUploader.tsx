@@ -287,6 +287,9 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         const BATCH_SIZE = 500;
         let fileInserted = 0;
 
+        // Refresh session before uploading to avoid expired JWT errors
+        await supabase.auth.getSession();
+
         for (let b = 0; b < features.length; b += BATCH_SIZE) {
           const batch = features.slice(b, b + BATCH_SIZE);
 
