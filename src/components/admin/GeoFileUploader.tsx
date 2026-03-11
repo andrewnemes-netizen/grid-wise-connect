@@ -277,6 +277,16 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     let hasError = false;
 
     for (let i = 0; i < files.length; i++) {
+      // Skip shapefile companion files — they're consumed by the .shp parser
+      const ext = files[i].name.split(".").pop()?.toLowerCase();
+      if (ext === "dbf" || ext === "prj" || ext === "shx") {
+        statuses[i].status = "done";
+        statuses[i].featureCount = 0;
+        parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
+        setFileStatuses([...statuses]);
+        continue;
+      }
+
       statuses[i].status = "parsing";
       setFileStatuses([...statuses]);
 
