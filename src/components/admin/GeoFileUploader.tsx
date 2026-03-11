@@ -617,7 +617,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         const expected = EXPECTED_GEOM[layer.storage_table] || [];
         if (expected.length === 0) return null;
         const mismatched = Object.entries(detectedTypes).filter(([, t]) => {
-          if (!t || t === "Error" || t === "No geometry" || t === "Unknown" || t === "Mixed") return false;
+          if (!t || t === "Error" || t === "No geometry" || t === "Unknown" || t === "Mixed" || t === "Shapefile" || t === "Geometry") return false;
           return !expected.includes(t);
         });
         if (mismatched.length === 0) return null;
