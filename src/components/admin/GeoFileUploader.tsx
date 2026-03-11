@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { gmlToGeoJSON, decompressGzip, bngToWgs84 } from "@/lib/gmlParser";
 import { detectGeometryType } from "@/lib/detectGeometryType";
+import * as shapefile from "shapefile";
 
 const GEOM_TYPE_RE = /"type"\s*:\s*"(Multi)?(Point|LineString|Polygon|GeometryCollection)"/i;
 const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon|MultiSurface|MultiCurve)/i;
@@ -14,6 +15,8 @@ const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|M
 /** Lightweight geometry type detection — reads only the first 10 KB of the file. */
 async function detectGeomTypeFromFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
+
+  if (ext === "shp") return "Shapefile";
 
   if (ext === "csv") {
     const header = await file.slice(0, 1024).text();
@@ -65,7 +68,7 @@ interface FileStatus {
 }
 
 /** Parse a file into a feature collection. For CSVs without geometry, features will have null geometry. */
-async function parseFile(file: File): Promise<{ geojson: GeoJSON.FeatureCollection; hasSpatial: boolean }> {
+async function parseFile(file: File, companionFiles?: File[]): Promise<{ geojson: GeoJSON.FeatureCollection; hasSpatial: boolean }> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "geojson" || ext === "json") {
@@ -93,7 +96,87 @@ async function parseFile(file: File): Promise<{ geojson: GeoJSON.FeatureCollecti
     return csvToGeoJSONFlexible(text);
   }
 
-  throw new Error("Unsupported format. Upload GeoJSON, CSV, or GML.");
+  if (ext === "shp") {
+    return parseShapefile(file, companionFiles || []);
+  }
+
+  throw new Error("Unsupported format. Upload GeoJSON, CSV, GML, or Shapefile (.shp).");
+}
+
+/** Detect if coordinates are in BNG (large values) and need reprojection */
+function isBNG(coords: number[]): boolean {
+  return Math.abs(coords[0]) > 180 || Math.abs(coords[1]) > 180;
+}
+
+/** Recursively reproject coordinates from BNG to WGS84 */
+function reprojectCoords(coords: any): any {
+  if (typeof coords[0] === "number") {
+    // Single coordinate pair
+    if (isBNG(coords)) {
+      const [lng, lat] = bngToWgs84(coords[0], coords[1]);
+      return [lng, lat, ...(coords.length > 2 ? coords.slice(2) : [])];
+    }
+    return coords;
+  }
+  return coords.map((c: any) => reprojectCoords(c));
+}
+
+/** Parse Shapefile (.shp + optional .dbf, .prj) */
+async function parseShapefile(shpFile: File, companions: File[]): Promise<{ geojson: GeoJSON.FeatureCollection; hasSpatial: boolean }> {
+  const baseName = shpFile.name.replace(/\.shp$/i, "").toLowerCase();
+
+  // Find companion .dbf file
+  const dbfFile = companions.find(f => f.name.toLowerCase() === baseName + ".dbf");
+  // Find companion .prj file to detect projection
+  const prjFile = companions.find(f => f.name.toLowerCase() === baseName + ".prj");
+
+  const shpBuffer = await shpFile.arrayBuffer();
+  const dbfBuffer = dbfFile ? await dbfFile.arrayBuffer() : undefined;
+
+  // Detect if BNG projection from .prj file
+  let needsReproject = false;
+  if (prjFile) {
+    const prjText = await prjFile.text();
+    if (prjText.includes("OSGB") || prjText.includes("British_National_Grid") || prjText.includes("27700") || prjText.includes("Airy")) {
+      needsReproject = true;
+    }
+  }
+
+  const source = await shapefile.open(shpBuffer, dbfBuffer);
+  const features: GeoJSON.Feature[] = [];
+
+  while (true) {
+    const result = await source.read();
+    if (result.done) break;
+    const feature = result.value as GeoJSON.Feature;
+
+    // Reproject if needed
+    if (needsReproject && feature.geometry && "coordinates" in feature.geometry) {
+      (feature.geometry as any).coordinates = reprojectCoords((feature.geometry as any).coordinates);
+    } else if (!needsReproject && feature.geometry && "coordinates" in feature.geometry) {
+      // Auto-detect BNG from first coordinate
+      const firstCoord = getFirstCoord(feature.geometry);
+      if (firstCoord && isBNG(firstCoord)) {
+        needsReproject = true;
+        (feature.geometry as any).coordinates = reprojectCoords((feature.geometry as any).coordinates);
+      }
+    }
+
+    features.push(feature);
+  }
+
+  return {
+    geojson: { type: "FeatureCollection", features },
+    hasSpatial: true,
+  };
+}
+
+/** Extract the first coordinate from any geometry type */
+function getFirstCoord(geom: GeoJSON.Geometry): number[] | null {
+  if (!geom || !("coordinates" in geom)) return null;
+  let c: any = geom.coordinates;
+  while (Array.isArray(c) && Array.isArray(c[0])) c = c[0];
+  return Array.isArray(c) && typeof c[0] === "number" ? c : null;
 }
 
 export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderProps) {
@@ -194,12 +277,22 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
     let hasError = false;
 
     for (let i = 0; i < files.length; i++) {
+      // Skip shapefile companion files — they're consumed by the .shp parser
+      const ext = files[i].name.split(".").pop()?.toLowerCase();
+      if (ext === "dbf" || ext === "prj" || ext === "shx") {
+        statuses[i].status = "done";
+        statuses[i].featureCount = 0;
+        parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
+        setFileStatuses([...statuses]);
+        continue;
+      }
+
       statuses[i].status = "parsing";
       setFileStatuses([...statuses]);
 
       try {
         console.log(`[GeoUploader] Parsing file ${i}: ${files[i].name} (${files[i].size} bytes)`);
-        const result = await parseFile(files[i]);
+        const result = await parseFile(files[i], files);
         console.log(`[GeoUploader] Parsed file ${i}: ${result.geojson.features.length} features, hasSpatial=${result.hasSpatial}`);
         parsed.push(result);
         statuses[i].featureCount = result.geojson.features.length;
@@ -428,15 +521,14 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload one or more files. If a file has no coordinates, geometry is inherited from the spatial
-        file(s) in the same batch by row order — so you can combine a geometry file with separate
-        attribute files.
+        Upload one or more files (GeoJSON, CSV, GML, or Shapefile). For Shapefiles, select all companion
+        files (.shp, .dbf, .prj, .shx) together. BNG/OSGB projections are automatically reprojected to WGS84.
       </p>
 
       <input
         ref={fileRef}
         type="file"
-        accept=".geojson,.json,.csv,.gml,.gz"
+        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx"
         multiple
         onChange={handleFilesSelected}
         className="hidden"
