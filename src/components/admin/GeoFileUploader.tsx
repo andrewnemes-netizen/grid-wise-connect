@@ -151,14 +151,14 @@ async function parseShapefile(shpFile: File, companions: File[]): Promise<{ geoj
     const feature = result.value as GeoJSON.Feature;
 
     // Reproject if needed
-    if (needsReproject && feature.geometry) {
-      feature.geometry.coordinates = reprojectCoords(feature.geometry.coordinates);
-    } else if (!needsReproject && feature.geometry) {
+    if (needsReproject && feature.geometry && "coordinates" in feature.geometry) {
+      (feature.geometry as any).coordinates = reprojectCoords((feature.geometry as any).coordinates);
+    } else if (!needsReproject && feature.geometry && "coordinates" in feature.geometry) {
       // Auto-detect BNG from first coordinate
       const firstCoord = getFirstCoord(feature.geometry);
       if (firstCoord && isBNG(firstCoord)) {
         needsReproject = true;
-        feature.geometry.coordinates = reprojectCoords(feature.geometry.coordinates);
+        (feature.geometry as any).coordinates = reprojectCoords((feature.geometry as any).coordinates);
       }
     }
 
