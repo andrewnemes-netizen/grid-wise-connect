@@ -519,7 +519,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
       <input
         ref={fileRef}
         type="file"
-        accept=".geojson,.json,.csv,.gml,.gz"
+        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx"
         multiple
         onChange={handleFilesSelected}
         className="hidden"
