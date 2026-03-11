@@ -282,7 +282,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
 
       try {
         console.log(`[GeoUploader] Parsing file ${i}: ${files[i].name} (${files[i].size} bytes)`);
-        const result = await parseFile(files[i]);
+        const result = await parseFile(files[i], files);
         console.log(`[GeoUploader] Parsed file ${i}: ${result.geojson.features.length} features, hasSpatial=${result.hasSpatial}`);
         parsed.push(result);
         statuses[i].featureCount = result.geojson.features.length;
