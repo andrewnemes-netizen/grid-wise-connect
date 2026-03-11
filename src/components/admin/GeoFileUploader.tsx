@@ -16,6 +16,8 @@ const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|M
 async function detectGeomTypeFromFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
+  if (ext === "shp") return "Shapefile";
+
   if (ext === "csv") {
     const header = await file.slice(0, 1024).text();
     const cols = header.split(/[\r\n]/)[0].toLowerCase();
