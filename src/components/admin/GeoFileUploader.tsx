@@ -521,9 +521,8 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload one or more files. If a file has no coordinates, geometry is inherited from the spatial
-        file(s) in the same batch by row order — so you can combine a geometry file with separate
-        attribute files.
+        Upload one or more files (GeoJSON, CSV, GML, or Shapefile). For Shapefiles, select all companion
+        files (.shp, .dbf, .prj, .shx) together. BNG/OSGB projections are automatically reprojected to WGS84.
       </p>
 
       <input
