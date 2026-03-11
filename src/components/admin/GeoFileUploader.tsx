@@ -245,7 +245,7 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
 
   const hasGeomMismatch = expectedFamily !== "Any" && files.some((_, idx) => {
     const detected = detectedTypes[idx];
-    if (!detected || detected === "Unknown" || detected === "Error" || detected === "Geometry") return false;
+    if (!detected || detected === "Unknown" || detected === "Error" || detected === "Geometry" || detected === "Shapefile") return false;
     const detectedBase = detected.replace("Multi", "");
     return detectedBase !== expectedFamily;
   });
