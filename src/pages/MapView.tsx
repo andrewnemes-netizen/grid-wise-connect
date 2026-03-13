@@ -26,6 +26,7 @@ import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel"
 import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { EvHubPanel } from "@/components/map/EvHubPanel";
+import { StreetViewPanel } from "@/components/map/StreetViewPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
