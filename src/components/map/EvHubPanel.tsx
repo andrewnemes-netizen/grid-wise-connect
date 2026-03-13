@@ -97,6 +97,32 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
         dnoLookupResult,
       };
 
+      // ── Integrate Connect tool data if available ──
+      if (connectData) {
+        // Classify route as footway by default (could be enhanced with surface detection)
+        context.routeSegments = [{
+          surface_type: "FOOTWAY",
+          length_m: connectData.routeLengthM,
+          start_m: 0,
+          end_m: connectData.routeLengthM,
+        }];
+
+        // Extract substation headroom from source properties if available
+        const headroomKw = connectData.sourceProperties?.headroom_kw as number | undefined;
+        const capacityKw = connectData.sourceProperties?.capacity_kw as number | undefined;
+        const utilisationPct = connectData.sourceProperties?.utilisation_pct as number | undefined;
+
+        if (headroomKw != null) {
+          context.networkHeadroomKva = headroomKw; // kW ≈ kVA for rough estimates
+        }
+        if (capacityKw != null) {
+          context.transformerCapacityKva = capacityKw;
+        }
+        if (utilisationPct != null) {
+          context.transformerLoadingPct = utilisationPct;
+        }
+      }
+
       const output = await runEvHubEngine(
         {
           site_lat: lat,
