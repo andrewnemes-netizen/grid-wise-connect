@@ -7,6 +7,8 @@ const DEFAULT_ZOOM = 6;
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F5bm1weWt5dyJ9.LE9-j6HiHMEJqnG86aIxEg";
 
+const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
+
 const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
   street: {
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
@@ -26,6 +28,13 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
     attribution: '&copy; <a href="https://www.mapbox.com">Mapbox</a> &copy; Maxar',
     maxzoom: 22,
   },
+  "google-satellite": {
+    tiles: [
+      `https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_KEY}`,
+    ],
+    attribution: '&copy; Google',
+    maxzoom: 21,
+  },
   topo: {
     tiles: [
       "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
@@ -34,6 +43,8 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
     maxzoom: 17,
   },
 };
+
+export { GOOGLE_MAPS_KEY };
 
 export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
   const mapRef = useRef<maplibregl.Map | null>(null);
