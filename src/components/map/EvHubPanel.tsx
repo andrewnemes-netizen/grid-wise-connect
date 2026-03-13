@@ -52,7 +52,7 @@ const DNO_OPTIONS: { value: DnoKey; label: string }[] = [
   { value: "SSEN", label: "SSEN" },
 ];
 
-export function EvHubPanel({ lng, lat, onClose }: Props) {
+export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
   const { toast } = useToast();
 
   // Inputs
