@@ -91,23 +91,16 @@ export function LayerManagement() {
 
   const clearDataMut = useMutation({
     mutationFn: async ({ id, storageTable }: { id: string; storageTable: string }) => {
-      const tableName = storageTable as keyof typeof STORAGE_TABLES extends never ? string : any;
-      // Delete all features for this layer from the storage table
-      const { error: delError } = await supabase
-        .from(storageTable as any)
-        .delete()
-        .eq("layer_id", id);
-      if (delError) throw delError;
-      // Reset feature_count to 0
-      const { error: updError } = await supabase
-        .from("layer_registry")
-        .update({ feature_count: 0, updated_at: new Date().toISOString() })
-        .eq("id", id);
-      if (updError) throw updError;
+      const { data, error } = await supabase.rpc("clear_layer_features", {
+        _layer_id: id,
+        _table_name: storageTable,
+      });
+      if (error) throw error;
+      return data as number;
     },
-    onSuccess: () => {
+    onSuccess: (deleted) => {
       queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
-      toast({ title: "Feature data cleared", description: "Layer kept — ready for fresh upload." });
+      toast({ title: "Feature data cleared", description: `${(deleted ?? 0).toLocaleString()} features removed — ready for fresh upload.` });
     },
     onError: (err: any) => toast({ title: "Clear failed", description: err.message, variant: "destructive" }),
   });
