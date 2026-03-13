@@ -228,9 +228,22 @@ export function LayerManagement() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700"
+                          disabled={clearDataMut.isPending || (layer.feature_count ?? 0) === 0}
+                          onClick={() => {
+                            if (confirm(`Clear all ${(layer.feature_count ?? 0).toLocaleString()} features from "${layer.display_name}"?\n\nThe layer entry will be kept — you can re-upload fresh data afterwards.`)) {
+                              clearDataMut.mutate({ id: layer.id, storageTable: layer.storage_table });
+                            }
+                          }}
+                        >
+                          <Eraser className="h-3 w-3 mr-1" />Clear
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                           onClick={() => {
-                            if (confirm(`Delete "${layer.display_name}"? This won't delete the features.`)) {
+                            if (confirm(`Delete "${layer.display_name}" entirely? This removes the layer registration (features stay in storage).`)) {
                               deleteMut.mutate(layer.id);
                             }
                           }}
