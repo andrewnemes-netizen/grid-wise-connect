@@ -11,6 +11,7 @@ export interface PdfSections {
   coverPage?: boolean;
   executiveSummary?: boolean;
   siteDetails?: boolean;
+  streetView?: boolean;
   routeMap?: boolean;
   electricalValidation?: boolean;
   costBreakdown?: boolean;
