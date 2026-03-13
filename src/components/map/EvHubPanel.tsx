@@ -21,10 +21,18 @@ import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface ConnectData {
+  routeCoords: [number, number][];
+  routeLengthM: number;
+  sourceProperties: Record<string, unknown>;
+  sourceLayerLabel: string;
+}
+
 interface Props {
   lng: number;
   lat: number;
   onClose: () => void;
+  connectData?: ConnectData | null;
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
