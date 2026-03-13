@@ -70,6 +70,8 @@ interface PdfInput {
   voltageOverride?: import("./connectionCosts").VoltageOverride;
   /** Nearest headroom for reinforcement calc */
   nearestHeadroomKw?: number;
+  /** Street View captures (data URLs with heading info) */
+  streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
