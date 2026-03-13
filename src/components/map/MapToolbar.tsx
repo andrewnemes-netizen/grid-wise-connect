@@ -1,6 +1,20 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Eye } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// Street View pegman icon (orange man like Google)
+function StreetViewIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <circle cx="12" cy="6" r="3" />
+      <ellipse cx="12" cy="15" rx="4" ry="5" />
+      <circle cx="9" cy="5" r="0.8" fill="white" />
+      <circle cx="15" cy="5" r="0.8" fill="white" />
+      <circle cx="9" cy="5" r="0.3" fill="black" />
+      <circle cx="15" cy="5" r="0.3" fill="black" />
+    </svg>
+  );
+}
 
 interface MapToolbarProps {
   activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null;
@@ -18,7 +32,7 @@ const tools = [
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
-  { id: "streetview" as const, icon: Eye, label: "Street View" },
+  { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
 ] as const;
 
 export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {
@@ -47,7 +61,13 @@ export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasA
               disabled={disabled}
               onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
             >
-              <tool.icon className="h-4 w-4" />
+              {'customIcon' in tool ? (
+                <tool.customIcon 
+                  className={`h-4 w-4 ${activeTool === tool.id ? 'text-primary-foreground' : 'text-amber-500'}`} 
+                />
+              ) : (
+                <tool.icon className="h-4 w-4" />
+              )}
             </Button>
           </div>
         );
