@@ -1877,6 +1877,10 @@ export type Database = {
         Args: { _features_json: string; _table_name: string }
         Returns: number
       }
+      clear_layer_features: {
+        Args: { _layer_id: string; _table_name: string }
+        Returns: number
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
