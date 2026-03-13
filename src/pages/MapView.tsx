@@ -132,6 +132,11 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
+      if (activeToolRef.current === "streetview") {
+        setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
+        return;
+      }
       if (activeToolRef.current === "pin") {
         pin.handlePinClick(e);
         setActiveTool(null);
