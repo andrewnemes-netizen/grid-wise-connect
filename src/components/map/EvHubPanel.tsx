@@ -21,10 +21,18 @@ import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface ConnectData {
+  routeCoords: [number, number][];
+  routeLengthM: number;
+  sourceProperties: Record<string, unknown>;
+  sourceLayerLabel: string;
+}
+
 interface Props {
   lng: number;
   lat: number;
   onClose: () => void;
+  connectData?: ConnectData | null;
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
@@ -44,7 +52,7 @@ const DNO_OPTIONS: { value: DnoKey; label: string }[] = [
   { value: "SSEN", label: "SSEN" },
 ];
 
-export function EvHubPanel({ lng, lat, onClose }: Props) {
+export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
   const { toast } = useToast();
 
   // Inputs
@@ -88,6 +96,31 @@ export function EvHubPanel({ lng, lat, onClose }: Props) {
       const context: EngineContext = {
         dnoLookupResult,
       };
+
+      // ── Integrate Connect tool data if available ──
+      if (connectData) {
+        // Classify route as footway by default (could be enhanced with surface detection)
+        context.routeSegments = [{
+          coordinates: connectData.routeCoords,
+          surface_type: "FOOTWAY",
+          length_m: connectData.routeLengthM,
+        }];
+
+        // Extract substation headroom from source properties if available
+        const headroomKw = connectData.sourceProperties?.headroom_kw as number | undefined;
+        const capacityKw = connectData.sourceProperties?.capacity_kw as number | undefined;
+        const utilisationPct = connectData.sourceProperties?.utilisation_pct as number | undefined;
+
+        if (headroomKw != null) {
+          context.networkHeadroomKva = headroomKw; // kW ≈ kVA for rough estimates
+        }
+        if (capacityKw != null) {
+          context.transformerCapacityKva = capacityKw;
+        }
+        if (utilisationPct != null) {
+          context.transformerLoadingPct = utilisationPct;
+        }
+      }
 
       const output = await runEvHubEngine(
         {

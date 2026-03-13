@@ -25,8 +25,8 @@ import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
 import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
-import { EvHubPanel } from "@/components/map/EvHubPanel";
-import { StreetViewPanel } from "@/components/map/StreetViewPanel";
+import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
+import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
@@ -67,6 +67,7 @@ const MapView = () => {
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
+  const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
@@ -451,6 +452,12 @@ const MapView = () => {
               lng={evHubLocation.lng}
               lat={evHubLocation.lat}
               onClose={() => setEvHubLocation(null)}
+              connectData={connect.connectEndpoints ? {
+                routeCoords: connect.connectEndpoints.routeCoords,
+                routeLengthM: calcRouteLength(connect.connectEndpoints.routeCoords),
+                sourceProperties: connect.connectEndpoints.source.properties,
+                sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
+              } : null}
             />
           )}
 
@@ -459,6 +466,23 @@ const MapView = () => {
               lng={streetViewLocation.lng}
               lat={streetViewLocation.lat}
               onClose={() => setStreetViewLocation(null)}
+              markers={
+                design.elements.map((el) => ({
+                  lat: Number(el.lat),
+                  lng: Number(el.lng),
+                  label: el.label || el.element_type.replace("_", " "),
+                  type: el.element_type,
+                  color:
+                    el.element_type === "feeder_pillar" ? "#2ecc71" :
+                    el.element_type === "transformer" ? "#e74c3c" :
+                    el.element_type === "rmu" ? "#3498db" :
+                    el.element_type === "cutout" ? "#f39c12" :
+                    el.element_type === "joint" ? "#9b59b6" :
+                    el.element_type === "pole" ? "#1abc9c" :
+                    "#2ecc71",
+                } as StreetViewMarker))
+              }
+              onCaptures={setStreetViewCaptures}
             />
           )}
         </>
