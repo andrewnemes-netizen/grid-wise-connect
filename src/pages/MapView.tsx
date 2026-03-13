@@ -453,6 +453,14 @@ const MapView = () => {
               onClose={() => setEvHubLocation(null)}
             />
           )}
+
+          {streetViewLocation && (
+            <StreetViewPanel
+              lng={streetViewLocation.lng}
+              lat={streetViewLocation.lat}
+              onClose={() => setStreetViewLocation(null)}
+            />
+          )}
         </>
       )}
     </div>
