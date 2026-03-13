@@ -101,10 +101,9 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
       if (connectData) {
         // Classify route as footway by default (could be enhanced with surface detection)
         context.routeSegments = [{
+          coordinates: connectData.routeCoords,
           surface_type: "FOOTWAY",
           length_m: connectData.routeLengthM,
-          start_m: 0,
-          end_m: connectData.routeLengthM,
         }];
 
         // Extract substation headroom from source properties if available
