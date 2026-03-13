@@ -174,13 +174,16 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   };
 
   // Build distance overrides using route measurement
+  // When a route has been drawn (routeDistanceM > 0), use the drawn route distance
+  // as the cable length since it represents the actual measured route, not straight-line.
   const distances = useMemo(() => {
+    const hasDrawnRoute = routeDistanceM > 0;
     if (result?.distances) {
       return {
         ...result.distances,
-        primary_m: Math.min(result.distances.primary_m, routeDistanceM),
-        feeder_m: Math.min(result.distances.feeder_m, routeDistanceM),
-        capacity_segment_m: Math.min(result.distances.capacity_segment_m, routeDistanceM),
+        primary_m: hasDrawnRoute ? routeDistanceM : result.distances.primary_m,
+        feeder_m: hasDrawnRoute ? routeDistanceM : result.distances.feeder_m,
+        capacity_segment_m: hasDrawnRoute ? routeDistanceM : result.distances.capacity_segment_m,
       };
     }
     return { primary_m: routeDistanceM, feeder_m: routeDistanceM, capacity_segment_m: routeDistanceM };
