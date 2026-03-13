@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Layers, Plus, Upload, Loader2, Trash2 } from "lucide-react";
+import { Layers, Plus, Upload, Loader2, Trash2, Eraser } from "lucide-react";
 import { GeoFileUploader } from "./GeoFileUploader";
 
 const CATEGORIES = ["substations", "feeders", "cables", "constraints", "points", "polygons"];
@@ -87,6 +87,29 @@ export function LayerManagement() {
       toast({ title: "Layer deleted" });
     },
     onError: (err: any) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+  });
+
+  const clearDataMut = useMutation({
+    mutationFn: async ({ id, storageTable }: { id: string; storageTable: string }) => {
+      const tableName = storageTable as keyof typeof STORAGE_TABLES extends never ? string : any;
+      // Delete all features for this layer from the storage table
+      const { error: delError } = await supabase
+        .from(storageTable as any)
+        .delete()
+        .eq("layer_id", id);
+      if (delError) throw delError;
+      // Reset feature_count to 0
+      const { error: updError } = await supabase
+        .from("layer_registry")
+        .update({ feature_count: 0, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (updError) throw updError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-layers"] });
+      toast({ title: "Feature data cleared", description: "Layer kept — ready for fresh upload." });
+    },
+    onError: (err: any) => toast({ title: "Clear failed", description: err.message, variant: "destructive" }),
   });
 
   return (
@@ -205,9 +228,22 @@ export function LayerManagement() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700"
+                          disabled={clearDataMut.isPending || (layer.feature_count ?? 0) === 0}
+                          onClick={() => {
+                            if (confirm(`Clear all ${(layer.feature_count ?? 0).toLocaleString()} features from "${layer.display_name}"?\n\nThe layer entry will be kept — you can re-upload fresh data afterwards.`)) {
+                              clearDataMut.mutate({ id: layer.id, storageTable: layer.storage_table });
+                            }
+                          }}
+                        >
+                          <Eraser className="h-3 w-3 mr-1" />Clear
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                           onClick={() => {
-                            if (confirm(`Delete "${layer.display_name}"? This won't delete the features.`)) {
+                            if (confirm(`Delete "${layer.display_name}" entirely? This removes the layer registration (features stay in storage).`)) {
                               deleteMut.mutate(layer.id);
                             }
                           }}
