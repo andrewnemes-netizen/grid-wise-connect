@@ -452,6 +452,12 @@ const MapView = () => {
               lng={evHubLocation.lng}
               lat={evHubLocation.lat}
               onClose={() => setEvHubLocation(null)}
+              connectData={connect.connectEndpoints ? {
+                routeCoords: connect.connectEndpoints.routeCoords,
+                routeLengthM: calcRouteLength(connect.connectEndpoints.routeCoords),
+                sourceProperties: connect.connectEndpoints.source.properties,
+                sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
+              } : null}
             />
           )}
 
