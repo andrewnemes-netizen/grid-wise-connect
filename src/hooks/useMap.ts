@@ -5,6 +5,8 @@ import type { BasemapId } from "@/components/map/BasemapSwitcher";
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 const DEFAULT_ZOOM = 6;
 
+const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F5bm1weWt5dyJ9.LE9-j6HiHMEJqnG86aIxEg";
+
 const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
   street: {
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
@@ -16,6 +18,13 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
     ],
     attribution: '&copy; <a href="https://www.esri.com">Esri</a> &mdash; Sources: Esri, Maxar, Earthstar Geographics',
     maxzoom: 19,
+  },
+  "satellite-hd": {
+    tiles: [
+      `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`,
+    ],
+    attribution: '&copy; <a href="https://www.mapbox.com">Mapbox</a> &copy; Maxar',
+    maxzoom: 22,
   },
   topo: {
     tiles: [
