@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
@@ -18,6 +18,7 @@ const tools = [
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
+  { id: "streetview" as const, icon: Eye, label: "Street View" },
 ] as const;
 
 export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {

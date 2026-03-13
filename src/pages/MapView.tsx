@@ -26,6 +26,7 @@ import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel"
 import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { EvHubPanel } from "@/components/map/EvHubPanel";
+import { StreetViewPanel } from "@/components/map/StreetViewPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
@@ -64,7 +65,8 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null>(null);
+  const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
@@ -130,6 +132,11 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
+      if (activeToolRef.current === "streetview") {
+        setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
+        return;
+      }
       if (activeToolRef.current === "pin") {
         pin.handlePinClick(e);
         setActiveTool(null);
@@ -164,7 +171,7 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview"
         ? "crosshair"
         : "";
   }, [map, activeTool]);
@@ -444,6 +451,14 @@ const MapView = () => {
               lng={evHubLocation.lng}
               lat={evHubLocation.lat}
               onClose={() => setEvHubLocation(null)}
+            />
+          )}
+
+          {streetViewLocation && (
+            <StreetViewPanel
+              lng={streetViewLocation.lng}
+              lat={streetViewLocation.lat}
+              onClose={() => setStreetViewLocation(null)}
             />
           )}
         </>
