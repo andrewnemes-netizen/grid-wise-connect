@@ -426,6 +426,38 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
   y += 4;
   } // end siteDetails
 
+  // ── STREET VIEW CAPTURES ──
+  if (sec.streetView && input.streetViewCaptures && input.streetViewCaptures.length > 0) {
+    input.streetViewCaptures.forEach((capture, idx) => {
+      checkPage(90);
+      doc.setTextColor(BRAND.black);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text(capture.label || `Street View — Angle ${idx + 1}`, margin, y);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.grey);
+      doc.text(`Heading: ${Math.round(capture.heading)}°  Pitch: ${capture.pitch}°`, margin + 80, y);
+      y += 6;
+      drawLine(y);
+      y += 3;
+
+      try {
+        const imgW = contentW;
+        const imgH = imgW * (400 / 640); // maintain 640:400 aspect ratio
+        doc.addImage(capture.dataUrl, "JPEG", margin, y, imgW, imgH);
+        y += imgH + 6;
+      } catch (e) {
+        console.warn("Failed to add street view capture to PDF:", e);
+        doc.setTextColor(BRAND.grey);
+        doc.setFontSize(8);
+        doc.text("[Street view image could not be rendered]", margin, y);
+        y += 6;
+      }
+    });
+  }
+
+
   // ── CONNECTION PROXIMITY ──
   if (input.distances || input.distanceBands) {
     checkPage(30);
