@@ -3,7 +3,7 @@ import { Map, Satellite, Mountain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type BasemapId = "street" | "satellite" | "topo";
+export type BasemapId = "street" | "satellite" | "satellite-hd" | "topo";
 
 interface BasemapOption {
   id: BasemapId;
@@ -14,6 +14,7 @@ interface BasemapOption {
 const basemaps: BasemapOption[] = [
   { id: "street", icon: Map, label: "Street" },
   { id: "satellite", icon: Satellite, label: "Satellite" },
+  { id: "satellite-hd", icon: Satellite, label: "Satellite HD" },
   { id: "topo", icon: Mountain, label: "Topographic" },
 ];
 
