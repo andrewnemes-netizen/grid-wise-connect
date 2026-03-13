@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.delete-user]
 verify_jwt = false
+
+[functions.street-view-proxy]
+verify_jwt = false
