@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
