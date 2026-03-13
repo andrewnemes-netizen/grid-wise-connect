@@ -25,6 +25,7 @@ const DEFAULT_SECTIONS: PdfSections = {
   coverPage: true,
   executiveSummary: true,
   siteDetails: true,
+  streetView: true,
   routeMap: true,
   electricalValidation: true,
   costBreakdown: true,
