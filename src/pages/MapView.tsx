@@ -432,6 +432,16 @@ const MapView = () => {
               onCaptureMapScreenshot={handleCaptureScreenshot}
               onClose={() => { connect.clearConnect(); handleClear(); }}
               streetViewCaptures={streetViewCaptures}
+              designElements={
+                design.elements.length > 0
+                  ? Object.entries(
+                      design.elements.reduce<Record<string, number>>((acc, el) => {
+                        acc[el.element_type] = (acc[el.element_type] || 0) + 1;
+                        return acc;
+                      }, {})
+                    ).map(([type, count]) => ({ type, label: type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), count }))
+                  : undefined
+              }
             />
           )}
 
