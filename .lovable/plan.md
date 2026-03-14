@@ -1,53 +1,43 @@
 
-Goal: fix the infinite loading screen on desktop/laptop so users are redirected correctly to login when not signed in, and can reach the GIS map when signed in.
 
-What I found
-- The issue is reproducible: route `/` stays on `Loading...`.
-- The auth timeout fix in `useAuth` is present and working as intended.
-- The remaining blocker is in `ProtectedRoute` (`src/App.tsx`):
-  - When auth finishes and there is no user, `profileState` is set to `"loading"`.
-  - Render order currently checks `profileState === "loading"` before checking `!user`.
-  - That creates a permanent loading loop for signed-out desktop sessions.
-- This explains why mobile can work (likely cached logged-in session), while laptop browsers (fresh/unsigned) get stuck.
+## Issues Found in the Street View + Connect + PDF Workflow
 
-Implementation plan
+### Bug 1: `streetViewCaptures` never reach the PDF generator
+`MapView.tsx` stores captures in state (`streetViewCaptures`) but **never passes them** to `ConnectAssessmentPanel`. The PDF call at line 557 of `ConnectAssessmentPanel.tsx` omits `streetViewCaptures` entirely, so the Street View section will always be empty in the report.
 
-1) Fix the route gating logic in `src/App.tsx`
-- Update `ProtectedRoute` render conditions so authentication state is evaluated first:
-  - Keep loading screen only while `loading === true`.
-  - If `!user`, immediately redirect to `/auth` (do not depend on `profileState`).
-  - Only then handle profile states for authenticated users.
-- Expected condition order:
-  1. `if (loading) ...`
-  2. `if (!user) return <Navigate to="/auth" replace />`
-  3. `if (profileState === "loading") ...`
-  4. pending/incomplete/complete branches
+**Fix:** Add a `streetViewCaptures` prop to `ConnectAssessmentPanel` and thread it through from `MapView.tsx`. Pass it into the `generateAssessmentPdf()` call.
 
-2) Prevent unnecessary “loading” state for signed-out users
-- In the `useEffect` branch `(!loading && !user)`, set profile state to a neutral non-blocking value (or leave unchanged) instead of `"loading"`.
-- This avoids any future reintroduction of the same lock.
+### Bug 2: `connectData` missing from `handleRun` dependency array
+In `EvHubPanel.tsx` line 144, the `useCallback` dependency array omits `connectData`. If a user draws a Connect route *after* opening EV Hub, pressing "Run" uses a stale closure without the route data.
 
-3) Add defensive profile-check handling (small hardening)
-- Wrap `checkProfile()` query handling with explicit fallback behavior if query fails/returns unexpected shape:
-  - For authenticated users, fail closed to `"incomplete"` (or a safe fallback state), never infinite loading.
-- Keep current UX unchanged for approved users.
+**Fix:** Add `connectData` to the dependency array.
 
-4) Verification checklist (desktop-focused)
-- Test on Chrome/Edge/Firefox desktop in fresh session:
-  - Open `/` while signed out → should redirect to `/auth` quickly (no endless loader).
-- Sign in on desktop:
-  - Approved + complete profile → map renders.
-  - Incomplete profile → complete-profile screen appears.
-  - Unapproved profile → pending-approval screen appears.
-- Refresh `/` after login and after logout to confirm no regressions.
-- Confirm mobile behavior remains unchanged.
+### Bug 3: Workflow ordering friction — Street View deactivates after one click
+When the user clicks the Street View tool, `setActiveTool(null)` fires immediately (line 138), so they can only place one Street View location per activation. This is fine, but the Street View panel also closes when the user clicks another tool, because `streetViewLocation` persists but the panel may get obscured by other panels (e.g., EV Hub). The panels compete for screen real estate in the top-right corner.
 
-Technical notes
-- File to modify: `src/App.tsx` only.
-- No backend/database changes required.
-- No auth provider/API contract changes required.
-- This is a client-side route-state bug, not a map rendering engine failure.
+**Fix:** Reposition the Street View panel so it doesn't overlap with the EV Hub side panel (move it left or make it a floating panel with drag).
 
-Risk and mitigation
-- Risk: changing route order could affect onboarding flow.
-- Mitigation: explicit branch testing for all 4 user states (signed out, incomplete, pending, complete) before finalizing.
+### Bug 4: No Connect data indicator in EV Hub panel
+When Connect data is available, the EV Hub panel shows no visual confirmation. Users don't know if route/headroom data was ingested.
+
+**Fix:** Add a small badge or info row in the EV Hub panel showing "Connect route: 245m" and "Headroom: 200 kW" when `connectData` is present.
+
+---
+
+### Implementation Plan
+
+1. **Thread `streetViewCaptures` to ConnectAssessmentPanel**
+   - Add `streetViewCaptures` prop to `ConnectAssessmentPanelProps`
+   - Pass from `MapView.tsx` line 426
+   - Include in `generateAssessmentPdf()` call at line 557
+   - Include `sections: { streetView: true }` in the PDF call
+
+2. **Fix `connectData` stale closure in EvHubPanel**
+   - Add `connectData` to `handleRun` dependency array at line 144
+
+3. **Add Connect data indicator in EV Hub panel**
+   - Show a small info block when `connectData` is present, displaying route length and headroom values
+
+4. **Adjust Street View panel positioning**
+   - Change from `right-14` to a left-side or center position so it doesn't conflict with the EV Hub side panel
+
