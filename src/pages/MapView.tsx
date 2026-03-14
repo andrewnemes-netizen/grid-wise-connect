@@ -510,7 +510,6 @@ const MapView = () => {
               </span>
             </Button>
           </div>
-          )}
         </>
       )}
     </div>
