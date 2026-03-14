@@ -571,6 +571,8 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       unitRates,
                       voltageOverride,
                       nearestHeadroomKw: sourceHeadroomKw,
+                      streetViewCaptures,
+                      sections: { streetView: (streetViewCaptures?.length ?? 0) > 0 },
                     });
                   }}
                 >

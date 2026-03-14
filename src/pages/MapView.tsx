@@ -427,6 +427,7 @@ const MapView = () => {
               endpoints={connect.connectEndpoints}
               onCaptureMapScreenshot={handleCaptureScreenshot}
               onClose={() => { connect.clearConnect(); handleClear(); }}
+              streetViewCaptures={streetViewCaptures}
             />
           )}
 
