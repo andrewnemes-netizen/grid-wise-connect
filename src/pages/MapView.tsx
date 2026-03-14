@@ -75,6 +75,8 @@ const MapView = () => {
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
+  const standaloneStreetViewRef = useRef(standaloneStreetView);
+  standaloneStreetViewRef.current = standaloneStreetView;
 
   // Extracted hooks
   const {
