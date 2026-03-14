@@ -39,7 +39,7 @@ interface StreetViewPanelProps {
 
 const IMG_W = 640;
 const IMG_H = 400;
-const FOV = 90;
+const DEFAULT_FOV = 90;
 
 // ── Bearing & projection utilities ──
 
