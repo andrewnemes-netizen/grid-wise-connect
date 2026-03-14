@@ -121,7 +121,7 @@ export function StreetViewPanel({
     .map((m) => {
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
-      const pos = projectMarker(heading, bearing, distance);
+      const pos = projectMarker(heading, bearing, distance, fov);
       return { ...m, ...pos, distance };
     })
     .filter((m) => m.visible && m.distance < 200);
