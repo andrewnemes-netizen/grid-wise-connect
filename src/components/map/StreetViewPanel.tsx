@@ -4,7 +4,7 @@
  * - Capture: Static image with design marker overlays for PDF reports
  */
 import { useState, useCallback } from "react";
-import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture } from "lucide-react";
+import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +39,7 @@ interface StreetViewPanelProps {
 
 const IMG_W = 640;
 const IMG_H = 400;
-const FOV = 90;
+const DEFAULT_FOV = 90;
 
 // ── Bearing & projection utilities ──
 
@@ -67,15 +67,16 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
 function projectMarker(
   heading: number,
   markerBearing: number,
-  distance: number
+  distance: number,
+  currentFov: number
 ): { xPct: number; yPct: number; visible: boolean; scale: number } {
   let rel = markerBearing - heading;
   while (rel > 180) rel -= 360;
   while (rel < -180) rel += 360;
 
-  if (Math.abs(rel) > FOV / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+  if (Math.abs(rel) > currentFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
 
-  const xPct = (rel / FOV + 0.5) * 100;
+  const xPct = (rel / currentFov + 0.5) * 100;
   const yPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
   const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
 
@@ -108,18 +109,19 @@ export function StreetViewPanel({
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
   const [capturing, setCapturing] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [fov, setFov] = useState(DEFAULT_FOV);
 
-  const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${FOV}&key=${GOOGLE_MAPS_KEY}`;
+  const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${GOOGLE_MAPS_KEY}`;
 
   // Google Street View Embed URL for interactive mode
-  const embedSrc = `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${FOV}`;
+  const embedSrc = `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}`;
 
   // Project markers onto the image (capture mode only)
   const projected = markers
     .map((m) => {
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
-      const pos = projectMarker(heading, bearing, distance);
+      const pos = projectMarker(heading, bearing, distance, fov);
       return { ...m, ...pos, distance };
     })
     .filter((m) => m.visible && m.distance < 200);
@@ -134,7 +136,7 @@ export function StreetViewPanel({
     setCapturing(true);
     try {
       const { data, error } = await supabase.functions.invoke("street-view-proxy", {
-        body: { lat, lng, heading, pitch, fov: FOV, width: IMG_W, height: IMG_H },
+        body: { lat, lng, heading, pitch, fov, width: IMG_W, height: IMG_H },
       });
 
       if (error) throw new Error(error.message || "Proxy error");
@@ -206,7 +208,7 @@ export function StreetViewPanel({
     } finally {
       setCapturing(false);
     }
-  }, [lat, lng, heading, pitch, captures, projected, onCaptures, toast]);
+  }, [lat, lng, heading, pitch, fov, captures, projected, onCaptures, toast]);
 
   return (
     <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 w-[520px] rounded-xl border bg-background/95 backdrop-blur shadow-xl overflow-hidden">
@@ -367,6 +369,23 @@ export function StreetViewPanel({
                 className="flex-1"
               />
               <span className="text-xs font-mono w-8 text-right">{pitch}°</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-14">Zoom</span>
+              <ZoomOut className="h-3 w-3 text-muted-foreground" />
+              <Slider
+                value={[fov]}
+                min={20}
+                max={120}
+                step={5}
+                onValueChange={([v]) => {
+                  setFov(v);
+                  setImgLoaded(false);
+                }}
+                className="flex-1"
+              />
+              <ZoomIn className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs font-mono w-8 text-right">{fov}°</span>
             </div>
           </div>
         </>
