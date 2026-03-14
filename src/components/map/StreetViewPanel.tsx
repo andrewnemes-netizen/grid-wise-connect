@@ -370,6 +370,23 @@ export function StreetViewPanel({
               />
               <span className="text-xs font-mono w-8 text-right">{pitch}°</span>
             </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-14">Zoom</span>
+              <ZoomOut className="h-3 w-3 text-muted-foreground" />
+              <Slider
+                value={[fov]}
+                min={20}
+                max={120}
+                step={5}
+                onValueChange={([v]) => {
+                  setFov(v);
+                  setImgLoaded(false);
+                }}
+                className="flex-1"
+              />
+              <ZoomIn className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs font-mono w-8 text-right">{fov}°</span>
+            </div>
           </div>
         </>
       )}
