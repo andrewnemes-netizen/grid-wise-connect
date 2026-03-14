@@ -3,7 +3,7 @@
  * - Explore: Interactive Google Street View iframe with full 360° navigation
  * - Capture: Static image with design marker overlays for PDF reports
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -111,6 +111,11 @@ export function StreetViewPanel({
   const [imgLoaded, setImgLoaded] = useState(false);
   const [fov, setFov] = useState(DEFAULT_FOV);
 
+  // Draggable marker overrides: store adjusted positions as { xPct, yPct }
+  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${GOOGLE_MAPS_KEY}`;
 
   // Google Street View Embed URL for interactive mode
@@ -118,13 +123,41 @@ export function StreetViewPanel({
 
   // Project markers onto the image (capture mode only)
   const projected = markers
-    .map((m) => {
+    .map((m, i) => {
+      const key = `${m.type}-${i}`;
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
       const pos = projectMarker(heading, bearing, distance, fov);
-      return { ...m, ...pos, distance };
+      // Apply drag overrides if present
+      const override = markerOverrides[key];
+      if (override) {
+        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
+      }
+      return { ...m, ...pos, distance, key };
     })
     .filter((m) => m.visible && m.distance < 200);
+
+  // Drag handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
+    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
+    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
+    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
@@ -255,7 +288,13 @@ export function StreetViewPanel({
       {/* ── CAPTURE MODE: Static image with markers ── */}
       {mode === "capture" && (
         <>
-          <div className="relative bg-muted" style={{ aspectRatio: `${IMG_W}/${IMG_H}` }}>
+          <div
+            ref={containerRef}
+            className="relative bg-muted select-none"
+            style={{ aspectRatio: `${IMG_W}/${IMG_H}` }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
             {!imgLoaded && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -271,17 +310,20 @@ export function StreetViewPanel({
               onError={() => setImgLoaded(true)}
             />
 
-            {/* Marker overlays */}
+            {/* Draggable marker overlays */}
             {imgLoaded &&
-              projected.map((m, i) => (
+              projected.map((m) => (
                 <div
-                  key={`${m.type}-${i}`}
-                  className="absolute pointer-events-none flex flex-col items-center"
+                  key={m.key}
+                  className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing"
                   style={{
                     left: `${m.xPct}%`,
                     top: `${m.yPct}%`,
                     transform: "translate(-50%, -50%)",
+                    touchAction: "none",
+                    zIndex: 10,
                   }}
+                  onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
                 >
                   <div
                     className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
@@ -295,7 +337,7 @@ export function StreetViewPanel({
                     {MARKER_INITIALS[m.type] || m.label.charAt(0)}
                   </div>
                   <span
-                    className="text-white font-semibold mt-0.5"
+                    className="text-white font-semibold mt-0.5 pointer-events-none"
                     style={{
                       fontSize: `${9 * m.scale}px`,
                       textShadow: "0 1px 3px rgba(0,0,0,0.9)",
@@ -310,7 +352,7 @@ export function StreetViewPanel({
             {markers.length > 0 && (
               <div className="absolute top-2 left-2">
                 <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur">
-                  {projected.length} marker{projected.length !== 1 ? "s" : ""} visible
+                  {projected.length} marker{projected.length !== 1 ? "s" : ""} visible · drag to reposition
                 </Badge>
               </div>
             )}
