@@ -134,9 +134,10 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      if (activeToolRef.current === "streetview") {
+      if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
         setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         setActiveTool(null);
+        setStandaloneStreetView(false);
         return;
       }
       if (activeToolRef.current === "pin") {
