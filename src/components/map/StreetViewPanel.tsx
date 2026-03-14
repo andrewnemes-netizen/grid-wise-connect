@@ -111,6 +111,11 @@ export function StreetViewPanel({
   const [imgLoaded, setImgLoaded] = useState(false);
   const [fov, setFov] = useState(DEFAULT_FOV);
 
+  // Draggable marker overrides: store adjusted positions as { xPct, yPct }
+  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${GOOGLE_MAPS_KEY}`;
 
   // Google Street View Embed URL for interactive mode
@@ -118,13 +123,41 @@ export function StreetViewPanel({
 
   // Project markers onto the image (capture mode only)
   const projected = markers
-    .map((m) => {
+    .map((m, i) => {
+      const key = `${m.type}-${i}`;
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
       const pos = projectMarker(heading, bearing, distance, fov);
-      return { ...m, ...pos, distance };
+      // Apply drag overrides if present
+      const override = markerOverrides[key];
+      if (override) {
+        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
+      }
+      return { ...m, ...pos, distance, key };
     })
     .filter((m) => m.visible && m.distance < 200);
+
+  // Drag handlers
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
+    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
+    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
+    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
