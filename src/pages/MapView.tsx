@@ -179,7 +179,7 @@ const MapView = () => {
       activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview" || standaloneStreetView
         ? "crosshair"
         : "";
-  }, [map, activeTool]);
+  }, [map, activeTool, standaloneStreetView]);
 
   // Postcode search
   const handleSearchResult = useCallback(
