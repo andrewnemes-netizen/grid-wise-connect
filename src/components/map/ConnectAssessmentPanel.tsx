@@ -41,6 +41,7 @@ interface ConnectAssessmentPanelProps {
   onClose: () => void;
   onCaptureMapScreenshot?: () => Promise<string | null>;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
+  designElements?: { type: string; label: string; count: number }[];
 }
 
 export interface SavedAssessment {
@@ -95,7 +96,7 @@ const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg:
 
 const OPTION_LETTERS = "ABCDEFGHIJ";
 
-export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures }: ConnectAssessmentPanelProps) {
+export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures, designElements }: ConnectAssessmentPanelProps) {
   const { toast } = useToast();
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -572,7 +573,11 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                       voltageOverride,
                       nearestHeadroomKw: sourceHeadroomKw,
                       streetViewCaptures,
-                      sections: { streetView: (streetViewCaptures?.length ?? 0) > 0 },
+                      designElements: designElements,
+                      sections: {
+                        streetView: (streetViewCaptures?.length ?? 0) > 0,
+                        designElements: (designElements?.length ?? 0) > 0,
+                      },
                     });
                   }}
                 >

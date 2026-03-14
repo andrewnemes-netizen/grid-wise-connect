@@ -305,6 +305,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       { label: "Cutout", color: "#f39c12", symbol: "C" },
       { label: "Joint", color: "#9b59b6", symbol: "J" },
       { label: "Pole", color: "#1abc9c", symbol: "P" },
+      { label: "EV Charger", color: "#00b894", symbol: "E" },
     ];
 
     const colW = contentW / 2;
