@@ -40,6 +40,7 @@ interface ConnectAssessmentPanelProps {
   endpoints: ConnectEndpoints;
   onClose: () => void;
   onCaptureMapScreenshot?: () => Promise<string | null>;
+  streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
 }
 
 export interface SavedAssessment {
