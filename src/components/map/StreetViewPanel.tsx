@@ -3,7 +3,7 @@
  * - Explore: Interactive Google Street View iframe with full 360° navigation
  * - Capture: Static image with design marker overlays for PDF reports
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
