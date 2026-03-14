@@ -68,12 +68,15 @@ const MapView = () => {
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
+  const [standaloneStreetView, setStandaloneStreetView] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
+  const standaloneStreetViewRef = useRef(standaloneStreetView);
+  standaloneStreetViewRef.current = standaloneStreetView;
 
   // Extracted hooks
   const {
@@ -133,9 +136,10 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      if (activeToolRef.current === "streetview") {
+      if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
         setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         setActiveTool(null);
+        setStandaloneStreetView(false);
         return;
       }
       if (activeToolRef.current === "pin") {
@@ -172,10 +176,10 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview" || standaloneStreetView
         ? "crosshair"
         : "";
-  }, [map, activeTool]);
+  }, [map, activeTool, standaloneStreetView]);
 
   // Postcode search
   const handleSearchResult = useCallback(
@@ -467,6 +471,7 @@ const MapView = () => {
               lng={streetViewLocation.lng}
               lat={streetViewLocation.lat}
               onClose={() => setStreetViewLocation(null)}
+              existingCaptures={streetViewCaptures}
               markers={
                 design.elements.map((el) => ({
                   lat: Number(el.lat),
@@ -480,12 +485,31 @@ const MapView = () => {
                     el.element_type === "cutout" ? "#f39c12" :
                     el.element_type === "joint" ? "#9b59b6" :
                     el.element_type === "pole" ? "#1abc9c" :
+                    el.element_type === "ev_charger" ? "#00b894" :
                     "#2ecc71",
                 } as StreetViewMarker))
               }
               onCaptures={setStreetViewCaptures}
             />
           )}
+
+          {/* Standalone Street View button — bottom-left */}
+          <div className="absolute bottom-4 left-4 z-10">
+            <Button
+              size="sm"
+              variant={standaloneStreetView ? "default" : "outline"}
+              className="h-9 shadow-md bg-background/95 backdrop-blur gap-1.5"
+              onClick={() => setStandaloneStreetView((v) => !v)}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className={`h-4 w-4 ${standaloneStreetView ? 'text-primary-foreground' : 'text-amber-500'}`}>
+                <circle cx="12" cy="6" r="3" />
+                <ellipse cx="12" cy="15" rx="4" ry="5" />
+              </svg>
+              <span className="text-xs font-medium">
+                {standaloneStreetView ? "Click map…" : "Street View"}
+              </span>
+            </Button>
+          </div>
         </>
       )}
     </div>

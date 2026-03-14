@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type EquipmentType = "transformer" | "rmu" | "feeder_pillar" | "cutout" | "joint" | "pole";
+export type EquipmentType = "transformer" | "rmu" | "feeder_pillar" | "cutout" | "joint" | "pole" | "ev_charger";
 export type CableType = "lv_main" | "lv_service" | "hv_cable" | "pilot_cable";
 
 export interface DesignElement {
@@ -36,6 +36,7 @@ const EQUIPMENT_CONFIG: Record<EquipmentType, { color: string; symbol: string; l
   cutout: { color: "#f39c12", symbol: "C", label: "Cutout" },
   joint: { color: "#9b59b6", symbol: "J", label: "Joint" },
   pole: { color: "#1abc9c", symbol: "P", label: "Pole" },
+  ev_charger: { color: "#00b894", symbol: "E", label: "EV Charger" },
 };
 
 const CABLE_CONFIG: Record<CableType, { color: string; label: string; dasharray: number[] }> = {
