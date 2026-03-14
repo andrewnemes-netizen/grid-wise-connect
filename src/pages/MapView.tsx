@@ -471,6 +471,7 @@ const MapView = () => {
               lng={streetViewLocation.lng}
               lat={streetViewLocation.lat}
               onClose={() => setStreetViewLocation(null)}
+              existingCaptures={streetViewCaptures}
               markers={
                 design.elements.map((el) => ({
                   lat: Number(el.lat),
@@ -484,11 +485,31 @@ const MapView = () => {
                     el.element_type === "cutout" ? "#f39c12" :
                     el.element_type === "joint" ? "#9b59b6" :
                     el.element_type === "pole" ? "#1abc9c" :
+                    el.element_type === "ev_charger" ? "#00b894" :
                     "#2ecc71",
                 } as StreetViewMarker))
               }
               onCaptures={setStreetViewCaptures}
             />
+          )}
+
+          {/* Standalone Street View button — bottom-left */}
+          <div className="absolute bottom-4 left-4 z-10">
+            <Button
+              size="sm"
+              variant={standaloneStreetView ? "default" : "outline"}
+              className="h-9 shadow-md bg-background/95 backdrop-blur gap-1.5"
+              onClick={() => setStandaloneStreetView((v) => !v)}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" className={`h-4 w-4 ${standaloneStreetView ? 'text-primary-foreground' : 'text-amber-500'}`}>
+                <circle cx="12" cy="6" r="3" />
+                <ellipse cx="12" cy="15" rx="4" ry="5" />
+              </svg>
+              <span className="text-xs font-medium">
+                {standaloneStreetView ? "Click map…" : "Street View"}
+              </span>
+            </Button>
+          </div>
           )}
         </>
       )}
