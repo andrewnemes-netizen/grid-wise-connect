@@ -494,7 +494,7 @@ const MapView = () => {
           )}
 
           {/* Standalone Street View button — bottom-left */}
-          <div className="absolute bottom-4 left-4 z-10">
+          <div className="absolute bottom-20 left-3 z-10">
             <Button
               size="sm"
               variant={standaloneStreetView ? "default" : "outline"}
