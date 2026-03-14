@@ -4,7 +4,7 @@
  * - Capture: Static image with design marker overlays for PDF reports
  */
 import { useState, useCallback } from "react";
-import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture } from "lucide-react";
+import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
