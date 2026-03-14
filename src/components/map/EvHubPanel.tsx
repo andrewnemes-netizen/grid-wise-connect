@@ -141,7 +141,7 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [lat, lng, chargerCount, chargerKw, diversityFactor, extraneous, dnoOverride, toast]);
+  }, [lat, lng, chargerCount, chargerKw, diversityFactor, extraneous, dnoOverride, connectData, toast]);
 
   const stateConfig = result ? STATE_CONFIG[result.feasibility_state] : null;
 
@@ -166,6 +166,20 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
             <p className="text-xs text-muted-foreground">Location</p>
             <p className="text-sm font-mono">{lat.toFixed(5)}, {lng.toFixed(5)}</p>
           </div>
+
+          {/* Connect data indicator */}
+          {connectData && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Connect Route Data</p>
+              <div className="flex items-center gap-3 text-xs">
+                <span>Route: <strong>{Math.round(connectData.routeLengthM).toLocaleString()} m</strong></span>
+                {(connectData.sourceProperties?.headroom_kw as number | undefined) != null && (
+                  <span>Headroom: <strong>{(connectData.sourceProperties.headroom_kw as number).toLocaleString()} kW</strong></span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">From: {connectData.sourceLayerLabel}</p>
+            </div>
+          )}
 
           {/* Inputs */}
           <div className="space-y-3">

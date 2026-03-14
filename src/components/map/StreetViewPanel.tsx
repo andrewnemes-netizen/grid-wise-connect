@@ -211,7 +211,7 @@ export function StreetViewPanel({
   }, [lat, lng, heading, pitch, captures, projected, onCaptures, toast]);
 
   return (
-    <div className="absolute top-2 right-14 z-20 w-[480px] rounded-xl border bg-background/95 backdrop-blur shadow-xl overflow-hidden">
+    <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 w-[480px] rounded-xl border bg-background/95 backdrop-blur shadow-xl overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="flex items-center gap-2">
