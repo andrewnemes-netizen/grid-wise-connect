@@ -3,7 +3,7 @@ import maplibregl from "maplibre-gl";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-export type EquipmentType = "transformer" | "rmu" | "feeder_pillar" | "cutout" | "joint" | "pole";
+export type EquipmentType = "transformer" | "rmu" | "feeder_pillar" | "cutout" | "joint" | "pole" | "ev_charger";
 export type CableType = "lv_main" | "lv_service" | "hv_cable" | "pilot_cable";
 
 export interface DesignElement {
