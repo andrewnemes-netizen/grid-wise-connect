@@ -68,6 +68,7 @@ const MapView = () => {
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
+  const [standaloneStreetView, setStandaloneStreetView] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
