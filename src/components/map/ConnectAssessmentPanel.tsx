@@ -41,6 +41,7 @@ interface ConnectAssessmentPanelProps {
   onClose: () => void;
   onCaptureMapScreenshot?: () => Promise<string | null>;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
+  designElements?: { type: string; label: string; count: number }[];
 }
 
 export interface SavedAssessment {
