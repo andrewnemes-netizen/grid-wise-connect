@@ -108,11 +108,12 @@ export function StreetViewPanel({
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
   const [capturing, setCapturing] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [fov, setFov] = useState(DEFAULT_FOV);
 
-  const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${FOV}&key=${GOOGLE_MAPS_KEY}`;
+  const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${GOOGLE_MAPS_KEY}`;
 
   // Google Street View Embed URL for interactive mode
-  const embedSrc = `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${FOV}`;
+  const embedSrc = `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}`;
 
   // Project markers onto the image (capture mode only)
   const projected = markers
