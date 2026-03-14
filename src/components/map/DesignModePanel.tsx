@@ -29,6 +29,7 @@ const equipmentTypes: EquipmentType[] = [
   "cutout",
   "joint",
   "pole",
+  "ev_charger",
 ];
 
 const cableTypes: CableType[] = ["lv_main", "lv_service", "hv_cable", "pilot_cable"];
