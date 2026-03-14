@@ -67,15 +67,16 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
 function projectMarker(
   heading: number,
   markerBearing: number,
-  distance: number
+  distance: number,
+  currentFov: number
 ): { xPct: number; yPct: number; visible: boolean; scale: number } {
   let rel = markerBearing - heading;
   while (rel > 180) rel -= 360;
   while (rel < -180) rel += 360;
 
-  if (Math.abs(rel) > FOV / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+  if (Math.abs(rel) > currentFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
 
-  const xPct = (rel / FOV + 0.5) * 100;
+  const xPct = (rel / currentFov + 0.5) * 100;
   const yPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
   const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
 
