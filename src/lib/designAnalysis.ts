@@ -270,12 +270,11 @@ const UPGRADE_PATHS: Record<string, string[]> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-/** Select Zs limit based on supply capacity */
+/** Select Zs limit based on supply capacity (3-phase) */
 function selectZsLimit(capacityA: number, thresholds: G81ZsThresholds): number {
-  if (capacityA >= 400) return thresholds.zs_400a;
-  if (capacityA >= 300) return thresholds.zs_300a;
-  if (capacityA >= 200) return thresholds.zs_200a;
-  return thresholds.zs_100a;
+  if (capacityA >= 100) return thresholds.zs_100a;
+  if (capacityA >= 80) return thresholds.zs_80a;
+  return thresholds.zs_60a;
 }
 
 /** Get expected PFC range for a node type */
