@@ -36,7 +36,7 @@ export async function runFeasibilityEngine(
       ? assets.nearest_substation.capacity_kw / 0.95
       : null,
     siteHasMetallicServices: false,
-    cableCandidates: [],
+    cableCandidates: cableCandidates ?? [],
   };
 
   // Run the full EV Hub engine
