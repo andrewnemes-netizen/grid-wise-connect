@@ -93,6 +93,7 @@ const MapView = () => {
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
   const activeStudy = useActiveStudy();
   const design = useDesignMode(map, activeStudy.studyId);
+  const planning = usePlanningLayers();
 
   // Auto-save boundary to study when finished
   useEffect(() => {
