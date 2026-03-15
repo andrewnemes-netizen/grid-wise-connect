@@ -4,7 +4,7 @@
  * Capture reads the current POV automatically.
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Camera, Loader2, Check, Plus, Trash2 } from "lucide-react";
+import { X, Camera, Loader2, Check, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
