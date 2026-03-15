@@ -214,14 +214,18 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       suggestions.push(`Consider derating or upgrading for future load growth`);
     }
 
-    // Cable length check
-    if (cable.cable_type === "lv_service" && cable.length_m > 25) {
-      flags.push({ code: "SERVICE_LENGTH", severity: "warning", message: `LV service cable ${cable.length_m.toFixed(0)}m exceeds typical 25m maximum` });
+    // Cable length check — uses DNO G81 service length cap and joint spacing
+    if (cable.cable_type === "lv_service" && cable.length_m > maxServiceLen) {
+      flags.push({ code: "SERVICE_LENGTH", severity: "warning", message: `LV service cable ${cable.length_m.toFixed(0)}m exceeds ${dno?.dno_code || "default"} maximum of ${maxServiceLen}m` });
       suggestions.push(`Consider adding a feeder pillar to reduce service length`);
     }
-    if (cable.cable_type === "lv_main" && cable.length_m > 200) {
-      flags.push({ code: "JOINT_REQUIRED", severity: "info", message: `LV main ${cable.length_m.toFixed(0)}m — joint recommended every 200m` });
-      const jointsNeeded = Math.floor(cable.length_m / 200);
+    if (cable.cable_type === "lv_service" && cable.length_m > serviceLengthCap) {
+      flags.push({ code: "SERVICE_CAP_EXCEEDED", severity: "error", message: `LV service ${cable.length_m.toFixed(0)}m exceeds ${dno?.dno_code || "DNO"} hard cap of ${serviceLengthCap}m — hybrid approach required` });
+      suggestions.push(`Route exceeds service length cap. Hybrid mains + service approach required.`);
+    }
+    if (cable.cable_type === "lv_main" && cable.length_m > jointSpacing) {
+      flags.push({ code: "JOINT_REQUIRED", severity: "info", message: `LV main ${cable.length_m.toFixed(0)}m — joint recommended every ${jointSpacing}m (${dno?.dno_code || "default"} rules)` });
+      const jointsNeeded = Math.floor(cable.length_m / jointSpacing);
       suggestions.push(`Add ${jointsNeeded} joint(s) along this cable run`);
     }
 
