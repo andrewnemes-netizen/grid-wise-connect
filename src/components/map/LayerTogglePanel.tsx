@@ -318,6 +318,11 @@ export function LayerTogglePanel({
                   Planning
                   {planningVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{planningVisibleCount}</Badge>}
                 </TabsTrigger>
+                <TabsTrigger value="landregistry" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                  <Landmark className="h-3 w-3" />
+                  Land Reg
+                  {lrVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{lrVisibleCount}</Badge>}
+                </TabsTrigger>
               </TabsList>
 
               {/* Network Tab */}
