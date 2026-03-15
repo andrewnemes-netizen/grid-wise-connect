@@ -310,6 +310,10 @@ const MapView = () => {
             loadingLayers={loadingLayers}
             selectedDno={selectedDno}
             onDnoChange={setSelectedDno}
+            planningDatasets={planning.planningDatasets}
+            planningVisibility={planning.planningVisibility}
+            planningLoading={planning.planningLoading}
+            onPlanningToggle={(id, visible) => planning.togglePlanningLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}
