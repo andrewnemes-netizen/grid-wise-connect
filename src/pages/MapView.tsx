@@ -141,6 +141,11 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
+      if (activeToolRef.current === "gridwise") {
+        setGridwiseLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
+        return;
+      }
       // Street View tool removed - re-enable later with better positioning
       // if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
       //   setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
