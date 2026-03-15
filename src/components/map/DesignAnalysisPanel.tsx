@@ -563,14 +563,22 @@ export function DesignAnalysisPanel({
                             <div className="px-2 pb-2 space-y-1 border-t bg-muted/10 pt-1.5">
                               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                                 <span className="text-muted-foreground">Zs</span>
-                                <span>{node.zs_ohms}Ω</span>
+                                <span className={node.zs_pass === false ? "text-destructive font-medium" : ""}>{node.zs_ohms}Ω <span className="text-muted-foreground text-[9px]">(limit {node.zs_limit_ohms}Ω)</span></span>
                                 <span className="text-muted-foreground">PFC</span>
-                                <span>{node.pfc_amps.toLocaleString()}A</span>
+                                <span className={node.pfc_in_range ? "" : "text-amber-600 font-medium"}>
+                                  {(node.pfc_amps/1000).toFixed(1)}kA
+                                  <span className="text-muted-foreground text-[9px]"> ({(node.pfc_expected_min/1000).toFixed(0)}–{(node.pfc_expected_max/1000).toFixed(0)}kA)</span>
+                                </span>
+                                <span className="text-muted-foreground">Delivered Voltage</span>
+                                <span className={node.esqcr_pass ? "" : "text-destructive font-medium"}>
+                                  {node.delivered_voltage_v}V
+                                  <span className="text-muted-foreground text-[9px]"> (ESQCR 216–253V)</span>
+                                </span>
                                 <span className="text-muted-foreground">Earthing</span>
                                 <span>{node.earthing_ok ? "✓ OK" : "⚠ Review"}</span>
                               </div>
                               {node.flags.map((f, i) => (
-                                <div key={i} className={`flex items-start gap-1 text-[10px] ${f.severity === "error" ? "text-red-600" : f.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>
+                                <div key={i} className={`flex items-start gap-1 text-[10px] ${f.severity === "error" ? "text-destructive" : f.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>
                                   {f.severity === "error" ? <XCircle className="h-3 w-3 mt-0.5 shrink-0" /> : <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
                                   {f.message}
                                 </div>
