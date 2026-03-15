@@ -140,6 +140,38 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables, autoD
           }));
       }
 
+      // ── Integrate auto-detected route data ──
+      if (autoDetectData) {
+        // Cable candidates from spatial detection
+        if (autoDetectData.cable_candidates.length > 0 && (!context.cableCandidates || context.cableCandidates.length === 0)) {
+          context.cableCandidates = autoDetectData.cable_candidates.map(c => ({
+            cable_segment_id: `auto-${c.id}`,
+            distance_m: c.distance_m,
+            capacity_headroom_pct: null,
+            age_years: null,
+            accessibility_score: null,
+          }));
+        }
+
+        // Surface segments from highway data
+        if (autoDetectData.surface_segments.length > 0) {
+          context.routeSegments = autoDetectData.surface_segments.map(s => ({
+            coordinates: [] as [number, number][],
+            surface_type: s.surface_type as "FOOTWAY" | "CARRIAGEWAY" | "VERGE",
+            length_m: s.length_m,
+          }));
+        }
+
+        // Crossings from spatial intersection
+        if (autoDetectData.crossings.length > 0) {
+          context.routeCrossings = autoDetectData.crossings.map((cr, i) => ({
+            crossing_id: `auto-crossing-${i}`,
+            crossing_type: cr.crossing_type === "CABLE" ? "UTILITY" : "UTILITY",
+            width_m: 2,
+          }));
+        }
+      }
+
       const output = await runEvHubEngine(
         {
           site_lat: lat,
