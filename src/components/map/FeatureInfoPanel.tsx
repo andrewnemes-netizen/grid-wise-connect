@@ -1,4 +1,4 @@
-import { X, Zap, Activity, Users, ArrowUpRight } from "lucide-react";
+import { X, Zap, Activity, Users, ArrowUpRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ interface FeatureInfoPanelProps {
 }
 
 const HIDDEN_KEYS = ["id", "geometry", "geom", "ogc_fid", "attrs_json", "layer_id", "created_at", "dno", "source_date"];
+const PLANNING_HIDDEN_KEYS = ["typology", "prefix", "organisation-entity", "quality"];
 
 /** Flatten attrs_json into top-level properties so all CSV columns are accessible.
  *  MapLibre serialises nested objects to JSON strings, so we parse first. */
