@@ -141,7 +141,7 @@ const DEFAULT_FAULT_V = 230;
 // Default cable specs when catalogue data unavailable
 const FALLBACK_SPECS: Record<string, CableSpec> = {
   lv_main: { impedance_per_km: 0.32, current_rating_a: 300, cost_per_m: 85, diameter_mm: 95, cable_type: "185mm² XLPE Al", voltage_class: "LV" },
-  lv_service: { impedance_per_km: 0.64, current_rating_a: 100, cost_per_m: 45, diameter_mm: 25, cable_type: "25mm² Cu", voltage_class: "LV" },
+  lv_service: { impedance_per_km: 0.524, current_rating_a: 125, cost_per_m: 52, diameter_mm: 35, cable_type: "35mm² Cu", voltage_class: "LV" },
   hv_cable: { impedance_per_km: 0.125, current_rating_a: 400, cost_per_m: 145, diameter_mm: 185, cable_type: "300mm² XLPE Cu", voltage_class: "HV" },
   pilot_cable: { impedance_per_km: 1.2, current_rating_a: 30, cost_per_m: 12, diameter_mm: 6, cable_type: "4mm² pilot", voltage_class: "LV" },
 };
