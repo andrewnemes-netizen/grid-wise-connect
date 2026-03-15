@@ -137,7 +137,7 @@ export function StreetViewPanel({
     loadGoogleMaps().then(() => {
       if (cancelled || !containerRef.current) return;
 
-      const pano = new google.maps.StreetViewPanorama(containerRef.current, {
+      const pano = new (window as any).google.maps.StreetViewPanorama(containerRef.current, {
         position: { lat, lng },
         pov: { heading: 0, pitch: 0 },
         zoom: 1,
