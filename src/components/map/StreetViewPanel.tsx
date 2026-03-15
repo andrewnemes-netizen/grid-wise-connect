@@ -178,13 +178,18 @@ export function StreetViewPanel({
         const pov = pano.getPov();
         setHeading(pov.heading);
         setPitch(pov.pitch);
-        // Reset drag overrides when user pans — projections shift
-        setMarkerOverrides({});
       });
 
       pano.addListener("zoom_changed", () => {
         const z = pano.getZoom();
-        setFov(180 / Math.pow(2, z));
+        setFov(180 / Math.pow(2, Math.max(z, 0)));
+      });
+
+      pano.addListener("position_changed", () => {
+        const pos = pano.getPosition();
+        if (!pos) return;
+        setCameraPosition({ lat: pos.lat(), lng: pos.lng() });
+        setMarkerOffsets({});
       });
 
       panoramaRef.current = pano;
