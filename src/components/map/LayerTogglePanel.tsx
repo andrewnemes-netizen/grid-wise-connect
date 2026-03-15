@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanningDataset } from "@/hooks/usePlanningLayers";
 import type { LandRegistryDataset } from "@/hooks/useLandRegistryLayers";
+import type { OsOpenDataset } from "@/hooks/useOsOpenLayers";
+import { OS_CATEGORY_COLORS, OS_UTILISATION_COLORS, getOsLayerColor } from "@/lib/osGeoDataVizPalette";
 
 export interface RegistryLayer {
   id: string;
