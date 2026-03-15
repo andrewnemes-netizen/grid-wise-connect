@@ -316,6 +316,10 @@ const MapView = () => {
             planningVisibility={planning.planningVisibility}
             planningLoading={planning.planningLoading}
             onPlanningToggle={(id, visible) => planning.togglePlanningLayer(id, visible, map)}
+            lrDatasets={landRegistry.lrDatasets}
+            lrVisibility={landRegistry.lrVisibility}
+            lrLoading={landRegistry.lrLoading}
+            onLrToggle={(id, visible) => landRegistry.toggleLandRegistryLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}
