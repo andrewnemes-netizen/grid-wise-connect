@@ -299,9 +299,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     // Remove cable layers from map
     if (map) {
       cables.forEach((cable) => {
-        const srcId = `design-cable-${cable.id}`;
-        if (map.getLayer(srcId)) map.removeLayer(srcId);
-        if (map.getSource(srcId)) map.removeSource(srcId);
+        removeLayerAndSource(map, `design-cable-${cable.id}`);
       });
     }
     setCables([]);
