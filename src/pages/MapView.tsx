@@ -543,25 +543,7 @@ const MapView = () => {
             />
           )}
 
-          {/* Street View panel hidden - re-enable later with better positioning */}
-          {/*
-          <div className="absolute bottom-20 left-3 z-10">
-            <Button
-              size="sm"
-              variant={standaloneStreetView ? "default" : "outline"}
-              className="h-9 shadow-md bg-background/95 backdrop-blur gap-1.5"
-              onClick={() => setStandaloneStreetView((v) => !v)}
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className={`h-4 w-4 ${standaloneStreetView ? 'text-primary-foreground' : 'text-amber-500'}`}>
-                <circle cx="12" cy="6" r="3" />
-                <ellipse cx="12" cy="15" rx="4" ry="5" />
-              </svg>
-              <span className="text-xs font-medium">
-                {standaloneStreetView ? "Click map…" : "Street View"}
-              </span>
-            </Button>
-          </div>
-          */}
+          {/* Street View re-enabled via toolbar */}
         </>
       )}
     </div>
