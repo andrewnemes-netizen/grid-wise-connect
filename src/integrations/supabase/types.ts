@@ -2195,6 +2195,39 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      route_crossing_detect: {
+        Args: { route_wkt: string }
+        Returns: {
+          asset_name: string
+          crossing_type: string
+          dno: string
+          voltage_kv: number
+        }[]
+      }
+      route_nearby_cables: {
+        Args: { radius_m?: number; route_wkt: string }
+        Returns: {
+          asset_id: string
+          capacity_flag: string
+          distance_m: number
+          dno: string
+          id: string
+          layer_name: string
+          name: string
+          voltage_kv: number
+        }[]
+      }
+      route_surface_classify: {
+        Args: { buffer_m?: number; route_wkt: string }
+        Returns: {
+          carriageway_width_m: number
+          footway_width_m: number
+          length_m: number
+          restriction_flag: string
+          segment_id: string
+          surface_type: string
+        }[]
+      }
       score_site: {
         Args: { _proposed_kw?: number; _site_geom: unknown }
         Returns: Json
