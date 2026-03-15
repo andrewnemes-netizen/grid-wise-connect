@@ -306,7 +306,7 @@ export function StreetViewPanel({
           <span className="text-sm font-semibold">Street View</span>
           {captures.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">
-              {captures.length}/2 captured
+              {captures.length}/6 captured
             </Badge>
           )}
           {ready && markers.length > 0 && (
