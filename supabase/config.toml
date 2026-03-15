@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.street-view-proxy]
 verify_jwt = false
+
+[functions.land-registry-lookup]
+verify_jwt = false
