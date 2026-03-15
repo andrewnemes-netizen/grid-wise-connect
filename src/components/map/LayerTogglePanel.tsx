@@ -310,18 +310,23 @@ export function LayerTogglePanel({
         {expanded && (
           <div className="border-t">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50">
-                <TabsTrigger value="network" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-4">
+                <TabsTrigger value="network" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Zap className="h-3 w-3" />
                   Network
                   {networkVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{networkVisibleCount}</Badge>}
                 </TabsTrigger>
-                <TabsTrigger value="planning" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                <TabsTrigger value="osopen" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
+                  <Compass className="h-3 w-3" />
+                  OS Open
+                  {osVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{osVisibleCount}</Badge>}
+                </TabsTrigger>
+                <TabsTrigger value="planning" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <TreePine className="h-3 w-3" />
                   Planning
                   {planningVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{planningVisibleCount}</Badge>}
                 </TabsTrigger>
-                <TabsTrigger value="landregistry" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                <TabsTrigger value="landregistry" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Landmark className="h-3 w-3" />
                   Land Reg
                   {lrVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{lrVisibleCount}</Badge>}
