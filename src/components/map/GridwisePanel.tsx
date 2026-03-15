@@ -480,7 +480,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                     {project.electrical.validation && (
                       <>
                         <Separator className="my-1" />
-                        <MetricRow label="Voltage Drop" value={`${project.electrical.validation.voltage_drop.total_pct.toFixed(1)}%`} />
+                        <MetricRow label="Voltage Drop" value={`${project.electrical.validation.voltage_drop.total_vd_pct.toFixed(1)}%`} />
                         <MetricRow
                           label="Voltage Drop Status"
                           badge={project.electrical.validation.voltage_drop.pass ? "PASS" : "FAIL"}
