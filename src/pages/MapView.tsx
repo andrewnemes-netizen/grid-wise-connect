@@ -30,6 +30,7 @@ import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
+import { GridwisePanel } from "@/components/map/GridwisePanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
@@ -68,12 +69,13 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
+  const [gridwiseLocation, setGridwiseLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
@@ -136,6 +138,11 @@ const MapView = () => {
       }
       if (activeToolRef.current === "evhub") {
         setEvHubLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
+        return;
+      }
+      if (activeToolRef.current === "gridwise") {
+        setGridwiseLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
         setActiveTool(null);
         return;
       }
@@ -493,6 +500,19 @@ const MapView = () => {
                 sourceProperties: connect.connectEndpoints.source.properties,
                 sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
               } : null}
+            />
+          )}
+
+          {gridwiseLocation && (
+            <GridwisePanel
+              lng={gridwiseLocation.lng}
+              lat={gridwiseLocation.lat}
+              onClose={() => setGridwiseLocation(null)}
+              routeGeojson={connect.connectEndpoints ? {
+                type: "LineString" as const,
+                coordinates: connect.connectEndpoints.routeCoords,
+              } : undefined}
+              boundaryGeojson={boundary.polygon ?? undefined}
             />
           )}
 
