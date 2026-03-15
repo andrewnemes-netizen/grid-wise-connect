@@ -323,6 +323,7 @@ const MapView = () => {
             osDatasets={osOpen.osDatasets}
             osVisibility={osOpen.osVisibility}
             osLoading={osOpen.osLoading}
+            osFeatureCounts={osOpen.osFeatureCounts}
             onOsToggle={(id, visible) => osOpen.toggleOsLayer(id, visible, map)}
           />
           <MapLegend
