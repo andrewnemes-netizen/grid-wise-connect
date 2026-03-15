@@ -13,6 +13,7 @@ import { LayerManagement } from "@/components/admin/LayerManagement";
 import { UserRolesManagement } from "@/components/admin/UserRolesManagement";
 import { EvHubRulesEditor } from "@/components/admin/EvHubRulesEditor";
 import { DnoApiSources } from "@/components/admin/DnoApiSources";
+import { NpgDatasetRegistry } from "@/components/admin/NpgDatasetRegistry";
 
 const Admin = () => {
   const { hasRole } = useAuth();
