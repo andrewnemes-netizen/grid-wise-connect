@@ -46,6 +46,11 @@ interface LayerTogglePanelProps {
   planningVisibility?: Record<string, boolean>;
   planningLoading?: Set<string>;
   onPlanningToggle?: (datasetId: string, visible: boolean) => void;
+  // Land Registry layers
+  lrDatasets?: LandRegistryDataset[];
+  lrVisibility?: Record<string, boolean>;
+  lrLoading?: Set<string>;
+  onLrToggle?: (datasetId: string, visible: boolean) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
