@@ -124,7 +124,7 @@ export function StreetViewPanel({
   const [ready, setReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const panoramaRef = useRef<google.maps.StreetViewPanorama | null>(null);
+  const panoramaRef = useRef<any>(null);
 
   // Current POV tracked from the panorama
   const [heading, setHeading] = useState(0);
