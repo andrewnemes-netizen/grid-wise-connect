@@ -379,9 +379,38 @@ export function StreetViewPanel({
             </Badge>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onAddMarker && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 gap-1">
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                {EQUIPMENT_OPTIONS.map((eq) => (
+                  <DropdownMenuItem
+                    key={eq.type}
+                    onClick={() => onAddMarker(eq.type, cameraPosition.lat, cameraPosition.lng)}
+                    className="text-xs gap-2"
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                      style={{ backgroundColor: eq.color }}
+                    >
+                      {eq.symbol}
+                    </div>
+                    {eq.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Interactive panorama */}
