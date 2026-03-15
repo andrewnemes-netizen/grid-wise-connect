@@ -268,12 +268,21 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
               <MapPin className="h-3 w-3" /> Location
             </p>
             <p className="text-sm font-mono">{lat.toFixed(5)}, {lng.toFixed(5)}</p>
-            {routeGeojson && (
-              <Badge variant="secondary" className="text-[9px] mt-1">Route drawn ✓</Badge>
-            )}
-            {boundaryGeojson && (
-              <Badge variant="secondary" className="text-[9px] mt-1 ml-1">Boundary set ✓</Badge>
-            )}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {dnoDetecting ? (
+                <Badge variant="outline" className="text-[9px]"><Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />Detecting DNO...</Badge>
+              ) : detectedDno ? (
+                <Badge variant="default" className="text-[9px]">DNO: {detectedDno} ✓</Badge>
+              ) : (
+                <Badge variant="destructive" className="text-[9px]">DNO not detected — select manually</Badge>
+              )}
+              {routeGeojson && (
+                <Badge variant="secondary" className="text-[9px]">Route drawn ✓</Badge>
+              )}
+              {boundaryGeojson && (
+                <Badge variant="secondary" className="text-[9px]">Boundary set ✓</Badge>
+              )}
+            </div>
           </div>
 
           {/* Inputs */}
