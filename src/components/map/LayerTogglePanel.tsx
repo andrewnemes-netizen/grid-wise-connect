@@ -472,7 +472,7 @@ export function LayerTogglePanel({
                 )}
                 <div className="pt-1.5 border-t mt-1">
                   <p className="text-[10px] text-muted-foreground px-1">
-                    INSPIRE Index Polygons from HM Land Registry — visible at zoom 12+.
+                    INSPIRE Index Polygons from HM Land Registry — visible at zoom 18+.
                   </p>
                 </div>
               </TabsContent>
