@@ -320,6 +320,10 @@ const MapView = () => {
             lrVisibility={landRegistry.lrVisibility}
             lrLoading={landRegistry.lrLoading}
             onLrToggle={(id, visible) => landRegistry.toggleLandRegistryLayer(id, visible, map)}
+            osDatasets={osOpen.osDatasets}
+            osVisibility={osOpen.osVisibility}
+            osLoading={osOpen.osLoading}
+            onOsToggle={(id, visible) => osOpen.toggleOsLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}
