@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const WMS_BASE = "https://inspire.landregistry.gov.uk/inspire/ows";
+const WMS_BASE = "https://inspire.landregistry.gov.uk/inspire/wms";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,6 +34,16 @@ serve(async (req) => {
 
     const body = await response.arrayBuffer();
     const contentType = response.headers.get('content-type') || 'image/png';
+
+    // If the WMS returned XML error instead of image, pass it through
+    if (contentType.includes('xml') || contentType.includes('text')) {
+      const text = new TextDecoder().decode(body);
+      console.error(`WMS returned non-image: ${text.substring(0, 500)}`);
+      return new Response(text, {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': contentType },
+      });
+    }
 
     return new Response(body, {
       status: 200,
