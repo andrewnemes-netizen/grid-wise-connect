@@ -112,8 +112,12 @@ export function DesignAnalysisPanel({
           dno_code: ruleset.dno_code,
           ruleset_version: ruleset.version,
           vd_limit_pct: rj.vd_limit_pct,
+          vd_limits: rj.vd_limits,
           ze_ohms: rj.ze_ohms,
+          zs_thresholds: rj.zs_thresholds,
           zs_limit_ohms: rj.zs_limit_ohms,
+          pfc_ranges: rj.pfc_ranges,
+          earthing_system: rj.earthing_system,
           max_service_length_m: rj.max_service_length_m,
           joint_spacing_m: rj.joint_spacing_m?.LV ?? rj.joint_spacing_m,
           service_length_cap_m: rj.service_length_cap_m,
@@ -121,7 +125,7 @@ export function DesignAnalysisPanel({
         };
         toast.info(`Loaded ${ruleset.dno_code} G81 ruleset (${ruleset.version})`);
       } else if (dnoCode) {
-        toast.warning(`No G81 ruleset found for ${dnoCode} — using generic defaults`);
+        toast.warning(`No G81 ruleset found for ${dnoCode} — using G81 defaults`);
       }
 
       const cableSpecs: Record<string, CableSpec> = {};
