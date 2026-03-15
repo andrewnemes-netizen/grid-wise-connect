@@ -72,7 +72,7 @@ export default function StudyDetail() {
   const engineOutput = study.engine_output_json as Record<string, any> | null;
   const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
   const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
-
+  const designAnalysis = engineOutput?.design_analysis as Record<string, any> | null;
   const handleConvertToDesign = async () => {
     if (!user || !id) return;
     setConverting(true);
