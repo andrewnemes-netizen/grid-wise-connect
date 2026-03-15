@@ -11,11 +11,10 @@ export interface LandRegistryDataset {
 }
 
 /**
- * HM Land Registry INSPIRE WMS — free service, no API key required.
- * Uses EPSG:900913 (Web Mercator alias supported by the server).
- * The proxy rewrites the endpoint from /inspire/ows to /inspire/wms.
+ * HM Land Registry INSPIRE index polygons via public OSMUK tile service.
+ * Source: https://tiles.osmuk.org/PropertyBoundaries/{z}/{x}/{y}.png
  */
-const WMS_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/land-registry-wms-proxy`;
+const LAND_REGISTRY_TILE_URL = "https://tiles.osmuk.org/PropertyBoundaries/{z}/{x}/{y}.png";
 
 export const LAND_REGISTRY_DATASETS: LandRegistryDataset[] = [
   {
