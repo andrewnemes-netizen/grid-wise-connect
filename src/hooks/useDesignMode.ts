@@ -172,46 +172,51 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
   useEffect(() => {
     if (!map) return;
 
-    // Remove old cable layers
-    const existingSources = Object.keys((map.getStyle()?.sources) || {}).filter((s) => s.startsWith("design-cable-"));
-    existingSources.forEach((srcId) => {
-      if (srcId === "design-cable-drawing") return; // Don't remove the drawing layer
-      const layerId = srcId;
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(srcId)) map.removeSource(srcId);
-    });
+    try {
+      const style = map.getStyle();
+      if (!style?.sources) return;
 
-    cables.forEach((cable) => {
-      const srcId = `design-cable-${cable.id}`;
-      const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
-
-      if (map.getSource(srcId)) return;
-
-      map.addSource(srcId, {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: { label: cable.label, length_m: cable.length_m },
-          geometry: { type: "LineString", coordinates: cable.coordinates },
-        },
+      // Remove old cable layers
+      const existingSources = Object.keys(style.sources).filter((s) => s.startsWith("design-cable-"));
+      existingSources.forEach((srcId) => {
+        if (srcId === "design-cable-drawing") return;
+        removeLayerAndSource(map, srcId);
       });
 
-      const paint: Record<string, unknown> = {
-        "line-color": cfg.color,
-        "line-width": 3,
-        "line-opacity": 0.9,
-      };
-      if (cfg.dasharray.length > 0) {
-        paint["line-dasharray"] = cfg.dasharray;
-      }
+      cables.forEach((cable) => {
+        const srcId = `design-cable-${cable.id}`;
+        const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
 
-          map.addLayer({
-            id: srcId,
-            type: "line",
-            source: srcId,
-            paint: paint as any,
-          });
-    });
+        if (map.getSource(srcId)) return;
+
+        map.addSource(srcId, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: { label: cable.label, length_m: cable.length_m },
+            geometry: { type: "LineString", coordinates: cable.coordinates },
+          },
+        });
+
+        const paint: Record<string, unknown> = {
+          "line-color": cfg.color,
+          "line-width": 3,
+          "line-opacity": 0.9,
+        };
+        if (cfg.dasharray.length > 0) {
+          paint["line-dasharray"] = cfg.dasharray;
+        }
+
+        map.addLayer({
+          id: srcId,
+          type: "line",
+          source: srcId,
+          paint: paint as any,
+        });
+      });
+    } catch (error) {
+      console.warn("Skipped cable sync while map style was unavailable", error);
+    }
   }, [map, cables]);
 
   // Cleanup all markers on unmount
