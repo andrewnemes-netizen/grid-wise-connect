@@ -546,6 +546,7 @@ const MapView = () => {
                 } catch { /* style reloading */ }
               }}
             />
+          )}
 
           {streetViewLocation && (
             <StreetViewPanel
