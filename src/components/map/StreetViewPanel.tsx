@@ -61,20 +61,32 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 function projectMarker(
   heading: number,
+  pitch: number,
   markerBearing: number,
   distance: number,
-  fov: number
+  horizontalFov: number
 ): { xPct: number; yPct: number; visible: boolean; scale: number } {
   let rel = markerBearing - heading;
   while (rel > 180) rel -= 360;
   while (rel < -180) rel += 360;
 
-  if (Math.abs(rel) > fov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+  if (Math.abs(rel) > horizontalFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
 
-  const xPct = (rel / fov + 0.5) * 100;
-  const yPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
+  const xPct = (rel / horizontalFov + 0.5) * 100;
+
+  const baseYPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
+  const horizontalFovRad = (horizontalFov * Math.PI) / 180;
+  const verticalFovRad = 2 * Math.atan(Math.tan(horizontalFovRad / 2) * (IMG_H / IMG_W));
+  const verticalFov = (verticalFovRad * 180) / Math.PI;
+  const pitchOffsetPct = (pitch / Math.max(verticalFov, 1)) * 100;
+  const yPct = clamp(baseYPct + pitchOffsetPct, 5, 95);
+
   const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
 
   return { xPct, yPct, visible: true, scale };
