@@ -45,6 +45,10 @@ export function useLandRegistryLayers() {
       const ds = LAND_REGISTRY_DATASETS.find((d) => d.id === datasetId);
       if (!ds) return;
 
+      if (visible && map.getZoom() < 12) {
+        toast.info("Zoom in to level 12+ to view cadastral parcels.");
+      }
+
       const sourceId = `lr-wms-${ds.id}`;
       const layerId = `lr-raster-${ds.id}`;
 
