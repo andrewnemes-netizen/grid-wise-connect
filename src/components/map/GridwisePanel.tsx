@@ -178,7 +178,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         postcode: project.site.postcode ?? null,
         proposed_kw: project.site.proposed_kw,
         score: project.feasibility.viability_band,
-        score_reasons: project.audit.audit_entries.map(e => e.message),
+        score_reasons: project.audit.reason_codes,
         connection_options: project.assets.distances,
         created_by: user.id,
         viability_index: project.feasibility.viability_index,
