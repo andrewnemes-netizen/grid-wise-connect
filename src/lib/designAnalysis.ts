@@ -36,16 +36,14 @@ export interface G81VdLimits {
   total_pct: number;
 }
 
-/** Capacity-based Zs thresholds per G81 / DNO earthing policy */
+/** Capacity-based Zs thresholds per G81 / DNO earthing policy (3-phase) */
 export interface G81ZsThresholds {
-  /** 100A supply — typical 0.35Ω */
+  /** 60A 3-phase supply — typical 0.35Ω */
+  zs_60a: number;
+  /** 80A 3-phase supply — typical 0.20Ω */
+  zs_80a: number;
+  /** 100A 3-phase supply — typical 0.10Ω */
   zs_100a: number;
-  /** 200A supply — typical 0.35Ω */
-  zs_200a: number;
-  /** 300A supply — typical 0.20Ω */
-  zs_300a: number;
-  /** 400A supply — typical 0.15Ω */
-  zs_400a: number;
 }
 
 /** Expected PFC ranges per location type (A) */
