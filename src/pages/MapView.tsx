@@ -32,6 +32,8 @@ import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 import { GridwisePanel } from "@/components/map/GridwisePanel";
 
+import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
+
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
 function calcRouteLength(coords: [number, number][]): number {
