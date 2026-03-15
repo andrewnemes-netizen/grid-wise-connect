@@ -16,6 +16,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { OptimiserResultPanel } from "./OptimiserResultPanel";
 import { generateAssessmentPdf, exportAssessmentJson } from "@/lib/generateAssessmentPdf";
+import { convertConnectToDesign } from "@/lib/connectDesignBridge";
 import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
 import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
