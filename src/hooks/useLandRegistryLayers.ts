@@ -10,17 +10,18 @@ export interface LandRegistryDataset {
 }
 
 /**
- * HM Land Registry INSPIRE Index Polygons — free WMS service.
- * No API key required for the WMS endpoint.
+ * HM Land Registry INSPIRE WMS — free service, no API key required.
+ * Uses EPSG:900913 (Web Mercator alias supported by the server).
+ * The proxy rewrites the endpoint from /inspire/ows to /inspire/wms.
  */
 const WMS_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/land-registry-wms-proxy`;
 
 export const LAND_REGISTRY_DATASETS: LandRegistryDataset[] = [
   {
-    id: "lr-inspire-freehold",
-    label: "Freehold Extents (INSPIRE)",
+    id: "lr-inspire-cadastral",
+    label: "Cadastral Parcels (INSPIRE)",
     color: "#D4A017",
-    wmsLayer: "INSPIRE_Index_Polygons",
+    wmsLayer: "inspire:CP.CadastralParcel",
     category: "ownership",
   },
 ];
@@ -49,12 +50,11 @@ export function useLandRegistryLayers() {
       // Add source + layer on first toggle-on
       if (!addedRef.current.has(datasetId)) {
         if (!map.getSource(sourceId)) {
-          // WMS raster tile source — requests 256x256 PNG tiles
-          // Use EPSG:3857 (Web Mercator) for MapLibre compatibility
+          // The INSPIRE WMS supports EPSG:900913 which is equivalent to EPSG:3857
           map.addSource(sourceId, {
             type: "raster",
             tiles: [
-              `${WMS_PROXY}?service=WMS&version=1.1.1&request=GetMap&layers=${ds.wmsLayer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`,
+              `${WMS_PROXY}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(ds.wmsLayer)}&styles=&format=image/png&transparent=true&srs=EPSG:900913&width=256&height=256&bbox={bbox-epsg-3857}`,
             ],
             tileSize: 256,
           });
@@ -68,7 +68,7 @@ export function useLandRegistryLayers() {
             "raster-opacity": 0.65,
           },
           layout: { visibility: "visible" },
-          minzoom: 14, // INSPIRE polygons only legible at close zoom
+          minzoom: 14,
         });
 
         addedRef.current.add(datasetId);
