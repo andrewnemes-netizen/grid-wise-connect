@@ -6,6 +6,7 @@ const UK_CENTER: [number, number] = [-1.5, 54.0];
 const DEFAULT_ZOOM = 6;
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F5bm1weWt5dyJ9.LE9-j6HiHMEJqnG86aIxEg";
+const OS_API_KEY = "j7vwIPqoPOj5tiwNsJGlQ1SDD2GpsehD";
 
 const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
 
