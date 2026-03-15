@@ -467,6 +467,8 @@ const MapView = () => {
                     ).map(([type, count]) => ({ type, label: type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), count }))
                   : undefined
               }
+              hasActiveStudy={!!activeStudy.study}
+              onConvertToDesign={design.bulkInsert}
             />
           )}
 
