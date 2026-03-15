@@ -73,16 +73,57 @@ export function DesignAnalysisPanel({
 
     setRunning(true);
     try {
-      // Fetch cable catalogue for specs
-      const { data: catalogue } = await supabase
-        .from("cable_catalogue")
-        .select("*")
-        .eq("is_default", true);
+      // Fetch cable catalogue and DNO ruleset in parallel
+      const [catalogueRes, rulesetRes] = await Promise.all([
+        supabase.from("cable_catalogue").select("*").eq("is_default", true),
+        dnoCode
+          ? supabase
+              .from("dno_rulesets")
+              .select("*")
+              .eq("dno_code", dnoCode)
+              .eq("is_active", true)
+              .order("version", { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+
+      // If no DNO-specific ruleset, try UK_ALL baseline
+      let ruleset = rulesetRes.data;
+      if (!ruleset && dnoCode) {
+        const { data: baseline } = await supabase
+          .from("dno_rulesets")
+          .select("*")
+          .eq("dno_code", "UK_ALL")
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        ruleset = baseline;
+      }
+
+      // Build DNO rule overrides from ruleset
+      let dnoRules: DnoRuleOverrides | undefined;
+      if (ruleset) {
+        const rj = ruleset.rules_json as Record<string, any>;
+        dnoRules = {
+          dno_code: ruleset.dno_code,
+          ruleset_version: ruleset.version,
+          vd_limit_pct: rj.vd_limit_pct,
+          ze_ohms: rj.ze_ohms,
+          zs_limit_ohms: rj.zs_limit_ohms,
+          max_service_length_m: rj.max_service_length_m,
+          joint_spacing_m: rj.joint_spacing_m?.LV ?? rj.joint_spacing_m,
+          service_length_cap_m: rj.service_length_cap_m,
+          cover_depths_mm: rj.cover_depths_mm,
+        };
+        toast.info(`Loaded ${ruleset.dno_code} G81 ruleset (${ruleset.version})`);
+      } else if (dnoCode) {
+        toast.warning(`No G81 ruleset found for ${dnoCode} — using generic defaults`);
+      }
 
       const cableSpecs: Record<string, CableSpec> = {};
-      if (catalogue) {
-        // Map catalogue entries to cable types
-        for (const cat of catalogue) {
+      if (catalogueRes.data) {
+        for (const cat of catalogueRes.data) {
           const key = cat.voltage_class === "LV" && cat.mains_allowed ? "lv_main"
             : cat.voltage_class === "LV" && cat.service_allowed ? "lv_service"
             : cat.voltage_class === "HV" ? "hv_cable"
@@ -105,6 +146,7 @@ export function DesignAnalysisPanel({
         elements,
         proposed_kw: proposedKw,
         cable_specs: cableSpecs,
+        dno_rules: dnoRules,
       };
 
       const analysisResult = runDesignAnalysis(input);
