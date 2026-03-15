@@ -52,6 +52,8 @@ interface StreetViewPanelProps {
   markers?: StreetViewMarker[];
   onCaptures?: (captures: StreetViewCapture[]) => void;
   existingCaptures?: StreetViewCapture[];
+  onDeleteMarker?: (id: string) => void;
+  onAddMarker?: (type: string, lat: number, lng: number) => void;
 }
 
 const IMG_W = 640;
