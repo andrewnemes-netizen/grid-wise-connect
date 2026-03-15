@@ -268,7 +268,7 @@ export async function convertConnectToDesign(
       lng: eq.lng,
       created_by: userId,
       properties_json: eq.properties,
-    });
+    } as any);
 
     if (error) {
       warnings.push(`Failed to place ${eq.label}: ${error.message}`);
