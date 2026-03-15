@@ -31,6 +31,7 @@ const basemaps: BasemapOption[] = [
   { id: "os-road", icon: Compass, label: "OS Road", group: "os" },
   { id: "os-outdoor", icon: Compass, label: "OS Outdoor", group: "os" },
   { id: "os-light", icon: Compass, label: "OS Light", group: "os" },
+  { id: "os-vector", icon: Hexagon, label: "OS Vector", group: "os" },
 ];
 
 interface BasemapSwitcherProps {
