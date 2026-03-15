@@ -287,7 +287,8 @@ export function LayerTogglePanel({
   };
 
   const lrVisibleCount = Object.values(lrVisibility).filter(Boolean).length;
-  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount;
+  const osVisibleCount = Object.values(osVisibility).filter(Boolean).length;
+  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount + osVisibleCount;
   const networkVisibleCount = Object.values(visibility).filter(Boolean).length;
   const planningVisibleCount = Object.values(planningVisibility).filter(Boolean).length;
 
