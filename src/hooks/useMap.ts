@@ -41,7 +41,9 @@ const BASEMAP_SOURCES: Record<string, { tiles: string[]; attribution: string; ma
   },
   topo: {
     tiles: [
-      "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+      "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+      "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+      "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
     ],
     attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
     maxzoom: 17,
