@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePlanningLayers } from "@/hooks/usePlanningLayers";
+import { useLandRegistryLayers } from "@/hooks/useLandRegistryLayers";
 import { Badge } from "@/components/ui/badge";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
