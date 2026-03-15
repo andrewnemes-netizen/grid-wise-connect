@@ -47,6 +47,16 @@ export interface DnoRuleOverrides {
   ruleset_version?: string;
 }
 
+/** Known upstream conditions at the point of connection (joint) */
+export interface UpstreamConditions {
+  /** Existing voltage drop % at the POC from the DNO network */
+  existing_vd_pct: number;
+  /** Existing impedance (Zs) at the POC in ohms */
+  existing_zs_ohms: number;
+  /** Source — 'manual' if user-entered, 'auto' if derived from network data */
+  source: "manual" | "auto";
+}
+
 export interface DesignAnalysisInput {
   cables: DesignCable[];
   elements: DesignElement[];
@@ -60,6 +70,8 @@ export interface DesignAnalysisInput {
   cable_specs: Record<string, CableSpec>;
   /** DNO-specific G81 rule overrides — takes priority over defaults */
   dno_rules?: DnoRuleOverrides;
+  /** Known upstream electrical conditions at the point of connection */
+  upstream?: UpstreamConditions;
 }
 
 export interface CableAnalysisResult {
