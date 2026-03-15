@@ -428,7 +428,7 @@ export function StreetViewPanel({
       {/* Capture bar */}
       <div className="flex items-center justify-between px-3 py-2 border-t">
         <span className="text-xs text-muted-foreground">
-          {lat.toFixed(5)}, {lng.toFixed(5)} · {Math.round(heading)}° hdg
+          {cameraPosition.lat.toFixed(5)}, {cameraPosition.lng.toFixed(5)} · {Math.round(heading)}° hdg
         </span>
         <Button
           size="sm"
