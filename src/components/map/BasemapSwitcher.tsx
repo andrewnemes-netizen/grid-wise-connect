@@ -46,7 +46,7 @@ export function BasemapSwitcher({ active, onChange }: BasemapSwitcherProps) {
   const osMaps = basemaps.filter((b) => b.group === "os");
 
   return (
-    <div className="absolute bottom-8 left-3 z-10 flex flex-col-reverse items-start gap-1">
+    <div className="absolute bottom-8 left-3 z-10 flex items-end gap-1">
       <Tooltip delayDuration={2000}>
         <TooltipTrigger asChild>
           <Button
@@ -61,11 +61,11 @@ export function BasemapSwitcher({ active, onChange }: BasemapSwitcherProps) {
             })()}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side="left">Base map</TooltipContent>
+        <TooltipContent side="right">Base map</TooltipContent>
       </Tooltip>
 
       {open && (
-        <div className="flex flex-col gap-1 rounded-lg border bg-background/95 backdrop-blur shadow-lg p-1 max-h-[60vh] overflow-y-auto">
+        <div className="flex flex-col gap-1 rounded-lg border bg-background/95 backdrop-blur shadow-lg p-1 max-h-[60vh] overflow-y-auto mb-0">
           {standardMaps.map((bm) => (
             <Button
               key={bm.id}
