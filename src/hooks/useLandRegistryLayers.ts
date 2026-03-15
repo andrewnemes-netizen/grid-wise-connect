@@ -69,7 +69,8 @@ export function useLandRegistryLayers() {
             "raster-opacity": 0.65,
           },
           layout: { visibility: "visible" },
-          minzoom: 12,
+          minzoom: 18,
+          maxzoom: 20,
         });
 
         addedRef.current.add(datasetId);
