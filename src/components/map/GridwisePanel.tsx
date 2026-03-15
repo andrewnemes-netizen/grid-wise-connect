@@ -100,7 +100,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, designCables }: Props) {
+export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, designCables, onConvertToDesign, activeStudyId }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
