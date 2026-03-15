@@ -61,20 +61,32 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 function projectMarker(
   heading: number,
+  pitch: number,
   markerBearing: number,
   distance: number,
-  fov: number
+  horizontalFov: number
 ): { xPct: number; yPct: number; visible: boolean; scale: number } {
   let rel = markerBearing - heading;
   while (rel > 180) rel -= 360;
   while (rel < -180) rel += 360;
 
-  if (Math.abs(rel) > fov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+  if (Math.abs(rel) > horizontalFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
 
-  const xPct = (rel / fov + 0.5) * 100;
-  const yPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
+  const xPct = (rel / horizontalFov + 0.5) * 100;
+
+  const baseYPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
+  const horizontalFovRad = (horizontalFov * Math.PI) / 180;
+  const verticalFovRad = 2 * Math.atan(Math.tan(horizontalFovRad / 2) * (IMG_H / IMG_W));
+  const verticalFov = (verticalFovRad * 180) / Math.PI;
+  const pitchOffsetPct = (pitch / Math.max(verticalFov, 1)) * 100;
+  const yPct = clamp(baseYPct + pitchOffsetPct, 5, 95);
+
   const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
 
   return { xPct, yPct, visible: true, scale };
@@ -128,13 +140,19 @@ export function StreetViewPanel({
   const panoramaRef = useRef<any>(null);
 
   // Current POV tracked from the panorama
+  const [cameraPosition, setCameraPosition] = useState({ lat, lng });
   const [heading, setHeading] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
 
-  // Draggable marker overrides
-  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
-  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
+  // Draggable marker offsets (relative to projected position)
+  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { dxPct: number; dyPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origDxPct: number; origDyPct: number } | null>(null);
+
+  useEffect(() => {
+    setCameraPosition({ lat, lng });
+    setMarkerOffsets({});
+  }, [lat, lng]);
 
   // Initialise the interactive Street View panorama
   useEffect(() => {
@@ -160,13 +178,18 @@ export function StreetViewPanel({
         const pov = pano.getPov();
         setHeading(pov.heading);
         setPitch(pov.pitch);
-        // Reset drag overrides when user pans — projections shift
-        setMarkerOverrides({});
       });
 
       pano.addListener("zoom_changed", () => {
         const z = pano.getZoom();
-        setFov(180 / Math.pow(2, z));
+        setFov(180 / Math.pow(2, Math.max(z, 0)));
+      });
+
+      pano.addListener("position_changed", () => {
+        const pos = pano.getPosition();
+        if (!pos) return;
+        setCameraPosition({ lat: pos.lat(), lng: pos.lng() });
+        setMarkerOffsets({});
       });
 
       panoramaRef.current = pano;
@@ -183,33 +206,49 @@ export function StreetViewPanel({
   const projected = markers
     .map((m, i) => {
       const key = `${m.type}-${i}`;
-      const bearing = calculateBearing(lat, lng, m.lat, m.lng);
-      const distance = haversineM(lat, lng, m.lat, m.lng);
-      const pos = projectMarker(heading, bearing, distance, fov);
-      const override = markerOverrides[key];
-      if (override) {
-        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
-      }
-      return { ...m, ...pos, distance, key };
+      const bearing = calculateBearing(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const distance = haversineM(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const pos = projectMarker(heading, pitch, bearing, distance, fov);
+      const offset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+
+      return {
+        ...m,
+        ...pos,
+        xPct: clamp(pos.xPct + offset.dxPct, 0, 100),
+        yPct: clamp(pos.yPct + offset.dyPct, 0, 100),
+        distance,
+        key,
+      };
     })
     .filter((m) => m.visible && m.distance < 200);
 
   // Drag handlers for marker repositioning
-  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string) => {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
-  }, []);
+    const currentOffset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+    dragRef.current = {
+      key,
+      startX: e.clientX,
+      startY: e.clientY,
+      origDxPct: currentOffset.dxPct,
+      origDyPct: currentOffset.dyPct,
+    };
+  }, [markerOffsets]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
     const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
     const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
-    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
-    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
+    setMarkerOffsets((prev) => ({
+      ...prev,
+      [dragRef.current!.key]: {
+        dxPct: dragRef.current!.origDxPct + dx,
+        dyPct: dragRef.current!.origDyPct + dy,
+      },
+    }));
   }, []);
 
   const handlePointerUp = useCallback(() => {
@@ -226,7 +265,7 @@ export function StreetViewPanel({
     setCapturing(true);
     try {
       const { data, error } = await supabase.functions.invoke("street-view-proxy", {
-        body: { lat, lng, heading, pitch, fov, width: IMG_W, height: IMG_H },
+        body: { lat: cameraPosition.lat, lng: cameraPosition.lng, heading, pitch, fov, width: IMG_W, height: IMG_H },
       });
 
       if (error) throw new Error(error.message || "Proxy error");
@@ -298,7 +337,7 @@ export function StreetViewPanel({
     } finally {
       setCapturing(false);
     }
-  }, [lat, lng, heading, pitch, fov, captures, projected, onCaptures, toast]);
+  }, [cameraPosition, heading, pitch, fov, captures, projected, onCaptures, toast]);
 
   return (
     <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 w-[520px] rounded-xl border bg-background/95 backdrop-blur shadow-xl overflow-hidden">
@@ -351,7 +390,7 @@ export function StreetViewPanel({
                   touchAction: "none",
                   zIndex: 10,
                 }}
-                onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
+                onPointerDown={(e) => handlePointerDown(e, m.key)}
               >
                 <div
                   className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
@@ -389,7 +428,7 @@ export function StreetViewPanel({
       {/* Capture bar */}
       <div className="flex items-center justify-between px-3 py-2 border-t">
         <span className="text-xs text-muted-foreground">
-          {lat.toFixed(5)}, {lng.toFixed(5)} · {Math.round(heading)}° hdg
+          {cameraPosition.lat.toFixed(5)}, {cameraPosition.lng.toFixed(5)} · {Math.round(heading)}° hdg
         </span>
         <Button
           size="sm"
