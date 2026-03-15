@@ -66,6 +66,7 @@ export interface CableAnalysisResult {
   cable_id: string;
   cable_label: string;
   cable_type: CableType;
+  cable_size: string;
   length_m: number;
   // Voltage drop
   vd_volts: number;
