@@ -48,6 +48,9 @@ export function DesignAnalysisPanel({
   const [saving, setSaving] = useState(false);
   const [expandedCables, setExpandedCables] = useState<Set<string>>(new Set());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [upstreamMode, setUpstreamMode] = useState<"auto" | "manual">("auto");
+  const [upstreamVdPct, setUpstreamVdPct] = useState<string>("");
+  const [upstreamZsOhms, setUpstreamZsOhms] = useState<string>("");
 
   const toggleCable = (id: string) => {
     setExpandedCables(prev => {
