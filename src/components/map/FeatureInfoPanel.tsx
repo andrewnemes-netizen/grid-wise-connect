@@ -192,6 +192,92 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
   );
 }
 
+/** Dedicated info panel for Planning Data (from planning.data.gov.uk vector tiles) */
+function PlanningInfo({ feature, layerLabel }: { feature: Record<string, unknown>; layerLabel: string }) {
+  const name = (feature.name || "—") as string;
+  const entity = feature.entity as number | string | null;
+  const dataset = (feature.dataset || feature.prefix || "") as string;
+  const reference = (feature.reference || "") as string;
+  const entryDate = (feature["entry-date"] || "") as string;
+  const startDate = (feature["start-date"] || "") as string;
+  const endDate = (feature["end-date"] || "") as string;
+  const localAuthority = (feature["local-authority-district"] || "") as string;
+
+  const entityUrl = entity ? `https://www.planning.data.gov.uk/entity/${entity}` : null;
+
+  // Show all properties except hidden ones
+  const extraEntries = Object.entries(feature).filter(
+    ([key]) =>
+      !PLANNING_HIDDEN_KEYS.includes(key) &&
+      !["name", "entity", "dataset", "reference", "entry-date", "start-date", "end-date", "local-authority-district"].includes(key)
+  );
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="font-semibold text-sm text-foreground">{name}</h3>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <Badge variant="secondary" className="text-[10px]">{layerLabel}</Badge>
+          {localAuthority && <Badge variant="outline" className="text-[10px]">{localAuthority}</Badge>}
+        </div>
+      </div>
+
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-xs">
+          <tbody>
+            <tr className="border-b">
+              <td className="bg-primary/10 font-semibold px-2 py-1.5 w-2/5">Dataset</td>
+              <td className="px-2 py-1.5 capitalize">{dataset.replace(/-/g, " ")}</td>
+            </tr>
+            {reference && (
+              <tr className="border-b">
+                <td className="bg-primary/10 font-semibold px-2 py-1.5">Reference</td>
+                <td className="px-2 py-1.5">{reference}</td>
+              </tr>
+            )}
+            {entryDate && (
+              <tr className="border-b">
+                <td className="bg-primary/10 font-semibold px-2 py-1.5">Entry Date</td>
+                <td className="px-2 py-1.5">{entryDate}</td>
+              </tr>
+            )}
+            {startDate && (
+              <tr className="border-b">
+                <td className="bg-primary/10 font-semibold px-2 py-1.5">Start Date</td>
+                <td className="px-2 py-1.5">{startDate}</td>
+              </tr>
+            )}
+            {endDate && (
+              <tr className="border-b">
+                <td className="bg-primary/10 font-semibold px-2 py-1.5">End Date</td>
+                <td className="px-2 py-1.5">{endDate}</td>
+              </tr>
+            )}
+            {extraEntries.map(([key, value]) => (
+              <tr key={key} className="border-b last:border-b-0">
+                <td className="bg-primary/10 font-semibold px-2 py-1.5 capitalize">{key.replace(/-/g, " ")}</td>
+                <td className="px-2 py-1.5">{String(value ?? "—")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {entityUrl && (
+        <a
+          href={entityUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+        >
+          <ExternalLink className="h-3 w-3" />
+          View on planning.data.gov.uk
+        </a>
+      )}
+    </div>
+  );
+}
+
 function GenericInfo({ feature }: { feature: Record<string, unknown> }) {
   const entries = Object.entries(feature).filter(
     ([key]) => !HIDDEN_KEYS.includes(key.toLowerCase())
