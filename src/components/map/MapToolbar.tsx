@@ -64,9 +64,9 @@ export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasA
             >
               {'customIcon' in tool && tool.customIcon ? (
                 <tool.customIcon className={`h-4 w-4 ${activeTool === tool.id ? 'text-primary-foreground' : 'text-amber-500'}`} />
-              ) : (
+              ) : 'icon' in tool ? (
                 <tool.icon className="h-4 w-4" />
-              )}
+              ) : null}
             </Button>
           </div>
         );
