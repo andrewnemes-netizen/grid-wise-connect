@@ -135,6 +135,9 @@ export interface DesignAnalysisResult {
     suggestion_count: number;
     dno_code?: string;
     ruleset_version?: string;
+    upstream_vd_pct?: number;
+    upstream_zs_ohms?: number;
+    upstream_source?: "manual" | "auto";
   };
   engine_version: string;
   analysed_at: string;
