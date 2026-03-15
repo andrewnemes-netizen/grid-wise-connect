@@ -124,12 +124,17 @@ export function StreetViewPanel({
   const [ready, setReady] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const panoramaRef = useRef<any>(null);
 
   // Current POV tracked from the panorama
   const [heading, setHeading] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
+
+  // Draggable marker overrides
+  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
 
   // Initialise the interactive Street View panorama
   useEffect(() => {
@@ -158,7 +163,6 @@ export function StreetViewPanel({
       });
 
       pano.addListener("zoom_changed", () => {
-        // Google's zoom 0 = 180° FOV, zoom 1 = 90°, zoom 2 = 45°, etc.
         const z = pano.getZoom();
         setFov(180 / Math.pow(2, z));
       });
@@ -173,16 +177,42 @@ export function StreetViewPanel({
     };
   }, [lat, lng]);
 
-  // Project markers
+  // Project markers onto the panorama view
   const projected = markers
     .map((m, i) => {
       const key = `${m.type}-${i}`;
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
       const pos = projectMarker(heading, bearing, distance, fov);
+      const override = markerOverrides[key];
+      if (override) {
+        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
+      }
       return { ...m, ...pos, distance, key };
     })
     .filter((m) => m.visible && m.distance < 200);
+
+  // Drag handlers for marker repositioning
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current || !overlayRef.current) return;
+    const rect = overlayRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
+    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
+    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
+    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
+    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
@@ -298,6 +328,60 @@ export function StreetViewPanel({
           </div>
         )}
         <div ref={containerRef} className="w-full h-full" />
+
+        {/* Draggable marker overlay — sits on top of panorama, pointer-events only on markers */}
+        {ready && projected.length > 0 && (
+          <div
+            ref={overlayRef}
+            className="absolute inset-0 pointer-events-none select-none"
+            style={{ zIndex: 5 }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            {projected.map((m) => (
+              <div
+                key={m.key}
+                className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing pointer-events-auto"
+                style={{
+                  left: `${m.xPct}%`,
+                  top: `${m.yPct}%`,
+                  transform: "translate(-50%, -50%)",
+                  touchAction: "none",
+                  zIndex: 10,
+                }}
+                onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
+              >
+                <div
+                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
+                  style={{
+                    width: `${24 * m.scale}px`,
+                    height: `${24 * m.scale}px`,
+                    backgroundColor: m.color,
+                    fontSize: `${11 * m.scale}px`,
+                  }}
+                >
+                  {MARKER_INITIALS[m.type] || m.label.charAt(0)}
+                </div>
+                <span
+                  className="text-white font-semibold mt-0.5 pointer-events-none whitespace-nowrap"
+                  style={{
+                    fontSize: `${9 * m.scale}px`,
+                    textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+                  }}
+                >
+                  {m.label}
+                </span>
+              </div>
+            ))}
+
+            {/* Marker count hint */}
+            <div className="absolute bottom-2 left-2 pointer-events-none">
+              <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur pointer-events-none">
+                drag markers to reposition
+              </Badge>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Capture bar */}
