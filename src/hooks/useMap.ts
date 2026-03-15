@@ -9,6 +9,9 @@ const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F
 
 const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
 const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
   street: {
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
@@ -80,6 +83,19 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
       zoom: DEFAULT_ZOOM,
       maxZoom: 22,
       canvasContextAttributes: { preserveDrawingBuffer: true },
+      transformRequest: (url) => {
+        const tileProxyBase = `${SUPABASE_URL}/functions/v1/planning-vector-tile/`;
+        if (SUPABASE_URL && SUPABASE_ANON_KEY && url.startsWith(tileProxyBase)) {
+          return {
+            url,
+            headers: {
+              apikey: SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+          };
+        }
+        return { url };
+      },
     });
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
