@@ -10,13 +10,13 @@ const corsHeaders = {
 const OS_API_KEY = "j7vwIPqoPOj5tiwNsJGlQ1SDD2GpsehD";
 
 /**
- * OS Features API (WFS) Proxy
+ * OS Features API (WFS) Proxy — with retry + cache headers
  *
  * Queries OS Features API and returns GeoJSON for map overlay display.
+ * Rounds bbox to reduce cache variance.
  *
  * Usage:
  *   GET /os-features-proxy?typeName=Zoomstack_RailwayStations&bbox=-0.5,51.3,0.3,51.7
- *   GET /os-features-proxy?typeName=Zoomstack_Boundaries&bbox=-0.5,51.3,0.3,51.7
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -73,13 +73,15 @@ serve(async (req) => {
     });
 
     if (bbox) {
+      // Round bbox to 3 decimal places (~100m) for better cacheability
+      const parts = bbox.split(",").map(Number);
+      const [minLng, minLat, maxLng, maxLat] = parts.map(v => Math.round(v * 1000) / 1000);
       // WFS expects bbox as minLat,minLng,maxLat,maxLng for EPSG:4326
-      const [minLng, minLat, maxLng, maxLat] = bbox.split(",").map(Number);
       params.set("bbox", `${minLat},${minLng},${maxLat},${maxLng}`);
     }
 
     const wfsUrl = `https://api.os.uk/features/v1/wfs?${params.toString()}`;
-    const res = await fetch(wfsUrl);
+    const res = await fetchWithRetry(wfsUrl);
 
     if (!res.ok) {
       const body = await res.text();
@@ -98,7 +100,14 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify(geojson),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=120", // 2 min cache for viewport data
+        },
+      }
     );
   } catch (err: unknown) {
     console.error("OS Features proxy error:", err);
@@ -109,3 +118,18 @@ serve(async (req) => {
     );
   }
 });
+
+/** Fetch with exponential backoff retry (3 attempts) */
+async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url);
+      if (res.ok || res.status < 500) return res;
+      if (i < retries - 1) await new Promise(r => setTimeout(r, 300 * (i + 1)));
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      await new Promise(r => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+  throw new Error("Max retries reached");
+}
