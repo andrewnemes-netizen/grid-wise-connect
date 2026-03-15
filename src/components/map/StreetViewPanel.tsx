@@ -265,7 +265,7 @@ export function StreetViewPanel({
     setCapturing(true);
     try {
       const { data, error } = await supabase.functions.invoke("street-view-proxy", {
-        body: { lat, lng, heading, pitch, fov, width: IMG_W, height: IMG_H },
+        body: { lat: cameraPosition.lat, lng: cameraPosition.lng, heading, pitch, fov, width: IMG_W, height: IMG_H },
       });
 
       if (error) throw new Error(error.message || "Proxy error");
