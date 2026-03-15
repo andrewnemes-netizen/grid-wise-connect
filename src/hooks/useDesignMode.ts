@@ -64,6 +64,19 @@ function haversineDistance(coords: [number, number][]): number {
   return total;
 }
 
+function removeLayerAndSource(map: maplibregl.Map, id: string) {
+  try {
+    if (map.getLayer(id)) map.removeLayer(id);
+  } catch {
+    // Style might be reloading
+  }
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+  } catch {
+    // Style might be reloading
+  }
+}
+
 export function useDesignMode(map: maplibregl.Map | null, studyId: string | null) {
   const [elements, setElements] = useState<DesignElement[]>([]);
   const [placingType, setPlacingType] = useState<EquipmentType | null>(null);
