@@ -43,6 +43,7 @@ const Admin = () => {
           <TabsTrigger value="rates"><SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Unit Rates</TabsTrigger>
           <TabsTrigger value="evhub"><Zap className="h-3.5 w-3.5 mr-1.5" />EV Hub Rules</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
+          <TabsTrigger value="api"><Globe className="h-3.5 w-3.5 mr-1.5" />API Sources</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
         </TabsList>
 
