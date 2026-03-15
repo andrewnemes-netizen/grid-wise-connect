@@ -347,22 +347,47 @@ export function DesignAnalysisPanel({
           ) : (
             <>
               {/* Summary */}
-              <div className="rounded-lg border p-3 space-y-2">
+               <div className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Overall Result</span>
                   <Badge variant="outline" className={result.summary.overall_pass ? statusBadgeClass.pass : statusBadgeClass.fail}>
                     {result.summary.overall_pass ? "PASS" : "FAIL"}
                   </Badge>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded bg-muted/30 px-2 py-1.5">
-                    <span className="text-muted-foreground">Voltage Drop</span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {result.summary.total_vd_pass ? statusIcon.pass : statusIcon.fail}
-                      <span className="font-semibold">{result.summary.total_vd_pct}%</span>
-                      <span className="text-muted-foreground">/ 5%</span>
+
+                {/* Segmented VD breakdown — G81 */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Voltage Drop (G81)</span>
+                  <div className="grid grid-cols-3 gap-1.5 text-xs">
+                    <div className="rounded bg-muted/30 px-2 py-1">
+                      <span className="text-[10px] text-muted-foreground block">Mains</span>
+                      <div className="flex items-center gap-1">
+                        {result.summary.mains_vd_pass ? statusIcon.pass : statusIcon.fail}
+                        <span className="font-semibold">{result.summary.mains_vd_pct}%</span>
+                        <span className="text-muted-foreground text-[9px]">/ 3%</span>
+                      </div>
+                    </div>
+                    <div className="rounded bg-muted/30 px-2 py-1">
+                      <span className="text-[10px] text-muted-foreground block">Service</span>
+                      <div className="flex items-center gap-1">
+                        {result.summary.service_vd_pass ? statusIcon.pass : statusIcon.fail}
+                        <span className="font-semibold">{result.summary.service_vd_pct}%</span>
+                        <span className="text-muted-foreground text-[9px]">/ 2%</span>
+                      </div>
+                    </div>
+                    <div className="rounded bg-muted/30 px-2 py-1">
+                      <span className="text-[10px] text-muted-foreground block">Total</span>
+                      <div className="flex items-center gap-1">
+                        {result.summary.total_vd_pass ? statusIcon.pass : statusIcon.fail}
+                        <span className="font-semibold">{result.summary.total_vd_pct}%</span>
+                        <span className="text-muted-foreground text-[9px]">/ 5%</span>
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Key metrics */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded bg-muted/30 px-2 py-1.5">
                     <span className="text-muted-foreground">Max Utilisation</span>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -371,17 +396,40 @@ export function DesignAnalysisPanel({
                     </div>
                   </div>
                   <div className="rounded bg-muted/30 px-2 py-1.5">
-                    <span className="text-muted-foreground">Total Length</span>
-                    <span className="block font-semibold mt-0.5">{result.summary.total_length_m.toLocaleString()}m</span>
+                    <span className="text-muted-foreground">Zs Limit ({result.summary.supply_capacity_a}A)</span>
+                    <span className="block font-semibold mt-0.5">{result.summary.zs_limit_applied}Ω</span>
+                  </div>
+                  <div className="rounded bg-muted/30 px-2 py-1.5">
+                    <span className="text-muted-foreground">ESQCR Voltage</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {result.summary.esqcr_pass ? statusIcon.pass : statusIcon.fail}
+                      <span className="font-semibold">{result.summary.min_delivered_v}V</span>
+                      <span className="text-muted-foreground text-[9px]">≥216V</span>
+                    </div>
                   </div>
                   <div className="rounded bg-muted/30 px-2 py-1.5">
                     <span className="text-muted-foreground">PFC Range</span>
                     <span className="block font-semibold mt-0.5">
-                      {result.summary.min_pfc_a > 0 ? `${result.summary.min_pfc_a.toLocaleString()}A` : "—"}
+                      {result.summary.min_pfc_a > 0
+                        ? `${(result.summary.min_pfc_a/1000).toFixed(1)}–${(result.summary.max_pfc_a/1000).toFixed(1)} kA`
+                        : "—"}
                     </span>
                   </div>
                 </div>
-                {/* Upstream POC info if manual values were used */}
+
+                {/* Limiting factor */}
+                {result.summary.limiting_factor !== "none" && (
+                  <div className="rounded border border-dashed px-2 py-1 text-[10px] flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                    <span>Limiting factor: <strong className="capitalize">{
+                      result.summary.limiting_factor === "vd" ? "Voltage Drop"
+                      : result.summary.limiting_factor === "zs" ? "Earth Loop Impedance (Zs)"
+                      : "Thermal Rating"
+                    }</strong></span>
+                  </div>
+                )}
+
+                {/* Upstream POC info */}
                 {result.summary.upstream_source === "manual" && (
                   <div className="rounded bg-muted/20 border border-dashed px-2 py-1.5 text-[10px] space-y-0.5">
                     <span className="font-medium flex items-center gap-1"><PlugZap className="h-3 w-3" />POC Conditions (manual)</span>
@@ -392,10 +440,17 @@ export function DesignAnalysisPanel({
                   </div>
                 )}
 
+                {/* Earthing & audit */}
+                <div className="text-[9px] text-muted-foreground flex gap-3">
+                  <span>Earthing: {result.summary.earthing_system}</span>
+                  <span>Length: {result.summary.total_length_m}m</span>
+                  {result.summary.dno_code && <span>{result.summary.dno_code} {result.summary.ruleset_version}</span>}
+                </div>
+
                 {/* Issue counts */}
                 <div className="flex gap-3 text-xs">
                   {result.summary.error_count > 0 && (
-                    <span className="flex items-center gap-1 text-red-600">
+                    <span className="flex items-center gap-1 text-destructive">
                       <XCircle className="h-3 w-3" />{result.summary.error_count} error{result.summary.error_count !== 1 ? "s" : ""}
                     </span>
                   )}
