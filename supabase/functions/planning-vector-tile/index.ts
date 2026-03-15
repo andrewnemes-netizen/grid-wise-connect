@@ -54,7 +54,6 @@ Deno.serve(async (req) => {
       headers: {
         ...corsHeaders,
         "Content-Type": upstreamRes.headers.get("content-type") || "application/x-protobuf",
-        "Content-Encoding": upstreamRes.headers.get("content-encoding") || "gzip",
         "Cache-Control": "public, max-age=3600",
       },
     });
