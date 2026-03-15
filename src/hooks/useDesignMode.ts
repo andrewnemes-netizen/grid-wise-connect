@@ -435,9 +435,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
         return;
       }
       if (map) {
-        const srcId = `design-cable-${id}`;
-        if (map.getLayer(srcId)) map.removeLayer(srcId);
-        if (map.getSource(srcId)) map.removeSource(srcId);
+        removeLayerAndSource(map, `design-cable-${id}`);
       }
       setCables((prev) => prev.filter((c) => c.id !== id));
     },
