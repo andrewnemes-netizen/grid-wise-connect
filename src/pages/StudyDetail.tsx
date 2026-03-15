@@ -112,8 +112,7 @@ export default function StudyDetail() {
       setConverting(false);
     }
   };
-
-
+  const handleExportPdf = () => {
     generateAssessmentPdf({
       siteName: study.study_name,
       proposedKw: study.proposed_kw || 0,
