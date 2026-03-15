@@ -3,6 +3,7 @@
  * Uses the Google Maps JavaScript API StreetViewPanorama for drag/click navigation.
  * Capture reads the current POV automatically.
  */
+import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Loader2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
