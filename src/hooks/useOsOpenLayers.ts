@@ -114,7 +114,15 @@ export function useOsOpenLayers() {
           },
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 500 && typeof body?.error === "string" && body.error.includes("403")) {
+            toast.error(`${ds.label} requires an OS Premium plan`);
+          } else {
+            toast.error(`Failed to load ${ds.label}`);
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const geojson = await res.json();
 
         // Remove stale layers if they exist
