@@ -51,6 +51,8 @@ interface ConnectAssessmentPanelProps {
     elements: { element_type: string; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
     cables: { cable_type: string; label: string; coordinates: [number, number][] }[]
   ) => Promise<number>;
+  /** Callback when auto-detect completes (feeds data to EV Hub) */
+  onAutoDetectComplete?: (result: RouteAutoDetectResult) => void;
 }
 
 export interface SavedAssessment {
