@@ -318,8 +318,10 @@ export function DesignAnalysisPanel({
                     {expandedCables.has(cable.cable_id) && (
                       <div className="px-2 pb-2 space-y-1.5 border-t bg-muted/10">
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 pt-1.5">
+                          <span className="text-muted-foreground">Cable Size</span>
+                          <span className="font-medium">{cable.cable_size}</span>
                           <span className="text-muted-foreground">Voltage Drop</span>
-                          <span className={cable.vd_pass ? "" : "text-red-600 font-medium"}>{cable.vd_volts}V ({cable.vd_pct}%)</span>
+                          <span className={cable.vd_pass ? "" : "text-destructive font-medium"}>{cable.vd_volts}V ({cable.vd_pct}%)</span>
                           <span className="text-muted-foreground">Design Current</span>
                           <span>{cable.design_current_a}A</span>
                           <span className="text-muted-foreground">Cable Rating</span>
