@@ -463,5 +463,6 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     undoCableVertex,
     finishCable,
     removeCable,
+    reload: loadDesignData,
   };
 }

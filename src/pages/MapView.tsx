@@ -519,8 +519,8 @@ const MapView = () => {
               onConvertToDesign={(studyId) => {
                 setGridwiseLocation(null);
                 setActiveTool("design");
-                // Reload design elements to pick up new items
-                activeStudy.refreshStudy?.();
+                // Reload design elements to pick up newly created items
+                design.reload();
               }}
             />
           )}
