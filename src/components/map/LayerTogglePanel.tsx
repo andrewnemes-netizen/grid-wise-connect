@@ -53,6 +53,11 @@ interface LayerTogglePanelProps {
   lrVisibility?: Record<string, boolean>;
   lrLoading?: Set<string>;
   onLrToggle?: (datasetId: string, visible: boolean) => void;
+  // OS Open layers
+  osDatasets?: OsOpenDataset[];
+  osVisibility?: Record<string, boolean>;
+  osLoading?: Set<string>;
+  onOsToggle?: (datasetId: string, visible: boolean) => void;
 }
 
 // Use OS GeoDataViz palette (re-exported for backward compatibility)
