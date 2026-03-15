@@ -6,6 +6,7 @@ const UK_CENTER: [number, number] = [-1.5, 54.0];
 const DEFAULT_ZOOM = 6;
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F5bm1weWt5dyJ9.LE9-j6HiHMEJqnG86aIxEg";
+const OS_API_KEY = "j7vwIPqoPOj5tiwNsJGlQ1SDD2GpsehD";
 
 const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
 
@@ -44,6 +45,27 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
     ],
     attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
     maxzoom: 17,
+  },
+  "os-road": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
+  },
+  "os-outdoor": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Outdoor_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
+  },
+  "os-light": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Light_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
   },
 };
 
