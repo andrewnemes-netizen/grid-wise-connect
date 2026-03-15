@@ -95,7 +95,7 @@ const MARKER_INITIALS: Record<string, string> = {
 let gmapsPromise: Promise<void> | null = null;
 function loadGoogleMaps(): Promise<void> {
   if (gmapsPromise) return gmapsPromise;
-  if (window.google?.maps?.StreetViewPanorama) {
+  if ((window as any).google?.maps?.StreetViewPanorama) {
     gmapsPromise = Promise.resolve();
     return gmapsPromise;
   }
