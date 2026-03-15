@@ -1,0 +1,81 @@
+/**
+ * GRIDWISE ENGINE 1 — Site & Asset Discovery
+ * 
+ * Wraps the existing score-site edge function and scoring engine
+ * into the unified AssetSearchResult interface.
+ */
+
+import { supabase } from "@/integrations/supabase/client";
+import { buildRawMetrics, type RawMetrics } from "../scoringEngine";
+import type { SiteInput, AssetSearchResult, NearestAsset } from "./types";
+
+/**
+ * Discover all candidate connection assets near the site.
+ * Calls the score-site edge function and maps results to AssetSearchResult.
+ */
+export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResult> {
+  // Call the existing score-site edge function
+  const { data, error } = await supabase.functions.invoke("score-site", {
+    body: {
+      lat: input.lat,
+      lng: input.lng,
+      proposed_kw: input.proposed_kw,
+      boundary_geojson: input.boundary_geojson ?? null,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Asset discovery failed: ${error.message}`);
+  }
+
+  const scoreData = data;
+  const distances = scoreData.distances || { primary_m: 9999, feeder_m: 9999, capacity_segment_m: 9999 };
+  const constraints = scoreData.constraints || {};
+  const nearestSubs = scoreData.nearest_substations || [];
+
+  // Build raw metrics for scoring
+  const rawMetrics = buildRawMetrics(scoreData, input.proposed_kw);
+
+  // Map nearest substation
+  const nearestSub = nearestSubs[0];
+  const nearestSubstation: NearestAsset | null = nearestSub ? {
+    asset_id: nearestSub.site_id || nearestSub.id || "unknown",
+    asset_type: "substation",
+    name: nearestSub.site_name || nearestSub.name,
+    distance_m: distances.primary_m,
+    headroom_kw: nearestSub.transformer_headroom_kw ?? nearestSub.headroom_kw ?? null,
+    utilisation_pct: nearestSub.utilisation_pct ?? null,
+    capacity_kw: nearestSub.firm_capacity_kw ?? nearestSub.capacity_kw ?? null,
+    voltage_kv: nearestSub.voltage_kv ?? null,
+    confidence: nearestSub.transformer_headroom_kw != null ? "high" : "medium",
+  } : null;
+
+  // Map alternatives
+  const alternatives: NearestAsset[] = nearestSubs.slice(1).map((sub: any, i: number) => ({
+    asset_id: sub.site_id || sub.id || `alt_${i}`,
+    asset_type: "substation" as const,
+    name: sub.site_name || sub.name,
+    distance_m: sub.distance_m ?? distances.primary_m + (i + 1) * 200,
+    headroom_kw: sub.transformer_headroom_kw ?? sub.headroom_kw ?? null,
+    utilisation_pct: sub.utilisation_pct ?? null,
+    capacity_kw: sub.firm_capacity_kw ?? sub.capacity_kw ?? null,
+    voltage_kv: sub.voltage_kv ?? null,
+    confidence: "medium" as const,
+  }));
+
+  return {
+    nearest_substation: nearestSubstation,
+    nearest_feeder: null, // Populated when feeder spatial queries are available
+    nearest_cable_segment: null,
+    alternatives,
+    distances,
+    constraints: {
+      capacity_flag: constraints.capacity_flag || "unknown",
+      ndp_intersect: constraints.ndp_intersect || false,
+      wayleave_intersect: constraints.wayleave_intersect || false,
+      min_footway_m: constraints.min_footway_m ?? null,
+      min_carriageway_m: constraints.min_carriageway_m ?? null,
+    },
+    raw_metrics: rawMetrics,
+  };
+}
