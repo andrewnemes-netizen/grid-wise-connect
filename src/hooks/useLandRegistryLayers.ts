@@ -13,7 +13,7 @@ export interface LandRegistryDataset {
  * HM Land Registry INSPIRE Index Polygons — free WMS service.
  * No API key required for the WMS endpoint.
  */
-const WMS_BASE = "https://inspire.landregistry.gov.uk/inspire/ows";
+const WMS_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/land-registry-wms-proxy`;
 
 export const LAND_REGISTRY_DATASETS: LandRegistryDataset[] = [
   {
