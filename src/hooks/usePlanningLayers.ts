@@ -78,6 +78,16 @@ export const PLANNING_DATASETS: PlanningDataset[] = [
   },
 ];
 
+function getMapBbox(map: MaplibreMap): [number, number, number, number] {
+  const bounds = map.getBounds();
+  return [
+    bounds.getWest(),
+    bounds.getSouth(),
+    bounds.getEast(),
+    bounds.getNorth(),
+  ];
+}
+
 interface PlanningLayerState {
   [datasetId: string]: boolean;
 }
@@ -102,31 +112,30 @@ export function usePlanningLayers() {
       const circleLayerId = `planning-circle-${ds.slug}`;
 
       if (!visible) {
-        // Hide layers
         if (map.getLayer(fillLayerId)) map.setLayoutProperty(fillLayerId, "visibility", "none");
         if (map.getLayer(lineLayerId)) map.setLayoutProperty(lineLayerId, "visibility", "none");
         if (map.getLayer(circleLayerId)) map.setLayoutProperty(circleLayerId, "visibility", "none");
         return;
       }
 
-      // If already loaded, just show
+      // If already loaded, just show — but also refresh data for current viewport
       if (loadedRef.current.has(datasetId)) {
         if (map.getLayer(fillLayerId)) map.setLayoutProperty(fillLayerId, "visibility", "visible");
         if (map.getLayer(lineLayerId)) map.setLayoutProperty(lineLayerId, "visibility", "visible");
         if (map.getLayer(circleLayerId)) map.setLayoutProperty(circleLayerId, "visibility", "visible");
+        // Refresh with current bbox
+        refreshSingleLayer(ds, map);
         return;
       }
 
-      // Fetch from API
       setPlanningLoading((prev) => new Set(prev).add(datasetId));
 
       try {
-        const center = map.getCenter();
+        const bbox = getMapBbox(map);
         const { data, error } = await supabase.functions.invoke("planning-data-lookup", {
           body: {
             dataset: ds.slug,
-            latitude: center.lat,
-            longitude: center.lng,
+            bbox,
             limit: 100,
             geometry_relation: "intersects",
           },
@@ -138,85 +147,84 @@ export function usePlanningLayers() {
         }
 
         const geojson = data;
-        if (!geojson?.features?.length) {
-          console.log(`No features for ${ds.slug} near ${center.lat},${center.lng}`);
-          // Still add empty source so toggle works
-          if (!map.getSource(sourceId)) {
-            map.addSource(sourceId, {
-              type: "geojson",
-              data: { type: "FeatureCollection", features: [] },
-            });
-          }
-          loadedRef.current.add(datasetId);
-          return;
-        }
+        const featureCount = geojson?.features?.length || 0;
+        console.log(`Planning: ${featureCount} features for ${ds.slug}`);
 
-        // Determine geometry types
-        const geomTypes = new Set(geojson.features.map((f: any) => f.geometry?.type));
-        const hasPolygon = geomTypes.has("Polygon") || geomTypes.has("MultiPolygon");
-        const hasLine = geomTypes.has("LineString") || geomTypes.has("MultiLineString");
-        const hasPoint = geomTypes.has("Point") || geomTypes.has("MultiPoint");
+        // Always add source (even if empty so toggle works)
+        const sourceData = featureCount > 0
+          ? geojson
+          : { type: "FeatureCollection", features: [] };
 
         if (!map.getSource(sourceId)) {
-          map.addSource(sourceId, { type: "geojson", data: geojson });
+          map.addSource(sourceId, { type: "geojson", data: sourceData });
         } else {
-          (map.getSource(sourceId) as any).setData(geojson);
+          (map.getSource(sourceId) as any).setData(sourceData);
         }
 
-        if (hasPolygon && !map.getLayer(fillLayerId)) {
-          map.addLayer({
-            id: fillLayerId,
-            type: "fill",
-            source: sourceId,
-            filter: ["any", ["==", "$type", "Polygon"]],
-            paint: {
-              "fill-color": ds.color,
-              "fill-opacity": ds.fillOpacity,
-            },
-          });
-          map.addLayer({
-            id: lineLayerId,
-            type: "line",
-            source: sourceId,
-            filter: ["any", ["==", "$type", "Polygon"]],
-            paint: {
-              "line-color": ds.color,
-              "line-width": 1.5,
-              "line-opacity": 0.8,
-            },
-          });
-        }
+        if (featureCount > 0) {
+          const geomTypes = new Set(geojson.features.map((f: any) => f.geometry?.type));
+          const hasPolygon = geomTypes.has("Polygon") || geomTypes.has("MultiPolygon");
+          const hasLine = geomTypes.has("LineString") || geomTypes.has("MultiLineString");
+          const hasPoint = geomTypes.has("Point") || geomTypes.has("MultiPoint");
 
-        if (hasLine && !map.getLayer(lineLayerId)) {
-          map.addLayer({
-            id: lineLayerId,
-            type: "line",
-            source: sourceId,
-            filter: ["==", "$type", "LineString"],
-            paint: {
-              "line-color": ds.color,
-              "line-width": 2,
-            },
-          });
-        }
+          if (hasPolygon) {
+            if (!map.getLayer(fillLayerId)) {
+              map.addLayer({
+                id: fillLayerId,
+                type: "fill",
+                source: sourceId,
+                filter: ["any", ["==", "$type", "Polygon"]],
+                paint: {
+                  "fill-color": ds.color,
+                  "fill-opacity": ds.fillOpacity,
+                },
+              });
+            }
+            if (!map.getLayer(lineLayerId)) {
+              map.addLayer({
+                id: lineLayerId,
+                type: "line",
+                source: sourceId,
+                filter: ["any", ["==", "$type", "Polygon"]],
+                paint: {
+                  "line-color": ds.color,
+                  "line-width": 1.5,
+                  "line-opacity": 0.8,
+                },
+              });
+            }
+          }
 
-        if (hasPoint && !map.getLayer(circleLayerId)) {
-          map.addLayer({
-            id: circleLayerId,
-            type: "circle",
-            source: sourceId,
-            filter: ["==", "$type", "Point"],
-            paint: {
-              "circle-color": ds.color,
-              "circle-radius": 5,
-              "circle-stroke-color": "#fff",
-              "circle-stroke-width": 1,
-            },
-          });
+          if (hasLine && !map.getLayer(lineLayerId)) {
+            map.addLayer({
+              id: lineLayerId,
+              type: "line",
+              source: sourceId,
+              filter: ["==", "$type", "LineString"],
+              paint: {
+                "line-color": ds.color,
+                "line-width": 2,
+              },
+            });
+          }
+
+          if (hasPoint && !map.getLayer(circleLayerId)) {
+            map.addLayer({
+              id: circleLayerId,
+              type: "circle",
+              source: sourceId,
+              filter: ["==", "$type", "Point"],
+              paint: {
+                "circle-color": ds.color,
+                "circle-radius": 5,
+                "circle-stroke-color": "#fff",
+                "circle-stroke-width": 1,
+              },
+            });
+          }
         }
 
         loadedRef.current.add(datasetId);
-        console.log(`Loaded ${geojson.features.length} planning features for ${ds.slug}`);
       } catch (err) {
         console.error("Failed to load planning layer:", err);
       } finally {
@@ -230,7 +238,27 @@ export function usePlanningLayers() {
     []
   );
 
-  /** Refetch visible planning layers for a new map center */
+  const refreshSingleLayer = async (ds: PlanningDataset, map: MaplibreMap) => {
+    const sourceId = `planning-src-${ds.slug}`;
+    const bbox = getMapBbox(map);
+    try {
+      const { data } = await supabase.functions.invoke("planning-data-lookup", {
+        body: {
+          dataset: ds.slug,
+          bbox,
+          limit: 100,
+          geometry_relation: "intersects",
+        },
+      });
+      if (data?.features && map.getSource(sourceId)) {
+        (map.getSource(sourceId) as any).setData(data);
+        console.log(`Refreshed ${ds.slug}: ${data.features.length} features`);
+      }
+    } catch (err) {
+      console.error("Refresh planning layer failed:", err);
+    }
+  };
+
   const refreshPlanningLayers = useCallback(
     async (map: MaplibreMap | null) => {
       if (!map) return;
@@ -238,25 +266,7 @@ export function usePlanningLayers() {
       for (const [datasetId] of visible) {
         const ds = PLANNING_DATASETS.find((d) => d.id === datasetId);
         if (!ds) continue;
-        const sourceId = `planning-src-${ds.slug}`;
-        const center = map.getCenter();
-
-        try {
-          const { data } = await supabase.functions.invoke("planning-data-lookup", {
-            body: {
-              dataset: ds.slug,
-              latitude: center.lat,
-              longitude: center.lng,
-              limit: 100,
-              geometry_relation: "intersects",
-            },
-          });
-          if (data?.features && map.getSource(sourceId)) {
-            (map.getSource(sourceId) as any).setData(data);
-          }
-        } catch (err) {
-          console.error("Refresh planning layer failed:", err);
-        }
+        await refreshSingleLayer(ds, map);
       }
     },
     [planningVisibility]
