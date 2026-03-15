@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2, PencilRuler, Loader2 } from "lucide-react";
+import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2, PencilRuler, Loader2, Activity, XCircle, Lightbulb } from "lucide-react";
 import { generateAssessmentPdf, type PdfSections } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
