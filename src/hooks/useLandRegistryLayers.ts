@@ -50,6 +50,7 @@ export function useLandRegistryLayers() {
       if (!addedRef.current.has(datasetId)) {
         if (!map.getSource(sourceId)) {
           // WMS raster tile source — requests 256x256 PNG tiles
+          // Use EPSG:3857 (Web Mercator) for MapLibre compatibility
           map.addSource(sourceId, {
             type: "raster",
             tiles: [
@@ -64,10 +65,10 @@ export function useLandRegistryLayers() {
           type: "raster",
           source: sourceId,
           paint: {
-            "raster-opacity": 0.6,
+            "raster-opacity": 0.65,
           },
           layout: { visibility: "visible" },
-          minzoom: 12, // Only show at close zoom where polygons are legible
+          minzoom: 14, // INSPIRE polygons only legible at close zoom
         });
 
         addedRef.current.add(datasetId);
