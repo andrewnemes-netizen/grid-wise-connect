@@ -566,21 +566,23 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                     <span className="flex items-center gap-2">
                       <FileText className="h-3.5 w-3.5 text-primary" />
                       Audit Trail
-                      <Badge variant="outline" className="text-[9px]">{project.audit.audit_entries.length}</Badge>
+                      <Badge variant="outline" className="text-[9px]">{project.audit.reason_codes.length + project.audit.warnings.length}</Badge>
                     </span>
                     {auditOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-1">
                   <div className="space-y-1 max-h-48 overflow-y-auto">
-                    {project.audit.audit_entries.map((entry, i) => (
-                      <div key={i} className="flex items-start gap-1.5 text-[10px] rounded border bg-muted/5 px-2 py-1">
-                        <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${
-                          entry.severity === "error" ? "bg-red-500" :
-                          entry.severity === "warning" ? "bg-amber-500" :
-                          "bg-emerald-500"
-                        }`} />
-                        <span className="text-muted-foreground">{entry.message}</span>
+                    {project.audit.reason_codes.map((code, i) => (
+                      <div key={`r-${i}`} className="flex items-start gap-1.5 text-[10px] rounded border bg-muted/5 px-2 py-1">
+                        <span className="mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 bg-primary" />
+                        <span className="text-muted-foreground">{code}</span>
+                      </div>
+                    ))}
+                    {project.audit.warnings.map((warning, i) => (
+                      <div key={`w-${i}`} className="flex items-start gap-1.5 text-[10px] rounded border bg-amber-50 border-amber-200 px-2 py-1">
+                        <span className="mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 bg-amber-500" />
+                        <span className="text-amber-700">{warning}</span>
                       </div>
                     ))}
                   </div>
