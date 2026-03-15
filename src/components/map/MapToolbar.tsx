@@ -31,6 +31,7 @@ const tools = [
   { id: "evhub" as const, icon: Zap, label: "EV Hub Feasibility" },
   { id: "connect" as const, icon: Cable, label: "Connect" },
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
+  { id: "analyse" as const, icon: Activity, label: "Analyse Design", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
   // { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
