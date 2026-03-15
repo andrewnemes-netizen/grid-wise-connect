@@ -255,9 +255,9 @@ export function DesignAnalysisPanel({
 
               {/* Supply capacity */}
               <div>
-                <label className="text-[10px] text-muted-foreground block mb-0.5">Supply Capacity (determines Zs limit)</label>
+                <label className="text-[10px] text-muted-foreground block mb-0.5">Supply Capacity — 3-Phase (determines Zs limit)</label>
                 <div className="flex gap-1">
-                  {["100", "200", "300", "400"].map(cap => (
+                  {["60", "80", "100"].map(cap => (
                     <Button
                       key={cap}
                       variant={supplyCapacity === cap ? "default" : "outline"}
@@ -270,7 +270,7 @@ export function DesignAnalysisPanel({
                   ))}
                 </div>
                 <p className="text-[9px] text-muted-foreground mt-0.5">
-                  Zs limit: {supplyCapacity === "400" ? "0.15" : supplyCapacity === "300" ? "0.20" : "0.35"}Ω
+                  Zs limit: {supplyCapacity === "100" ? "0.10" : supplyCapacity === "80" ? "0.20" : "0.35"}Ω (TT/PME)
                 </p>
               </div>
 
