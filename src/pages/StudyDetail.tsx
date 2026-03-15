@@ -20,11 +20,6 @@ import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
 import { convertConnectToDesign } from "@/lib/connectToDesign";
 import type { GridwiseProject } from "@/lib/gridwise/types";
 import { toast } from "sonner";
-import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
-import { useUnitRates } from "@/hooks/useUnitRates";
-import { StudyShareDialog } from "@/components/study/StudyShareDialog";
-import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
-import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
