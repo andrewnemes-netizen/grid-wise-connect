@@ -45,6 +45,10 @@ interface Props {
   onCaptureScreenshot?: () => Promise<string | null>;
   /** Design Mode cables to feed into engine */
   designCables?: DesignCable[];
+  /** Callback to switch to Design Mode after conversion */
+  onConvertToDesign?: (studyId: string) => void;
+  /** Active study ID (for creating design elements) */
+  activeStudyId?: string | null;
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
