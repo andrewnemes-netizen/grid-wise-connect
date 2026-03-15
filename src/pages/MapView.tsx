@@ -503,6 +503,19 @@ const MapView = () => {
             />
           )}
 
+          {gridwiseLocation && (
+            <GridwisePanel
+              lng={gridwiseLocation.lng}
+              lat={gridwiseLocation.lat}
+              onClose={() => setGridwiseLocation(null)}
+              routeGeojson={connect.connectEndpoints ? {
+                type: "LineString" as const,
+                coordinates: connect.connectEndpoints.routeCoords,
+              } : undefined}
+              boundaryGeojson={boundary.polygon ?? undefined}
+            />
+          )}
+
           {streetViewLocation && (
             <StreetViewPanel
               lng={streetViewLocation.lng}
