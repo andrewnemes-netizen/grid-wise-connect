@@ -34,7 +34,9 @@ const statusColors: Record<string, string> = {
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: unitRates } = useUnitRates();
+  const [converting, setConverting] = useState(false);
   const [pdfSections, setPdfSections] = useState<PdfSections>({
     coverPage: true,
     executiveSummary: true,
