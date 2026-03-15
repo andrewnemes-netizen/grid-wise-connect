@@ -284,6 +284,122 @@ export type Database = {
           },
         ]
       }
+      dno_dataset_registry: {
+        Row: {
+          active: boolean
+          attachment_urls: Json | null
+          created_at: string
+          dataset_id: string
+          description: string | null
+          dno: string
+          endpoint_export_csv: string | null
+          endpoint_export_geojson: string | null
+          endpoint_export_json: string | null
+          endpoint_export_parquet: string | null
+          endpoint_metadata: string | null
+          endpoint_records: string | null
+          export_formats: Json | null
+          fields_json: Json | null
+          geometry_field: string | null
+          geometry_type: string | null
+          id: string
+          is_geospatial: boolean
+          last_sync_at: string | null
+          last_sync_error: string | null
+          last_sync_rows: number | null
+          last_sync_status: string | null
+          linked_layer_id: string | null
+          portal_url: string | null
+          primary_key_guess: string | null
+          record_count: number | null
+          refresh_strategy: string
+          schedule: string | null
+          schema_hash: string | null
+          storage_table: string | null
+          title: string | null
+          updated_at: string
+          updated_at_source: string | null
+        }
+        Insert: {
+          active?: boolean
+          attachment_urls?: Json | null
+          created_at?: string
+          dataset_id: string
+          description?: string | null
+          dno?: string
+          endpoint_export_csv?: string | null
+          endpoint_export_geojson?: string | null
+          endpoint_export_json?: string | null
+          endpoint_export_parquet?: string | null
+          endpoint_metadata?: string | null
+          endpoint_records?: string | null
+          export_formats?: Json | null
+          fields_json?: Json | null
+          geometry_field?: string | null
+          geometry_type?: string | null
+          id?: string
+          is_geospatial?: boolean
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_rows?: number | null
+          last_sync_status?: string | null
+          linked_layer_id?: string | null
+          portal_url?: string | null
+          primary_key_guess?: string | null
+          record_count?: number | null
+          refresh_strategy?: string
+          schedule?: string | null
+          schema_hash?: string | null
+          storage_table?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_at_source?: string | null
+        }
+        Update: {
+          active?: boolean
+          attachment_urls?: Json | null
+          created_at?: string
+          dataset_id?: string
+          description?: string | null
+          dno?: string
+          endpoint_export_csv?: string | null
+          endpoint_export_geojson?: string | null
+          endpoint_export_json?: string | null
+          endpoint_export_parquet?: string | null
+          endpoint_metadata?: string | null
+          endpoint_records?: string | null
+          export_formats?: Json | null
+          fields_json?: Json | null
+          geometry_field?: string | null
+          geometry_type?: string | null
+          id?: string
+          is_geospatial?: boolean
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_rows?: number | null
+          last_sync_status?: string | null
+          linked_layer_id?: string | null
+          portal_url?: string | null
+          primary_key_guess?: string | null
+          record_count?: number | null
+          refresh_strategy?: string
+          schedule?: string | null
+          schema_hash?: string | null
+          storage_table?: string | null
+          title?: string | null
+          updated_at?: string
+          updated_at_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dno_dataset_registry_linked_layer_id_fkey"
+            columns: ["linked_layer_id"]
+            isOneToOne: false
+            referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dno_rulesets: {
         Row: {
           created_at: string
