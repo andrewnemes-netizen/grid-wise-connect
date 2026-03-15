@@ -75,21 +75,38 @@ export default function StudyDetail() {
   const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
   const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
 
-  // Check if raw_score_data contains a GridwiseProject (from Gridwise Connect saves)
-  const rawScoreData = (study as any).raw_score_data as GridwiseProject | null;
-  const hasGridwiseProject = rawScoreData?.version === "GRIDWISE_CONNECT_V1";
-
   const handleConvertToDesign = async () => {
-    if (!user || !id || !rawScoreData) return;
+    if (!user || !id) return;
     setConverting(true);
     try {
-      const result = await convertConnectToDesign(rawScoreData, id, user.id);
-      if (result.warnings.length > 0) {
-        toast.warning(`Converted with warnings: ${result.warnings[0]}`);
-      } else {
-        toast.success(`Converted: ${result.cablesCreated} cable(s) + ${result.elementsCreated} equipment placed.`);
+      const routeGeoJson = study.route_geojson as any;
+      if (!routeGeoJson?.coordinates?.length) {
+        toast.error("No route geometry found on this study.");
+        return;
       }
-      // Navigate to map in design mode
+
+      // Build a minimal GridwiseProject-like structure for conversion
+      const coords = routeGeoJson.coordinates.map((c: number[]) => [c[0], c[1]] as [number, number]);
+      const cableType = study.voltage_level === "HV" ? "hv_cable" : "lv_main";
+
+      // Insert the route as a design cable
+      const { error: cableError } = await supabase.from("design_cables").insert({
+        study_id: id,
+        cable_type: cableType,
+        label: `${cableType === "hv_cable" ? "HV Cable" : "LV Main"} (from Connect)`,
+        coordinates: coords as any,
+        length_m: study.proposed_kw ? Math.round(coords.length * 10) : 0,
+        created_by: user.id,
+        properties_json: {
+          source: "study_conversion",
+          study_mode: study.mode,
+          dno: study.dno,
+        },
+      } as any);
+
+      if (cableError) throw cableError;
+
+      toast.success("Route converted to Design Mode cable. Opening map...");
       navigate(`/?study=${id}`);
     } catch (err: any) {
       toast.error(`Conversion failed: ${err.message}`);
