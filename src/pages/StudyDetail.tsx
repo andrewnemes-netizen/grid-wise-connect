@@ -17,8 +17,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
 import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
-import { convertConnectToDesign } from "@/lib/connectToDesign";
-import type { GridwiseProject } from "@/lib/gridwise/types";
 import { toast } from "sonner";
 
 function formatGBP(amount: number): string {
