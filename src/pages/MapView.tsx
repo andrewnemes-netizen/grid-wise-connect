@@ -67,18 +67,15 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
-  const [standaloneStreetView, setStandaloneStreetView] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
-  const standaloneStreetViewRef = useRef(standaloneStreetView);
-  standaloneStreetViewRef.current = standaloneStreetView;
 
   // Extracted hooks
   const {
@@ -140,12 +137,13 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
-        setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-        setActiveTool(null);
-        setStandaloneStreetView(false);
-        return;
-      }
+      // Street View tool removed - re-enable later with better positioning
+      // if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
+      //   setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+      //   setActiveTool(null);
+      //   setStandaloneStreetView(false);
+      //   return;
+      // }
       if (activeToolRef.current === "pin") {
         pin.handlePinClick(e);
         setActiveTool(null);
@@ -180,10 +178,10 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview" || standaloneStreetView
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design"
         ? "crosshair"
         : "";
-  }, [map, activeTool, standaloneStreetView]);
+  }, [map, activeTool]);
 
   // Postcode search
   const handleSearchResult = useCallback(
@@ -518,7 +516,8 @@ const MapView = () => {
             />
           )}
 
-          {/* Standalone Street View button — bottom-left */}
+          {/* Street View panel hidden - re-enable later with better positioning */}
+          {/*
           <div className="absolute bottom-20 left-3 z-10">
             <Button
               size="sm"
@@ -535,6 +534,7 @@ const MapView = () => {
               </span>
             </Button>
           </div>
+          */}
         </>
       )}
     </div>

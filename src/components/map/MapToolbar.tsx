@@ -17,8 +17,8 @@ function StreetViewIcon({ className }: { className?: string }) {
 }
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
@@ -32,7 +32,7 @@ const tools = [
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
-  { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
+  // { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
 ] as const;
 
 export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {
@@ -61,13 +61,7 @@ export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasA
               disabled={disabled}
               onClick={() => onToolChange(activeTool === tool.id ? null : tool.id)}
             >
-              {'customIcon' in tool ? (
-                <tool.customIcon 
-                  className={`h-4 w-4 ${activeTool === tool.id ? 'text-primary-foreground' : 'text-amber-500'}`} 
-                />
-              ) : (
-                <tool.icon className="h-4 w-4" />
-              )}
+              <tool.icon className="h-4 w-4" />
             </Button>
           </div>
         );
