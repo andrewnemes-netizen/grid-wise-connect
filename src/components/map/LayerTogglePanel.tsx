@@ -55,14 +55,8 @@ interface LayerTogglePanelProps {
   onLrToggle?: (datasetId: string, visible: boolean) => void;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  substations: "#2196F3",
-  feeders: "#9b59b6",
-  cables: "#e67e22",
-  constraints: "#95a5a6",
-  points: "#3498db",
-  polygons: "#2ecc71",
-};
+// Use OS GeoDataViz palette (re-exported for backward compatibility)
+const CATEGORY_COLORS = OS_CATEGORY_COLORS;
 
 export function getLayerColor(layer: RegistryLayer, index: number): string {
   const style = layer.style_json as any;
