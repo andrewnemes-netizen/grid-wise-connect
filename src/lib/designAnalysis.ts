@@ -315,7 +315,7 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
   const supplyV = input.supply_voltage_v ?? DEFAULT_SUPPLY_V;
   const pf = input.power_factor ?? DEFAULT_PF;
   const diversity = input.diversity_factor ?? DEFAULT_DIVERSITY;
-  const supplyCapacity = input.supply_capacity_a ?? 100;
+  const supplyCapacity = input.supply_capacity_a ?? 60;
   const earthingSystem = dno?.earthing_system ?? "TN-C-S";
 
   // G81 segmented VD limits
