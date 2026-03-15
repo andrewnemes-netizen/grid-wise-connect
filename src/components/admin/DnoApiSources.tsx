@@ -283,7 +283,7 @@ export function DnoApiSources() {
                                 <Progress value={state.progress} className="w-24 h-1.5" />
                               )}
                               {state?.result && (
-                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                <span className="text-xs text-primary flex items-center gap-1">
                                   <CheckCircle className="h-3 w-3" />
                                   {state.result.inserted} inserted
                                 </span>
