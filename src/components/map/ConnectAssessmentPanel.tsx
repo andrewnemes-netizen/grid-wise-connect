@@ -141,6 +141,9 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState(false);
 
+  // Auto-detect hook
+  const autoDetect = useRouteAutoDetect();
+
   // Save & compare state
   const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
   const [comparisonIds, setComparisonIds] = useState<string[] | null>(null);
