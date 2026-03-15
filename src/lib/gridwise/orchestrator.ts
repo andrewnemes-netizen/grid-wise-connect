@@ -59,6 +59,8 @@ export async function runGridwiseProject(
     visuals?: Partial<VisualPack>;
     /** DNO lookup result from spatial query (used for auto-detection) */
     dnoLookupResult?: string;
+    /** Design Mode cable candidates to feed into feasibility engine */
+    cableCandidates?: import("../evHub/cableSelection").CableCandidate[];
   }
 ): Promise<GridwiseProject> {
   const runId = generateRunId();
