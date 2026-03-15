@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Map, Satellite, Mountain, Compass } from "lucide-react";
+import { Map, Satellite, Mountain, Compass, Hexagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
@@ -12,7 +12,8 @@ export type BasemapId =
   | "topo"
   | "os-road"
   | "os-outdoor"
-  | "os-light";
+  | "os-light"
+  | "os-vector";
 
 interface BasemapOption {
   id: BasemapId;
