@@ -229,6 +229,10 @@ export function LayerTogglePanel({
   lrVisibility = {},
   lrLoading = new Set(),
   onLrToggle,
+  osDatasets = [],
+  osVisibility = {},
+  osLoading = new Set(),
+  onOsToggle,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
