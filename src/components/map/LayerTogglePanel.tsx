@@ -233,6 +233,7 @@ export function LayerTogglePanel({
   osDatasets = [],
   osVisibility = {},
   osLoading = new Set(),
+  osFeatureCounts = {},
   onOsToggle,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
