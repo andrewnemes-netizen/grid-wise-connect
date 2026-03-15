@@ -16,6 +16,7 @@ interface DesignAnalysisPanelProps {
   proposedKw: number;
   cables: DesignCable[];
   elements: DesignElement[];
+  dnoCode?: string | null;
   onClose: () => void;
   onHighlightCable?: (cableId: string, status: "pass" | "warning" | "fail") => void;
 }
