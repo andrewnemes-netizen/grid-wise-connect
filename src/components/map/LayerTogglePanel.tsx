@@ -442,7 +442,76 @@ export function LayerTogglePanel({
                 </div>
               </TabsContent>
 
-              {/* Land Registry Tab */}
+              {/* OS Open Tab */}
+              <TabsContent value="osopen" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {(() => {
+                  const osCatMap = new Map<string, OsOpenDataset[]>();
+                  osDatasets.forEach((ds) => {
+                    if (!osCatMap.has(ds.category)) osCatMap.set(ds.category, []);
+                    osCatMap.get(ds.category)!.push(ds);
+                  });
+
+                  return osDatasets.length === 0 ? (
+                    <div className="py-4 text-center space-y-1.5">
+                      <Compass className="h-6 w-6 text-muted-foreground mx-auto" />
+                      <p className="text-[11px] text-muted-foreground">No OS Open layers available.</p>
+                    </div>
+                  ) : (
+                    Array.from(osCatMap.entries()).map(([category, datasets]) => {
+                      const groupKey = `osopen:${category}`;
+                      const isCollapsed = collapsedGroups.has(groupKey);
+
+                      return (
+                        <div key={groupKey} className="space-y-0.5">
+                          <button
+                            onClick={() => toggleGroup(groupKey)}
+                            className="flex items-center gap-1.5 w-full px-1 py-1 text-left hover:bg-accent/30 rounded transition-colors"
+                          >
+                            {isCollapsed ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">{category}</span>
+                            <span className="text-[9px] text-muted-foreground ml-auto">{datasets.length}</span>
+                          </button>
+
+                          {!isCollapsed &&
+                            datasets.map((ds) => {
+                              const isVisible = osVisibility[ds.id] ?? false;
+                              const isLoading = osLoading.has(ds.id);
+
+                              return (
+                                <div key={ds.id} className="space-y-0.5 pl-4">
+                                  <div className="flex items-center justify-between gap-2 py-0.5">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      {isLoading ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                                      ) : (
+                                        <div className="h-3 w-3 rounded-sm shrink-0 border border-border" style={{ backgroundColor: ds.color }} />
+                                      )}
+                                      <Label htmlFor={`os-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
+                                        {ds.label}
+                                      </Label>
+                                    </div>
+                                    <Switch
+                                      id={`os-${ds.id}`}
+                                      checked={isVisible}
+                                      onCheckedChange={(checked) => onOsToggle?.(ds.id, checked)}
+                                      className="scale-75 shrink-0"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      );
+                    })
+                  );
+                })()}
+                <div className="pt-1.5 border-t mt-1">
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    Ordnance Survey Open Data — Zoomstack layers for your viewport.
+                  </p>
+                </div>
+              </TabsContent>
+
               <TabsContent value="landregistry" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
                 {lrDatasets.length === 0 ? (
                   <div className="py-4 text-center space-y-1.5">
