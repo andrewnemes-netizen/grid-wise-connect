@@ -9,7 +9,7 @@ import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
-  Gauge, Construction, Eye,
+  Gauge, Construction, Eye, Paintbrush,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,10 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { supabase } from "@/integrations/supabase/client";
 import { runGridwiseProject } from "@/lib/gridwise";
 import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
+import { convertGridwiseToDesign } from "@/lib/gridwise/designBridge";
 import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from "@/lib/gridwise/types";
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import type { EquipmentType, CableType } from "@/hooks/useDesignMode";
 
 interface Props {
   lng: number;
@@ -40,6 +42,13 @@ interface Props {
   boundaryGeojson?: GeoJSON.Polygon;
   /** Map screenshot callback */
   onCaptureScreenshot?: () => Promise<string | null>;
+  /** Whether an active study exists (required for design conversion) */
+  hasActiveStudy?: boolean;
+  /** Bulk insert callback from useDesignMode */
+  onConvertToDesign?: (
+    elements: { element_type: EquipmentType; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
+    cables: { cable_type: CableType; label: string; coordinates: [number, number][] }[]
+  ) => Promise<number>;
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
