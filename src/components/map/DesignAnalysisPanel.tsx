@@ -144,12 +144,21 @@ export function DesignAnalysisPanel({
         }
       }
 
+      // Build upstream conditions
+      const hasManualUpstream = upstreamMode === "manual" && (upstreamVdPct || upstreamZsOhms);
+      const upstream = hasManualUpstream ? {
+        existing_vd_pct: parseFloat(upstreamVdPct) || 0,
+        existing_zs_ohms: parseFloat(upstreamZsOhms) || 0.35,
+        source: "manual" as const,
+      } : undefined;
+
       const input: DesignAnalysisInput = {
         cables,
         elements,
         proposed_kw: proposedKw,
         cable_specs: cableSpecs,
         dno_rules: dnoRules,
+        upstream,
       };
 
       const analysisResult = runDesignAnalysis(input);
