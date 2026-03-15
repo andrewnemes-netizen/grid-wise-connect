@@ -22,7 +22,8 @@ import type { CableCandidate } from "../evHub/cableSelection";
 export async function runFeasibilityEngine(
   input: SiteInput,
   assets: AssetSearchResult,
-  dnoLookupResult?: string
+  dnoLookupResult?: string,
+  cableCandidates?: CableCandidate[]
 ): Promise<FeasibilityDecision> {
   // Build engine context from asset search results
   const context: EngineContext = {
