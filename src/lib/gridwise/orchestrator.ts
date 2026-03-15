@@ -56,6 +56,8 @@ export async function runGridwiseProject(
     onProgress?: (progress: PipelineProgress) => void;
     /** Pre-captured visuals (map screenshot, street view) */
     visuals?: Partial<VisualPack>;
+    /** DNO lookup result from spatial query (used for auto-detection) */
+    dnoLookupResult?: string;
   }
 ): Promise<GridwiseProject> {
   const runId = generateRunId();

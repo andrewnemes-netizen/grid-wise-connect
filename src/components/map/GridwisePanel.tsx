@@ -114,16 +114,21 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   useEffect(() => {
     let cancelled = false;
     setDnoDetecting(true);
-    supabase.rpc("lookup_dno_by_location", { p_lat: lat, p_lng: lng })
-      .then(({ data, error }) => {
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("lookup_dno_by_location", { p_lat: lat, p_lng: lng });
         if (cancelled) return;
         if (!error && data) {
           setDetectedDno(data);
         } else {
           setDetectedDno(null);
         }
-      })
-      .finally(() => { if (!cancelled) setDnoDetecting(false); });
+      } catch {
+        if (!cancelled) setDetectedDno(null);
+      } finally {
+        if (!cancelled) setDnoDetecting(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [lat, lng]);
 
