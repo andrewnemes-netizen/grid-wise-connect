@@ -249,7 +249,27 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
     }
   }, [project, user, toast]);
 
-  const progressPct = progress
+  const handleConvertToDesign = useCallback(async () => {
+    if (!project || !user || !activeStudyId) {
+      toast({ title: "No active study", description: "Create or open a study first to convert to Design Mode.", variant: "destructive" });
+      return;
+    }
+    setConverting(true);
+    try {
+      const result = await convertConnectToDesign(project, activeStudyId, user.id);
+      if (result.warnings.length > 0) {
+        toast({ title: "Conversion completed with warnings", description: result.warnings[0] });
+      } else {
+        toast({ title: "Converted to Design Mode", description: `${result.cablesCreated} cable(s) + ${result.elementsCreated} equipment placed.` });
+      }
+      onConvertToDesign?.(activeStudyId);
+    } catch (err: any) {
+      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
+    } finally {
+      setConverting(false);
+    }
+  }, [project, user, activeStudyId, toast, onConvertToDesign]);
+
     ? progress.stage === "COMPLETE" ? 100
     : progress.stage === "ERROR" ? 0
     : Math.round(((progress.stage_index + 1) / progress.total_stages) * 100)
