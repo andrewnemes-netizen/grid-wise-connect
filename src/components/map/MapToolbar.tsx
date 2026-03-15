@@ -17,8 +17,8 @@ function StreetViewIcon({ className }: { className?: string }) {
 }
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "streetview" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
