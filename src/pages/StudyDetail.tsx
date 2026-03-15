@@ -156,6 +156,19 @@ export default function StudyDetail() {
         </div>
         <div className="flex gap-2">
           <StudyShareDialog studyId={study.id} studyName={study.study_name} />
+          {study.mode === "connect" && study.route_geojson && (
+            <Button
+              variant="outline"
+              onClick={handleConvertToDesign}
+              disabled={converting}
+            >
+              {converting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Converting…</>
+              ) : (
+                <><PencilRuler className="h-4 w-4 mr-2" />Convert to Design</>
+              )}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => navigate(`/?study=${study.id}`)}>
             <Map className="h-4 w-4 mr-2" />Open on Map
           </Button>
