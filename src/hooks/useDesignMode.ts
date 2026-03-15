@@ -324,35 +324,39 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
       const cfg = CABLE_CONFIG[drawingCableType];
       const lineId = "design-cable-drawing";
       if (updated.length >= 2) {
-        if (map.getSource(lineId)) {
-          (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
-            type: "Feature",
-            properties: {},
-            geometry: { type: "LineString", coordinates: updated },
-          });
-        } else {
-          map.addSource(lineId, {
-            type: "geojson",
-            data: {
+        try {
+          if (map.getSource(lineId)) {
+            (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
               type: "Feature",
               properties: {},
               geometry: { type: "LineString", coordinates: updated },
-            },
-          });
-          const paint: Record<string, unknown> = {
-            "line-color": cfg.color,
-            "line-width": 3,
-            "line-opacity": 0.7,
-          };
-          if (cfg.dasharray.length > 0) {
-            paint["line-dasharray"] = cfg.dasharray;
+            });
+          } else {
+            map.addSource(lineId, {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: updated },
+              },
+            });
+            const paint: Record<string, unknown> = {
+              "line-color": cfg.color,
+              "line-width": 3,
+              "line-opacity": 0.7,
+            };
+            if (cfg.dasharray.length > 0) {
+              paint["line-dasharray"] = cfg.dasharray;
+            }
+            map.addLayer({
+              id: lineId,
+              type: "line",
+              source: lineId,
+              paint: paint as any,
+            });
           }
-          map.addLayer({
-            id: lineId,
-            type: "line",
-            source: lineId,
-            paint: paint as any,
-          });
+        } catch (error) {
+          console.warn("Skipping temporary cable draw update while style reloads", error);
         }
       }
     },
