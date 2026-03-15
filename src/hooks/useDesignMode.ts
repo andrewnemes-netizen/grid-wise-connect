@@ -373,8 +373,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
 
     const lineId = "design-cable-drawing";
     if (updated.length < 2) {
-      if (map.getLayer(lineId)) map.removeLayer(lineId);
-      if (map.getSource(lineId)) map.removeSource(lineId);
+      removeLayerAndSource(map, lineId);
     } else if (map.getSource(lineId)) {
       (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
         type: "Feature",
