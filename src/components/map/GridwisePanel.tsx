@@ -690,6 +690,34 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                   </div>
                 )}
               </div>
+
+              {/* ── Convert to Design Mode ── */}
+              {onConvertToDesign && hasActiveStudy && (
+                <div className="space-y-2">
+                  {!converted ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      disabled={converting}
+                      onClick={handleConvertToDesign}
+                    >
+                      {converting ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
+                      ) : (
+                        <><Paintbrush className="mr-2 h-4 w-4" />Convert to Design Mode</>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 flex items-center justify-center gap-1.5">
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="text-xs text-emerald-700 font-medium">Design elements placed on map</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!hasActiveStudy && project && (
+                <p className="text-[10px] text-muted-foreground text-center">Open a study to enable design conversion</p>
+              )}
             </>
           )}
         </div>
