@@ -46,7 +46,7 @@ export function BasemapSwitcher({ active, onChange }: BasemapSwitcherProps) {
   const osMaps = basemaps.filter((b) => b.group === "os");
 
   return (
-    <div className="absolute bottom-8 left-3 z-10 flex flex-col items-start gap-1">
+    <div className="absolute bottom-8 left-3 z-10 flex flex-col-reverse items-start gap-1">
       <Tooltip delayDuration={2000}>
         <TooltipTrigger asChild>
           <Button
