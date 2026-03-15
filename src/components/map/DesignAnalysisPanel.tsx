@@ -350,6 +350,16 @@ export function DesignAnalysisPanel({
                     </span>
                   </div>
                 </div>
+                {/* Upstream POC info if manual values were used */}
+                {result.summary.upstream_source === "manual" && (
+                  <div className="rounded bg-muted/20 border border-dashed px-2 py-1.5 text-[10px] space-y-0.5">
+                    <span className="font-medium flex items-center gap-1"><PlugZap className="h-3 w-3" />POC Conditions (manual)</span>
+                    <div className="flex gap-4">
+                      <span>Upstream VD: <strong>{result.summary.upstream_vd_pct}%</strong></span>
+                      <span>Upstream Zs: <strong>{result.summary.upstream_zs_ohms}Ω</strong></span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Issue counts */}
                 <div className="flex gap-3 text-xs">
