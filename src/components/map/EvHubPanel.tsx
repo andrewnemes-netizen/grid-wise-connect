@@ -129,8 +129,11 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Pro
         context.cableCandidates = designCables
           .filter(c => c.cable_type === "lv_main" || c.cable_type === "lv_service")
           .map(c => ({
-            cable_type: c.label || c.cable_type,
+            cable_segment_id: `design-${c.label || c.cable_type}`,
             distance_m: c.length_m,
+            capacity_headroom_pct: null,
+            age_years: null,
+            accessibility_score: null,
             coordinates: c.coordinates,
           }));
       }
