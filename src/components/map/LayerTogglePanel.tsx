@@ -57,6 +57,7 @@ interface LayerTogglePanelProps {
   osDatasets?: OsOpenDataset[];
   osVisibility?: Record<string, boolean>;
   osLoading?: Set<string>;
+  osFeatureCounts?: Record<string, number>;
   onOsToggle?: (datasetId: string, visible: boolean) => void;
 }
 
@@ -232,6 +233,7 @@ export function LayerTogglePanel({
   osDatasets = [],
   osVisibility = {},
   osLoading = new Set(),
+  osFeatureCounts = {},
   onOsToggle,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
@@ -489,6 +491,13 @@ export function LayerTogglePanel({
                                       <Label htmlFor={`os-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
                                         {ds.label}
                                       </Label>
+                                      {isVisible && !isLoading && (
+                                        <span className="text-[9px] text-muted-foreground">
+                                          {(osFeatureCounts[ds.id] ?? 0) > 0
+                                            ? `${osFeatureCounts[ds.id]?.toLocaleString()}`
+                                            : `z${ds.minZoom}+`}
+                                        </span>
+                                      )}
                                     </div>
                                     <Switch
                                       id={`os-${ds.id}`}
