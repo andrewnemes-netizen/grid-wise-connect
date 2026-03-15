@@ -107,7 +107,7 @@ const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg:
 
 const OPTION_LETTERS = "ABCDEFGHIJ";
 
-export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures, designElements, hasActiveStudy, onConvertToDesign }: ConnectAssessmentPanelProps) {
+export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures, designElements, hasActiveStudy, onConvertToDesign, onAutoDetectComplete }: ConnectAssessmentPanelProps) {
   const { toast } = useToast();
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
