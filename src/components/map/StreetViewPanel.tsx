@@ -160,6 +160,8 @@ export function StreetViewPanel({
         const pov = pano.getPov();
         setHeading(pov.heading);
         setPitch(pov.pitch);
+        // Reset drag overrides when user pans — projections shift
+        setMarkerOverrides({});
       });
 
       pano.addListener("zoom_changed", () => {
