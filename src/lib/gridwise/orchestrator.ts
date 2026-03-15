@@ -116,8 +116,16 @@ export async function runGridwiseProject(
       supply_point_marker: { lat: input.lat, lng: input.lng },
     };
 
-    // ── Audit Trace ──
-    const rules = getBaselineRules();
+    // ── Audit Trace (use DNO-specific rules if available) ──
+    let rules = getBaselineRules();
+    try {
+      if (feasibility.dno_anchor?.dno_key) {
+        const ruleSet = await loadRuleSet(feasibility.dno_anchor.dno_key, feasibility.dno_anchor.rule_set_id);
+        rules = ruleSet.rules;
+      }
+    } catch {
+      // Fall back to baseline
+    }
     const audit = buildAuditTrace(
       rules,
       feasibility.cable_selection,
