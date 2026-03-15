@@ -124,6 +124,17 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Pro
         }
       }
 
+      // ── Integrate design cables as POC candidates ──
+      if (designCables && designCables.length > 0) {
+        context.cableCandidates = designCables
+          .filter(c => c.cable_type === "lv_main" || c.cable_type === "lv_service")
+          .map(c => ({
+            cable_type: c.label || c.cable_type,
+            distance_m: c.length_m,
+            coordinates: c.coordinates,
+          }));
+      }
+
       const output = await runEvHubEngine(
         {
           site_lat: lat,
