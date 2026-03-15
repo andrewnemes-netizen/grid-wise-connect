@@ -13,7 +13,7 @@ const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
+const BASEMAP_SOURCES: Record<string, { tiles: string[]; attribution: string; maxzoom?: number }> = {
   street: {
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -69,12 +69,26 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
   },
 };
 
-export { GOOGLE_MAPS_KEY };
+// Cached OS VTS style
+let osVtsStyleCache: any = null;
+
+async function fetchOsVtsStyle(): Promise<any> {
+  if (osVtsStyleCache) return osVtsStyleCache;
+  const res = await fetch(
+    `https://api.os.uk/maps/vector/v1/vts/resources/styles?srs=3857&key=${OS_API_KEY}`
+  );
+  if (!res.ok) throw new Error(`Failed to fetch OS VTS style: ${res.status}`);
+  osVtsStyleCache = await res.json();
+  return osVtsStyleCache;
+}
+
+export { GOOGLE_MAPS_KEY, OS_API_KEY };
 
 export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const currentBasemapRef = useRef<BasemapId>("street");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -136,13 +150,134 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
     };
   }, [containerRef]);
 
-  const setBasemap = useCallback((id: BasemapId) => {
+  const setBasemap = useCallback(async (id: BasemapId) => {
     const map = mapRef.current;
     if (!map) return;
 
-    const cfg = BASEMAP_SOURCES[id];
+    const prevBasemap = currentBasemapRef.current;
+    currentBasemapRef.current = id;
 
-    // Remove old basemap source+layer, re-add with new tiles
+    // ── Switching TO OS Vector Tiles ──
+    if (id === "os-vector") {
+      try {
+        const style = await fetchOsVtsStyle();
+
+        // Capture current center/zoom to restore after style swap
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const bearing = map.getBearing();
+        const pitch = map.getPitch();
+
+        // Capture all non-basemap sources and layers to re-add
+        const currentStyle = map.getStyle();
+        const customSources: Record<string, any> = {};
+        const customLayers: any[] = [];
+
+        if (currentStyle) {
+          for (const [srcId, srcDef] of Object.entries(currentStyle.sources || {})) {
+            if (srcId !== "basemap") {
+              customSources[srcId] = srcDef;
+            }
+          }
+          for (const layer of currentStyle.layers || []) {
+            if (layer.id !== "basemap-tiles") {
+              customLayers.push(layer);
+            }
+          }
+        }
+
+        // Merge OS VTS style with custom sources and layers
+        const mergedStyle = {
+          ...style,
+          sources: {
+            ...style.sources,
+            ...customSources,
+          },
+          layers: [
+            ...style.layers,
+            ...customLayers,
+          ],
+        };
+
+        map.setStyle(mergedStyle);
+
+        map.once("style.load" as any, () => {
+          map.jumpTo({ center, zoom, bearing, pitch });
+        });
+      } catch (err) {
+        console.error("Failed to load OS Vector Tiles:", err);
+        currentBasemapRef.current = prevBasemap;
+      }
+      return;
+    }
+
+    // ── Switching FROM OS Vector Tiles to raster ──
+    if (prevBasemap === "os-vector") {
+      const cfg = BASEMAP_SOURCES[id];
+      if (!cfg) return;
+
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      const bearing = map.getBearing();
+      const pitch = map.getPitch();
+
+      // Capture custom sources/layers (non-esri, non-OS VTS)
+      const currentStyle = map.getStyle();
+      const customSources: Record<string, any> = {};
+      const customLayers: any[] = [];
+
+      if (currentStyle) {
+        const osLayerIds = new Set((currentStyle.layers || [])
+          .filter((l: any) => l.source === "esri")
+          .map((l: any) => l.id));
+
+        for (const [srcId, srcDef] of Object.entries(currentStyle.sources || {})) {
+          if (srcId !== "esri") {
+            customSources[srcId] = srcDef;
+          }
+        }
+        for (const layer of currentStyle.layers || []) {
+          if (!osLayerIds.has(layer.id) && layer.id !== "background") {
+            customLayers.push(layer);
+          }
+        }
+      }
+
+      const rasterStyle: any = {
+        version: 8,
+        sources: {
+          basemap: {
+            type: "raster",
+            tiles: cfg.tiles,
+            tileSize: 256,
+            attribution: cfg.attribution,
+            maxzoom: cfg.maxzoom,
+          },
+          ...customSources,
+        },
+        layers: [
+          {
+            id: "basemap-tiles",
+            type: "raster",
+            source: "basemap",
+            minzoom: 0,
+            maxzoom: cfg.maxzoom || 19,
+          },
+          ...customLayers,
+        ],
+      };
+
+      map.setStyle(rasterStyle);
+      map.once("style.load" as any, () => {
+        map.jumpTo({ center, zoom, bearing, pitch });
+      });
+      return;
+    }
+
+    // ── Normal raster-to-raster swap ──
+    const cfg = BASEMAP_SOURCES[id];
+    if (!cfg) return;
+
     if (map.getLayer("basemap-tiles")) map.removeLayer("basemap-tiles");
     if (map.getSource("basemap")) map.removeSource("basemap");
 
@@ -154,7 +289,6 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
       maxzoom: cfg.maxzoom,
     });
 
-    // Add basemap layer at the bottom (before all other layers)
     const firstLayerId = map.getStyle().layers?.[0]?.id;
     map.addLayer(
       {
