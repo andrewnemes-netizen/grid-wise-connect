@@ -16,7 +16,8 @@ import { runRouteEngine } from "./routeEngine";
 import { runElectricalEngine } from "./electricalEngine";
 import { runCommercialEngine } from "./commercialEngine";
 import { buildAuditTrace } from "../evHub/audit";
-import { getBaselineRules } from "../evHub/ruleLoader";
+import { loadRuleSet, getBaselineRules } from "../evHub/ruleLoader";
+import { resolveDnoAnchor } from "../evHub/dnoAnchor";
 import type { UnitRates } from "../connectionCosts";
 
 /**
@@ -56,6 +57,8 @@ export async function runGridwiseProject(
     onProgress?: (progress: PipelineProgress) => void;
     /** Pre-captured visuals (map screenshot, street view) */
     visuals?: Partial<VisualPack>;
+    /** DNO lookup result from spatial query (used for auto-detection) */
+    dnoLookupResult?: string;
   }
 ): Promise<GridwiseProject> {
   const runId = generateRunId();
@@ -86,7 +89,7 @@ export async function runGridwiseProject(
 
     // ── Stage 2: Feasibility & POC ──
     report(1, "Running feasibility assessment...");
-    const feasibility = await runFeasibilityEngine(input, assets);
+    const feasibility = await runFeasibilityEngine(input, assets, options?.dnoLookupResult);
 
     // ── Stage 3: Route & Streetworks ──
     report(2, "Designing route and assessing streetworks...");
@@ -113,8 +116,16 @@ export async function runGridwiseProject(
       supply_point_marker: { lat: input.lat, lng: input.lng },
     };
 
-    // ── Audit Trace ──
-    const rules = getBaselineRules();
+    // ── Audit Trace (use DNO-specific rules if available) ──
+    let rules = getBaselineRules();
+    try {
+      if (feasibility.dno_anchor?.dno_key) {
+        const ruleSet = await loadRuleSet(feasibility.dno_anchor.dno_key, feasibility.dno_anchor.rule_set_id);
+        rules = ruleSet.rules;
+      }
+    } catch {
+      // Fall back to baseline
+    }
     const audit = buildAuditTrace(
       rules,
       feasibility.cable_selection,

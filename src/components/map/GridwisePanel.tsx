@@ -4,7 +4,7 @@
  * Single panel that collects site inputs and runs the full
  * 6-engine pipeline with progress indicators and structured results.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
@@ -106,6 +106,32 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   const [dnoOverride, setDnoOverride] = useState<DnoKey | "auto">("auto");
   const [voltageOverride, setVoltageOverride] = useState<"Auto" | "LV" | "HV" | "EHV">("Auto");
 
+  // DNO auto-detection state
+  const [detectedDno, setDetectedDno] = useState<string | null>(null);
+  const [dnoDetecting, setDnoDetecting] = useState(false);
+
+  // Auto-detect DNO from licence area boundaries on mount
+  useEffect(() => {
+    let cancelled = false;
+    setDnoDetecting(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("lookup_dno_by_location", { p_lat: lat, p_lng: lng });
+        if (cancelled) return;
+        if (!error && data) {
+          setDetectedDno(data);
+        } else {
+          setDetectedDno(null);
+        }
+      } catch {
+        if (!cancelled) setDetectedDno(null);
+      } finally {
+        if (!cancelled) setDnoDetecting(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lat, lng]);
+
   // Pipeline state
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
@@ -123,7 +149,15 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
 
   const proposedKw = Number(chargerCount) * Number(chargerKw) * Number(diversityFactor);
 
+  // Resolve the DNO to use: manual override or auto-detected
+  const resolvedDnoLookup = dnoOverride !== "auto" ? dnoOverride : detectedDno ?? undefined;
+
   const handleRun = useCallback(async () => {
+    if (!resolvedDnoLookup) {
+      toast({ title: "DNO not detected", description: "No DNO licence area found for this location. Please select a DNO manually.", variant: "destructive" });
+      return;
+    }
+
     setRunning(true);
     setProject(null);
     setSaved(false);
@@ -158,6 +192,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         unitRates: unitRates ?? undefined,
         onProgress: setProgress,
         visuals: { map_screenshot: mapScreenshot },
+        dnoLookupResult: resolvedDnoLookup,
       });
 
       setProject(result);
@@ -167,7 +202,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
     } finally {
       setRunning(false);
     }
-  }, [siteName, postcode, lat, lng, proposedKw, chargerCount, chargerKw, diversityFactor, extraneous, routeGeojson, boundaryGeojson, voltageOverride, dnoOverride, unitRates, onCaptureScreenshot, toast]);
+  }, [siteName, postcode, lat, lng, proposedKw, chargerCount, chargerKw, diversityFactor, extraneous, routeGeojson, boundaryGeojson, voltageOverride, dnoOverride, unitRates, onCaptureScreenshot, toast, resolvedDnoLookup]);
 
   const handleSave = useCallback(async () => {
     if (!project || !user) return;
@@ -233,12 +268,21 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
               <MapPin className="h-3 w-3" /> Location
             </p>
             <p className="text-sm font-mono">{lat.toFixed(5)}, {lng.toFixed(5)}</p>
-            {routeGeojson && (
-              <Badge variant="secondary" className="text-[9px] mt-1">Route drawn ✓</Badge>
-            )}
-            {boundaryGeojson && (
-              <Badge variant="secondary" className="text-[9px] mt-1 ml-1">Boundary set ✓</Badge>
-            )}
+            <div className="flex flex-wrap gap-1 mt-1">
+              {dnoDetecting ? (
+                <Badge variant="outline" className="text-[9px]"><Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />Detecting DNO...</Badge>
+              ) : detectedDno ? (
+                <Badge variant="default" className="text-[9px]">DNO: {detectedDno} ✓</Badge>
+              ) : (
+                <Badge variant="destructive" className="text-[9px]">DNO not detected — select manually</Badge>
+              )}
+              {routeGeojson && (
+                <Badge variant="secondary" className="text-[9px]">Route drawn ✓</Badge>
+              )}
+              {boundaryGeojson && (
+                <Badge variant="secondary" className="text-[9px]">Boundary set ✓</Badge>
+              )}
+            </div>
           </div>
 
           {/* Inputs */}
