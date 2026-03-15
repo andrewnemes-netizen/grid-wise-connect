@@ -628,6 +628,51 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
             </>
           )}
 
+          {/* Convert to Design Mode */}
+          {result && onConvertToDesign && hasActiveStudy && (
+            <div className="pt-2">
+              {!converted ? (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={converting}
+                  onClick={async () => {
+                    setConverting(true);
+                    try {
+                      const costEst = Number(proposedKw) > 0
+                        ? estimateConnectionCost({ proposed_kw: Number(proposedKw), distances, constraints: result.constraints, nearest_headroom_kw: sourceHeadroomKw, voltage_override: voltageOverride })
+                        : null;
+                      const vLevel = costEst?.voltage_level ?? (voltageOverride === "Auto" ? "LV" : voltageOverride);
+                      const designResult = convertConnectToDesign(endpoints, {
+                        voltageLevel: vLevel,
+                        proposedKw: Number(proposedKw) || 0,
+                        sourceName: sourceName,
+                      });
+                      const count = await onConvertToDesign(designResult.elements, designResult.cables);
+                      toast({ title: "Converted to Design Mode", description: `${count} items placed on map` });
+                      setConverted(true);
+                    } catch (err: any) {
+                      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
+                    } finally {
+                      setConverting(false);
+                    }
+                  }}
+                >
+                  {converting ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
+                  ) : (
+                    <><Paintbrush className="mr-2 h-4 w-4" />Convert to Design Mode</>
+                  )}
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-emerald-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Design elements placed on map</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Saved assessments drawer */}
           <SavedAssessmentsDrawer
             assessments={savedAssessments}
