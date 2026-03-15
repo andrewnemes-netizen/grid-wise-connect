@@ -13,12 +13,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export interface StreetViewMarker {
+  id: string;
   lat: number;
   lng: number;
   label: string;
   type: string;
   color: string;
 }
+
+export type EquipmentTypeOption = {
+  type: string;
+  label: string;
+  color: string;
+  symbol: string;
+};
+
+const EQUIPMENT_OPTIONS: EquipmentTypeOption[] = [
+  { type: "transformer", label: "Transformer", color: "#e74c3c", symbol: "T" },
+  { type: "rmu", label: "Ring Main Unit", color: "#3498db", symbol: "R" },
+  { type: "feeder_pillar", label: "Feeder Pillar", color: "#2ecc71", symbol: "F" },
+  { type: "cutout", label: "Cutout", color: "#f39c12", symbol: "C" },
+  { type: "joint", label: "Joint", color: "#9b59b6", symbol: "J" },
+  { type: "pole", label: "Pole", color: "#1abc9c", symbol: "P" },
+  { type: "ev_charger", label: "EV Charger", color: "#00b894", symbol: "E" },
+];
 
 export interface StreetViewCapture {
   dataUrl: string;
