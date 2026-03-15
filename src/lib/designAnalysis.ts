@@ -233,10 +233,9 @@ const DEFAULT_VD_LIMITS: G81VdLimits = {
 };
 
 const DEFAULT_ZS_THRESHOLDS: G81ZsThresholds = {
-  zs_100a: 0.35,
-  zs_200a: 0.35,
-  zs_300a: 0.20,
-  zs_400a: 0.15,
+  zs_60a: 0.35,
+  zs_80a: 0.20,
+  zs_100a: 0.10,
 };
 
 const DEFAULT_PFC_RANGES: G81PfcRanges = {
