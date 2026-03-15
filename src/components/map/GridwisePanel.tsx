@@ -707,6 +707,22 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                   </div>
                 )}
               </div>
+
+              {/* Convert to Design Mode */}
+              {onConvertToDesign && activeStudyId && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleConvertToDesign}
+                  disabled={converting}
+                >
+                  {converting ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
+                  ) : (
+                    <><PencilRuler className="mr-2 h-4 w-4" />Convert to Design Mode</>
+                  )}
+                </Button>
+              )}
             </>
           )}
         </div>
