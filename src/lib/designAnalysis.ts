@@ -328,6 +328,8 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       error_count: errorCount,
       warning_count: warningCount,
       suggestion_count: allSuggestions.length,
+      dno_code: dno?.dno_code,
+      ruleset_version: dno?.ruleset_version,
     },
     engine_version: ENGINE_VERSION,
     analysed_at: new Date().toISOString(),
