@@ -54,12 +54,9 @@ export function useLandRegistryLayers() {
       // Add source + layer on first toggle-on
       if (!addedRef.current.has(datasetId)) {
         if (!map.getSource(sourceId)) {
-          // The INSPIRE WMS supports EPSG:900913 which is equivalent to EPSG:3857
           map.addSource(sourceId, {
             type: "raster",
-            tiles: [
-              `${WMS_PROXY}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(ds.wmsLayer)}&styles=&format=image/png&transparent=true&srs=EPSG:900913&width=256&height=256&bbox={bbox-epsg-3857}`,
-            ],
+            tiles: [LAND_REGISTRY_TILE_URL],
             tileSize: 256,
           });
         }
