@@ -239,6 +239,72 @@ export function DesignAnalysisPanel({
             </div>
           </div>
 
+          {/* Upstream POC Conditions */}
+          {!result && (
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <PlugZap className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold">Point of Connection</span>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant={upstreamMode === "auto" ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 text-[10px] flex-1"
+                  onClick={() => setUpstreamMode("auto")}
+                >
+                  Auto (Ze only)
+                </Button>
+                <Button
+                  variant={upstreamMode === "manual" ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 text-[10px] flex-1"
+                  onClick={() => setUpstreamMode("manual")}
+                >
+                  Manual (DNO values)
+                </Button>
+              </div>
+              {upstreamMode === "manual" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-0.5">Existing VD at joint (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="10"
+                      value={upstreamVdPct}
+                      onChange={e => setUpstreamVdPct(e.target.value)}
+                      placeholder="e.g. 1.2"
+                      className="w-full h-7 px-2 text-xs border rounded bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-0.5">Zs at joint (Ω)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max="5"
+                      value={upstreamZsOhms}
+                      onChange={e => setUpstreamZsOhms(e.target.value)}
+                      placeholder="e.g. 0.28"
+                      className="w-full h-7 px-2 text-xs border rounded bg-background"
+                    />
+                  </div>
+                  <p className="col-span-2 text-[9px] text-muted-foreground">
+                    Enter values from DNO connection offer or existing network data at the joint/POC.
+                  </p>
+                </div>
+              )}
+              {upstreamMode === "auto" && (
+                <p className="text-[9px] text-muted-foreground">
+                  Analysis starts from Ze ({(0.35).toFixed(2)}Ω default). Use Manual mode to enter known DNO values at the joint.
+                </p>
+              )}
+            </div>
+          )}
+
           {!result ? (
             <Button className="w-full" onClick={runAnalysis} disabled={running}>
               {running ? (
