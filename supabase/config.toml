@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.dno-open-data-ingest]
 verify_jwt = false
+
+[functions.npg-catalog-crawler]
+verify_jwt = false
+
+[functions.npg-dataset-ingest]
+verify_jwt = false

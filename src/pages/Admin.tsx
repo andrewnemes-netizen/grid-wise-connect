@@ -67,6 +67,9 @@ const Admin = () => {
         <TabsContent value="api" className="mt-4">
           <DnoApiSources />
         </TabsContent>
+        <TabsContent value="npg" className="mt-4">
+          <NpgDatasetRegistry />
+        </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
         </TabsContent>
