@@ -284,7 +284,8 @@ export function LayerTogglePanel({
     });
   };
 
-  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length;
+  const lrVisibleCount = Object.values(lrVisibility).filter(Boolean).length;
+  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount;
   const networkVisibleCount = Object.values(visibility).filter(Boolean).length;
   const planningVisibleCount = Object.values(planningVisibility).filter(Boolean).length;
 
