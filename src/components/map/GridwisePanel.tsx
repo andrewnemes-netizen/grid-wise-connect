@@ -244,7 +244,22 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
     }
   }, [project, user, toast]);
 
-  const progressPct = progress
+  const handleConvertToDesign = useCallback(async () => {
+    if (!project || !onConvertToDesign) return;
+    setConverting(true);
+    try {
+      const result = convertGridwiseToDesign(project);
+      const count = await onConvertToDesign(result.elements, result.cables);
+      toast({ title: "Converted to Design Mode", description: `${count} items placed on map` });
+      setConverted(true);
+    } catch (err: any) {
+      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
+    } finally {
+      setConverting(false);
+    }
+  }, [project, onConvertToDesign, toast]);
+
+
     ? progress.stage === "COMPLETE" ? 100
     : progress.stage === "ERROR" ? 0
     : Math.round(((progress.stage_index + 1) / progress.total_stages) * 100)
