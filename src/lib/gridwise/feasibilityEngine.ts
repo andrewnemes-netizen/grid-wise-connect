@@ -26,15 +26,16 @@ export async function runFeasibilityEngine(
 ): Promise<FeasibilityDecision> {
   // Build engine context from asset search results
   const context: EngineContext = {
+    dnoLookupResult,
     networkHeadroomKva: assets.nearest_substation?.headroom_kw
-      ? assets.nearest_substation.headroom_kw / 0.95 // kW → approximate kVA
+      ? assets.nearest_substation.headroom_kw / 0.95
       : null,
     transformerLoadingPct: assets.nearest_substation?.utilisation_pct ?? null,
     transformerCapacityKva: assets.nearest_substation?.capacity_kw
       ? assets.nearest_substation.capacity_kw / 0.95
       : null,
-    siteHasMetallicServices: false, // Conservative default
-    cableCandidates: [], // Will be populated when LV cable spatial queries are available
+    siteHasMetallicServices: false,
+    cableCandidates: [],
   };
 
   // Run the full EV Hub engine

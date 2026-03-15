@@ -88,7 +88,7 @@ export async function runGridwiseProject(
 
     // ── Stage 2: Feasibility & POC ──
     report(1, "Running feasibility assessment...");
-    const feasibility = await runFeasibilityEngine(input, assets);
+    const feasibility = await runFeasibilityEngine(input, assets, options?.dnoLookupResult);
 
     // ── Stage 3: Route & Streetworks ──
     report(2, "Designing route and assessing streetworks...");
