@@ -321,9 +321,12 @@ const MapView = () => {
             heatmapMode={heatmapMode}
           />
           <FeatureInfoPanel
-            feature={selectedFeature}
-            layerLabel={selectedLayerLabel}
-            onClose={closeFeatureInfo}
+            feature={planning.selectedPlanningFeature || selectedFeature}
+            layerLabel={planning.selectedPlanningLabel || selectedLayerLabel}
+            onClose={() => {
+              planning.closePlanningFeatureInfo();
+              closeFeatureInfo();
+            }}
           />
           <MapToolbar
             activeTool={activeTool}
