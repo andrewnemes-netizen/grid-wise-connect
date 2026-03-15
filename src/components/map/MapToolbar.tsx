@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Workflow } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Workflow, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Street View pegman icon (orange man like Google)
