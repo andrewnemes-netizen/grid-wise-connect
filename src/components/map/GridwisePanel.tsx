@@ -29,6 +29,8 @@ import { runGridwiseProject } from "@/lib/gridwise";
 import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
 import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from "@/lib/gridwise/types";
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import type { DesignCable } from "@/hooks/useDesignMode";
+import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
 
 interface Props {
   lng: number;
@@ -40,6 +42,8 @@ interface Props {
   boundaryGeojson?: GeoJSON.Polygon;
   /** Map screenshot callback */
   onCaptureScreenshot?: () => Promise<string | null>;
+  /** Design Mode cables to feed into engine */
+  designCables?: DesignCable[];
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
