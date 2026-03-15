@@ -16,7 +16,8 @@ import { runRouteEngine } from "./routeEngine";
 import { runElectricalEngine } from "./electricalEngine";
 import { runCommercialEngine } from "./commercialEngine";
 import { buildAuditTrace } from "../evHub/audit";
-import { getBaselineRules } from "../evHub/ruleLoader";
+import { loadRuleSet, getBaselineRules } from "../evHub/ruleLoader";
+import { resolveDnoAnchor } from "../evHub/dnoAnchor";
 import type { UnitRates } from "../connectionCosts";
 
 /**
