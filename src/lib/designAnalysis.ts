@@ -36,16 +36,14 @@ export interface G81VdLimits {
   total_pct: number;
 }
 
-/** Capacity-based Zs thresholds per G81 / DNO earthing policy */
+/** Capacity-based Zs thresholds per G81 / DNO earthing policy (3-phase) */
 export interface G81ZsThresholds {
-  /** 100A supply — typical 0.35Ω */
+  /** 60A 3-phase supply — typical 0.35Ω */
+  zs_60a: number;
+  /** 80A 3-phase supply — typical 0.20Ω */
+  zs_80a: number;
+  /** 100A 3-phase supply — typical 0.10Ω */
   zs_100a: number;
-  /** 200A supply — typical 0.35Ω */
-  zs_200a: number;
-  /** 300A supply — typical 0.20Ω */
-  zs_300a: number;
-  /** 400A supply — typical 0.15Ω */
-  zs_400a: number;
 }
 
 /** Expected PFC ranges per location type (A) */
@@ -235,10 +233,9 @@ const DEFAULT_VD_LIMITS: G81VdLimits = {
 };
 
 const DEFAULT_ZS_THRESHOLDS: G81ZsThresholds = {
-  zs_100a: 0.35,
-  zs_200a: 0.35,
-  zs_300a: 0.20,
-  zs_400a: 0.15,
+  zs_60a: 0.35,
+  zs_80a: 0.20,
+  zs_100a: 0.10,
 };
 
 const DEFAULT_PFC_RANGES: G81PfcRanges = {
@@ -273,12 +270,11 @@ const UPGRADE_PATHS: Record<string, string[]> = {
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
-/** Select Zs limit based on supply capacity */
+/** Select Zs limit based on supply capacity (3-phase) */
 function selectZsLimit(capacityA: number, thresholds: G81ZsThresholds): number {
-  if (capacityA >= 400) return thresholds.zs_400a;
-  if (capacityA >= 300) return thresholds.zs_300a;
-  if (capacityA >= 200) return thresholds.zs_200a;
-  return thresholds.zs_100a;
+  if (capacityA >= 100) return thresholds.zs_100a;
+  if (capacityA >= 80) return thresholds.zs_80a;
+  return thresholds.zs_60a;
 }
 
 /** Get expected PFC range for a node type */
@@ -319,7 +315,7 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
   const supplyV = input.supply_voltage_v ?? DEFAULT_SUPPLY_V;
   const pf = input.power_factor ?? DEFAULT_PF;
   const diversity = input.diversity_factor ?? DEFAULT_DIVERSITY;
-  const supplyCapacity = input.supply_capacity_a ?? 100;
+  const supplyCapacity = input.supply_capacity_a ?? 60;
   const earthingSystem = dno?.earthing_system ?? "TN-C-S";
 
   // G81 segmented VD limits
@@ -331,10 +327,9 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
 
   // Capacity-based Zs thresholds
   const zsThresholds: G81ZsThresholds = {
+    zs_60a: dno?.zs_thresholds?.zs_60a ?? DEFAULT_ZS_THRESHOLDS.zs_60a,
+    zs_80a: dno?.zs_thresholds?.zs_80a ?? DEFAULT_ZS_THRESHOLDS.zs_80a,
     zs_100a: dno?.zs_thresholds?.zs_100a ?? DEFAULT_ZS_THRESHOLDS.zs_100a,
-    zs_200a: dno?.zs_thresholds?.zs_200a ?? DEFAULT_ZS_THRESHOLDS.zs_200a,
-    zs_300a: dno?.zs_thresholds?.zs_300a ?? DEFAULT_ZS_THRESHOLDS.zs_300a,
-    zs_400a: dno?.zs_thresholds?.zs_400a ?? DEFAULT_ZS_THRESHOLDS.zs_400a,
   };
   const zsLimit = selectZsLimit(supplyCapacity, zsThresholds);
 
