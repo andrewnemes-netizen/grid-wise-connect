@@ -468,7 +468,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
           label: el.label,
           lng: el.lng,
           lat: el.lat,
-          properties_json: el.properties_json,
+          properties_json: el.properties_json as any,
           created_by: user.user!.id,
         }));
         const { data, error } = await supabase
