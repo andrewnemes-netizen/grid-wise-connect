@@ -390,7 +390,7 @@ export function StreetViewPanel({
                   touchAction: "none",
                   zIndex: 10,
                 }}
-                onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
+                onPointerDown={(e) => handlePointerDown(e, m.key)}
               >
                 <div
                   className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
