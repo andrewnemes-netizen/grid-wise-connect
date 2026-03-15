@@ -106,6 +106,27 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   const [dnoOverride, setDnoOverride] = useState<DnoKey | "auto">("auto");
   const [voltageOverride, setVoltageOverride] = useState<"Auto" | "LV" | "HV" | "EHV">("Auto");
 
+  // DNO auto-detection state
+  const [detectedDno, setDetectedDno] = useState<string | null>(null);
+  const [dnoDetecting, setDnoDetecting] = useState(false);
+
+  // Auto-detect DNO from licence area boundaries on mount
+  useEffect(() => {
+    let cancelled = false;
+    setDnoDetecting(true);
+    supabase.rpc("lookup_dno_by_location", { p_lat: lat, p_lng: lng })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data) {
+          setDetectedDno(data);
+        } else {
+          setDetectedDno(null);
+        }
+      })
+      .finally(() => { if (!cancelled) setDnoDetecting(false); });
+    return () => { cancelled = true; };
+  }, [lat, lng]);
+
   // Pipeline state
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress | null>(null);
