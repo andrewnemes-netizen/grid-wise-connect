@@ -107,15 +107,15 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     }
   }, [map]);
 
-  // Load design elements and cables for the active study
-  const loadDesignData = useCallback(async () => {
+  // Load existing elements when study changes
+  useEffect(() => {
     if (!studyId) {
       setElements([]);
       setCables([]);
       return;
     }
     setLoading(true);
-    const [elemResult, cableResult] = await Promise.all([
+    Promise.all([
       supabase
         .from("design_elements")
         .select("*")
@@ -126,18 +126,14 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
         .select("*")
         .eq("study_id", studyId)
         .order("created_at", { ascending: true }),
-    ]);
-    if (elemResult.error) console.error("Failed to load design elements", elemResult.error);
-    if (cableResult.error) console.error("Failed to load design cables", cableResult.error);
-    setElements((elemResult.data as DesignElement[]) || []);
-    setCables((cableResult.data as DesignCable[]) || []);
-    setLoading(false);
+    ]).then(([elemResult, cableResult]) => {
+      if (elemResult.error) console.error("Failed to load design elements", elemResult.error);
+      if (cableResult.error) console.error("Failed to load design cables", cableResult.error);
+      setElements((elemResult.data as DesignElement[]) || []);
+      setCables((cableResult.data as DesignCable[]) || []);
+      setLoading(false);
+    });
   }, [studyId]);
-
-  // Load existing elements when study changes
-  useEffect(() => {
-    loadDesignData();
-  }, [loadDesignData]);
 
   // Sync equipment markers to map
   useEffect(() => {
@@ -463,6 +459,5 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     undoCableVertex,
     finishCable,
     removeCable,
-    reload: loadDesignData,
   };
 }

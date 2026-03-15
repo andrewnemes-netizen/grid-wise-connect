@@ -22,8 +22,7 @@ import type { CableCandidate } from "../evHub/cableSelection";
 export async function runFeasibilityEngine(
   input: SiteInput,
   assets: AssetSearchResult,
-  dnoLookupResult?: string,
-  cableCandidates?: CableCandidate[]
+  dnoLookupResult?: string
 ): Promise<FeasibilityDecision> {
   // Build engine context from asset search results
   const context: EngineContext = {
@@ -36,7 +35,7 @@ export async function runFeasibilityEngine(
       ? assets.nearest_substation.capacity_kw / 0.95
       : null,
     siteHasMetallicServices: false,
-    cableCandidates: cableCandidates ?? [],
+    cableCandidates: [],
   };
 
   // Run the full EV Hub engine

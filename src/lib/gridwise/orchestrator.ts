@@ -59,8 +59,6 @@ export async function runGridwiseProject(
     visuals?: Partial<VisualPack>;
     /** DNO lookup result from spatial query (used for auto-detection) */
     dnoLookupResult?: string;
-    /** Design Mode cable candidates to feed into feasibility engine */
-    cableCandidates?: import("../evHub/cableSelection").CableCandidate[];
   }
 ): Promise<GridwiseProject> {
   const runId = generateRunId();
@@ -91,7 +89,7 @@ export async function runGridwiseProject(
 
     // ── Stage 2: Feasibility & POC ──
     report(1, "Running feasibility assessment...");
-    const feasibility = await runFeasibilityEngine(input, assets, options?.dnoLookupResult, options?.cableCandidates);
+    const feasibility = await runFeasibilityEngine(input, assets, options?.dnoLookupResult);
 
     // ── Stage 3: Route & Streetworks ──
     report(2, "Designing route and assessing streetworks...");

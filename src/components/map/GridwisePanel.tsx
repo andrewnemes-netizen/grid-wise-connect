@@ -9,7 +9,7 @@ import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
-  Gauge, Construction, Eye, PencilRuler,
+  Gauge, Construction, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,9 +29,6 @@ import { runGridwiseProject } from "@/lib/gridwise";
 import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
 import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from "@/lib/gridwise/types";
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
-import type { DesignCable } from "@/hooks/useDesignMode";
-import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
-import { convertConnectToDesign } from "@/lib/connectToDesign";
 
 interface Props {
   lng: number;
@@ -43,12 +40,6 @@ interface Props {
   boundaryGeojson?: GeoJSON.Polygon;
   /** Map screenshot callback */
   onCaptureScreenshot?: () => Promise<string | null>;
-  /** Design Mode cables to feed into engine */
-  designCables?: DesignCable[];
-  /** Callback to switch to Design Mode after conversion */
-  onConvertToDesign?: (studyId: string) => void;
-  /** Active study ID (for creating design elements) */
-  activeStudyId?: string | null;
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
@@ -100,7 +91,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, designCables, onConvertToDesign, activeStudyId }: Props) {
+export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
@@ -147,7 +138,6 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   const [project, setProject] = useState<GridwiseProject | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [converting, setConverting] = useState(false);
 
   // Collapsible sections
   const [assetsOpen, setAssetsOpen] = useState(false);
@@ -198,17 +188,11 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         } catch {}
       }
 
-      // Convert design cables to engine candidates
-      const cableCandidates = designCables && designCables.length > 0
-        ? designCablesToCandidates(designCables, lat, lng)
-        : undefined;
-
       const result = await runGridwiseProject(input, {
         unitRates: unitRates ?? undefined,
         onProgress: setProgress,
         visuals: { map_screenshot: mapScreenshot },
         dnoLookupResult: resolvedDnoLookup,
-        cableCandidates,
       });
 
       setProject(result);
@@ -248,27 +232,6 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
       setSaving(false);
     }
   }, [project, user, toast]);
-
-  const handleConvertToDesign = useCallback(async () => {
-    if (!project || !user || !activeStudyId) {
-      toast({ title: "No active study", description: "Create or open a study first to convert to Design Mode.", variant: "destructive" });
-      return;
-    }
-    setConverting(true);
-    try {
-      const result = await convertConnectToDesign(project, activeStudyId, user.id);
-      if (result.warnings.length > 0) {
-        toast({ title: "Conversion completed with warnings", description: result.warnings[0] });
-      } else {
-        toast({ title: "Converted to Design Mode", description: `${result.cablesCreated} cable(s) + ${result.elementsCreated} equipment placed.` });
-      }
-      onConvertToDesign?.(activeStudyId);
-    } catch (err: any) {
-      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
-    } finally {
-      setConverting(false);
-    }
-  }, [project, user, activeStudyId, toast, onConvertToDesign]);
 
   const progressPct = progress
     ? progress.stage === "COMPLETE" ? 100
@@ -318,12 +281,6 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
               )}
               {boundaryGeojson && (
                 <Badge variant="secondary" className="text-[9px]">Boundary set ✓</Badge>
-              )}
-              {designCables && designCables.length > 0 && (
-                <Badge variant="secondary" className="text-[9px]">
-                  <Cable className="h-2.5 w-2.5 mr-0.5" />
-                  {designCables.length} design cable{designCables.length !== 1 ? "s" : ""} ✓
-                </Badge>
               )}
             </div>
           </div>
@@ -707,22 +664,6 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                   </div>
                 )}
               </div>
-
-              {/* Convert to Design Mode */}
-              {onConvertToDesign && activeStudyId && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleConvertToDesign}
-                  disabled={converting}
-                >
-                  {converting ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
-                  ) : (
-                    <><PencilRuler className="mr-2 h-4 w-4" />Convert to Design Mode</>
-                  )}
-                </Button>
-              )}
             </>
           )}
         </div>

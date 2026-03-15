@@ -31,7 +31,6 @@ import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib
 import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 import { GridwisePanel } from "@/components/map/GridwisePanel";
-import { DesignAnalysisPanel } from "@/components/map/DesignAnalysisPanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
@@ -70,7 +69,7 @@ const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "analyse" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
   const [heatmapMode, setHeatmapMode] = useState(false);
@@ -501,7 +500,6 @@ const MapView = () => {
                 sourceProperties: connect.connectEndpoints.source.properties,
                 sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
               } : null}
-              designCables={design.cables}
             />
           )}
 
@@ -515,37 +513,6 @@ const MapView = () => {
                 coordinates: connect.connectEndpoints.routeCoords,
               } : undefined}
               boundaryGeojson={boundary.polygon ?? undefined}
-              designCables={design.cables}
-              activeStudyId={activeStudy.studyId}
-              onConvertToDesign={(studyId) => {
-                setGridwiseLocation(null);
-                setActiveTool("design");
-                // Reload design elements to pick up newly created items
-                design.reload();
-              }}
-            />
-          )}
-
-          {activeTool === "analyse" && activeStudy.study && (
-            <DesignAnalysisPanel
-              studyId={activeStudy.study.id}
-              studyName={activeStudy.study.study_name}
-              proposedKw={activeStudy.study.proposed_kw || 50}
-              cables={design.cables}
-              elements={design.elements}
-              dnoCode={activeStudy.study.dno}
-              onClose={() => setActiveTool(null)}
-              onHighlightCable={(cableId, status) => {
-                if (!map) return;
-                const srcId = `design-cable-${cableId}`;
-                try {
-                  if (map.getLayer(srcId)) {
-                    const color = status === "pass" ? "#22c55e" : status === "warning" ? "#f59e0b" : "#ef4444";
-                    map.setPaintProperty(srcId, "line-color", color);
-                    map.setPaintProperty(srcId, "line-width", 4);
-                  }
-                } catch { /* style reloading */ }
-              }}
             />
           )}
 

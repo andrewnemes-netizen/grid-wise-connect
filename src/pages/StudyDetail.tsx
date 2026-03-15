@@ -9,15 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2, PencilRuler, Loader2, Activity, XCircle, Lightbulb } from "lucide-react";
+import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2 } from "lucide-react";
 import { generateAssessmentPdf, type PdfSections } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
-import { useAuth } from "@/hooks/useAuth";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
 import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
-import { toast } from "sonner";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
@@ -32,9 +30,7 @@ const statusColors: Record<string, string> = {
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data: unitRates } = useUnitRates();
-  const [converting, setConverting] = useState(false);
   const [pdfSections, setPdfSections] = useState<PdfSections>({
     coverPage: true,
     executiveSummary: true,
@@ -72,46 +68,7 @@ export default function StudyDetail() {
   const engineOutput = study.engine_output_json as Record<string, any> | null;
   const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
   const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
-  const designAnalysis = engineOutput?.design_analysis as Record<string, any> | null;
-  const handleConvertToDesign = async () => {
-    if (!user || !id) return;
-    setConverting(true);
-    try {
-      const routeGeoJson = study.route_geojson as any;
-      if (!routeGeoJson?.coordinates?.length) {
-        toast.error("No route geometry found on this study.");
-        return;
-      }
 
-      // Build a minimal GridwiseProject-like structure for conversion
-      const coords = routeGeoJson.coordinates.map((c: number[]) => [c[0], c[1]] as [number, number]);
-      const cableType = study.voltage_level === "HV" ? "hv_cable" : "lv_main";
-
-      // Insert the route as a design cable
-      const { error: cableError } = await supabase.from("design_cables").insert({
-        study_id: id,
-        cable_type: cableType,
-        label: `${cableType === "hv_cable" ? "HV Cable" : "LV Main"} (from Connect)`,
-        coordinates: coords as any,
-        length_m: study.proposed_kw ? Math.round(coords.length * 10) : 0,
-        created_by: user.id,
-        properties_json: {
-          source: "study_conversion",
-          study_mode: study.mode,
-          dno: study.dno,
-        },
-      } as any);
-
-      if (cableError) throw cableError;
-
-      toast.success("Route converted to Design Mode cable. Opening map...");
-      navigate(`/?study=${id}`);
-    } catch (err: any) {
-      toast.error(`Conversion failed: ${err.message}`);
-    } finally {
-      setConverting(false);
-    }
-  };
   const handleExportPdf = () => {
     generateAssessmentPdf({
       siteName: study.study_name,
@@ -170,19 +127,6 @@ export default function StudyDetail() {
         </div>
         <div className="flex gap-2">
           <StudyShareDialog studyId={study.id} studyName={study.study_name} />
-          {study.mode === "connect" && study.route_geojson && (
-            <Button
-              variant="outline"
-              onClick={handleConvertToDesign}
-              disabled={converting}
-            >
-              {converting ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Converting…</>
-              ) : (
-                <><PencilRuler className="h-4 w-4 mr-2" />Convert to Design</>
-              )}
-            </Button>
-          )}
           <Button variant="outline" onClick={() => navigate(`/?study=${study.id}`)}>
             <Map className="h-4 w-4 mr-2" />Open on Map
           </Button>
@@ -402,86 +346,6 @@ export default function StudyDetail() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Design Analysis Results */}
-      {designAnalysis && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Activity className="h-4 w-4" />Electrical Analysis
-              <Badge variant="outline" className={designAnalysis.summary?.overall_pass ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}>
-                {designAnalysis.summary?.overall_pass ? "PASS" : "FAIL"}
-              </Badge>
-              <span className="text-[10px] text-muted-foreground ml-auto">{designAnalysis.engine_version}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="grid grid-cols-4 gap-2 text-xs">
-              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
-                <span className="text-muted-foreground block">VD Total</span>
-                <span className="font-semibold">{designAnalysis.summary?.total_vd_pct}%</span>
-              </div>
-              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
-                <span className="text-muted-foreground block">Max Util</span>
-                <span className="font-semibold">{designAnalysis.summary?.max_utilisation_pct}%</span>
-              </div>
-              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
-                <span className="text-muted-foreground block">Length</span>
-                <span className="font-semibold">{designAnalysis.summary?.total_length_m?.toLocaleString()}m</span>
-              </div>
-              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
-                <span className="text-muted-foreground block">PFC Min</span>
-                <span className="font-semibold">{designAnalysis.summary?.min_pfc_a?.toLocaleString()}A</span>
-              </div>
-            </div>
-            <div className="flex gap-3 text-xs">
-              {designAnalysis.summary?.error_count > 0 && (
-                <span className="flex items-center gap-1 text-red-600">
-                  <XCircle className="h-3 w-3" />{designAnalysis.summary.error_count} error{designAnalysis.summary.error_count !== 1 ? "s" : ""}
-                </span>
-              )}
-              {designAnalysis.summary?.warning_count > 0 && (
-                <span className="flex items-center gap-1 text-amber-600">
-                  <AlertTriangle className="h-3 w-3" />{designAnalysis.summary.warning_count} warning{designAnalysis.summary.warning_count !== 1 ? "s" : ""}
-                </span>
-              )}
-              {designAnalysis.summary?.suggestion_count > 0 && (
-                <span className="flex items-center gap-1 text-blue-600">
-                  <Lightbulb className="h-3 w-3" />{designAnalysis.summary.suggestion_count} suggestion{designAnalysis.summary.suggestion_count !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-            {designAnalysis.cables?.length > 0 && (
-              <>
-                <Separator />
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Cable Results</p>
-                {designAnalysis.cables.map((cable: any) => (
-                  <div key={cable.cable_id} className="flex items-center gap-2 text-xs py-0.5">
-                    {cable.status === "pass" ? <CheckCircle className="h-3 w-3 text-green-600" /> :
-                     cable.status === "warning" ? <AlertTriangle className="h-3 w-3 text-amber-500" /> :
-                     <XCircle className="h-3 w-3 text-red-500" />}
-                    <span className="flex-1 truncate">{cable.cable_label}</span>
-                    <span className="text-muted-foreground">{cable.length_m}m</span>
-                    <Badge variant="outline" className="text-[9px]">VD {cable.vd_pct}%</Badge>
-                    <Badge variant="outline" className="text-[9px]">{cable.utilisation_pct}% util</Badge>
-                  </div>
-                ))}
-              </>
-            )}
-            {designAnalysis.cables?.some((c: any) => c.suggestions?.length > 0) && (
-              <>
-                <Separator />
-                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Recommendations</p>
-                {designAnalysis.cables.flatMap((c: any) => (c.suggestions || []).map((s: string, i: number) => (
-                  <div key={`${c.cable_id}-${i}`} className="flex items-start gap-1.5 text-xs text-blue-600">
-                    <Lightbulb className="h-3 w-3 mt-0.5 shrink-0" />{s}
-                  </div>
-                )))}
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Activity Feed */}
       <Card>
