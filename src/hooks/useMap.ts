@@ -46,6 +46,27 @@ const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string;
     attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
     maxzoom: 17,
   },
+  "os-road": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Road_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
+  },
+  "os-outdoor": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Outdoor_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
+  },
+  "os-light": {
+    tiles: [
+      `https://api.os.uk/maps/raster/v1/zxy/Light_3857/{z}/{x}/{y}.png?key=${OS_API_KEY}`,
+    ],
+    attribution: '&copy; <a href="https://www.ordnancesurvey.co.uk/">Ordnance Survey</a>',
+    maxzoom: 20,
+  },
 };
 
 export { GOOGLE_MAPS_KEY };
