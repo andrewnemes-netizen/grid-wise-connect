@@ -32,7 +32,7 @@ const tools = [
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
-  { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
+  // { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
 ] as const;
 
 export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {
