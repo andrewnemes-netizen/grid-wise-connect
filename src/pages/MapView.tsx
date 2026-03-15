@@ -3,6 +3,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import maplibregl from "maplibre-gl";
 import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePlanningLayers } from "@/hooks/usePlanningLayers";
 import { Badge } from "@/components/ui/badge";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
@@ -92,6 +93,7 @@ const MapView = () => {
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
   const activeStudy = useActiveStudy();
   const design = useDesignMode(map, activeStudy.studyId);
+  const planning = usePlanningLayers();
 
   // Auto-save boundary to study when finished
   useEffect(() => {
@@ -308,6 +310,10 @@ const MapView = () => {
             loadingLayers={loadingLayers}
             selectedDno={selectedDno}
             onDnoChange={setSelectedDno}
+            planningDatasets={planning.planningDatasets}
+            planningVisibility={planning.planningVisibility}
+            planningLoading={planning.planningLoading}
+            onPlanningToggle={(id, visible) => planning.togglePlanningLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}
