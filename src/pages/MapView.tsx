@@ -522,33 +522,7 @@ const MapView = () => {
               lat={streetViewLocation.lat}
               onClose={() => setStreetViewLocation(null)}
               existingCaptures={streetViewCaptures}
-              markers={
-                design.elements.map((el) => ({
-                  id: el.id,
-                  lat: Number(el.lat),
-                  lng: Number(el.lng),
-                  label: el.label || el.element_type.replace("_", " "),
-                  type: el.element_type,
-                  color:
-                    el.element_type === "feeder_pillar" ? "#2ecc71" :
-                    el.element_type === "transformer" ? "#e74c3c" :
-                    el.element_type === "rmu" ? "#3498db" :
-                    el.element_type === "cutout" ? "#f39c12" :
-                    el.element_type === "joint" ? "#9b59b6" :
-                    el.element_type === "pole" ? "#1abc9c" :
-                    el.element_type === "ev_charger" ? "#00b894" :
-                    "#2ecc71",
-                } as StreetViewMarker))
-              }
               onCaptures={setStreetViewCaptures}
-              onDeleteMarker={(id) => design.removeElement(id)}
-              onAddMarker={(type, markerLat, markerLng) => {
-                design.setPlacingType(type as any);
-                // Directly place at the camera position
-                setTimeout(() => {
-                  design.placeElement(markerLng, markerLat);
-                }, 50);
-              }}
             />
           )}
 
