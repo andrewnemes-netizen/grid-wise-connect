@@ -216,8 +216,8 @@ export function StreetViewPanel({
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
-    if (angleNum > 2) {
-      toast({ title: "Maximum 2 captures" });
+    if (angleNum > 6) {
+      toast({ title: "Maximum 6 captures" });
       return;
     }
 
