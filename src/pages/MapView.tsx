@@ -146,13 +146,11 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      // Street View tool removed - re-enable later with better positioning
-      // if (activeToolRef.current === "streetview" || standaloneStreetViewRef.current) {
-      //   setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-      //   setActiveTool(null);
-      //   setStandaloneStreetView(false);
-      //   return;
-      // }
+      if (activeToolRef.current === "streetview") {
+        setStreetViewLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+        setActiveTool(null);
+        return;
+      }
       if (activeToolRef.current === "pin") {
         pin.handlePinClick(e);
         setActiveTool(null);
