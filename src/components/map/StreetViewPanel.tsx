@@ -328,6 +328,60 @@ export function StreetViewPanel({
           </div>
         )}
         <div ref={containerRef} className="w-full h-full" />
+
+        {/* Draggable marker overlay — sits on top of panorama, pointer-events only on markers */}
+        {ready && projected.length > 0 && (
+          <div
+            ref={overlayRef}
+            className="absolute inset-0 pointer-events-none select-none"
+            style={{ zIndex: 5 }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          >
+            {projected.map((m) => (
+              <div
+                key={m.key}
+                className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing pointer-events-auto"
+                style={{
+                  left: `${m.xPct}%`,
+                  top: `${m.yPct}%`,
+                  transform: "translate(-50%, -50%)",
+                  touchAction: "none",
+                  zIndex: 10,
+                }}
+                onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
+              >
+                <div
+                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
+                  style={{
+                    width: `${24 * m.scale}px`,
+                    height: `${24 * m.scale}px`,
+                    backgroundColor: m.color,
+                    fontSize: `${11 * m.scale}px`,
+                  }}
+                >
+                  {MARKER_INITIALS[m.type] || m.label.charAt(0)}
+                </div>
+                <span
+                  className="text-white font-semibold mt-0.5 pointer-events-none whitespace-nowrap"
+                  style={{
+                    fontSize: `${9 * m.scale}px`,
+                    textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+                  }}
+                >
+                  {m.label}
+                </span>
+              </div>
+            ))}
+
+            {/* Marker count hint */}
+            <div className="absolute bottom-2 left-2 pointer-events-none">
+              <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur pointer-events-none">
+                drag markers to reposition
+              </Badge>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Capture bar */}
