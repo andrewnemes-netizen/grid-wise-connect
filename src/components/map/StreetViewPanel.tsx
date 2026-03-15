@@ -4,7 +4,8 @@
  * Capture reads the current POV automatically.
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Camera, Loader2, Check } from "lucide-react";
+import { X, Camera, Loader2, Check, Plus, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GOOGLE_MAPS_KEY } from "@/hooks/useMap";
@@ -12,12 +13,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 export interface StreetViewMarker {
+  id: string;
   lat: number;
   lng: number;
   label: string;
   type: string;
   color: string;
 }
+
+export type EquipmentTypeOption = {
+  type: string;
+  label: string;
+  color: string;
+  symbol: string;
+};
+
+const EQUIPMENT_OPTIONS: EquipmentTypeOption[] = [
+  { type: "transformer", label: "Transformer", color: "#e74c3c", symbol: "T" },
+  { type: "rmu", label: "Ring Main Unit", color: "#3498db", symbol: "R" },
+  { type: "feeder_pillar", label: "Feeder Pillar", color: "#2ecc71", symbol: "F" },
+  { type: "cutout", label: "Cutout", color: "#f39c12", symbol: "C" },
+  { type: "joint", label: "Joint", color: "#9b59b6", symbol: "J" },
+  { type: "pole", label: "Pole", color: "#1abc9c", symbol: "P" },
+  { type: "ev_charger", label: "EV Charger", color: "#00b894", symbol: "E" },
+];
 
 export interface StreetViewCapture {
   dataUrl: string;
@@ -33,6 +52,8 @@ interface StreetViewPanelProps {
   markers?: StreetViewMarker[];
   onCaptures?: (captures: StreetViewCapture[]) => void;
   existingCaptures?: StreetViewCapture[];
+  onDeleteMarker?: (id: string) => void;
+  onAddMarker?: (type: string, lat: number, lng: number) => void;
 }
 
 const IMG_W = 640;
@@ -129,6 +150,8 @@ export function StreetViewPanel({
   markers = [],
   onCaptures,
   existingCaptures = [],
+  onDeleteMarker,
+  onAddMarker,
 }: StreetViewPanelProps) {
   const { toast } = useToast();
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
@@ -356,9 +379,38 @@ export function StreetViewPanel({
             </Badge>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {onAddMarker && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 gap-1">
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                {EQUIPMENT_OPTIONS.map((eq) => (
+                  <DropdownMenuItem
+                    key={eq.type}
+                    onClick={() => onAddMarker(eq.type, cameraPosition.lat, cameraPosition.lng)}
+                    className="text-xs gap-2"
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                      style={{ backgroundColor: eq.color }}
+                    >
+                      {eq.symbol}
+                    </div>
+                    {eq.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Interactive panorama */}
@@ -382,7 +434,7 @@ export function StreetViewPanel({
             {projected.map((m) => (
               <div
                 key={m.key}
-                className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing pointer-events-auto"
+                className="absolute flex flex-col items-center pointer-events-auto"
                 style={{
                   left: `${m.xPct}%`,
                   top: `${m.yPct}%`,
@@ -390,16 +442,29 @@ export function StreetViewPanel({
                   touchAction: "none",
                   zIndex: 10,
                 }}
-                onPointerDown={(e) => handlePointerDown(e, m.key)}
               >
+                {/* Delete button */}
+                {onDeleteMarker && (
+                  <button
+                    className="absolute -top-2 -right-3 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center hover:scale-110 transition-transform"
+                    style={{ zIndex: 20, fontSize: "8px" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteMarker(m.id);
+                    }}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
                 <div
-                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
+                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold cursor-grab active:cursor-grabbing"
                   style={{
                     width: `${24 * m.scale}px`,
                     height: `${24 * m.scale}px`,
                     backgroundColor: m.color,
                     fontSize: `${11 * m.scale}px`,
                   }}
+                  onPointerDown={(e) => handlePointerDown(e, m.key)}
                 >
                   {MARKER_INITIALS[m.type] || m.label.charAt(0)}
                 </div>
