@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanningDataset } from "@/hooks/usePlanningLayers";
+import type { LandRegistryDataset } from "@/hooks/useLandRegistryLayers";
 
 export interface RegistryLayer {
   id: string;
