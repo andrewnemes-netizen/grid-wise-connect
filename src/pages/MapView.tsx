@@ -510,6 +510,7 @@ const MapView = () => {
                 length_m: c.length_m,
                 label: c.label,
               })) : undefined}
+              autoDetectData={autoDetectResult}
             />
           )}
 
