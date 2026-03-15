@@ -259,7 +259,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
     }
   }, [project, onConvertToDesign, toast]);
 
-
+  const progressPct = progress
     ? progress.stage === "COMPLETE" ? 100
     : progress.stage === "ERROR" ? 0
     : Math.round(((progress.stage_index + 1) / progress.total_stages) * 100)
