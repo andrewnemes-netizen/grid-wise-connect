@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ConnectData {
