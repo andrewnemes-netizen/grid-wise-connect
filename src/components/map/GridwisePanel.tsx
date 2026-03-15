@@ -553,7 +553,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                     <p className="text-[10px] text-muted-foreground font-medium">Engineering BOQ</p>
                     <MetricRow label="Electrical Items" value={`${project.commercial.engineering_boq.electrical.length}`} />
                     <MetricRow label="Civils Items" value={`${project.commercial.engineering_boq.civils.length}`} />
-                    <MetricRow label="TM Items" value={`${project.commercial.engineering_boq.traffic_management.length}`} />
+                    <MetricRow label="TM Items" value={`${project.commercial.engineering_boq.traffic_mgmt.length}`} />
                     <MetricRow label="Fees" value={`${project.commercial.engineering_boq.fees.length}`} />
                   </div>
                 </CollapsibleContent>
