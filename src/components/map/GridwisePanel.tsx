@@ -144,7 +144,15 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
 
   const proposedKw = Number(chargerCount) * Number(chargerKw) * Number(diversityFactor);
 
+  // Resolve the DNO to use: manual override or auto-detected
+  const resolvedDnoLookup = dnoOverride !== "auto" ? dnoOverride : detectedDno ?? undefined;
+
   const handleRun = useCallback(async () => {
+    if (!resolvedDnoLookup) {
+      toast({ title: "DNO not detected", description: "No DNO licence area found for this location. Please select a DNO manually.", variant: "destructive" });
+      return;
+    }
+
     setRunning(true);
     setProject(null);
     setSaved(false);
@@ -179,6 +187,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         unitRates: unitRates ?? undefined,
         onProgress: setProgress,
         visuals: { map_screenshot: mapScreenshot },
+        dnoLookupResult: resolvedDnoLookup,
       });
 
       setProject(result);
@@ -188,7 +197,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
     } finally {
       setRunning(false);
     }
-  }, [siteName, postcode, lat, lng, proposedKw, chargerCount, chargerKw, diversityFactor, extraneous, routeGeojson, boundaryGeojson, voltageOverride, dnoOverride, unitRates, onCaptureScreenshot, toast]);
+  }, [siteName, postcode, lat, lng, proposedKw, chargerCount, chargerKw, diversityFactor, extraneous, routeGeojson, boundaryGeojson, voltageOverride, dnoOverride, unitRates, onCaptureScreenshot, toast, resolvedDnoLookup]);
 
   const handleSave = useCallback(async () => {
     if (!project || !user) return;
