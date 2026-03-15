@@ -11,7 +11,7 @@ export interface PlanningDataset {
   type: "polygon" | "point"; // geometry type hint
 }
 
-const TILES_BASE = "https://tiles.planning.data.gov.uk";
+const TILES_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/planning-vector-tile`;
 
 export const PLANNING_DATASETS: PlanningDataset[] = [
   {
@@ -30,7 +30,7 @@ export const PLANNING_DATASETS: PlanningDataset[] = [
     color: "#745729",
     fillOpacity: 0.5,
     category: "development",
-    type: "polygon",
+    type: "point",
   },
   {
     id: "planning-brownfield-site",
