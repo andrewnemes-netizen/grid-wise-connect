@@ -533,6 +533,7 @@ const MapView = () => {
               proposedKw={activeStudy.study.proposed_kw || 50}
               cables={design.cables}
               elements={design.elements}
+              dnoCode={activeStudy.study.dno}
               onClose={() => setActiveTool(null)}
               onHighlightCable={(cableId, status) => {
                 if (!map) return;
