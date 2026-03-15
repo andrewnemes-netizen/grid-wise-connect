@@ -4,6 +4,7 @@ import maplibregl from "maplibre-gl";
 import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePlanningLayers } from "@/hooks/usePlanningLayers";
+import { useLandRegistryLayers } from "@/hooks/useLandRegistryLayers";
 import { Badge } from "@/components/ui/badge";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
@@ -94,6 +95,7 @@ const MapView = () => {
   const activeStudy = useActiveStudy();
   const design = useDesignMode(map, activeStudy.studyId);
   const planning = usePlanningLayers();
+  const landRegistry = useLandRegistryLayers();
 
   // Auto-save boundary to study when finished
   useEffect(() => {
@@ -314,6 +316,10 @@ const MapView = () => {
             planningVisibility={planning.planningVisibility}
             planningLoading={planning.planningLoading}
             onPlanningToggle={(id, visible) => planning.togglePlanningLayer(id, visible, map)}
+            lrDatasets={landRegistry.lrDatasets}
+            lrVisibility={landRegistry.lrVisibility}
+            lrLoading={landRegistry.lrLoading}
+            onLrToggle={(id, visible) => landRegistry.toggleLandRegistryLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}

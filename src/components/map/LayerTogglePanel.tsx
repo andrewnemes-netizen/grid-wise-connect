@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanningDataset } from "@/hooks/usePlanningLayers";
+import type { LandRegistryDataset } from "@/hooks/useLandRegistryLayers";
 
 export interface RegistryLayer {
   id: string;
@@ -45,6 +46,11 @@ interface LayerTogglePanelProps {
   planningVisibility?: Record<string, boolean>;
   planningLoading?: Set<string>;
   onPlanningToggle?: (datasetId: string, visible: boolean) => void;
+  // Land Registry layers
+  lrDatasets?: LandRegistryDataset[];
+  lrVisibility?: Record<string, boolean>;
+  lrLoading?: Set<string>;
+  onLrToggle?: (datasetId: string, visible: boolean) => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -221,6 +227,10 @@ export function LayerTogglePanel({
   planningVisibility = {},
   planningLoading = new Set(),
   onPlanningToggle,
+  lrDatasets = [],
+  lrVisibility = {},
+  lrLoading = new Set(),
+  onLrToggle,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -274,7 +284,8 @@ export function LayerTogglePanel({
     });
   };
 
-  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length;
+  const lrVisibleCount = Object.values(lrVisibility).filter(Boolean).length;
+  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount;
   const networkVisibleCount = Object.values(visibility).filter(Boolean).length;
   const planningVisibleCount = Object.values(planningVisibility).filter(Boolean).length;
 
@@ -306,6 +317,11 @@ export function LayerTogglePanel({
                   <TreePine className="h-3 w-3" />
                   Planning
                   {planningVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{planningVisibleCount}</Badge>}
+                </TabsTrigger>
+                <TabsTrigger value="landregistry" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                  <Landmark className="h-3 w-3" />
+                  Land Reg
+                  {lrVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{lrVisibleCount}</Badge>}
                 </TabsTrigger>
               </TabsList>
 
@@ -414,6 +430,49 @@ export function LayerTogglePanel({
                 <div className="pt-1.5 border-t mt-1">
                   <p className="text-[10px] text-muted-foreground px-1">
                     Data from planning.data.gov.uk — fetched live for your map location.
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* Land Registry Tab */}
+              <TabsContent value="landregistry" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {lrDatasets.length === 0 ? (
+                  <div className="py-4 text-center space-y-1.5">
+                    <Landmark className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-[11px] text-muted-foreground">No Land Registry layers configured.</p>
+                  </div>
+                ) : (
+                  lrDatasets.map((ds) => {
+                    const isVisible = lrVisibility[ds.id] ?? false;
+                    const isLoading = lrLoading.has(ds.id);
+
+                    return (
+                      <div key={ds.id} className="space-y-0.5">
+                        <div className="flex items-center justify-between gap-2 py-0.5">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {isLoading ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                            ) : (
+                              <div className="h-3 w-3 rounded-sm shrink-0 border border-border" style={{ backgroundColor: ds.color }} />
+                            )}
+                            <Label htmlFor={`lr-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
+                              {ds.label}
+                            </Label>
+                          </div>
+                          <Switch
+                            id={`lr-${ds.id}`}
+                            checked={isVisible}
+                            onCheckedChange={(checked) => onLrToggle?.(ds.id, checked)}
+                            className="scale-75 shrink-0"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div className="pt-1.5 border-t mt-1">
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    INSPIRE Index Polygons from HM Land Registry — visible at zoom 12+.
                   </p>
                 </div>
               </TabsContent>
