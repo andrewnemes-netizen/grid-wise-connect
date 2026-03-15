@@ -221,6 +221,10 @@ export function DesignAnalysisPanel({
               <span className="text-muted-foreground">Equipment</span>
               <span>{elements.length}</span>
             </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">DNO Ruleset</span>
+              <span className="font-medium">{dnoCode || "Generic"}</span>
+            </div>
           </div>
 
           {!result ? (
