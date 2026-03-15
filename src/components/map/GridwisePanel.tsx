@@ -9,7 +9,7 @@ import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
-  Gauge, Construction, Eye,
+  Gauge, Construction, Eye, PencilRuler,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
