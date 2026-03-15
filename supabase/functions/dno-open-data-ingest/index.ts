@@ -236,8 +236,8 @@ Deno.serve(async (req) => {
       totalSkipped += records.length - features.length;
       offset += records.length;
 
-      // Safety limit to avoid infinite loops
-      if (offset >= totalRecords || offset > 500000) break;
+      // Opendatasoft API caps offset+limit at 10000
+      if (offset >= totalRecords || offset + batch_size > 10000) break;
     }
 
     // Update feature count in layer_registry
