@@ -491,6 +491,13 @@ export function LayerTogglePanel({
                                       <Label htmlFor={`os-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
                                         {ds.label}
                                       </Label>
+                                      {isVisible && !isLoading && (
+                                        <span className="text-[9px] text-muted-foreground">
+                                          {(osFeatureCounts[ds.id] ?? 0) > 0
+                                            ? `${osFeatureCounts[ds.id]?.toLocaleString()}`
+                                            : `z${ds.minZoom}+`}
+                                        </span>
+                                      )}
                                     </div>
                                     <Switch
                                       id={`os-${ds.id}`}
