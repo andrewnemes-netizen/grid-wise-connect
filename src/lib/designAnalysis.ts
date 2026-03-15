@@ -155,12 +155,17 @@ const UPGRADE_PATHS: Record<string, string[]> = {
 // ── Engine ─────────────────────────────────────────────────────────────
 
 export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisResult {
+  const dno = input.dno_rules;
   const supplyV = input.supply_voltage_v ?? DEFAULT_SUPPLY_V;
   const pf = input.power_factor ?? DEFAULT_PF;
   const diversity = input.diversity_factor ?? DEFAULT_DIVERSITY;
-  const vdLimit = input.vd_limit_pct ?? DEFAULT_VD_LIMIT_PCT;
-  const ze = input.ze_ohms ?? DEFAULT_ZE_OHMS;
-  const zsLimit = input.zs_limit_ohms ?? null;
+  // DNO G81 rules take priority over explicit input, which takes priority over defaults
+  const vdLimit = dno?.vd_limit_pct ?? input.vd_limit_pct ?? DEFAULT_VD_LIMIT_PCT;
+  const ze = dno?.ze_ohms ?? input.ze_ohms ?? DEFAULT_ZE_OHMS;
+  const zsLimit = dno?.zs_limit_ohms ?? input.zs_limit_ohms ?? null;
+  const maxServiceLen = dno?.max_service_length_m ?? 25;
+  const jointSpacing = dno?.joint_spacing_m ?? 200;
+  const serviceLengthCap = dno?.service_length_cap_m ?? 30;
 
   // Design current (diversified)
   const rawIb = (input.proposed_kw * 1000) / (Math.sqrt(3) * supplyV * pf);
