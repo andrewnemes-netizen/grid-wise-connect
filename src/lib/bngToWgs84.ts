@@ -1,11 +1,11 @@
 /**
- * Approximate BNG (OSGB36) to WGS84 conversion.
- * Accurate to ~5m which is sufficient for map navigation.
+ * BNG (OSGB36) to WGS84 conversion using full Helmert 7-parameter transformation.
+ * Based on OS recommended parameters. Accurate to ~1m.
  */
 export function bngToWgs84(easting: number, northing: number): { lat: number; lng: number } {
-  // Airy 1830 ellipsoid
-  const a = 6377563.396;
-  const b = 6356256.909;
+  // ── Step 1: BNG → OSGB36 lat/lng ──
+  const a = 6377563.396;     // Airy 1830 semi-major
+  const b = 6356256.909;     // Airy 1830 semi-minor
   const e2 = 1 - (b * b) / (a * a);
   const N0 = -100000;
   const E0 = 400000;
@@ -18,7 +18,7 @@ export function bngToWgs84(easting: number, northing: number): { lat: number; ln
   const n3 = n * n * n;
 
   let phi = ((northing - N0) / (a * F0)) + phi0;
-  
+
   for (let i = 0; i < 10; i++) {
     const M =
       b * F0 *
@@ -26,10 +26,10 @@ export function bngToWgs84(easting: number, northing: number): { lat: number; ln
        (3 * n + 3 * n2 + (21 / 8) * n3) * Math.sin(phi - phi0) * Math.cos(phi + phi0) +
        ((15 / 8) * n2 + (15 / 8) * n3) * Math.sin(2 * (phi - phi0)) * Math.cos(2 * (phi + phi0)) -
        (35 / 24) * n3 * Math.sin(3 * (phi - phi0)) * Math.cos(3 * (phi + phi0)));
-    
+
     phi = ((northing - N0 - M) / (a * F0)) + phi;
-    
-    if (Math.abs(northing - N0 - M) < 0.01) break;
+
+    if (Math.abs(northing - N0 - M) < 0.001) break;
   }
 
   const sinPhi = Math.sin(phi);
@@ -50,11 +50,49 @@ export function bngToWgs84(easting: number, northing: number): { lat: number; ln
   const osgbLat = phi - VII * dE * dE + VIII * Math.pow(dE, 4) - IX * Math.pow(dE, 6);
   const osgbLng = lambda0 + X * dE - XI * Math.pow(dE, 3) + XII * Math.pow(dE, 5);
 
-  // Helmert transformation OSGB36 → WGS84
-  const latDeg = osgbLat * (180 / Math.PI);
-  const lngDeg = osgbLng * (180 / Math.PI);
+  // ── Step 2: OSGB36 lat/lng → OSGB36 cartesian ──
+  const sinLat = Math.sin(osgbLat);
+  const cosLat = Math.cos(osgbLat);
+  const sinLng = Math.sin(osgbLng);
+  const cosLng = Math.cos(osgbLng);
 
-  // Simplified: OSGB36 ≈ WGS84 with small offsets (~70m)
-  // For navigation purposes this is sufficient
-  return { lat: latDeg, lng: lngDeg };
+  const nuCart = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+
+  const x1 = nuCart * cosLat * cosLng;
+  const y1 = nuCart * cosLat * sinLng;
+  const z1 = nuCart * (1 - e2) * sinLat;
+
+  // ── Step 3: Helmert 7-parameter transform OSGB36 → WGS84 ──
+  // OS recommended parameters
+  const tx = 446.448;      // metres
+  const ty = -125.157;
+  const tz = 542.060;
+  const s = -20.4894e-6;   // scale factor (ppm → unitless)
+  const rx = (0.1502 / 3600) * (Math.PI / 180);  // seconds → radians
+  const ry = (0.2470 / 3600) * (Math.PI / 180);
+  const rz = (0.8421 / 3600) * (Math.PI / 180);
+
+  const x2 = tx + (1 + s) * x1 + (-rz) * y1 + (ry) * z1;
+  const y2 = ty + (rz) * x1 + (1 + s) * y1 + (-rx) * z1;
+  const z2 = tz + (-ry) * x1 + (rx) * y1 + (1 + s) * z1;
+
+  // ── Step 4: WGS84 cartesian → WGS84 lat/lng ──
+  const aWgs = 6378137.0;
+  const bWgs = 6356752.3142;
+  const e2Wgs = 1 - (bWgs * bWgs) / (aWgs * aWgs);
+
+  const p = Math.sqrt(x2 * x2 + y2 * y2);
+  let lat = Math.atan2(z2, p * (1 - e2Wgs));
+
+  for (let i = 0; i < 10; i++) {
+    const nuWgs = aWgs / Math.sqrt(1 - e2Wgs * Math.sin(lat) * Math.sin(lat));
+    lat = Math.atan2(z2 + e2Wgs * nuWgs * Math.sin(lat), p);
+  }
+
+  const lng = Math.atan2(y2, x2);
+
+  return {
+    lat: lat * (180 / Math.PI),
+    lng: lng * (180 / Math.PI),
+  };
 }

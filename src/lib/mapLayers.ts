@@ -222,11 +222,11 @@ export async function addRegistryLayerToMap(
       const circleColor = layer.slug === "npg_hv_substations_utilisation"
         ? [
             "match", ["get", "utilisation_band"],
-            "Low", "#22c55e",
-            "Below Average", "#84cc16",
-            "Average", "#f59e0b",
-            "Above Average", "#f97316",
-            "High", "#ef4444",
+            "Low", "#00B000",
+            "Below Average", "#86C440",
+            "Average", "#FFAA00",
+            "Above Average", "#F28522",
+            "High", "#E9002D",
             color,
           ] as any
         : color;

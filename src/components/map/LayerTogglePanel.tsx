@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { PlanningDataset } from "@/hooks/usePlanningLayers";
 import type { LandRegistryDataset } from "@/hooks/useLandRegistryLayers";
+import type { OsOpenDataset } from "@/hooks/useOsOpenLayers";
+import { OS_CATEGORY_COLORS, OS_UTILISATION_COLORS, getOsLayerColor } from "@/lib/osGeoDataVizPalette";
 
 export interface RegistryLayer {
   id: string;
@@ -51,16 +53,15 @@ interface LayerTogglePanelProps {
   lrVisibility?: Record<string, boolean>;
   lrLoading?: Set<string>;
   onLrToggle?: (datasetId: string, visible: boolean) => void;
+  // OS Open layers
+  osDatasets?: OsOpenDataset[];
+  osVisibility?: Record<string, boolean>;
+  osLoading?: Set<string>;
+  onOsToggle?: (datasetId: string, visible: boolean) => void;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  substations: "#2196F3",
-  feeders: "#9b59b6",
-  cables: "#e67e22",
-  constraints: "#95a5a6",
-  points: "#3498db",
-  polygons: "#2ecc71",
-};
+// Use OS GeoDataViz palette (re-exported for backward compatibility)
+const CATEGORY_COLORS = OS_CATEGORY_COLORS;
 
 export function getLayerColor(layer: RegistryLayer, index: number): string {
   const style = layer.style_json as any;
@@ -68,10 +69,7 @@ export function getLayerColor(layer: RegistryLayer, index: number): string {
   if (style?.paint?.["circle-color"] && typeof style.paint["circle-color"] === "string") return style.paint["circle-color"];
   if (style?.paint?.["line-color"] && typeof style.paint["line-color"] === "string") return style.paint["line-color"];
 
-  const base = CATEGORY_COLORS[layer.category] || "#888";
-  if (index === 0) return base;
-  const hueShift = index * 30;
-  return `hsl(${(parseInt(base.slice(1), 16) + hueShift) % 360}, 60%, 50%)`;
+  return getOsLayerColor(layer.category, index);
 }
 
 export function isUtilisationLayer(layer: RegistryLayer): boolean {
@@ -231,6 +229,10 @@ export function LayerTogglePanel({
   lrVisibility = {},
   lrLoading = new Set(),
   onLrToggle,
+  osDatasets = [],
+  osVisibility = {},
+  osLoading = new Set(),
+  onOsToggle,
 }: LayerTogglePanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -285,7 +287,8 @@ export function LayerTogglePanel({
   };
 
   const lrVisibleCount = Object.values(lrVisibility).filter(Boolean).length;
-  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount;
+  const osVisibleCount = Object.values(osVisibility).filter(Boolean).length;
+  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount + osVisibleCount;
   const networkVisibleCount = Object.values(visibility).filter(Boolean).length;
   const planningVisibleCount = Object.values(planningVisibility).filter(Boolean).length;
 
@@ -307,18 +310,23 @@ export function LayerTogglePanel({
         {expanded && (
           <div className="border-t">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50">
-                <TabsTrigger value="network" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-4">
+                <TabsTrigger value="network" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Zap className="h-3 w-3" />
                   Network
                   {networkVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{networkVisibleCount}</Badge>}
                 </TabsTrigger>
-                <TabsTrigger value="planning" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                <TabsTrigger value="osopen" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
+                  <Compass className="h-3 w-3" />
+                  OS Open
+                  {osVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{osVisibleCount}</Badge>}
+                </TabsTrigger>
+                <TabsTrigger value="planning" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <TreePine className="h-3 w-3" />
                   Planning
                   {planningVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{planningVisibleCount}</Badge>}
                 </TabsTrigger>
-                <TabsTrigger value="landregistry" className="flex-1 text-[11px] h-7 gap-1 data-[state=active]:bg-background">
+                <TabsTrigger value="landregistry" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Landmark className="h-3 w-3" />
                   Land Reg
                   {lrVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{lrVisibleCount}</Badge>}
@@ -434,7 +442,76 @@ export function LayerTogglePanel({
                 </div>
               </TabsContent>
 
-              {/* Land Registry Tab */}
+              {/* OS Open Tab */}
+              <TabsContent value="osopen" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {(() => {
+                  const osCatMap = new Map<string, OsOpenDataset[]>();
+                  osDatasets.forEach((ds) => {
+                    if (!osCatMap.has(ds.category)) osCatMap.set(ds.category, []);
+                    osCatMap.get(ds.category)!.push(ds);
+                  });
+
+                  return osDatasets.length === 0 ? (
+                    <div className="py-4 text-center space-y-1.5">
+                      <Compass className="h-6 w-6 text-muted-foreground mx-auto" />
+                      <p className="text-[11px] text-muted-foreground">No OS Open layers available.</p>
+                    </div>
+                  ) : (
+                    Array.from(osCatMap.entries()).map(([category, datasets]) => {
+                      const groupKey = `osopen:${category}`;
+                      const isCollapsed = collapsedGroups.has(groupKey);
+
+                      return (
+                        <div key={groupKey} className="space-y-0.5">
+                          <button
+                            onClick={() => toggleGroup(groupKey)}
+                            className="flex items-center gap-1.5 w-full px-1 py-1 text-left hover:bg-accent/30 rounded transition-colors"
+                          >
+                            {isCollapsed ? <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground capitalize">{category}</span>
+                            <span className="text-[9px] text-muted-foreground ml-auto">{datasets.length}</span>
+                          </button>
+
+                          {!isCollapsed &&
+                            datasets.map((ds) => {
+                              const isVisible = osVisibility[ds.id] ?? false;
+                              const isLoading = osLoading.has(ds.id);
+
+                              return (
+                                <div key={ds.id} className="space-y-0.5 pl-4">
+                                  <div className="flex items-center justify-between gap-2 py-0.5">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      {isLoading ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                                      ) : (
+                                        <div className="h-3 w-3 rounded-sm shrink-0 border border-border" style={{ backgroundColor: ds.color }} />
+                                      )}
+                                      <Label htmlFor={`os-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
+                                        {ds.label}
+                                      </Label>
+                                    </div>
+                                    <Switch
+                                      id={`os-${ds.id}`}
+                                      checked={isVisible}
+                                      onCheckedChange={(checked) => onOsToggle?.(ds.id, checked)}
+                                      className="scale-75 shrink-0"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      );
+                    })
+                  );
+                })()}
+                <div className="pt-1.5 border-t mt-1">
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    Ordnance Survey Open Data — Zoomstack layers for your viewport.
+                  </p>
+                </div>
+              </TabsContent>
+
               <TabsContent value="landregistry" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
                 {lrDatasets.length === 0 ? (
                   <div className="py-4 text-center space-y-1.5">

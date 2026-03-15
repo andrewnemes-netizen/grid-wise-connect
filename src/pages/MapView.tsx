@@ -5,6 +5,7 @@ import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePlanningLayers } from "@/hooks/usePlanningLayers";
 import { useLandRegistryLayers } from "@/hooks/useLandRegistryLayers";
+import { useOsOpenLayers } from "@/hooks/useOsOpenLayers";
 import { Badge } from "@/components/ui/badge";
 import { useMap } from "@/hooks/useMap";
 import { useLayerManager } from "@/hooks/useLayerManager";
@@ -93,6 +94,7 @@ const MapView = () => {
   const design = useDesignMode(map, activeStudy.studyId);
   const planning = usePlanningLayers();
   const landRegistry = useLandRegistryLayers();
+  const osOpen = useOsOpenLayers();
 
   // Auto-save boundary to study when finished
   useEffect(() => {
@@ -318,6 +320,10 @@ const MapView = () => {
             lrVisibility={landRegistry.lrVisibility}
             lrLoading={landRegistry.lrLoading}
             onLrToggle={(id, visible) => landRegistry.toggleLandRegistryLayer(id, visible, map)}
+            osDatasets={osOpen.osDatasets}
+            osVisibility={osOpen.osVisibility}
+            osLoading={osOpen.osLoading}
+            onOsToggle={(id, visible) => osOpen.toggleOsLayer(id, visible, map)}
           />
           <MapLegend
             registryLayers={registryLayers}
