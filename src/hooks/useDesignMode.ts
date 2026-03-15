@@ -442,6 +442,77 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     [map]
   );
 
+  /**
+   * Bulk-insert elements and cables from an external source (e.g. Gridwise Connect bridge).
+   * Returns the number of items successfully created.
+   */
+  const bulkInsert = useCallback(
+    async (
+      newElements: { element_type: EquipmentType; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
+      newCables: { cable_type: CableType; label: string; coordinates: [number, number][] }[]
+    ): Promise<number> => {
+      if (!studyId) return 0;
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        toast.error("You must be logged in");
+        return 0;
+      }
+
+      let count = 0;
+
+      // Insert elements
+      if (newElements.length > 0) {
+        const rows = newElements.map((el) => ({
+          study_id: studyId,
+          element_type: el.element_type,
+          label: el.label,
+          lng: el.lng,
+          lat: el.lat,
+          properties_json: el.properties_json as any,
+          created_by: user.user!.id,
+        }));
+        const { data, error } = await supabase
+          .from("design_elements")
+          .insert(rows)
+          .select();
+        if (error) {
+          toast.error("Failed to insert design elements");
+          console.error(error);
+        } else if (data) {
+          setElements((prev) => [...prev, ...(data as DesignElement[])]);
+          count += data.length;
+        }
+      }
+
+      // Insert cables
+      for (const cable of newCables) {
+        const length_m = Math.round(haversineDistance(cable.coordinates) * 10) / 10;
+        const { data, error } = await supabase
+          .from("design_cables")
+          .insert({
+            study_id: studyId,
+            cable_type: cable.cable_type,
+            label: cable.label,
+            coordinates: cable.coordinates as any,
+            length_m,
+            created_by: user.user!.id,
+          } as any)
+          .select()
+          .single();
+        if (error) {
+          toast.error(`Failed to insert cable: ${cable.label}`);
+          console.error(error);
+        } else if (data) {
+          setCables((prev) => [...prev, data as unknown as DesignCable]);
+          count++;
+        }
+      }
+
+      return count;
+    },
+    [studyId]
+  );
+
   return {
     elements,
     placingType,
@@ -459,5 +530,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     undoCableVertex,
     finishCable,
     removeCable,
+    // Bulk API (for Connect → Design bridge)
+    bulkInsert,
   };
 }

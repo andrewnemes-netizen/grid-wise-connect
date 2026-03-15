@@ -9,7 +9,7 @@ import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
-  Gauge, Construction, Eye,
+  Gauge, Construction, Eye, Paintbrush,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,10 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { supabase } from "@/integrations/supabase/client";
 import { runGridwiseProject } from "@/lib/gridwise";
 import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
+import { convertGridwiseToDesign } from "@/lib/gridwise/designBridge";
 import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from "@/lib/gridwise/types";
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import type { EquipmentType, CableType } from "@/hooks/useDesignMode";
 
 interface Props {
   lng: number;
@@ -40,6 +42,13 @@ interface Props {
   boundaryGeojson?: GeoJSON.Polygon;
   /** Map screenshot callback */
   onCaptureScreenshot?: () => Promise<string | null>;
+  /** Whether an active study exists (required for design conversion) */
+  hasActiveStudy?: boolean;
+  /** Bulk insert callback from useDesignMode */
+  onConvertToDesign?: (
+    elements: { element_type: EquipmentType; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
+    cables: { cable_type: CableType; label: string; coordinates: [number, number][] }[]
+  ) => Promise<number>;
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
@@ -91,7 +100,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot }: Props) {
+export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, hasActiveStudy, onConvertToDesign }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
@@ -138,6 +147,8 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   const [project, setProject] = useState<GridwiseProject | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [converted, setConverted] = useState(false);
 
   // Collapsible sections
   const [assetsOpen, setAssetsOpen] = useState(false);
@@ -232,6 +243,21 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
       setSaving(false);
     }
   }, [project, user, toast]);
+
+  const handleConvertToDesign = useCallback(async () => {
+    if (!project || !onConvertToDesign) return;
+    setConverting(true);
+    try {
+      const result = convertGridwiseToDesign(project);
+      const count = await onConvertToDesign(result.elements, result.cables);
+      toast({ title: "Converted to Design Mode", description: `${count} items placed on map` });
+      setConverted(true);
+    } catch (err: any) {
+      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
+    } finally {
+      setConverting(false);
+    }
+  }, [project, onConvertToDesign, toast]);
 
   const progressPct = progress
     ? progress.stage === "COMPLETE" ? 100
@@ -664,6 +690,34 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                   </div>
                 )}
               </div>
+
+              {/* ── Convert to Design Mode ── */}
+              {onConvertToDesign && hasActiveStudy && (
+                <div className="space-y-2">
+                  {!converted ? (
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      disabled={converting}
+                      onClick={handleConvertToDesign}
+                    >
+                      {converting ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
+                      ) : (
+                        <><Paintbrush className="mr-2 h-4 w-4" />Convert to Design Mode</>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 flex items-center justify-center gap-1.5">
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                      <span className="text-xs text-emerald-700 font-medium">Design elements placed on map</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!hasActiveStudy && project && (
+                <p className="text-[10px] text-muted-foreground text-center">Open a study to enable design conversion</p>
+              )}
             </>
           )}
         </div>
