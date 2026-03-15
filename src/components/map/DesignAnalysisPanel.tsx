@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Activity, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, Cable, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Activity, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, Cable, Loader2, ChevronDown, ChevronRight, PlugZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
