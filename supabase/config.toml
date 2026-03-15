@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.land-registry-wms-proxy]
 verify_jwt = false
+
+[functions.dno-open-data-ingest]
+verify_jwt = false
