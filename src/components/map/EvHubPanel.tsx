@@ -99,6 +99,9 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Pro
 
       const context: EngineContext = {
         dnoLookupResult,
+        cableCandidates: designCables && designCables.length > 0
+          ? designCablesToCandidates(designCables, lat, lng)
+          : undefined,
       };
 
       // ── Integrate Connect tool data if available ──
