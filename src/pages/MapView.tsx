@@ -526,6 +526,27 @@ const MapView = () => {
             />
           )}
 
+          {activeTool === "analyse" && activeStudy.study && (
+            <DesignAnalysisPanel
+              studyId={activeStudy.study.id}
+              studyName={activeStudy.study.study_name}
+              proposedKw={activeStudy.study.proposed_kw || 50}
+              cables={design.cables}
+              elements={design.elements}
+              onClose={() => setActiveTool(null)}
+              onHighlightCable={(cableId, status) => {
+                if (!map) return;
+                const srcId = `design-cable-${cableId}`;
+                try {
+                  if (map.getLayer(srcId)) {
+                    const color = status === "pass" ? "#22c55e" : status === "warning" ? "#f59e0b" : "#ef4444";
+                    map.setPaintProperty(srcId, "line-color", color);
+                    map.setPaintProperty(srcId, "line-width", 4);
+                  }
+                } catch { /* style reloading */ }
+              }}
+            />
+
           {streetViewLocation && (
             <StreetViewPanel
               lng={streetViewLocation.lng}
