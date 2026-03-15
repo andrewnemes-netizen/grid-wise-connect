@@ -405,7 +405,7 @@ export function StreetViewPanel({
             {projected.map((m) => (
               <div
                 key={m.key}
-                className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing pointer-events-auto"
+                className="absolute flex flex-col items-center pointer-events-auto"
                 style={{
                   left: `${m.xPct}%`,
                   top: `${m.yPct}%`,
@@ -413,16 +413,29 @@ export function StreetViewPanel({
                   touchAction: "none",
                   zIndex: 10,
                 }}
-                onPointerDown={(e) => handlePointerDown(e, m.key)}
               >
+                {/* Delete button */}
+                {onDeleteMarker && (
+                  <button
+                    className="absolute -top-2 -right-3 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center hover:scale-110 transition-transform"
+                    style={{ zIndex: 20, fontSize: "8px" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteMarker(m.id);
+                    }}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
                 <div
-                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
+                  className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold cursor-grab active:cursor-grabbing"
                   style={{
                     width: `${24 * m.scale}px`,
                     height: `${24 * m.scale}px`,
                     backgroundColor: m.color,
                     fontSize: `${11 * m.scale}px`,
                   }}
+                  onPointerDown={(e) => handlePointerDown(e, m.key)}
                 >
                   {MARKER_INITIALS[m.type] || m.label.charAt(0)}
                 </div>
@@ -436,7 +449,7 @@ export function StreetViewPanel({
                   {m.label}
                 </span>
               </div>
-            ))}
+            ))
 
             {/* Marker count hint */}
             <div className="absolute bottom-2 left-2 pointer-events-none">
