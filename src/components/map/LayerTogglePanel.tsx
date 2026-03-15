@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
