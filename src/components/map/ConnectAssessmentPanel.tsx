@@ -316,7 +316,72 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
             </div>
           </div>
 
-          {/* Proposed kW input */}
+          {/* Auto-detect from map data */}
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={autoDetect.loading}
+            onClick={async () => {
+              const res = await autoDetect.detect(endpoints.routeCoords);
+              if (res && onAutoDetectComplete) {
+                onAutoDetectComplete(res);
+              }
+            }}
+          >
+            {autoDetect.loading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Scanning route…</>
+            ) : (
+              <><Radar className="mr-2 h-4 w-4" />Auto-detect Route Data</>
+            )}
+          </Button>
+
+          {/* Auto-detect results */}
+          {autoDetect.result && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Route Intelligence</p>
+              {autoDetect.result.cable_candidates.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">{autoDetect.result.cable_candidates.length} nearby cables</p>
+                  {autoDetect.result.cable_candidates.slice(0, 3).map((c, i) => (
+                    <div key={i} className="flex justify-between text-[10px]">
+                      <span className="text-muted-foreground truncate">{c.name || c.asset_id || "Cable"} {c.voltage_kv ? `(${c.voltage_kv}kV)` : ""}</span>
+                      <span className="font-mono">{Math.round(c.distance_m)}m</span>
+                    </div>
+                  ))}
+                  {autoDetect.result.cable_candidates.length > 3 && (
+                    <p className="text-[9px] text-muted-foreground">+{autoDetect.result.cable_candidates.length - 3} more</p>
+                  )}
+                </div>
+              )}
+              {autoDetect.result.surface_segments.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Surface classification</p>
+                  <div className="flex flex-wrap gap-1">
+                    {autoDetect.result.surface_segments.slice(0, 5).map((s, i) => (
+                      <Badge key={i} variant="outline" className="text-[9px]">
+                        {s.surface_type} · {Math.round(s.length_m)}m
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {autoDetect.result.crossings.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">{autoDetect.result.crossings.length} crossings detected</p>
+                  {autoDetect.result.crossings.slice(0, 3).map((cr, i) => (
+                    <div key={i} className="text-[10px] text-muted-foreground">
+                      {cr.crossing_type}: {cr.asset_name || "Unknown"} {cr.voltage_kv ? `(${cr.voltage_kv}kV)` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {autoDetect.result.cable_candidates.length === 0 && autoDetect.result.surface_segments.length === 0 && autoDetect.result.crossings.length === 0 && (
+                <p className="text-[10px] text-muted-foreground">No spatial data found along this route</p>
+              )}
+            </div>
+          )}
+
+
           <div className="space-y-1">
             <Label className="text-xs">Proposed Load (kW)</Label>
             <Input
