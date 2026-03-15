@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush, Radar } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouteAutoDetect, type RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
