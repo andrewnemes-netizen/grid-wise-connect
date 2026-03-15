@@ -140,13 +140,14 @@ export function StreetViewPanel({
   const panoramaRef = useRef<any>(null);
 
   // Current POV tracked from the panorama
+  const [cameraPosition, setCameraPosition] = useState({ lat, lng });
   const [heading, setHeading] = useState(0);
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
 
-  // Draggable marker overrides
-  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
-  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
+  // Draggable marker offsets (relative to projected position)
+  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { dxPct: number; dyPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origDxPct: number; origDyPct: number } | null>(null);
 
   // Initialise the interactive Street View panorama
   useEffect(() => {
