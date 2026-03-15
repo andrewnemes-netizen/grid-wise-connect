@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers, Zap, Globe } from "lucide-react";
+import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers, Zap, Globe, Radar } from "lucide-react";
 import { format } from "date-fns";
 import { DataUploader } from "@/components/admin/DataUploader";
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
