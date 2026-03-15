@@ -42,6 +42,13 @@ interface ConnectAssessmentPanelProps {
   onCaptureMapScreenshot?: () => Promise<string | null>;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
   designElements?: { type: string; label: string; count: number }[];
+  /** Whether an active study exists (required for design conversion) */
+  hasActiveStudy?: boolean;
+  /** Bulk insert callback from useDesignMode */
+  onConvertToDesign?: (
+    elements: { element_type: string; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
+    cables: { cable_type: string; label: string; coordinates: [number, number][] }[]
+  ) => Promise<number>;
 }
 
 export interface SavedAssessment {
