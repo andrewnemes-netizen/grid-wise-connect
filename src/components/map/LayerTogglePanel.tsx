@@ -433,6 +433,49 @@ export function LayerTogglePanel({
                   </p>
                 </div>
               </TabsContent>
+
+              {/* Land Registry Tab */}
+              <TabsContent value="landregistry" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {lrDatasets.length === 0 ? (
+                  <div className="py-4 text-center space-y-1.5">
+                    <Landmark className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-[11px] text-muted-foreground">No Land Registry layers configured.</p>
+                  </div>
+                ) : (
+                  lrDatasets.map((ds) => {
+                    const isVisible = lrVisibility[ds.id] ?? false;
+                    const isLoading = lrLoading.has(ds.id);
+
+                    return (
+                      <div key={ds.id} className="space-y-0.5">
+                        <div className="flex items-center justify-between gap-2 py-0.5">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {isLoading ? (
+                              <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                            ) : (
+                              <div className="h-3 w-3 rounded-sm shrink-0 border border-border" style={{ backgroundColor: ds.color }} />
+                            )}
+                            <Label htmlFor={`lr-${ds.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
+                              {ds.label}
+                            </Label>
+                          </div>
+                          <Switch
+                            id={`lr-${ds.id}`}
+                            checked={isVisible}
+                            onCheckedChange={(checked) => onLrToggle?.(ds.id, checked)}
+                            className="scale-75 shrink-0"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div className="pt-1.5 border-t mt-1">
+                  <p className="text-[10px] text-muted-foreground px-1">
+                    INSPIRE Index Polygons from HM Land Registry — visible at zoom 12+.
+                  </p>
+                </div>
+              </TabsContent>
             </Tabs>
           </div>
         )}
