@@ -14,27 +14,41 @@ import type { SiteInput, AssetSearchResult, NearestAsset } from "./types";
  * Calls the score-site edge function and maps results to AssetSearchResult.
  */
 export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResult> {
-  // Call the existing score-site edge function
-  const { data, error } = await supabase.functions.invoke("score-site", {
-    body: {
-      lat: input.lat,
-      lng: input.lng,
-      proposed_kw: input.proposed_kw,
-      boundary_geojson: input.boundary_geojson ?? null,
-    },
-  });
+  let scoreData: any = null;
 
-  if (error) {
-    throw new Error(`Asset discovery failed: ${error.message}`);
+  // Call the existing score-site edge function — gracefully degrade if it fails
+  try {
+    const { data, error } = await supabase.functions.invoke("score-site", {
+      body: {
+        lat: input.lat,
+        lng: input.lng,
+        proposed_kw: input.proposed_kw,
+        boundary_geojson: input.boundary_geojson ?? null,
+      },
+    });
+
+    if (error) {
+      console.warn("Asset discovery (score-site) returned error, using fallback:", error.message);
+    } else {
+      scoreData = data;
+    }
+  } catch (err) {
+    console.warn("Asset discovery (score-site) call failed, using fallback:", err);
   }
 
-  const scoreData = data;
-  const distances = scoreData.distances || { primary_m: 9999, feeder_m: 9999, capacity_segment_m: 9999 };
-  const constraints = scoreData.constraints || {};
-  const nearestSubs = scoreData.nearest_substations || [];
+  // If score-site returned an error object (e.g. { error: "..." }), treat as no data
+  if (scoreData && scoreData.error) {
+    console.warn("score-site returned error payload:", scoreData.error);
+    scoreData = null;
+  }
+
+  // Build fallback-safe results
+  const distances = scoreData?.distances || { primary_m: 9999, feeder_m: 9999, capacity_segment_m: 9999 };
+  const constraints = scoreData?.constraints || {};
+  const nearestSubs = scoreData?.nearest_substations || [];
 
   // Build raw metrics for scoring
-  const rawMetrics = buildRawMetrics(scoreData, input.proposed_kw);
+  const rawMetrics = buildRawMetrics(scoreData || { distances, constraints, nearest_substations: nearestSubs }, input.proposed_kw);
 
   // Map nearest substation
   const nearestSub = nearestSubs[0];
@@ -65,7 +79,7 @@ export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResul
 
   return {
     nearest_substation: nearestSubstation,
-    nearest_feeder: null, // Populated when feeder spatial queries are available
+    nearest_feeder: null,
     nearest_cable_segment: null,
     alternatives,
     distances,
