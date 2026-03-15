@@ -1,14 +1,12 @@
 /**
- * Enhanced Street View Panel with two modes:
- * - Explore: Interactive Google Street View iframe with full 360° navigation
- * - Capture: Static image with design marker overlays for PDF reports
+ * Street View Panel — fully interactive Google Street View with capture support.
+ * Uses the Google Maps JavaScript API StreetViewPanorama for drag/click navigation.
+ * Capture reads the current POV automatically.
  */
-import { useState, useCallback, useRef } from "react";
-import { X, Camera, ChevronLeft, ChevronRight, Loader2, Eye, Aperture, ZoomIn, ZoomOut } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { X, Camera, Loader2, Aperture } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GOOGLE_MAPS_KEY } from "@/hooks/useMap";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +37,6 @@ interface StreetViewPanelProps {
 
 const IMG_W = 640;
 const IMG_H = 400;
-const DEFAULT_FOV = 90;
 
 // ── Bearing & projection utilities ──
 
@@ -68,15 +65,15 @@ function projectMarker(
   heading: number,
   markerBearing: number,
   distance: number,
-  currentFov: number
+  fov: number
 ): { xPct: number; yPct: number; visible: boolean; scale: number } {
   let rel = markerBearing - heading;
   while (rel > 180) rel -= 360;
   while (rel < -180) rel += 360;
 
-  if (Math.abs(rel) > currentFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+  if (Math.abs(rel) > fov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
 
-  const xPct = (rel / currentFov + 0.5) * 100;
+  const xPct = (rel / fov + 0.5) * 100;
   const yPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
   const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
 
@@ -94,6 +91,25 @@ const MARKER_INITIALS: Record<string, string> = {
   pole: "P",
 };
 
+// Load Google Maps JS API once
+let gmapsPromise: Promise<void> | null = null;
+function loadGoogleMaps(): Promise<void> {
+  if (gmapsPromise) return gmapsPromise;
+  if (window.google?.maps?.StreetViewPanorama) {
+    gmapsPromise = Promise.resolve();
+    return gmapsPromise;
+  }
+  gmapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}`;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Google Maps"));
+    document.head.appendChild(script);
+  });
+  return gmapsPromise;
+}
+
 export function StreetViewPanel({
   lat,
   lng,
@@ -103,61 +119,70 @@ export function StreetViewPanel({
   existingCaptures = [],
 }: StreetViewPanelProps) {
   const { toast } = useToast();
-  const [mode, setMode] = useState<"explore" | "capture">("explore");
-  const [heading, setHeading] = useState(0);
-  const [pitch, setPitch] = useState(0);
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
   const [capturing, setCapturing] = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [fov, setFov] = useState(DEFAULT_FOV);
+  const [ready, setReady] = useState(false);
 
-  // Draggable marker overrides: store adjusted positions as { xPct, yPct }
-  const [markerOverrides, setMarkerOverrides] = useState<Record<string, { xPct: number; yPct: number }>>({});
-  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panoramaRef = useRef<google.maps.StreetViewPanorama | null>(null);
 
-  const imgSrc = `https://maps.googleapis.com/maps/api/streetview?size=${IMG_W}x${IMG_H}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${GOOGLE_MAPS_KEY}`;
+  // Current POV tracked from the panorama
+  const [heading, setHeading] = useState(0);
+  const [pitch, setPitch] = useState(0);
+  const [fov, setFov] = useState(90);
 
-  // Google Street View Embed URL for interactive mode
-  const embedSrc = `https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}`;
+  // Initialise the interactive Street View panorama
+  useEffect(() => {
+    let cancelled = false;
+    loadGoogleMaps().then(() => {
+      if (cancelled || !containerRef.current) return;
 
-  // Project markers onto the image (capture mode only)
+      const pano = new google.maps.StreetViewPanorama(containerRef.current, {
+        position: { lat, lng },
+        pov: { heading: 0, pitch: 0 },
+        zoom: 1,
+        addressControl: false,
+        fullscreenControl: false,
+        motionTracking: false,
+        motionTrackingControl: false,
+        linksControl: true,
+        panControl: true,
+        zoomControl: true,
+        enableCloseButton: false,
+      });
+
+      pano.addListener("pov_changed", () => {
+        const pov = pano.getPov();
+        setHeading(pov.heading);
+        setPitch(pov.pitch);
+      });
+
+      pano.addListener("zoom_changed", () => {
+        // Google's zoom 0 = 180° FOV, zoom 1 = 90°, zoom 2 = 45°, etc.
+        const z = pano.getZoom();
+        setFov(180 / Math.pow(2, z));
+      });
+
+      panoramaRef.current = pano;
+      setReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+      panoramaRef.current = null;
+    };
+  }, [lat, lng]);
+
+  // Project markers
   const projected = markers
     .map((m, i) => {
       const key = `${m.type}-${i}`;
       const bearing = calculateBearing(lat, lng, m.lat, m.lng);
       const distance = haversineM(lat, lng, m.lat, m.lng);
       const pos = projectMarker(heading, bearing, distance, fov);
-      // Apply drag overrides if present
-      const override = markerOverrides[key];
-      if (override) {
-        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
-      }
       return { ...m, ...pos, distance, key };
     })
     .filter((m) => m.visible && m.distance < 200);
-
-  // Drag handlers
-  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
-    e.preventDefault();
-    e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
-  }, []);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
-    const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
-    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
-    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
-  }, []);
-
-  const handlePointerUp = useCallback(() => {
-    dragRef.current = null;
-  }, []);
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
@@ -249,21 +274,14 @@ export function StreetViewPanel({
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">Street View</span>
-          <Tabs value={mode} onValueChange={(v) => setMode(v as "explore" | "capture")}>
-            <TabsList className="h-7">
-              <TabsTrigger value="explore" className="h-6 text-[10px] px-2 gap-1">
-                <Eye className="h-3 w-3" />
-                Explore
-              </TabsTrigger>
-              <TabsTrigger value="capture" className="h-6 text-[10px] px-2 gap-1">
-                <Aperture className="h-3 w-3" />
-                Capture
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
           {captures.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">
               {captures.length}/2 captured
+            </Badge>
+          )}
+          {ready && markers.length > 0 && (
+            <Badge variant="outline" className="text-[10px]">
+              {projected.length} marker{projected.length !== 1 ? "s" : ""} in view
             </Badge>
           )}
         </div>
@@ -272,202 +290,39 @@ export function StreetViewPanel({
         </Button>
       </div>
 
-      {/* ── EXPLORE MODE: Interactive iframe ── */}
-      {mode === "explore" && (
-        <div className="relative bg-muted" style={{ aspectRatio: `${IMG_W}/${IMG_H}` }}>
-          <iframe
-            src={embedSrc}
-            className="w-full h-full border-0"
-            allowFullScreen
-            referrerPolicy="no-referrer-when-downgrade"
-            title="Google Street View"
-          />
-        </div>
-      )}
-
-      {/* ── CAPTURE MODE: Static image with markers ── */}
-      {mode === "capture" && (
-        <>
-          <div
-            ref={containerRef}
-            className="relative bg-muted select-none"
-            style={{ aspectRatio: `${IMG_W}/${IMG_H}` }}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-          >
-            {!imgLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-            <img
-              key={imgSrc}
-              src={imgSrc}
-              className="w-full h-full object-cover"
-              alt="Street View"
-              draggable={false}
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgLoaded(true)}
-            />
-
-            {/* Draggable marker overlays */}
-            {imgLoaded &&
-              projected.map((m) => (
-                <div
-                  key={m.key}
-                  className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing"
-                  style={{
-                    left: `${m.xPct}%`,
-                    top: `${m.yPct}%`,
-                    transform: "translate(-50%, -50%)",
-                    touchAction: "none",
-                    zIndex: 10,
-                  }}
-                  onPointerDown={(e) => handlePointerDown(e, m.key, m.xPct, m.yPct)}
-                >
-                  <div
-                    className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold"
-                    style={{
-                      width: `${24 * m.scale}px`,
-                      height: `${24 * m.scale}px`,
-                      backgroundColor: m.color,
-                      fontSize: `${11 * m.scale}px`,
-                    }}
-                  >
-                    {MARKER_INITIALS[m.type] || m.label.charAt(0)}
-                  </div>
-                  <span
-                    className="text-white font-semibold mt-0.5 pointer-events-none"
-                    style={{
-                      fontSize: `${9 * m.scale}px`,
-                      textShadow: "0 1px 3px rgba(0,0,0,0.9)",
-                    }}
-                  >
-                    {m.label}
-                  </span>
-                </div>
-              ))}
-
-            {/* Marker count badge */}
-            {markers.length > 0 && (
-              <div className="absolute top-2 left-2">
-                <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur">
-                  {projected.length} marker{projected.length !== 1 ? "s" : ""} visible · drag to reposition
-                </Badge>
-              </div>
-            )}
+      {/* Interactive panorama */}
+      <div className="relative bg-muted" style={{ aspectRatio: `${IMG_W}/${IMG_H}` }}>
+        {!ready && (
+          <div className="absolute inset-0 flex items-center justify-center z-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        )}
+        <div ref={containerRef} className="w-full h-full" />
+      </div>
 
-          {/* Heading/Pitch Controls */}
-          <div className="px-3 py-2 space-y-2 border-t">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-14">Heading</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => {
-                  setHeading((h) => (h - 30 + 360) % 360);
-                  setImgLoaded(false);
-                }}
-              >
-                <ChevronLeft className="h-3 w-3" />
-              </Button>
-              <Slider
-                value={[heading]}
-                min={0}
-                max={360}
-                step={5}
-                onValueChange={([v]) => {
-                  setHeading(v);
-                  setImgLoaded(false);
-                }}
-                className="flex-1"
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => {
-                  setHeading((h) => (h + 30) % 360);
-                  setImgLoaded(false);
-                }}
-              >
-                <ChevronRight className="h-3 w-3" />
-              </Button>
-              <span className="text-xs font-mono w-8 text-right">{Math.round(heading)}°</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-14">Pitch</span>
-              <Slider
-                value={[pitch]}
-                min={-20}
-                max={20}
-                step={5}
-                onValueChange={([v]) => {
-                  setPitch(v);
-                  setImgLoaded(false);
-                }}
-                className="flex-1"
-              />
-              <span className="text-xs font-mono w-8 text-right">{pitch}°</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-14">Zoom</span>
-              <ZoomOut className="h-3 w-3 text-muted-foreground" />
-              <Slider
-                value={[fov]}
-                min={20}
-                max={120}
-                step={5}
-                onValueChange={([v]) => {
-                  setFov(v);
-                  setImgLoaded(false);
-                }}
-                className="flex-1"
-              />
-              <ZoomIn className="h-3 w-3 text-muted-foreground" />
-              <span className="text-xs font-mono w-8 text-right">{fov}°</span>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Capture bar (shown in both modes) */}
+      {/* Capture bar */}
       <div className="flex items-center justify-between px-3 py-2 border-t">
         <span className="text-xs text-muted-foreground">
-          {lat.toFixed(5)}, {lng.toFixed(5)}
+          {lat.toFixed(5)}, {lng.toFixed(5)} · {Math.round(heading)}° hdg
         </span>
-        {mode === "capture" ? (
-          <Button
-            size="sm"
-            className="h-7 text-xs"
-            disabled={capturing || captures.length >= 2}
-            onClick={handleCapture}
-          >
-            {capturing ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Capturing…
-              </>
-            ) : (
-              <>
-                <Camera className="h-3 w-3 mr-1" />
-                Capture Angle {captures.length + 1}
-              </>
-            )}
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={() => setMode("capture")}
-          >
-            <Aperture className="h-3 w-3 mr-1" />
-            Switch to Capture
-          </Button>
-        )}
+        <Button
+          size="sm"
+          className="h-7 text-xs"
+          disabled={capturing || captures.length >= 2 || !ready}
+          onClick={handleCapture}
+        >
+          {capturing ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Capturing…
+            </>
+          ) : (
+            <>
+              <Camera className="h-3 w-3 mr-1" />
+              Capture Angle {captures.length + 1}
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Captured thumbnails */}
