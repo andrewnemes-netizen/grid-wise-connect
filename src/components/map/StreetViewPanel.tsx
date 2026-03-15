@@ -149,6 +149,11 @@ export function StreetViewPanel({
   const [markerOffsets, setMarkerOffsets] = useState<Record<string, { dxPct: number; dyPct: number }>>({});
   const dragRef = useRef<{ key: string; startX: number; startY: number; origDxPct: number; origDyPct: number } | null>(null);
 
+  useEffect(() => {
+    setCameraPosition({ lat, lng });
+    setMarkerOffsets({});
+  }, [lat, lng]);
+
   // Initialise the interactive Street View panorama
   useEffect(() => {
     let cancelled = false;
