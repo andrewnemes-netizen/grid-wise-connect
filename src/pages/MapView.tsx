@@ -95,6 +95,7 @@ const MapView = () => {
   const activeStudy = useActiveStudy();
   const design = useDesignMode(map, activeStudy.studyId);
   const planning = usePlanningLayers();
+  const landRegistry = useLandRegistryLayers();
 
   // Auto-save boundary to study when finished
   useEffect(() => {
