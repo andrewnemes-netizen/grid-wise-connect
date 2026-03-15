@@ -9,6 +9,9 @@ const MAPBOX_TOKEN = "pk.eyJ1IjoiYW5kcmV3bmVtZXMiLCJhIjoiY21tb3kzcXFnMDYxeTJwc2F
 
 const GOOGLE_MAPS_KEY = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
 const BASEMAP_SOURCES: Record<BasemapId, { tiles: string[]; attribution: string; maxzoom?: number }> = {
   street: {
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
