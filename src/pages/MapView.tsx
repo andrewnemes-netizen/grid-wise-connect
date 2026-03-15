@@ -472,7 +472,9 @@ const MapView = () => {
               }
               hasActiveStudy={!!activeStudy.study}
               onConvertToDesign={design.bulkInsert}
+              onAutoDetectComplete={(res) => setAutoDetectResult(res)}
             />
+          )}
           )}
 
           {activeTool === "design" && activeStudy.study && (
