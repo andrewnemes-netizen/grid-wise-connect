@@ -54,7 +54,7 @@ export function useLandRegistryLayers() {
           map.addSource(sourceId, {
             type: "raster",
             tiles: [
-              `${WMS_BASE}?service=WMS&version=1.1.1&request=GetMap&layers=${ds.wmsLayer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`,
+              `${WMS_PROXY}?service=WMS&version=1.1.1&request=GetMap&layers=${ds.wmsLayer}&styles=&format=image/png&transparent=true&srs=EPSG:3857&width=256&height=256&bbox={bbox-epsg-3857}`,
             ],
             tileSize: 256,
           });
