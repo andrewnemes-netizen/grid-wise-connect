@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { OptimiserResultPanel } from "./OptimiserResultPanel";
 import { generateAssessmentPdf, exportAssessmentJson } from "@/lib/generateAssessmentPdf";
+import { convertConnectToDesign } from "@/lib/connectDesignBridge";
 import { SavedAssessmentsDrawer } from "./SavedAssessmentsDrawer";
 import { AssessmentComparisonPanel } from "./AssessmentComparisonPanel";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
@@ -42,6 +43,13 @@ interface ConnectAssessmentPanelProps {
   onCaptureMapScreenshot?: () => Promise<string | null>;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
   designElements?: { type: string; label: string; count: number }[];
+  /** Whether an active study exists (required for design conversion) */
+  hasActiveStudy?: boolean;
+  /** Bulk insert callback from useDesignMode */
+  onConvertToDesign?: (
+    elements: { element_type: string; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[],
+    cables: { cable_type: string; label: string; coordinates: [number, number][] }[]
+  ) => Promise<number>;
 }
 
 export interface SavedAssessment {
@@ -96,7 +104,7 @@ const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg:
 
 const OPTION_LETTERS = "ABCDEFGHIJ";
 
-export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures, designElements }: ConnectAssessmentPanelProps) {
+export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreenshot, streetViewCaptures, designElements, hasActiveStudy, onConvertToDesign }: ConnectAssessmentPanelProps) {
   const { toast } = useToast();
   const [proposedKw, setProposedKw] = useState("");
   const [loading, setLoading] = useState(false);
@@ -125,6 +133,10 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   // Voltage comparison state
   const [comparisonResult, setComparisonResult] = useState<VoltageComparisonResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+
+  // Design conversion state
+  const [converting, setConverting] = useState(false);
+  const [converted, setConverted] = useState(false);
 
   // Save & compare state
   const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
@@ -614,6 +626,51 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                 </Button>
               </div>
             </>
+          )}
+
+          {/* Convert to Design Mode */}
+          {result && onConvertToDesign && hasActiveStudy && (
+            <div className="pt-2">
+              {!converted ? (
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  disabled={converting}
+                  onClick={async () => {
+                    setConverting(true);
+                    try {
+                      const costEst = Number(proposedKw) > 0
+                        ? estimateConnectionCost({ proposed_kw: Number(proposedKw), distances, constraints: result.constraints, nearest_headroom_kw: sourceHeadroomKw, voltage_override: voltageOverride })
+                        : null;
+                      const vLevel = costEst?.voltage_level ?? (voltageOverride === "Auto" ? "LV" : voltageOverride);
+                      const designResult = convertConnectToDesign(endpoints, {
+                        voltageLevel: vLevel,
+                        proposedKw: Number(proposedKw) || 0,
+                        sourceName: sourceName,
+                      });
+                      const count = await onConvertToDesign(designResult.elements, designResult.cables);
+                      toast({ title: "Converted to Design Mode", description: `${count} items placed on map` });
+                      setConverted(true);
+                    } catch (err: any) {
+                      toast({ title: "Conversion failed", description: err.message, variant: "destructive" });
+                    } finally {
+                      setConverting(false);
+                    }
+                  }}
+                >
+                  {converting ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Converting…</>
+                  ) : (
+                    <><Paintbrush className="mr-2 h-4 w-4" />Convert to Design Mode</>
+                  )}
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-emerald-600">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Design elements placed on map</span>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Saved assessments drawer */}

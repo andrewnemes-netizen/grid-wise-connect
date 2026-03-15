@@ -467,6 +467,8 @@ const MapView = () => {
                     ).map(([type, count]) => ({ type, label: type.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), count }))
                   : undefined
               }
+              hasActiveStudy={!!activeStudy.study}
+              onConvertToDesign={design.bulkInsert}
             />
           )}
 
@@ -498,6 +500,12 @@ const MapView = () => {
                 sourceProperties: connect.connectEndpoints.source.properties,
                 sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
               } : null}
+              designCables={design.cables.length > 0 ? design.cables.map(c => ({
+                cable_type: c.cable_type,
+                coordinates: c.coordinates,
+                length_m: c.length_m,
+                label: c.label,
+              })) : undefined}
             />
           )}
 

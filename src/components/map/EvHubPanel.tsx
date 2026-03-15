@@ -33,6 +33,8 @@ interface Props {
   lat: number;
   onClose: () => void;
   connectData?: ConnectData | null;
+  /** Design cables to feed as POC candidates */
+  designCables?: { cable_type: string; coordinates: [number, number][]; length_m: number; label: string | null }[];
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
@@ -52,7 +54,7 @@ const DNO_OPTIONS: { value: DnoKey; label: string }[] = [
   { value: "SSEN", label: "SSEN" },
 ];
 
-export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
+export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Props) {
   const { toast } = useToast();
 
   // Inputs
@@ -122,6 +124,19 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
         }
       }
 
+      // ── Integrate design cables as POC candidates ──
+      if (designCables && designCables.length > 0) {
+        context.cableCandidates = designCables
+          .filter(c => c.cable_type === "lv_main" || c.cable_type === "lv_service")
+          .map(c => ({
+            cable_segment_id: `design-${c.label || c.cable_type}`,
+            distance_m: c.length_m,
+            capacity_headroom_pct: null,
+            age_years: null,
+            accessibility_score: null,
+          }));
+      }
+
       const output = await runEvHubEngine(
         {
           site_lat: lat,
@@ -178,6 +193,17 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
                 )}
               </div>
               <p className="text-[10px] text-muted-foreground">From: {connectData.sourceLayerLabel}</p>
+            </div>
+          )}
+
+          {/* Design cables indicator */}
+          {designCables && designCables.length > 0 && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Design Cable Data</p>
+              <div className="flex items-center gap-3 text-xs">
+                <span><strong>{designCables.filter(c => c.cable_type === "lv_main" || c.cable_type === "lv_service").length}</strong> LV cables as POC candidates</span>
+              </div>
+              <Badge variant="secondary" className="text-[9px]">Design → Engine</Badge>
             </div>
           )}
 
