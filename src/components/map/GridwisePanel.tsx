@@ -4,7 +4,7 @@
  * Single panel that collects site inputs and runs the full
  * 6-engine pipeline with progress indicators and structured results.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   X, Zap, Loader2, MapPin, CheckCircle, AlertTriangle, XCircle,
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
