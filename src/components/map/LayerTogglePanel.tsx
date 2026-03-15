@@ -57,6 +57,7 @@ interface LayerTogglePanelProps {
   osDatasets?: OsOpenDataset[];
   osVisibility?: Record<string, boolean>;
   osLoading?: Set<string>;
+  osFeatureCounts?: Record<string, number>;
   onOsToggle?: (datasetId: string, visible: boolean) => void;
 }
 
