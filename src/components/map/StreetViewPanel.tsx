@@ -429,24 +429,37 @@ export function StreetViewPanel({
         <span className="text-xs text-muted-foreground">
           {cameraPosition.lat.toFixed(5)}, {cameraPosition.lng.toFixed(5)} · {Math.round(heading)}° hdg
         </span>
-        <Button
-          size="sm"
-          className="h-7 text-xs"
-          disabled={capturing || captures.length >= 6 || !ready}
-          onClick={handleCapture}
-        >
-          {capturing ? (
-            <>
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Capturing…
-            </>
-          ) : (
-            <>
-              <Camera className="h-3 w-3 mr-1" />
-              Capture Angle {captures.length + 1}
-            </>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            disabled={capturing || captures.length >= 6 || !ready}
+            onClick={handleCapture}
+          >
+            {capturing ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Capturing…
+              </>
+            ) : (
+              <>
+                <Camera className="h-3 w-3 mr-1" />
+                Capture Angle {captures.length + 1}
+              </>
+            )}
+          </Button>
+          {captures.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={onClose}
+            >
+              <Check className="h-3 w-3 mr-1" />
+              Done
+            </Button>
           )}
-        </Button>
+        </div>
       </div>
 
       {/* Captured thumbnails */}
