@@ -466,30 +466,30 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
                   <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
                     <MetricRow label="Service Cable" value={project.electrical.sizing.service_cable} />
                     <MetricRow label="LV Main Cable" value={project.electrical.sizing.lv_main_cable} />
-                    <MetricRow label="Transition Joint" badge={project.electrical.sizing.transition_joint_required ? "Required" : "No"} badgeVariant={project.electrical.sizing.transition_joint_required ? "secondary" : "outline"} />
+                    <MetricRow label="Reinforcement Trigger" badge={project.electrical.sizing.reinforcement_trigger ? "Yes" : "No"} badgeVariant={project.electrical.sizing.reinforcement_trigger ? "secondary" : "outline"} />
                     <MetricRow
                       label="Earthing"
-                      badge={project.electrical.earthing.earthing_review ? "Review Required" : "OK"}
-                      badgeVariant={project.electrical.earthing.earthing_review ? "destructive" : "outline"}
+                      badge={project.electrical.earthing.review_required ? "Review Required" : "OK"}
+                      badgeVariant={project.electrical.earthing.review_required ? "destructive" : "outline"}
                     />
                     <MetricRow
                       label="Reinforcement"
-                      badge={project.electrical.reinforcement.reinforcement_required ? "Required" : "None"}
-                      badgeVariant={project.electrical.reinforcement.reinforcement_required ? "destructive" : "outline"}
+                      badge={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? project.electrical.reinforcement.state.replace(/_/g, " ") : "None"}
+                      badgeVariant={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? "destructive" : "outline"}
                     />
                     {project.electrical.validation && (
                       <>
                         <Separator className="my-1" />
-                        <MetricRow label="Voltage Drop" value={`${project.electrical.validation.total_vd_pct.toFixed(1)}%`} />
+                        <MetricRow label="Voltage Drop" value={`${project.electrical.validation.voltage_drop.total_pct.toFixed(1)}%`} />
                         <MetricRow
                           label="Voltage Drop Status"
-                          badge={project.electrical.validation.vd_pass ? "PASS" : "FAIL"}
-                          badgeVariant={project.electrical.validation.vd_pass ? "outline" : "destructive"}
+                          badge={project.electrical.validation.voltage_drop.pass ? "PASS" : "FAIL"}
+                          badgeVariant={project.electrical.validation.voltage_drop.pass ? "outline" : "destructive"}
                         />
                         <MetricRow
-                          label="Cable Sizing"
-                          badge={project.electrical.validation.sizing_pass ? "PASS" : "FAIL"}
-                          badgeVariant={project.electrical.validation.sizing_pass ? "outline" : "destructive"}
+                          label="Overall"
+                          badge={project.electrical.validation.overall_pass ? "PASS" : "FAIL"}
+                          badgeVariant={project.electrical.validation.overall_pass ? "outline" : "destructive"}
                         />
                       </>
                     )}
