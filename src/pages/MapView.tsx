@@ -30,6 +30,7 @@ import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
+import { GridwisePanel } from "@/components/map/GridwisePanel";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
