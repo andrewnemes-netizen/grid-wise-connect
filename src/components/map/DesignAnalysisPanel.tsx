@@ -161,6 +161,7 @@ export function DesignAnalysisPanel({
         cables,
         elements,
         proposed_kw: proposedKw,
+        supply_capacity_a: parseInt(supplyCapacity) || 100,
         cable_specs: cableSpecs,
         dno_rules: dnoRules,
         upstream,
