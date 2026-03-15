@@ -513,6 +513,8 @@ const MapView = () => {
                 coordinates: connect.connectEndpoints.routeCoords,
               } : undefined}
               boundaryGeojson={boundary.polygon ?? undefined}
+              hasActiveStudy={!!activeStudy.study}
+              onConvertToDesign={design.bulkInsert}
             />
           )}
 
