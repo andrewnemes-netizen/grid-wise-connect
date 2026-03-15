@@ -292,6 +292,12 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
               {boundaryGeojson && (
                 <Badge variant="secondary" className="text-[9px]">Boundary set ✓</Badge>
               )}
+              {designCables && designCables.length > 0 && (
+                <Badge variant="secondary" className="text-[9px]">
+                  <Cable className="h-2.5 w-2.5 mr-0.5" />
+                  {designCables.length} design cable{designCables.length !== 1 ? "s" : ""} ✓
+                </Badge>
+              )}
             </div>
           </div>
 
