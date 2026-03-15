@@ -94,8 +94,41 @@ interface PlanningLayerState {
 
 export function usePlanningLayers() {
   const [planningVisibility, setPlanningVisibility] = useState<PlanningLayerState>({});
-  const [planningLoading] = useState<Set<string>>(new Set()); // No loading needed with vector tiles
+  const [planningLoading] = useState<Set<string>>(new Set());
+  const [selectedPlanningFeature, setSelectedPlanningFeature] = useState<Record<string, unknown> | null>(null);
+  const [selectedPlanningLabel, setSelectedPlanningLabel] = useState("");
   const addedRef = useRef<Set<string>>(new Set());
+  const handlersRef = useRef<Map<string, { click: (e: any) => void; enter: () => void; leave: () => void }>>(new Map());
+
+  const attachClickHandlers = useCallback(
+    (map: MaplibreMap, layerIds: string[], ds: PlanningDataset) => {
+      const clickHandler = (e: any) => {
+        if (e.features && e.features.length > 0) {
+          const props = e.features[0].properties as Record<string, unknown>;
+          setSelectedPlanningFeature(props);
+          setSelectedPlanningLabel(ds.label);
+        }
+      };
+      const enterHandler = () => {
+        map.getCanvas().style.cursor = "pointer";
+      };
+      const leaveHandler = () => {
+        map.getCanvas().style.cursor = "";
+      };
+
+      for (const lid of layerIds) {
+        if (map.getLayer(lid)) {
+          map.on("click", lid, clickHandler);
+          map.on("mouseenter", lid, enterHandler);
+          map.on("mouseleave", lid, leaveHandler);
+        }
+      }
+
+      // Store handlers keyed by dataset id for cleanup
+      handlersRef.current.set(ds.id, { click: clickHandler, enter: enterHandler, leave: leaveHandler });
+    },
+    []
+  );
 
   const togglePlanningLayer = useCallback(
     (datasetId: string, visible: boolean, map: MaplibreMap | null) => {
@@ -122,6 +155,8 @@ export function usePlanningLayers() {
           });
         }
 
+        const interactiveLayerIds: string[] = [];
+
         if (ds.type === "point") {
           map.addLayer({
             id: circleLayerId,
@@ -137,6 +172,7 @@ export function usePlanningLayers() {
             },
             layout: { visibility: "visible" },
           });
+          interactiveLayerIds.push(circleLayerId);
         } else {
           map.addLayer({
             id: fillLayerId,
@@ -161,11 +197,15 @@ export function usePlanningLayers() {
             },
             layout: { visibility: "visible" },
           });
+          interactiveLayerIds.push(fillLayerId);
         }
+
+        // Attach click + hover handlers
+        attachClickHandlers(map, interactiveLayerIds, ds);
 
         addedRef.current.add(datasetId);
         console.log(`Added planning vector tile layer: ${ds.slug}`);
-        return; // Already visible on add
+        return;
       }
 
       // Toggle visibility
@@ -174,16 +214,20 @@ export function usePlanningLayers() {
       if (map.getLayer(lineLayerId)) map.setLayoutProperty(lineLayerId, "visibility", vis);
       if (map.getLayer(circleLayerId)) map.setLayoutProperty(circleLayerId, "visibility", vis);
     },
-    []
+    [attachClickHandlers]
   );
 
-  // No-op for vector tiles — data loads automatically by viewport
   const refreshPlanningLayers = useCallback(
     async (_map: MaplibreMap | null) => {
-      // Vector tiles refresh automatically — nothing to do
+      // Vector tiles refresh automatically
     },
     []
   );
+
+  const closePlanningFeatureInfo = useCallback(() => {
+    setSelectedPlanningFeature(null);
+    setSelectedPlanningLabel("");
+  }, []);
 
   return {
     planningVisibility,
@@ -191,5 +235,8 @@ export function usePlanningLayers() {
     togglePlanningLayer,
     refreshPlanningLayers,
     planningDatasets: PLANNING_DATASETS,
+    selectedPlanningFeature,
+    selectedPlanningLabel,
+    closePlanningFeatureInfo,
   };
 }
