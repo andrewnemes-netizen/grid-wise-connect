@@ -150,6 +150,8 @@ export function StreetViewPanel({
   markers = [],
   onCaptures,
   existingCaptures = [],
+  onDeleteMarker,
+  onAddMarker,
 }: StreetViewPanelProps) {
   const { toast } = useToast();
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
