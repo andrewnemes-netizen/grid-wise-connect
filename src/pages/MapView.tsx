@@ -524,6 +524,7 @@ const MapView = () => {
               existingCaptures={streetViewCaptures}
               markers={
                 design.elements.map((el) => ({
+                  id: el.id,
                   lat: Number(el.lat),
                   lng: Number(el.lng),
                   label: el.label || el.element_type.replace("_", " "),
@@ -540,6 +541,14 @@ const MapView = () => {
                 } as StreetViewMarker))
               }
               onCaptures={setStreetViewCaptures}
+              onDeleteMarker={(id) => design.removeElement(id)}
+              onAddMarker={(type, markerLat, markerLng) => {
+                design.selectPlacingType(type as any);
+                // Directly place at the camera position
+                setTimeout(() => {
+                  design.placeElement(markerLng, markerLat);
+                }, 50);
+              }}
             />
           )}
 
