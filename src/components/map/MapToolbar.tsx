@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Workflow } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, Cable, SquareDashedBottom, PencilRuler, Zap, Workflow, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Street View pegman icon (orange man like Google)
@@ -17,8 +17,8 @@ function StreetViewIcon({ className }: { className?: string }) {
 }
 
 interface MapToolbarProps {
-  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | null;
-  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | null) => void;
+  activeTool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "analyse" | null;
+  onToolChange: (tool: "pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "analyse" | null) => void;
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
@@ -31,6 +31,7 @@ const tools = [
   { id: "evhub" as const, icon: Zap, label: "EV Hub Feasibility" },
   { id: "connect" as const, icon: Cable, label: "Connect" },
   { id: "design" as const, icon: PencilRuler, label: "Design Mode", requiresStudy: true },
+  { id: "analyse" as const, icon: Activity, label: "Analyse Design", requiresStudy: true },
   { id: "polygon" as const, icon: Pentagon, label: "Polygon Search" },
   { id: "measure" as const, icon: Ruler, label: "Measure" },
   // { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
