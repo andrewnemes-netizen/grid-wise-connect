@@ -475,7 +475,6 @@ const MapView = () => {
               onAutoDetectComplete={(res) => setAutoDetectResult(res)}
             />
           )}
-          )}
 
           {activeTool === "design" && activeStudy.study && (
             <DesignModePanel
