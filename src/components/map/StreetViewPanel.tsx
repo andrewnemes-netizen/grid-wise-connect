@@ -1,6 +1,7 @@
 /**
- * Street View Panel — interactive Street View with local, screen-locked markers.
- * Markers are managed only inside this view for capture composition.
+ * Street View Panel — fully interactive Google Street View with capture support.
+ * Uses the Google Maps JavaScript API StreetViewPanorama for drag/click navigation.
+ * Capture reads the current POV automatically.
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Camera, Loader2, Check, Plus } from "lucide-react";
@@ -11,37 +12,20 @@ import { GOOGLE_MAPS_KEY } from "@/hooks/useMap";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-export interface StreetViewCapture {
-  dataUrl: string;
-  heading: number;
-  pitch: number;
-  label: string;
-}
-
-interface StreetViewPanelProps {
+export interface StreetViewMarker {
+  id: string;
   lat: number;
   lng: number;
-  onClose: () => void;
-  onCaptures?: (captures: StreetViewCapture[]) => void;
-  existingCaptures?: StreetViewCapture[];
+  label: string;
+  type: string;
+  color: string;
 }
 
-type EquipmentTypeOption = {
+export type EquipmentTypeOption = {
   type: string;
   label: string;
   color: string;
   symbol: string;
-};
-
-type LocalStreetViewMarker = {
-  id: string;
-  type: string;
-  label: string;
-  color: string;
-  symbol: string;
-  xPct: number;
-  yPct: number;
-  scale: number;
 };
 
 const EQUIPMENT_OPTIONS: EquipmentTypeOption[] = [
@@ -54,13 +38,91 @@ const EQUIPMENT_OPTIONS: EquipmentTypeOption[] = [
   { type: "ev_charger", label: "EV Charger", color: "#00b894", symbol: "E" },
 ];
 
+export interface StreetViewCapture {
+  dataUrl: string;
+  heading: number;
+  pitch: number;
+  label: string;
+}
+
+interface StreetViewPanelProps {
+  lat: number;
+  lng: number;
+  onClose: () => void;
+  markers?: StreetViewMarker[];
+  onCaptures?: (captures: StreetViewCapture[]) => void;
+  existingCaptures?: StreetViewCapture[];
+  onDeleteMarker?: (id: string) => void;
+  onAddMarker?: (type: string, lat: number, lng: number) => void;
+}
+
 const IMG_W = 640;
 const IMG_H = 400;
-const MAX_CAPTURES = 6;
+
+// ── Bearing & projection utilities ──
+
+function calculateBearing(fromLat: number, fromLng: number, toLat: number, toLng: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLon = toRad(toLng - fromLng);
+  const lat1 = toRad(fromLat);
+  const lat2 = toRad(toLat);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
+
+function projectMarker(
+  heading: number,
+  pitch: number,
+  markerBearing: number,
+  distance: number,
+  horizontalFov: number
+): { xPct: number; yPct: number; visible: boolean; scale: number } {
+  let rel = markerBearing - heading;
+  while (rel > 180) rel -= 360;
+  while (rel < -180) rel += 360;
+
+  if (Math.abs(rel) > horizontalFov / 2) return { xPct: 0, yPct: 0, visible: false, scale: 1 };
+
+  const xPct = (rel / horizontalFov + 0.5) * 100;
+
+  const baseYPct = distance < 10 ? 72 : distance < 30 ? 64 : distance < 80 ? 58 : 54;
+  const horizontalFovRad = (horizontalFov * Math.PI) / 180;
+  const verticalFovRad = 2 * Math.atan(Math.tan(horizontalFovRad / 2) * (IMG_H / IMG_W));
+  const verticalFov = (verticalFovRad * 180) / Math.PI;
+  const pitchOffsetPct = (pitch / Math.max(verticalFov, 1)) * 100;
+  const yPct = clamp(baseYPct + pitchOffsetPct, 5, 95);
+
+  const scale = distance < 10 ? 1.3 : distance < 30 ? 1.0 : distance < 80 ? 0.8 : 0.6;
+
+  return { xPct, yPct, visible: true, scale };
+}
+
+const MARKER_INITIALS: Record<string, string> = {
+  feeder_pillar: "F",
+  charge_point: "E",
+  ev_charger: "E",
+  transformer: "T",
+  rmu: "R",
+  cutout: "C",
+  joint: "J",
+  pole: "P",
+};
 
 // Load Google Maps JS API once
 let gmapsPromise: Promise<void> | null = null;
@@ -85,14 +147,16 @@ export function StreetViewPanel({
   lat,
   lng,
   onClose,
+  markers = [],
   onCaptures,
   existingCaptures = [],
+  onDeleteMarker,
+  onAddMarker,
 }: StreetViewPanelProps) {
   const { toast } = useToast();
   const [captures, setCaptures] = useState<StreetViewCapture[]>(existingCaptures);
   const [capturing, setCapturing] = useState(false);
   const [ready, setReady] = useState(false);
-  const [markers, setMarkers] = useState<LocalStreetViewMarker[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -104,14 +168,16 @@ export function StreetViewPanel({
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
 
+  // Screen-fixed marker positions
+  const [markerPositions, setMarkerPositions] = useState<Record<string, { xPct: number; yPct: number }>>({});
   const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
 
   useEffect(() => {
     setCameraPosition({ lat, lng });
-    setMarkers([]);
+    setMarkerPositions({});
   }, [lat, lng]);
 
-  // Initialise interactive Street View panorama
+  // Initialise the interactive Street View panorama
   useEffect(() => {
     let cancelled = false;
     loadGoogleMaps().then(() => {
@@ -158,67 +224,78 @@ export function StreetViewPanel({
     };
   }, [lat, lng]);
 
-  const handleAddMarker = useCallback(
-    (type: string) => {
-      const option = EQUIPMENT_OPTIONS.find((e) => e.type === type);
-      if (!option) return;
+  // Project markers onto the panorama view
+  const projected = markers
+    .map((m) => {
+      const key = m.id;
+      const bearing = calculateBearing(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const distance = haversineM(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const pos = projectMarker(heading, pitch, bearing, distance, fov);
+      const fixed = markerPositions[key];
 
-      setMarkers((prev) => {
-        const typeCount = prev.filter((m) => m.type === type).length + 1;
-        const stackOffset = Math.min(prev.length, 5) * 4;
-        return [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            type,
-            label: `${option.label} ${typeCount}`,
-            color: option.color,
-            symbol: option.symbol,
-            xPct: clamp(50 + stackOffset, 8, 92),
-            yPct: clamp(64 + stackOffset * 0.4, 10, 92),
-            scale: 1,
-          },
-        ];
+      return {
+        ...m,
+        ...pos,
+        xPct: clamp(fixed ? fixed.xPct : pos.xPct, 0, 100),
+        yPct: clamp(fixed ? fixed.yPct : pos.yPct, 0, 100),
+        visible: fixed ? true : pos.visible,
+        distance,
+        key,
+      };
+    })
+    .filter((m) => m.visible && m.distance < 200);
+
+  // Seed fixed positions once per marker, and clean up removed markers
+  useEffect(() => {
+    setMarkerPositions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      projected.forEach((m) => {
+        if (!next[m.key]) {
+          next[m.key] = { xPct: m.xPct, yPct: m.yPct };
+          changed = true;
+        }
       });
-    },
-    []
-  );
 
-  const handleDeleteMarker = useCallback((id: string) => {
-    setMarkers((prev) => prev.filter((m) => m.id !== id));
-  }, []);
+      Object.keys(next).forEach((key) => {
+        if (!markers.some((marker) => marker.id === key)) {
+          delete next[key];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [projected, markers]);
 
   // Drag handlers for marker repositioning
-  const handlePointerDown = useCallback((e: React.PointerEvent, markerId: string, currentXPct: number, currentYPct: number) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string) => {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const current = markerPositions[key] ?? { xPct: 50, yPct: 65 };
     dragRef.current = {
-      key: markerId,
+      key,
       startX: e.clientX,
       startY: e.clientY,
-      origXPct: currentXPct,
-      origYPct: currentYPct,
+      origXPct: current.xPct,
+      origYPct: current.yPct,
     };
-  }, []);
+  }, [markerPositions]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
     const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
     const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-
-    setMarkers((prev) =>
-      prev.map((m) =>
-        m.id === dragRef.current!.key
-          ? {
-              ...m,
-              xPct: clamp(dragRef.current!.origXPct + dx, 0, 100),
-              yPct: clamp(dragRef.current!.origYPct + dy, 0, 100),
-            }
-          : m
-      )
-    );
+    setMarkerPositions((prev) => ({
+      ...prev,
+      [dragRef.current!.key]: {
+        xPct: clamp(dragRef.current!.origXPct + dx, 0, 100),
+        yPct: clamp(dragRef.current!.origYPct + dy, 0, 100),
+      },
+    }));
   }, []);
 
   const handlePointerUp = useCallback(() => {
@@ -227,8 +304,8 @@ export function StreetViewPanel({
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
-    if (angleNum > MAX_CAPTURES) {
-      toast({ title: `Maximum ${MAX_CAPTURES} captures` });
+    if (angleNum > 6) {
+      toast({ title: "Maximum 6 captures" });
       return;
     }
 
@@ -254,8 +331,8 @@ export function StreetViewPanel({
       });
       ctx.drawImage(img, 0, 0, IMG_W, IMG_H);
 
-      // Draw local marker overlays
-      markers.forEach((m) => {
+      // Draw marker overlays
+      projected.forEach((m) => {
         const x = (m.xPct / 100) * IMG_W;
         const y = (m.yPct / 100) * IMG_H;
         const r = 14 * m.scale;
@@ -274,7 +351,7 @@ export function StreetViewPanel({
         ctx.fillStyle = "white";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(m.symbol, x, y);
+        ctx.fillText(MARKER_INITIALS[m.type] || m.label.charAt(0), x, y);
 
         ctx.font = `bold ${Math.round(10 * m.scale)}px Arial`;
         ctx.textBaseline = "top";
@@ -307,7 +384,7 @@ export function StreetViewPanel({
     } finally {
       setCapturing(false);
     }
-  }, [cameraPosition, heading, pitch, fov, captures, markers, onCaptures, toast]);
+  }, [cameraPosition, heading, pitch, fov, captures, projected, onCaptures, toast]);
 
   return (
     <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 w-[520px] rounded-xl border bg-background/95 backdrop-blur shadow-xl overflow-hidden">
@@ -317,37 +394,43 @@ export function StreetViewPanel({
           <span className="text-sm font-semibold">Street View</span>
           {captures.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">
-              {captures.length}/{MAX_CAPTURES} captured
+              {captures.length}/6 captured
             </Badge>
           )}
           {ready && markers.length > 0 && (
             <Badge variant="outline" className="text-[10px]">
-              {markers.length} marker{markers.length !== 1 ? "s" : ""} in view
+              {projected.length} marker{projected.length !== 1 ? "s" : ""} in view
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 gap-1">
-                <Plus className="h-3 w-3" />
-                Add
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[160px]">
-              {EQUIPMENT_OPTIONS.map((eq) => (
-                <DropdownMenuItem key={eq.type} onClick={() => handleAddMarker(eq.type)} className="text-xs gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
-                    style={{ backgroundColor: eq.color }}
+          {onAddMarker && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2 gap-1">
+                  <Plus className="h-3 w-3" />
+                  Add
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                {EQUIPMENT_OPTIONS.map((eq) => (
+                  <DropdownMenuItem
+                    key={eq.type}
+                    onClick={() => onAddMarker(eq.type, cameraPosition.lat, cameraPosition.lng)}
+                    className="text-xs gap-2"
                   >
-                    {eq.symbol}
-                  </div>
-                  {eq.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                    <div
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+                      style={{ backgroundColor: eq.color }}
+                    >
+                      {eq.symbol}
+                    </div>
+                    {eq.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
@@ -363,7 +446,8 @@ export function StreetViewPanel({
         )}
         <div ref={containerRef} className="w-full h-full" />
 
-        {ready && markers.length > 0 && (
+        {/* Draggable marker overlay — sits on top of panorama, pointer-events only on markers */}
+        {ready && projected.length > 0 && (
           <div
             ref={overlayRef}
             className="absolute inset-0 pointer-events-none select-none"
@@ -371,9 +455,9 @@ export function StreetViewPanel({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
           >
-            {markers.map((m) => (
+            {projected.map((m) => (
               <div
-                key={m.id}
+                key={m.key}
                 className="absolute flex flex-col items-center pointer-events-auto"
                 style={{
                   left: `${m.xPct}%`,
@@ -383,17 +467,19 @@ export function StreetViewPanel({
                   zIndex: 10,
                 }}
               >
-                <button
-                  className="absolute -top-2 -right-3 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center hover:scale-110 transition-transform"
-                  style={{ zIndex: 20, fontSize: "8px" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteMarker(m.id);
-                  }}
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-
+                {/* Delete button */}
+                {onDeleteMarker && (
+                  <button
+                    className="absolute -top-2 -right-3 w-4 h-4 rounded-full bg-destructive text-white flex items-center justify-center hover:scale-110 transition-transform"
+                    style={{ zIndex: 20, fontSize: "8px" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteMarker(m.id);
+                    }}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
                 <div
                   className="rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold cursor-grab active:cursor-grabbing"
                   style={{
@@ -402,9 +488,9 @@ export function StreetViewPanel({
                     backgroundColor: m.color,
                     fontSize: `${11 * m.scale}px`,
                   }}
-                  onPointerDown={(e) => handlePointerDown(e, m.id, m.xPct, m.yPct)}
+                  onPointerDown={(e) => handlePointerDown(e, m.key)}
                 >
-                  {m.symbol}
+                  {MARKER_INITIALS[m.type] || m.label.charAt(0)}
                 </div>
                 <span
                   className="text-white font-semibold mt-0.5 pointer-events-none whitespace-nowrap"
@@ -418,9 +504,10 @@ export function StreetViewPanel({
               </div>
             ))}
 
+            {/* Marker count hint */}
             <div className="absolute bottom-2 left-2 pointer-events-none">
               <Badge variant="outline" className="text-[10px] bg-background/80 backdrop-blur pointer-events-none">
-                markers are locked to screen · drag to reposition
+                drag markers to reposition
               </Badge>
             </div>
           </div>
@@ -433,7 +520,12 @@ export function StreetViewPanel({
           {cameraPosition.lat.toFixed(5)}, {cameraPosition.lng.toFixed(5)} · {Math.round(heading)}° hdg
         </span>
         <div className="flex items-center gap-2">
-          <Button size="sm" className="h-7 text-xs" disabled={capturing || captures.length >= MAX_CAPTURES || !ready} onClick={handleCapture}>
+          <Button
+            size="sm"
+            className="h-7 text-xs"
+            disabled={capturing || captures.length >= 6 || !ready}
+            onClick={handleCapture}
+          >
             {capturing ? (
               <>
                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -447,7 +539,12 @@ export function StreetViewPanel({
             )}
           </Button>
           {captures.length > 0 && (
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onClose}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={onClose}
+            >
               <Check className="h-3 w-3 mr-1" />
               Done
             </Button>
@@ -460,7 +557,11 @@ export function StreetViewPanel({
         <div className="px-3 py-2 border-t flex gap-2">
           {captures.map((cap, i) => (
             <div key={i} className="relative flex-1">
-              <img src={cap.dataUrl} className="w-full h-16 object-cover rounded border" alt={cap.label} />
+              <img
+                src={cap.dataUrl}
+                className="w-full h-16 object-cover rounded border"
+                alt={cap.label}
+              />
               <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] text-center py-0.5 rounded-b">
                 {cap.label} — {Math.round(cap.heading)}°
               </span>
