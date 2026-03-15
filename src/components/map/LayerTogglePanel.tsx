@@ -64,10 +64,7 @@ export function getLayerColor(layer: RegistryLayer, index: number): string {
   if (style?.paint?.["circle-color"] && typeof style.paint["circle-color"] === "string") return style.paint["circle-color"];
   if (style?.paint?.["line-color"] && typeof style.paint["line-color"] === "string") return style.paint["line-color"];
 
-  const base = CATEGORY_COLORS[layer.category] || "#888";
-  if (index === 0) return base;
-  const hueShift = index * 30;
-  return `hsl(${(parseInt(base.slice(1), 16) + hueShift) % 360}, 60%, 50%)`;
+  return getOsLayerColor(layer.category, index);
 }
 
 export function isUtilisationLayer(layer: RegistryLayer): boolean {
