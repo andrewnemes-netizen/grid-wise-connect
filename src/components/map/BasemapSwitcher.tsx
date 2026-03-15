@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Map, Satellite, Mountain, Compass } from "lucide-react";
+import { Map, Satellite, Mountain, Compass, Hexagon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
@@ -12,7 +12,8 @@ export type BasemapId =
   | "topo"
   | "os-road"
   | "os-outdoor"
-  | "os-light";
+  | "os-light"
+  | "os-vector";
 
 interface BasemapOption {
   id: BasemapId;
@@ -30,6 +31,7 @@ const basemaps: BasemapOption[] = [
   { id: "os-road", icon: Compass, label: "OS Road", group: "os" },
   { id: "os-outdoor", icon: Compass, label: "OS Outdoor", group: "os" },
   { id: "os-light", icon: Compass, label: "OS Light", group: "os" },
+  { id: "os-vector", icon: Hexagon, label: "OS Vector", group: "os" },
 ];
 
 interface BasemapSwitcherProps {
