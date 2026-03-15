@@ -392,7 +392,7 @@ export function StreetViewPanel({
         <Button
           size="sm"
           className="h-7 text-xs"
-          disabled={capturing || captures.length >= 2 || !ready}
+          disabled={capturing || captures.length >= 6 || !ready}
           onClick={handleCapture}
         >
           {capturing ? (
