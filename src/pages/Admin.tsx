@@ -62,6 +62,9 @@ const Admin = () => {
         <TabsContent value="users" className="mt-4">
           <UserRolesManagement />
         </TabsContent>
+        <TabsContent value="api" className="mt-4">
+          <DnoApiSources />
+        </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
         </TabsContent>
