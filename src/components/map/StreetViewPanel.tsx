@@ -4,7 +4,7 @@
  * Capture reads the current POV automatically.
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Camera, Loader2, Check, Plus, Trash2 } from "lucide-react";
+import { X, Camera, Loader2, Check, Plus } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -168,13 +168,13 @@ export function StreetViewPanel({
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
 
-  // Draggable marker offsets (relative to projected position)
-  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { dxPct: number; dyPct: number }>>({});
-  const dragRef = useRef<{ key: string; startX: number; startY: number; origDxPct: number; origDyPct: number } | null>(null);
+  // Screen-fixed marker positions
+  const [markerPositions, setMarkerPositions] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
 
   useEffect(() => {
     setCameraPosition({ lat, lng });
-    setMarkerOffsets({});
+    setMarkerPositions({});
   }, [lat, lng]);
 
   // Initialise the interactive Street View panorama
@@ -212,7 +212,6 @@ export function StreetViewPanel({
         const pos = pano.getPosition();
         if (!pos) return;
         setCameraPosition({ lat: pos.lat(), lng: pos.lng() });
-        setMarkerOffsets({});
       });
 
       panoramaRef.current = pano;
@@ -227,49 +226,74 @@ export function StreetViewPanel({
 
   // Project markers onto the panorama view
   const projected = markers
-    .map((m, i) => {
-      const key = `${m.type}-${i}`;
+    .map((m) => {
+      const key = m.id;
       const bearing = calculateBearing(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
       const distance = haversineM(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
       const pos = projectMarker(heading, pitch, bearing, distance, fov);
-      const offset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+      const fixed = markerPositions[key];
 
       return {
         ...m,
         ...pos,
-        xPct: clamp(pos.xPct + offset.dxPct, 0, 100),
-        yPct: clamp(pos.yPct + offset.dyPct, 0, 100),
+        xPct: clamp(fixed ? fixed.xPct : pos.xPct, 0, 100),
+        yPct: clamp(fixed ? fixed.yPct : pos.yPct, 0, 100),
+        visible: fixed ? true : pos.visible,
         distance,
         key,
       };
     })
     .filter((m) => m.visible && m.distance < 200);
 
+  // Seed fixed positions once per marker, and clean up removed markers
+  useEffect(() => {
+    setMarkerPositions((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      projected.forEach((m) => {
+        if (!next[m.key]) {
+          next[m.key] = { xPct: m.xPct, yPct: m.yPct };
+          changed = true;
+        }
+      });
+
+      Object.keys(next).forEach((key) => {
+        if (!markers.some((marker) => marker.id === key)) {
+          delete next[key];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [projected, markers]);
+
   // Drag handlers for marker repositioning
   const handlePointerDown = useCallback((e: React.PointerEvent, key: string) => {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    const currentOffset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+    const current = markerPositions[key] ?? { xPct: 50, yPct: 65 };
     dragRef.current = {
       key,
       startX: e.clientX,
       startY: e.clientY,
-      origDxPct: currentOffset.dxPct,
-      origDyPct: currentOffset.dyPct,
+      origXPct: current.xPct,
+      origYPct: current.yPct,
     };
-  }, [markerOffsets]);
+  }, [markerPositions]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
     const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
     const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    setMarkerOffsets((prev) => ({
+    setMarkerPositions((prev) => ({
       ...prev,
       [dragRef.current!.key]: {
-        dxPct: dragRef.current!.origDxPct + dx,
-        dyPct: dragRef.current!.origDyPct + dy,
+        xPct: clamp(dragRef.current!.origXPct + dx, 0, 100),
+        yPct: clamp(dragRef.current!.origYPct + dy, 0, 100),
       },
     }));
   }, []);
