@@ -403,6 +403,86 @@ export default function StudyDetail() {
         </Card>
       </div>
 
+      {/* Design Analysis Results */}
+      {designAnalysis && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="h-4 w-4" />Electrical Analysis
+              <Badge variant="outline" className={designAnalysis.summary?.overall_pass ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}>
+                {designAnalysis.summary?.overall_pass ? "PASS" : "FAIL"}
+              </Badge>
+              <span className="text-[10px] text-muted-foreground ml-auto">{designAnalysis.engine_version}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
+                <span className="text-muted-foreground block">VD Total</span>
+                <span className="font-semibold">{designAnalysis.summary?.total_vd_pct}%</span>
+              </div>
+              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
+                <span className="text-muted-foreground block">Max Util</span>
+                <span className="font-semibold">{designAnalysis.summary?.max_utilisation_pct}%</span>
+              </div>
+              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
+                <span className="text-muted-foreground block">Length</span>
+                <span className="font-semibold">{designAnalysis.summary?.total_length_m?.toLocaleString()}m</span>
+              </div>
+              <div className="rounded border bg-muted/20 px-2 py-1.5 text-center">
+                <span className="text-muted-foreground block">PFC Min</span>
+                <span className="font-semibold">{designAnalysis.summary?.min_pfc_a?.toLocaleString()}A</span>
+              </div>
+            </div>
+            <div className="flex gap-3 text-xs">
+              {designAnalysis.summary?.error_count > 0 && (
+                <span className="flex items-center gap-1 text-red-600">
+                  <XCircle className="h-3 w-3" />{designAnalysis.summary.error_count} error{designAnalysis.summary.error_count !== 1 ? "s" : ""}
+                </span>
+              )}
+              {designAnalysis.summary?.warning_count > 0 && (
+                <span className="flex items-center gap-1 text-amber-600">
+                  <AlertTriangle className="h-3 w-3" />{designAnalysis.summary.warning_count} warning{designAnalysis.summary.warning_count !== 1 ? "s" : ""}
+                </span>
+              )}
+              {designAnalysis.summary?.suggestion_count > 0 && (
+                <span className="flex items-center gap-1 text-blue-600">
+                  <Lightbulb className="h-3 w-3" />{designAnalysis.summary.suggestion_count} suggestion{designAnalysis.summary.suggestion_count !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+            {designAnalysis.cables?.length > 0 && (
+              <>
+                <Separator />
+                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Cable Results</p>
+                {designAnalysis.cables.map((cable: any) => (
+                  <div key={cable.cable_id} className="flex items-center gap-2 text-xs py-0.5">
+                    {cable.status === "pass" ? <CheckCircle className="h-3 w-3 text-green-600" /> :
+                     cable.status === "warning" ? <AlertTriangle className="h-3 w-3 text-amber-500" /> :
+                     <XCircle className="h-3 w-3 text-red-500" />}
+                    <span className="flex-1 truncate">{cable.cable_label}</span>
+                    <span className="text-muted-foreground">{cable.length_m}m</span>
+                    <Badge variant="outline" className="text-[9px]">VD {cable.vd_pct}%</Badge>
+                    <Badge variant="outline" className="text-[9px]">{cable.utilisation_pct}% util</Badge>
+                  </div>
+                ))}
+              </>
+            )}
+            {designAnalysis.cables?.some((c: any) => c.suggestions?.length > 0) && (
+              <>
+                <Separator />
+                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Recommendations</p>
+                {designAnalysis.cables.flatMap((c: any) => (c.suggestions || []).map((s: string, i: number) => (
+                  <div key={`${c.cable_id}-${i}`} className="flex items-start gap-1.5 text-xs text-blue-600">
+                    <Lightbulb className="h-3 w-3 mt-0.5 shrink-0" />{s}
+                  </div>
+                )))}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Activity Feed */}
       <Card>
         <CardContent className="pt-6">
