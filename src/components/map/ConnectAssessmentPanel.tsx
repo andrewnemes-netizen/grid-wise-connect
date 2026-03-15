@@ -134,6 +134,10 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [comparisonResult, setComparisonResult] = useState<VoltageComparisonResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
 
+  // Design conversion state
+  const [converting, setConverting] = useState(false);
+  const [converted, setConverted] = useState(false);
+
   // Save & compare state
   const [savedAssessments, setSavedAssessments] = useState<SavedAssessment[]>([]);
   const [comparisonIds, setComparisonIds] = useState<string[] | null>(null);
