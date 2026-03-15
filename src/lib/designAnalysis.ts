@@ -25,6 +25,28 @@ export interface CableSpec {
   voltage_class: string;
 }
 
+/** DNO G81 rule overrides loaded from dno_rulesets / ev_hub_rulesets */
+export interface DnoRuleOverrides {
+  /** Max voltage drop %, e.g. 5 for LV, 6 for HV */
+  vd_limit_pct?: number;
+  /** Earth fault loop impedance at origin (Ω) */
+  ze_ohms?: number;
+  /** Max Zs limit (Ω) */
+  zs_limit_ohms?: number;
+  /** Max LV service cable length (m) */
+  max_service_length_m?: number;
+  /** Joint spacing per voltage level (m) */
+  joint_spacing_m?: number;
+  /** Cover depths per surface type (mm) */
+  cover_depths_mm?: Record<string, number>;
+  /** Service length cap (m) */
+  service_length_cap_m?: number;
+  /** DNO code for audit trail */
+  dno_code?: string;
+  /** Ruleset version for audit trail */
+  ruleset_version?: string;
+}
+
 export interface DesignAnalysisInput {
   cables: DesignCable[];
   elements: DesignElement[];
@@ -36,6 +58,8 @@ export interface DesignAnalysisInput {
   ze_ohms?: number;
   zs_limit_ohms?: number;
   cable_specs: Record<string, CableSpec>;
+  /** DNO-specific G81 rule overrides — takes priority over defaults */
+  dno_rules?: DnoRuleOverrides;
 }
 
 export interface CableAnalysisResult {
@@ -96,6 +120,8 @@ export interface DesignAnalysisResult {
     error_count: number;
     warning_count: number;
     suggestion_count: number;
+    dno_code?: string;
+    ruleset_version?: string;
   };
   engine_version: string;
   analysed_at: string;
@@ -129,12 +155,17 @@ const UPGRADE_PATHS: Record<string, string[]> = {
 // ── Engine ─────────────────────────────────────────────────────────────
 
 export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisResult {
+  const dno = input.dno_rules;
   const supplyV = input.supply_voltage_v ?? DEFAULT_SUPPLY_V;
   const pf = input.power_factor ?? DEFAULT_PF;
   const diversity = input.diversity_factor ?? DEFAULT_DIVERSITY;
-  const vdLimit = input.vd_limit_pct ?? DEFAULT_VD_LIMIT_PCT;
-  const ze = input.ze_ohms ?? DEFAULT_ZE_OHMS;
-  const zsLimit = input.zs_limit_ohms ?? null;
+  // DNO G81 rules take priority over explicit input, which takes priority over defaults
+  const vdLimit = dno?.vd_limit_pct ?? input.vd_limit_pct ?? DEFAULT_VD_LIMIT_PCT;
+  const ze = dno?.ze_ohms ?? input.ze_ohms ?? DEFAULT_ZE_OHMS;
+  const zsLimit = dno?.zs_limit_ohms ?? input.zs_limit_ohms ?? null;
+  const maxServiceLen = dno?.max_service_length_m ?? 25;
+  const jointSpacing = dno?.joint_spacing_m ?? 200;
+  const serviceLengthCap = dno?.service_length_cap_m ?? 30;
 
   // Design current (diversified)
   const rawIb = (input.proposed_kw * 1000) / (Math.sqrt(3) * supplyV * pf);
@@ -183,14 +214,18 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       suggestions.push(`Consider derating or upgrading for future load growth`);
     }
 
-    // Cable length check
-    if (cable.cable_type === "lv_service" && cable.length_m > 25) {
-      flags.push({ code: "SERVICE_LENGTH", severity: "warning", message: `LV service cable ${cable.length_m.toFixed(0)}m exceeds typical 25m maximum` });
+    // Cable length check — uses DNO G81 service length cap and joint spacing
+    if (cable.cable_type === "lv_service" && cable.length_m > maxServiceLen) {
+      flags.push({ code: "SERVICE_LENGTH", severity: "warning", message: `LV service cable ${cable.length_m.toFixed(0)}m exceeds ${dno?.dno_code || "default"} maximum of ${maxServiceLen}m` });
       suggestions.push(`Consider adding a feeder pillar to reduce service length`);
     }
-    if (cable.cable_type === "lv_main" && cable.length_m > 200) {
-      flags.push({ code: "JOINT_REQUIRED", severity: "info", message: `LV main ${cable.length_m.toFixed(0)}m — joint recommended every 200m` });
-      const jointsNeeded = Math.floor(cable.length_m / 200);
+    if (cable.cable_type === "lv_service" && cable.length_m > serviceLengthCap) {
+      flags.push({ code: "SERVICE_CAP_EXCEEDED", severity: "error", message: `LV service ${cable.length_m.toFixed(0)}m exceeds ${dno?.dno_code || "DNO"} hard cap of ${serviceLengthCap}m — hybrid approach required` });
+      suggestions.push(`Route exceeds service length cap. Hybrid mains + service approach required.`);
+    }
+    if (cable.cable_type === "lv_main" && cable.length_m > jointSpacing) {
+      flags.push({ code: "JOINT_REQUIRED", severity: "info", message: `LV main ${cable.length_m.toFixed(0)}m — joint recommended every ${jointSpacing}m (${dno?.dno_code || "default"} rules)` });
+      const jointsNeeded = Math.floor(cable.length_m / jointSpacing);
       suggestions.push(`Add ${jointsNeeded} joint(s) along this cable run`);
     }
 
@@ -293,6 +328,8 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       error_count: errorCount,
       warning_count: warningCount,
       suggestion_count: allSuggestions.length,
+      dno_code: dno?.dno_code,
+      ruleset_version: dno?.ruleset_version,
     },
     engine_version: ENGINE_VERSION,
     analysed_at: new Date().toISOString(),
