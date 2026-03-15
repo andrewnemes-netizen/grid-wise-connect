@@ -147,6 +147,8 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
   const [project, setProject] = useState<GridwiseProject | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [converted, setConverted] = useState(false);
 
   // Collapsible sections
   const [assetsOpen, setAssetsOpen] = useState(false);
