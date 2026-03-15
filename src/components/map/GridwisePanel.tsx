@@ -192,11 +192,17 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         } catch {}
       }
 
+      // Convert design cables to engine candidates
+      const cableCandidates = designCables && designCables.length > 0
+        ? designCablesToCandidates(designCables, lat, lng)
+        : undefined;
+
       const result = await runGridwiseProject(input, {
         unitRates: unitRates ?? undefined,
         onProgress: setProgress,
         visuals: { map_screenshot: mapScreenshot },
         dnoLookupResult: resolvedDnoLookup,
+        cableCandidates,
       });
 
       setProject(result);
