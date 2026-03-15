@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { Map as MaplibreMap } from "maplibre-gl";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface OsOpenDataset {
   id: string;
@@ -12,6 +13,7 @@ export interface OsOpenDataset {
   type: "polygon" | "line" | "point";
 }
 
+// Only includes layers available on the OS Features API free/open tier
 export const OS_OPEN_DATASETS: OsOpenDataset[] = [
   {
     id: "os-greenspace",
@@ -48,33 +50,6 @@ export const OS_OPEN_DATASETS: OsOpenDataset[] = [
     fillOpacity: 0.35,
     category: "water",
     type: "polygon",
-  },
-  {
-    id: "os-waterside",
-    typeName: "Zoomstack_Waterside",
-    label: "Waterside",
-    color: "#226E9C",
-    fillOpacity: 0.5,
-    category: "water",
-    type: "line",
-  },
-  {
-    id: "os-roads-local",
-    typeName: "Zoomstack_Roads_Local",
-    label: "Roads (Local)",
-    color: "#A0B1BA",
-    fillOpacity: 0.6,
-    category: "transport",
-    type: "line",
-  },
-  {
-    id: "os-roads-national",
-    typeName: "Zoomstack_Roads_National",
-    label: "Roads (National)",
-    color: "#F28522",
-    fillOpacity: 0.7,
-    category: "transport",
-    type: "line",
   },
   {
     id: "os-railway-stations",
@@ -139,7 +114,15 @@ export function useOsOpenLayers() {
           },
         });
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 500 && typeof body?.error === "string" && body.error.includes("403")) {
+            toast.error(`${ds.label} requires an OS Premium plan`);
+          } else {
+            toast.error(`Failed to load ${ds.label}`);
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const geojson = await res.json();
 
         // Remove stale layers if they exist
