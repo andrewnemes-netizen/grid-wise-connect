@@ -120,6 +120,8 @@ export interface DesignAnalysisResult {
     error_count: number;
     warning_count: number;
     suggestion_count: number;
+    dno_code?: string;
+    ruleset_version?: string;
   };
   engine_version: string;
   analysed_at: string;
