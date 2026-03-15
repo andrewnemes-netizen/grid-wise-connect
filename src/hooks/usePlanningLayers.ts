@@ -30,7 +30,7 @@ export const PLANNING_DATASETS: PlanningDataset[] = [
     color: "#745729",
     fillOpacity: 0.5,
     category: "development",
-    type: "point",
+    type: "polygon",
   },
   {
     id: "planning-brownfield-site",
