@@ -516,7 +516,8 @@ const MapView = () => {
             />
           )}
 
-          {/* Standalone Street View button — bottom-left */}
+          {/* Street View panel hidden - re-enable later with better positioning */}
+          {/*
           <div className="absolute bottom-20 left-3 z-10">
             <Button
               size="sm"
@@ -533,6 +534,7 @@ const MapView = () => {
               </span>
             </Button>
           </div>
+          */}
         </>
       )}
     </div>
