@@ -191,7 +191,7 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables, autoD
     } finally {
       setLoading(false);
     }
-  }, [lat, lng, chargerCount, chargerKw, diversityFactor, extraneous, dnoOverride, connectData, toast]);
+  }, [lat, lng, chargerCount, chargerKw, diversityFactor, extraneous, dnoOverride, connectData, designCables, autoDetectData, toast]);
 
   const stateConfig = result ? STATE_CONFIG[result.feasibility_state] : null;
 
