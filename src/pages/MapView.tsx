@@ -75,6 +75,7 @@ const MapView = () => {
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
   const [heatmapMode, setHeatmapMode] = useState(false);
+  const [autoDetectResult, setAutoDetectResult] = useState<RouteAutoDetectResult | null>(null);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [gridwiseLocation, setGridwiseLocation] = useState<{ lng: number; lat: number } | null>(null);
