@@ -131,23 +131,23 @@ function buildRouteSegments(
     surfaceSplit = { footway_pct: 0.6, carriageway_pct: 0.3, verge_pct: 0.1 };
   }
 
-  const segments: RawRouteSegment[] = [
+  const segments: RawRouteSegment[] = ([
     {
-      coordinates: [],
-      surface_type: "FOOTWAY",
+      coordinates: [] as [number, number][],
+      surface_type: "FOOTWAY" as const,
       length_m: Math.round(totalDistance * surfaceSplit.footway_pct),
     },
     {
-      coordinates: [],
-      surface_type: "CARRIAGEWAY",
+      coordinates: [] as [number, number][],
+      surface_type: "CARRIAGEWAY" as const,
       length_m: Math.round(totalDistance * surfaceSplit.carriageway_pct),
     },
     {
-      coordinates: [],
-      surface_type: "VERGE",
+      coordinates: [] as [number, number][],
+      surface_type: "VERGE" as const,
       length_m: Math.round(totalDistance * surfaceSplit.verge_pct),
     },
-  ].filter(s => s.length_m > 0);
+  ] satisfies RawRouteSegment[]).filter(s => s.length_m > 0);
 
   return {
     segments,
