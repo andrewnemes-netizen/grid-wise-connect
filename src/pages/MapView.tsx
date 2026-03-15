@@ -543,7 +543,7 @@ const MapView = () => {
               onCaptures={setStreetViewCaptures}
               onDeleteMarker={(id) => design.removeElement(id)}
               onAddMarker={(type, markerLat, markerLng) => {
-                design.selectPlacingType(type as any);
+                design.setPlacingType(type as any);
                 // Directly place at the camera position
                 setTimeout(() => {
                   design.placeElement(markerLng, markerLat);
