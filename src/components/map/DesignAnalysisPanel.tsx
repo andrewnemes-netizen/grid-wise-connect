@@ -51,7 +51,6 @@ export function DesignAnalysisPanel({
   const [upstreamMode, setUpstreamMode] = useState<"auto" | "manual">("auto");
   const [upstreamVdPct, setUpstreamVdPct] = useState<string>("");
   const [upstreamZsOhms, setUpstreamZsOhms] = useState<string>("");
-  const [supplyCapacity, setSupplyCapacity] = useState<string>("100");
 
   const toggleCable = (id: string) => {
     setExpandedCables(prev => {
@@ -113,12 +112,8 @@ export function DesignAnalysisPanel({
           dno_code: ruleset.dno_code,
           ruleset_version: ruleset.version,
           vd_limit_pct: rj.vd_limit_pct,
-          vd_limits: rj.vd_limits,
           ze_ohms: rj.ze_ohms,
-          zs_thresholds: rj.zs_thresholds,
           zs_limit_ohms: rj.zs_limit_ohms,
-          pfc_ranges: rj.pfc_ranges,
-          earthing_system: rj.earthing_system,
           max_service_length_m: rj.max_service_length_m,
           joint_spacing_m: rj.joint_spacing_m?.LV ?? rj.joint_spacing_m,
           service_length_cap_m: rj.service_length_cap_m,
@@ -126,7 +121,7 @@ export function DesignAnalysisPanel({
         };
         toast.info(`Loaded ${ruleset.dno_code} G81 ruleset (${ruleset.version})`);
       } else if (dnoCode) {
-        toast.warning(`No G81 ruleset found for ${dnoCode} — using G81 defaults`);
+        toast.warning(`No G81 ruleset found for ${dnoCode} — using generic defaults`);
       }
 
       const cableSpecs: Record<string, CableSpec> = {};
@@ -161,7 +156,6 @@ export function DesignAnalysisPanel({
         cables,
         elements,
         proposed_kw: proposedKw,
-        supply_capacity_a: parseInt(supplyCapacity) || 60,
         cable_specs: cableSpecs,
         dno_rules: dnoRules,
         upstream,
@@ -252,31 +246,6 @@ export function DesignAnalysisPanel({
                 <PlugZap className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold">Point of Connection</span>
               </div>
-
-              {/* Supply capacity */}
-              <div>
-                <label className="text-[10px] text-muted-foreground block mb-0.5">Supply Capacity — 3-Phase (determines Zs limit)</label>
-                <div className="flex gap-1">
-                  {["60", "80", "100"].map(cap => (
-                    <Button
-                      key={cap}
-                      variant={supplyCapacity === cap ? "default" : "outline"}
-                      size="sm"
-                      className="h-6 text-[10px] flex-1"
-                      onClick={() => setSupplyCapacity(cap)}
-                    >
-                      {cap}A
-                    </Button>
-                  ))}
-                </div>
-                <p className="text-[9px] text-muted-foreground mt-0.5">
-                  Zs limit: {supplyCapacity === "100" ? "0.10" : supplyCapacity === "80" ? "0.20" : "0.35"}Ω (TT/PME)
-                </p>
-              </div>
-
-              <Separator />
-
-              {/* Auto/Manual POC */}
               <div className="flex gap-1">
                 <Button
                   variant={upstreamMode === "auto" ? "default" : "outline"}
@@ -324,13 +293,13 @@ export function DesignAnalysisPanel({
                     />
                   </div>
                   <p className="col-span-2 text-[9px] text-muted-foreground">
-                    Enter values from DNO connection offer at the joint/POC.
+                    Enter values from DNO connection offer or existing network data at the joint/POC.
                   </p>
                 </div>
               )}
               {upstreamMode === "auto" && (
                 <p className="text-[9px] text-muted-foreground">
-                  Starts from Ze (PME 0.35Ω default). Use Manual to enter known DNO values.
+                  Analysis starts from Ze ({(0.35).toFixed(2)}Ω default). Use Manual mode to enter known DNO values at the joint.
                 </p>
               )}
             </div>
@@ -347,47 +316,22 @@ export function DesignAnalysisPanel({
           ) : (
             <>
               {/* Summary */}
-               <div className="rounded-lg border p-3 space-y-2">
+              <div className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold">Overall Result</span>
                   <Badge variant="outline" className={result.summary.overall_pass ? statusBadgeClass.pass : statusBadgeClass.fail}>
                     {result.summary.overall_pass ? "PASS" : "FAIL"}
                   </Badge>
                 </div>
-
-                {/* Segmented VD breakdown — G81 */}
-                <div className="space-y-1">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase">Voltage Drop (G81)</span>
-                  <div className="grid grid-cols-3 gap-1.5 text-xs">
-                    <div className="rounded bg-muted/30 px-2 py-1">
-                      <span className="text-[10px] text-muted-foreground block">Mains</span>
-                      <div className="flex items-center gap-1">
-                        {result.summary.mains_vd_pass ? statusIcon.pass : statusIcon.fail}
-                        <span className="font-semibold">{result.summary.mains_vd_pct}%</span>
-                        <span className="text-muted-foreground text-[9px]">/ 3%</span>
-                      </div>
-                    </div>
-                    <div className="rounded bg-muted/30 px-2 py-1">
-                      <span className="text-[10px] text-muted-foreground block">Service</span>
-                      <div className="flex items-center gap-1">
-                        {result.summary.service_vd_pass ? statusIcon.pass : statusIcon.fail}
-                        <span className="font-semibold">{result.summary.service_vd_pct}%</span>
-                        <span className="text-muted-foreground text-[9px]">/ 2%</span>
-                      </div>
-                    </div>
-                    <div className="rounded bg-muted/30 px-2 py-1">
-                      <span className="text-[10px] text-muted-foreground block">Total</span>
-                      <div className="flex items-center gap-1">
-                        {result.summary.total_vd_pass ? statusIcon.pass : statusIcon.fail}
-                        <span className="font-semibold">{result.summary.total_vd_pct}%</span>
-                        <span className="text-muted-foreground text-[9px]">/ 5%</span>
-                      </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded bg-muted/30 px-2 py-1.5">
+                    <span className="text-muted-foreground">Voltage Drop</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      {result.summary.total_vd_pass ? statusIcon.pass : statusIcon.fail}
+                      <span className="font-semibold">{result.summary.total_vd_pct}%</span>
+                      <span className="text-muted-foreground">/ 5%</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Key metrics */}
-                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded bg-muted/30 px-2 py-1.5">
                     <span className="text-muted-foreground">Max Utilisation</span>
                     <div className="flex items-center gap-1 mt-0.5">
@@ -396,40 +340,17 @@ export function DesignAnalysisPanel({
                     </div>
                   </div>
                   <div className="rounded bg-muted/30 px-2 py-1.5">
-                    <span className="text-muted-foreground">Zs Limit ({result.summary.supply_capacity_a}A)</span>
-                    <span className="block font-semibold mt-0.5">{result.summary.zs_limit_applied}Ω</span>
-                  </div>
-                  <div className="rounded bg-muted/30 px-2 py-1.5">
-                    <span className="text-muted-foreground">ESQCR Voltage</span>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      {result.summary.esqcr_pass ? statusIcon.pass : statusIcon.fail}
-                      <span className="font-semibold">{result.summary.min_delivered_v}V</span>
-                      <span className="text-muted-foreground text-[9px]">≥216V</span>
-                    </div>
+                    <span className="text-muted-foreground">Total Length</span>
+                    <span className="block font-semibold mt-0.5">{result.summary.total_length_m.toLocaleString()}m</span>
                   </div>
                   <div className="rounded bg-muted/30 px-2 py-1.5">
                     <span className="text-muted-foreground">PFC Range</span>
                     <span className="block font-semibold mt-0.5">
-                      {result.summary.min_pfc_a > 0
-                        ? `${(result.summary.min_pfc_a/1000).toFixed(1)}–${(result.summary.max_pfc_a/1000).toFixed(1)} kA`
-                        : "—"}
+                      {result.summary.min_pfc_a > 0 ? `${result.summary.min_pfc_a.toLocaleString()}A` : "—"}
                     </span>
                   </div>
                 </div>
-
-                {/* Limiting factor */}
-                {result.summary.limiting_factor !== "none" && (
-                  <div className="rounded border border-dashed px-2 py-1 text-[10px] flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3 text-amber-500" />
-                    <span>Limiting factor: <strong className="capitalize">{
-                      result.summary.limiting_factor === "vd" ? "Voltage Drop"
-                      : result.summary.limiting_factor === "zs" ? "Earth Loop Impedance (Zs)"
-                      : "Thermal Rating"
-                    }</strong></span>
-                  </div>
-                )}
-
-                {/* Upstream POC info */}
+                {/* Upstream POC info if manual values were used */}
                 {result.summary.upstream_source === "manual" && (
                   <div className="rounded bg-muted/20 border border-dashed px-2 py-1.5 text-[10px] space-y-0.5">
                     <span className="font-medium flex items-center gap-1"><PlugZap className="h-3 w-3" />POC Conditions (manual)</span>
@@ -440,17 +361,10 @@ export function DesignAnalysisPanel({
                   </div>
                 )}
 
-                {/* Earthing & audit */}
-                <div className="text-[9px] text-muted-foreground flex gap-3">
-                  <span>Earthing: {result.summary.earthing_system}</span>
-                  <span>Length: {result.summary.total_length_m}m</span>
-                  {result.summary.dno_code && <span>{result.summary.dno_code} {result.summary.ruleset_version}</span>}
-                </div>
-
                 {/* Issue counts */}
                 <div className="flex gap-3 text-xs">
                   {result.summary.error_count > 0 && (
-                    <span className="flex items-center gap-1 text-destructive">
+                    <span className="flex items-center gap-1 text-red-600">
                       <XCircle className="h-3 w-3" />{result.summary.error_count} error{result.summary.error_count !== 1 ? "s" : ""}
                     </span>
                   )}
@@ -563,22 +477,14 @@ export function DesignAnalysisPanel({
                             <div className="px-2 pb-2 space-y-1 border-t bg-muted/10 pt-1.5">
                               <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
                                 <span className="text-muted-foreground">Zs</span>
-                                <span className={node.zs_pass === false ? "text-destructive font-medium" : ""}>{node.zs_ohms}Ω <span className="text-muted-foreground text-[9px]">(limit {node.zs_limit_ohms}Ω)</span></span>
+                                <span>{node.zs_ohms}Ω</span>
                                 <span className="text-muted-foreground">PFC</span>
-                                <span className={node.pfc_in_range ? "" : "text-amber-600 font-medium"}>
-                                  {(node.pfc_amps/1000).toFixed(1)}kA
-                                  <span className="text-muted-foreground text-[9px]"> ({(node.pfc_expected_min/1000).toFixed(0)}–{(node.pfc_expected_max/1000).toFixed(0)}kA)</span>
-                                </span>
-                                <span className="text-muted-foreground">Delivered Voltage</span>
-                                <span className={node.esqcr_pass ? "" : "text-destructive font-medium"}>
-                                  {node.delivered_voltage_v}V
-                                  <span className="text-muted-foreground text-[9px]"> (ESQCR 216–253V)</span>
-                                </span>
+                                <span>{node.pfc_amps.toLocaleString()}A</span>
                                 <span className="text-muted-foreground">Earthing</span>
                                 <span>{node.earthing_ok ? "✓ OK" : "⚠ Review"}</span>
                               </div>
                               {node.flags.map((f, i) => (
-                                <div key={i} className={`flex items-start gap-1 text-[10px] ${f.severity === "error" ? "text-destructive" : f.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>
+                                <div key={i} className={`flex items-start gap-1 text-[10px] ${f.severity === "error" ? "text-red-600" : f.severity === "warning" ? "text-amber-600" : "text-muted-foreground"}`}>
                                   {f.severity === "error" ? <XCircle className="h-3 w-3 mt-0.5 shrink-0" /> : <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />}
                                   {f.message}
                                 </div>
