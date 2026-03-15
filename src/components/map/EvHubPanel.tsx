@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
 import { supabase } from "@/integrations/supabase/client";
+import type { DesignCable } from "@/hooks/useDesignMode";
+import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
 
 export interface ConnectData {
   routeCoords: [number, number][];
@@ -33,6 +35,8 @@ interface Props {
   lat: number;
   onClose: () => void;
   connectData?: ConnectData | null;
+  /** Design Mode cables to feed into engine */
+  designCables?: DesignCable[];
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
@@ -52,7 +56,7 @@ const DNO_OPTIONS: { value: DnoKey; label: string }[] = [
   { value: "SSEN", label: "SSEN" },
 ];
 
-export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
+export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Props) {
   const { toast } = useToast();
 
   // Inputs
@@ -95,6 +99,9 @@ export function EvHubPanel({ lng, lat, onClose, connectData }: Props) {
 
       const context: EngineContext = {
         dnoLookupResult,
+        cableCandidates: designCables && designCables.length > 0
+          ? designCablesToCandidates(designCables, lat, lng)
+          : undefined,
       };
 
       // ── Integrate Connect tool data if available ──

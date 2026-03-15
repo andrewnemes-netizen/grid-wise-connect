@@ -500,6 +500,7 @@ const MapView = () => {
                 sourceProperties: connect.connectEndpoints.source.properties,
                 sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
               } : null}
+              designCables={design.cables}
             />
           )}
 
@@ -513,6 +514,7 @@ const MapView = () => {
                 coordinates: connect.connectEndpoints.routeCoords,
               } : undefined}
               boundaryGeojson={boundary.polygon ?? undefined}
+              designCables={design.cables}
             />
           )}
 

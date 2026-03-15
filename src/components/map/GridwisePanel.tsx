@@ -29,6 +29,8 @@ import { runGridwiseProject } from "@/lib/gridwise";
 import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
 import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from "@/lib/gridwise/types";
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
+import type { DesignCable } from "@/hooks/useDesignMode";
+import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
 
 interface Props {
   lng: number;
@@ -40,6 +42,8 @@ interface Props {
   boundaryGeojson?: GeoJSON.Polygon;
   /** Map screenshot callback */
   onCaptureScreenshot?: () => Promise<string | null>;
+  /** Design Mode cables to feed into engine */
+  designCables?: DesignCable[];
 }
 
 const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
@@ -91,7 +95,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot }: Props) {
+export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, designCables }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
@@ -188,11 +192,17 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         } catch {}
       }
 
+      // Convert design cables to engine candidates
+      const cableCandidates = designCables && designCables.length > 0
+        ? designCablesToCandidates(designCables, lat, lng)
+        : undefined;
+
       const result = await runGridwiseProject(input, {
         unitRates: unitRates ?? undefined,
         onProgress: setProgress,
         visuals: { map_screenshot: mapScreenshot },
         dnoLookupResult: resolvedDnoLookup,
+        cableCandidates,
       });
 
       setProject(result);
@@ -281,6 +291,12 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
               )}
               {boundaryGeojson && (
                 <Badge variant="secondary" className="text-[9px]">Boundary set ✓</Badge>
+              )}
+              {designCables && designCables.length > 0 && (
+                <Badge variant="secondary" className="text-[9px]">
+                  <Cable className="h-2.5 w-2.5 mr-0.5" />
+                  {designCables.length} design cable{designCables.length !== 1 ? "s" : ""} ✓
+                </Badge>
               )}
             </div>
           </div>
