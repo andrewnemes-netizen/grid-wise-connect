@@ -449,7 +449,7 @@ export function StreetViewPanel({
                   {m.label}
                 </span>
               </div>
-            ))
+            ))}
 
             {/* Marker count hint */}
             <div className="absolute bottom-2 left-2 pointer-events-none">
