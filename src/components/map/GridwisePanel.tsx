@@ -31,6 +31,7 @@ import type { GridwiseProject, PipelineProgress, SiteInput, PackAudience } from 
 import type { FeasibilityState, DnoKey } from "@/lib/evHub/types";
 import type { DesignCable } from "@/hooks/useDesignMode";
 import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
+import { convertConnectToDesign } from "@/lib/connectToDesign";
 
 interface Props {
   lng: number;
