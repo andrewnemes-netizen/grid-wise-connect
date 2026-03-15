@@ -103,8 +103,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     vertexMarkersRef.current.forEach((m) => m.remove());
     vertexMarkersRef.current = [];
     if (map) {
-      if (map.getLayer("design-cable-drawing")) map.removeLayer("design-cable-drawing");
-      if (map.getSource("design-cable-drawing")) map.removeSource("design-cable-drawing");
+      removeLayerAndSource(map, "design-cable-drawing");
     }
   }, [map]);
 
