@@ -184,8 +184,9 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
   const rawIb = (input.proposed_kw * 1000) / (Math.sqrt(3) * supplyV * pf);
   const Ib = rawIb * diversity;
 
-  let cumulativeZ = ze;
-  let cumulativeVdPct = 0;
+  // Start from upstream POC conditions if provided, otherwise from Ze
+  let cumulativeZ = input.upstream ? input.upstream.existing_zs_ohms : ze;
+  let cumulativeVdPct = input.upstream ? input.upstream.existing_vd_pct : 0;
 
   // Analyse each cable
   const cableResults: CableAnalysisResult[] = input.cables.map((cable) => {
