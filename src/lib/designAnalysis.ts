@@ -25,6 +25,28 @@ export interface CableSpec {
   voltage_class: string;
 }
 
+/** DNO G81 rule overrides loaded from dno_rulesets / ev_hub_rulesets */
+export interface DnoRuleOverrides {
+  /** Max voltage drop %, e.g. 5 for LV, 6 for HV */
+  vd_limit_pct?: number;
+  /** Earth fault loop impedance at origin (Ω) */
+  ze_ohms?: number;
+  /** Max Zs limit (Ω) */
+  zs_limit_ohms?: number;
+  /** Max LV service cable length (m) */
+  max_service_length_m?: number;
+  /** Joint spacing per voltage level (m) */
+  joint_spacing_m?: number;
+  /** Cover depths per surface type (mm) */
+  cover_depths_mm?: Record<string, number>;
+  /** Service length cap (m) */
+  service_length_cap_m?: number;
+  /** DNO code for audit trail */
+  dno_code?: string;
+  /** Ruleset version for audit trail */
+  ruleset_version?: string;
+}
+
 export interface DesignAnalysisInput {
   cables: DesignCable[];
   elements: DesignElement[];
@@ -36,6 +58,8 @@ export interface DesignAnalysisInput {
   ze_ohms?: number;
   zs_limit_ohms?: number;
   cable_specs: Record<string, CableSpec>;
+  /** DNO-specific G81 rule overrides — takes priority over defaults */
+  dno_rules?: DnoRuleOverrides;
 }
 
 export interface CableAnalysisResult {
