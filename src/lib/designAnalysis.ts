@@ -237,6 +237,7 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       cable_id: cable.id,
       cable_label: cable.label || `${cable.cable_type} cable`,
       cable_type: cable.cable_type as CableType,
+      cable_size: spec.cable_type,
       length_m: round1(cable.length_m),
       vd_volts: round2(vdV),
       vd_pct: round2(vdPct),
