@@ -327,10 +327,9 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
 
   // Capacity-based Zs thresholds
   const zsThresholds: G81ZsThresholds = {
+    zs_60a: dno?.zs_thresholds?.zs_60a ?? DEFAULT_ZS_THRESHOLDS.zs_60a,
+    zs_80a: dno?.zs_thresholds?.zs_80a ?? DEFAULT_ZS_THRESHOLDS.zs_80a,
     zs_100a: dno?.zs_thresholds?.zs_100a ?? DEFAULT_ZS_THRESHOLDS.zs_100a,
-    zs_200a: dno?.zs_thresholds?.zs_200a ?? DEFAULT_ZS_THRESHOLDS.zs_200a,
-    zs_300a: dno?.zs_thresholds?.zs_300a ?? DEFAULT_ZS_THRESHOLDS.zs_300a,
-    zs_400a: dno?.zs_thresholds?.zs_400a ?? DEFAULT_ZS_THRESHOLDS.zs_400a,
   };
   const zsLimit = selectZsLimit(supplyCapacity, zsThresholds);
 
