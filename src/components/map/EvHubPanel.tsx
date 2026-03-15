@@ -134,7 +134,6 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Pro
             capacity_headroom_pct: null,
             age_years: null,
             accessibility_score: null,
-            coordinates: c.coordinates,
           }));
       }
 
