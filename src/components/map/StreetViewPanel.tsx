@@ -160,6 +160,8 @@ export function StreetViewPanel({
         const pov = pano.getPov();
         setHeading(pov.heading);
         setPitch(pov.pitch);
+        // Reset drag overrides when user pans — projections shift
+        setMarkerOverrides({});
       });
 
       pano.addListener("zoom_changed", () => {
@@ -216,8 +218,8 @@ export function StreetViewPanel({
 
   const handleCapture = useCallback(async () => {
     const angleNum = captures.length + 1;
-    if (angleNum > 2) {
-      toast({ title: "Maximum 2 captures" });
+    if (angleNum > 6) {
+      toast({ title: "Maximum 6 captures" });
       return;
     }
 
@@ -306,7 +308,7 @@ export function StreetViewPanel({
           <span className="text-sm font-semibold">Street View</span>
           {captures.length > 0 && (
             <Badge variant="secondary" className="text-[10px]">
-              {captures.length}/2 captured
+              {captures.length}/6 captured
             </Badge>
           )}
           {ready && markers.length > 0 && (
@@ -392,7 +394,7 @@ export function StreetViewPanel({
         <Button
           size="sm"
           className="h-7 text-xs"
-          disabled={capturing || captures.length >= 2 || !ready}
+          disabled={capturing || captures.length >= 6 || !ready}
           onClick={handleCapture}
         >
           {capturing ? (
