@@ -39,6 +39,7 @@ export function DesignAnalysisPanel({
   proposedKw,
   cables,
   elements,
+  dnoCode,
   onClose,
   onHighlightCable,
 }: DesignAnalysisPanelProps) {
