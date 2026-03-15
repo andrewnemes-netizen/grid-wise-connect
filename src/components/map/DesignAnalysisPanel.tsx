@@ -252,6 +252,31 @@ export function DesignAnalysisPanel({
                 <PlugZap className="h-3.5 w-3.5 text-primary" />
                 <span className="text-xs font-semibold">Point of Connection</span>
               </div>
+
+              {/* Supply capacity */}
+              <div>
+                <label className="text-[10px] text-muted-foreground block mb-0.5">Supply Capacity (determines Zs limit)</label>
+                <div className="flex gap-1">
+                  {["100", "200", "300", "400"].map(cap => (
+                    <Button
+                      key={cap}
+                      variant={supplyCapacity === cap ? "default" : "outline"}
+                      size="sm"
+                      className="h-6 text-[10px] flex-1"
+                      onClick={() => setSupplyCapacity(cap)}
+                    >
+                      {cap}A
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-muted-foreground mt-0.5">
+                  Zs limit: {supplyCapacity === "400" ? "0.15" : supplyCapacity === "300" ? "0.20" : "0.35"}Ω
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Auto/Manual POC */}
               <div className="flex gap-1">
                 <Button
                   variant={upstreamMode === "auto" ? "default" : "outline"}
@@ -299,13 +324,13 @@ export function DesignAnalysisPanel({
                     />
                   </div>
                   <p className="col-span-2 text-[9px] text-muted-foreground">
-                    Enter values from DNO connection offer or existing network data at the joint/POC.
+                    Enter values from DNO connection offer at the joint/POC.
                   </p>
                 </div>
               )}
               {upstreamMode === "auto" && (
                 <p className="text-[9px] text-muted-foreground">
-                  Analysis starts from Ze ({(0.35).toFixed(2)}Ω default). Use Manual mode to enter known DNO values at the joint.
+                  Starts from Ze (PME 0.35Ω default). Use Manual to enter known DNO values.
                 </p>
               )}
             </div>
