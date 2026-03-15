@@ -388,8 +388,16 @@ export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: F
   if (!rawFeature) return null;
 
   const feature = flattenFeature(rawFeature);
+  const isPlanningData = !!feature.entity && (!!feature.dataset || !!feature.prefix);
   const isSubstationArea = layerLabel.toLowerCase().includes("heat map") || layerLabel.toLowerCase().includes("substation area");
-  const isSubstation = !isSubstationArea && (layerLabel.toLowerCase().includes("substation") || !!feature.utilisation_pct);
+  const isSubstation = !isSubstationArea && !isPlanningData && (layerLabel.toLowerCase().includes("substation") || !!feature.utilisation_pct);
+
+  const renderContent = () => {
+    if (isPlanningData) return <PlanningInfo feature={feature} layerLabel={layerLabel} />;
+    if (isSubstationArea) return <SubstationAreaInfo feature={feature} />;
+    if (isSubstation) return <SubstationInfo feature={feature} />;
+    return <GenericInfo feature={feature} />;
+  };
 
   return (
     <div className="absolute bottom-4 left-3 z-10 w-[22rem] max-w-[calc(100vw-2rem)]">
@@ -402,7 +410,7 @@ export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: F
         </div>
         <ScrollArea className="max-h-[50vh] overflow-y-auto">
           <div className="px-3 py-2">
-            {isSubstationArea ? <SubstationAreaInfo feature={feature} /> : isSubstation ? <SubstationInfo feature={feature} /> : <GenericInfo feature={feature} />}
+            {renderContent()}
           </div>
         </ScrollArea>
       </div>
