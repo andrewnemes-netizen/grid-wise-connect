@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { runEvHubEngine, type EngineContext } from "@/lib/evHub/engine";
 import type { EvHubEngineOutput, FeasibilityState, DnoKey } from "@/lib/evHub/types";
 import { supabase } from "@/integrations/supabase/client";
+import type { DesignCable } from "@/hooks/useDesignMode";
+import { designCablesToCandidates } from "@/lib/designCablesToCandidates";
 
 export interface ConnectData {
   routeCoords: [number, number][];
@@ -33,6 +35,8 @@ interface Props {
   lat: number;
   onClose: () => void;
   connectData?: ConnectData | null;
+  /** Design Mode cables to feed into engine */
+  designCables?: DesignCable[];
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
