@@ -168,9 +168,9 @@ export function StreetViewPanel({
   const [pitch, setPitch] = useState(0);
   const [fov, setFov] = useState(90);
 
-  // Draggable marker offsets (relative to projected position)
-  const [markerOffsets, setMarkerOffsets] = useState<Record<string, { dxPct: number; dyPct: number }>>({});
-  const dragRef = useRef<{ key: string; startX: number; startY: number; origDxPct: number; origDyPct: number } | null>(null);
+  // Screen-fixed marker positions
+  const [markerPositions, setMarkerPositions] = useState<Record<string, { xPct: number; yPct: number }>>({});
+  const dragRef = useRef<{ key: string; startX: number; startY: number; origXPct: number; origYPct: number } | null>(null);
 
   useEffect(() => {
     setCameraPosition({ lat, lng });
