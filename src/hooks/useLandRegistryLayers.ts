@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import { toast } from "sonner";
 import type { Map as MaplibreMap } from "maplibre-gl";
 
 export interface LandRegistryDataset {
@@ -10,11 +11,10 @@ export interface LandRegistryDataset {
 }
 
 /**
- * HM Land Registry INSPIRE WMS — free service, no API key required.
- * Uses EPSG:900913 (Web Mercator alias supported by the server).
- * The proxy rewrites the endpoint from /inspire/ows to /inspire/wms.
+ * HM Land Registry INSPIRE index polygons via public OSMUK tile service.
+ * Source: https://tiles.osmuk.org/PropertyBoundaries/{z}/{x}/{y}.png
  */
-const WMS_PROXY = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/land-registry-wms-proxy`;
+const LAND_REGISTRY_TILE_URL = "https://tiles.osmuk.org/PropertyBoundaries/{z}/{x}/{y}.png";
 
 export const LAND_REGISTRY_DATASETS: LandRegistryDataset[] = [
   {
@@ -44,18 +44,19 @@ export function useLandRegistryLayers() {
       const ds = LAND_REGISTRY_DATASETS.find((d) => d.id === datasetId);
       if (!ds) return;
 
+      if (visible && map.getZoom() < 18) {
+        toast.info("Zoom in to level 18+ to view cadastral parcels.");
+      }
+
       const sourceId = `lr-wms-${ds.id}`;
       const layerId = `lr-raster-${ds.id}`;
 
       // Add source + layer on first toggle-on
       if (!addedRef.current.has(datasetId)) {
         if (!map.getSource(sourceId)) {
-          // The INSPIRE WMS supports EPSG:900913 which is equivalent to EPSG:3857
           map.addSource(sourceId, {
             type: "raster",
-            tiles: [
-              `${WMS_PROXY}?service=WMS&version=1.1.1&request=GetMap&layers=${encodeURIComponent(ds.wmsLayer)}&styles=&format=image/png&transparent=true&srs=EPSG:900913&width=256&height=256&bbox={bbox-epsg-3857}`,
-            ],
+            tiles: [LAND_REGISTRY_TILE_URL],
             tileSize: 256,
           });
         }
@@ -68,7 +69,8 @@ export function useLandRegistryLayers() {
             "raster-opacity": 0.65,
           },
           layout: { visibility: "visible" },
-          minzoom: 14,
+          minzoom: 18,
+          maxzoom: 20,
         });
 
         addedRef.current.add(datasetId);

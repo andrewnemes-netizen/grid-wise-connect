@@ -64,6 +64,19 @@ function haversineDistance(coords: [number, number][]): number {
   return total;
 }
 
+function removeLayerAndSource(map: maplibregl.Map, id: string) {
+  try {
+    if (map.getLayer(id)) map.removeLayer(id);
+  } catch {
+    // Style might be reloading
+  }
+  try {
+    if (map.getSource(id)) map.removeSource(id);
+  } catch {
+    // Style might be reloading
+  }
+}
+
 export function useDesignMode(map: maplibregl.Map | null, studyId: string | null) {
   const [elements, setElements] = useState<DesignElement[]>([]);
   const [placingType, setPlacingType] = useState<EquipmentType | null>(null);
@@ -90,8 +103,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     vertexMarkersRef.current.forEach((m) => m.remove());
     vertexMarkersRef.current = [];
     if (map) {
-      if (map.getLayer("design-cable-drawing")) map.removeLayer("design-cable-drawing");
-      if (map.getSource("design-cable-drawing")) map.removeSource("design-cable-drawing");
+      removeLayerAndSource(map, "design-cable-drawing");
     }
   }, [map]);
 
@@ -160,46 +172,51 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
   useEffect(() => {
     if (!map) return;
 
-    // Remove old cable layers
-    const existingSources = Object.keys((map.getStyle()?.sources) || {}).filter((s) => s.startsWith("design-cable-"));
-    existingSources.forEach((srcId) => {
-      if (srcId === "design-cable-drawing") return; // Don't remove the drawing layer
-      const layerId = srcId;
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(srcId)) map.removeSource(srcId);
-    });
+    try {
+      const style = map.getStyle();
+      if (!style?.sources) return;
 
-    cables.forEach((cable) => {
-      const srcId = `design-cable-${cable.id}`;
-      const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
-
-      if (map.getSource(srcId)) return;
-
-      map.addSource(srcId, {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          properties: { label: cable.label, length_m: cable.length_m },
-          geometry: { type: "LineString", coordinates: cable.coordinates },
-        },
+      // Remove old cable layers
+      const existingSources = Object.keys(style.sources).filter((s) => s.startsWith("design-cable-"));
+      existingSources.forEach((srcId) => {
+        if (srcId === "design-cable-drawing") return;
+        removeLayerAndSource(map, srcId);
       });
 
-      const paint: Record<string, unknown> = {
-        "line-color": cfg.color,
-        "line-width": 3,
-        "line-opacity": 0.9,
-      };
-      if (cfg.dasharray.length > 0) {
-        paint["line-dasharray"] = cfg.dasharray;
-      }
+      cables.forEach((cable) => {
+        const srcId = `design-cable-${cable.id}`;
+        const cfg = CABLE_CONFIG[cable.cable_type as CableType] || CABLE_CONFIG.lv_main;
 
-          map.addLayer({
-            id: srcId,
-            type: "line",
-            source: srcId,
-            paint: paint as any,
-          });
-    });
+        if (map.getSource(srcId)) return;
+
+        map.addSource(srcId, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: { label: cable.label, length_m: cable.length_m },
+            geometry: { type: "LineString", coordinates: cable.coordinates },
+          },
+        });
+
+        const paint: Record<string, unknown> = {
+          "line-color": cfg.color,
+          "line-width": 3,
+          "line-opacity": 0.9,
+        };
+        if (cfg.dasharray.length > 0) {
+          paint["line-dasharray"] = cfg.dasharray;
+        }
+
+        map.addLayer({
+          id: srcId,
+          type: "line",
+          source: srcId,
+          paint: paint as any,
+        });
+      });
+    } catch (error) {
+      console.warn("Skipped cable sync while map style was unavailable", error);
+    }
   }, [map, cables]);
 
   // Cleanup all markers on unmount
@@ -282,9 +299,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     // Remove cable layers from map
     if (map) {
       cables.forEach((cable) => {
-        const srcId = `design-cable-${cable.id}`;
-        if (map.getLayer(srcId)) map.removeLayer(srcId);
-        if (map.getSource(srcId)) map.removeSource(srcId);
+        removeLayerAndSource(map, `design-cable-${cable.id}`);
       });
     }
     setCables([]);
@@ -309,35 +324,39 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
       const cfg = CABLE_CONFIG[drawingCableType];
       const lineId = "design-cable-drawing";
       if (updated.length >= 2) {
-        if (map.getSource(lineId)) {
-          (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
-            type: "Feature",
-            properties: {},
-            geometry: { type: "LineString", coordinates: updated },
-          });
-        } else {
-          map.addSource(lineId, {
-            type: "geojson",
-            data: {
+        try {
+          if (map.getSource(lineId)) {
+            (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
               type: "Feature",
               properties: {},
               geometry: { type: "LineString", coordinates: updated },
-            },
-          });
-          const paint: Record<string, unknown> = {
-            "line-color": cfg.color,
-            "line-width": 3,
-            "line-opacity": 0.7,
-          };
-          if (cfg.dasharray.length > 0) {
-            paint["line-dasharray"] = cfg.dasharray;
+            });
+          } else {
+            map.addSource(lineId, {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: updated },
+              },
+            });
+            const paint: Record<string, unknown> = {
+              "line-color": cfg.color,
+              "line-width": 3,
+              "line-opacity": 0.7,
+            };
+            if (cfg.dasharray.length > 0) {
+              paint["line-dasharray"] = cfg.dasharray;
+            }
+            map.addLayer({
+              id: lineId,
+              type: "line",
+              source: lineId,
+              paint: paint as any,
+            });
           }
-          map.addLayer({
-            id: lineId,
-            type: "line",
-            source: lineId,
-            paint: paint as any,
-          });
+        } catch (error) {
+          console.warn("Skipping temporary cable draw update while style reloads", error);
         }
       }
     },
@@ -354,8 +373,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
 
     const lineId = "design-cable-drawing";
     if (updated.length < 2) {
-      if (map.getLayer(lineId)) map.removeLayer(lineId);
-      if (map.getSource(lineId)) map.removeSource(lineId);
+      removeLayerAndSource(map, lineId);
     } else if (map.getSource(lineId)) {
       (map.getSource(lineId) as maplibregl.GeoJSONSource).setData({
         type: "Feature",
@@ -405,8 +423,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     vertexMarkersRef.current.forEach((m) => m.remove());
     vertexMarkersRef.current = [];
     if (map) {
-      if (map.getLayer("design-cable-drawing")) map.removeLayer("design-cable-drawing");
-      if (map.getSource("design-cable-drawing")) map.removeSource("design-cable-drawing");
+      removeLayerAndSource(map, "design-cable-drawing");
     }
   }, [drawingCableType, studyId, cableVertices, cables, map]);
 
@@ -418,9 +435,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
         return;
       }
       if (map) {
-        const srcId = `design-cable-${id}`;
-        if (map.getLayer(srcId)) map.removeLayer(srcId);
-        if (map.getSource(srcId)) map.removeSource(srcId);
+        removeLayerAndSource(map, `design-cable-${id}`);
       }
       setCables((prev) => prev.filter((c) => c.id !== id));
     },
