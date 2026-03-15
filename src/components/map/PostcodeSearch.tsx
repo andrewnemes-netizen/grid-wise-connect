@@ -2,15 +2,16 @@ import { useState, useCallback } from "react";
 import { Search, MapPin, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { bngToWgs84 } from "@/lib/bngToWgs84";
-
-const OS_API_KEY = "j7vwIPqoPOj5tiwNsJGlQ1SDD2GpsehD";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SearchResult {
-  display_name: string;
+  label: string;
   lat: number;
   lng: number;
-  type?: string;
+  type: string;
+  source: string;
+  uprn: string | null;
+  postcode: string | null;
 }
 
 interface PostcodeSearchProps {
@@ -27,10 +28,10 @@ export function PostcodeSearch({ onResult }: PostcodeSearchProps) {
     if (!query.trim()) return;
     setLoading(true);
     try {
-      // Try OS Names API first (UK-specific, high quality)
-      const osResults = await searchOSNames(query.trim());
-      if (osResults.length > 0) {
-        setResults(osResults);
+      // Use unified geocoder edge function
+      const geocoderResults = await searchGeocoder(query.trim());
+      if (geocoderResults.length > 0) {
+        setResults(geocoderResults);
         setOpen(true);
         setLoading(false);
         return;
@@ -44,10 +45,13 @@ export function PostcodeSearch({ onResult }: PostcodeSearchProps) {
       const data = await res.json();
       setResults(
         data.map((r: any) => ({
-          display_name: r.display_name,
+          label: r.display_name,
           lat: parseFloat(r.lat),
           lng: parseFloat(r.lon),
           type: "nominatim",
+          source: "nominatim",
+          uprn: null,
+          postcode: null,
         }))
       );
       setOpen(data.length > 0);
@@ -63,8 +67,8 @@ export function PostcodeSearch({ onResult }: PostcodeSearchProps) {
   };
 
   const handleSelect = (r: SearchResult) => {
-    onResult(r.lng, r.lat, r.display_name);
-    setQuery(r.display_name.split(",")[0]);
+    onResult(r.lng, r.lat, r.label);
+    setQuery(r.label.split(",")[0]);
     setOpen(false);
     setResults([]);
   };
@@ -95,10 +99,10 @@ export function PostcodeSearch({ onResult }: PostcodeSearchProps) {
               onClick={() => handleSelect(r)}
               className="w-full px-3 py-2 text-left text-sm hover:bg-accent transition-colors truncate"
             >
-              <span className="font-medium">{r.display_name.split(",")[0]}</span>
-              {r.display_name.includes(",") && (
+              <span className="font-medium">{r.label.split(",")[0]}</span>
+              {r.label.includes(",") && (
                 <span className="text-muted-foreground text-xs ml-1">
-                  {r.display_name.substring(r.display_name.indexOf(",") + 1).trim()}
+                  {r.label.substring(r.label.indexOf(",") + 1).trim()}
                 </span>
               )}
               {r.type && (
@@ -114,36 +118,32 @@ export function PostcodeSearch({ onResult }: PostcodeSearchProps) {
   );
 }
 
-async function searchOSNames(query: string): Promise<SearchResult[]> {
+async function searchGeocoder(query: string): Promise<SearchResult[]> {
   try {
-    const url = `https://api.os.uk/search/names/v1/find?query=${encodeURIComponent(query)}&maxresults=8&key=${OS_API_KEY}`;
-    const res = await fetch(url);
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+    if (!token) return [];
+
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/geocoder?q=${encodeURIComponent(query)}&limit=8`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+    });
+
     if (!res.ok) return [];
     const data = await res.json();
-    
-    const entries = data.results || [];
-    return entries
-      .map((r: any) => {
-        const entry = r.GAZETTEER_ENTRY;
-        if (!entry) return null;
-        
-        const { lat, lng } = bngToWgs84(entry.GEOMETRY_X, entry.GEOMETRY_Y);
-        const localType = entry.LOCAL_TYPE || "";
-        const county = entry.COUNTY_UNITARY || entry.REGION || "";
-        const district = entry.DISTRICT_BOROUGH || "";
-        
-        const parts = [entry.NAME1];
-        if (district && district !== entry.NAME1) parts.push(district);
-        if (county && county !== district) parts.push(county);
-        
-        return {
-          display_name: parts.join(", "),
-          lat,
-          lng,
-          type: localType.toLowerCase(),
-        } as SearchResult;
-      })
-      .filter(Boolean) as SearchResult[];
+
+    return (data.results || []).map((r: any) => ({
+      label: r.label,
+      lat: r.lat,
+      lng: r.lng,
+      type: r.type || "",
+      source: r.source || "",
+      uprn: r.uprn || null,
+      postcode: r.postcode || null,
+    }));
   } catch {
     return [];
   }

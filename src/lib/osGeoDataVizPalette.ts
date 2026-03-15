@@ -65,6 +65,66 @@ export const OS_UTILISATION_COLORS = {
 } as const;
 
 /**
+ * Route classification colours for cable/route design.
+ */
+export const OS_ROUTE_COLORS = {
+  lv:       "#00CD6C",  // green — low voltage
+  hv:       "#009ADE",  // blue — high voltage
+  ehv:      "#AF58BA",  // purple — extra-high voltage
+  proposed: "#FFC61E",  // yellow — proposed routes
+  existing: "#A0B1BA",  // grey — existing routes
+  rejected: "#E9002D",  // red — rejected/infeasible
+} as const;
+
+/**
+ * Constraint severity colours (RAG-based).
+ */
+export const OS_CONSTRAINT_SEVERITY = {
+  blocker:  "#E9002D",  // red — hard constraint, route blocked
+  warning:  "#FFAA00",  // amber — soft constraint, cost impact
+  info:     "#009ADE",  // blue — informational
+  clear:    "#00B000",  // green — no constraint
+} as const;
+
+/**
+ * Scoring / feasibility gradient (7-step, green→red).
+ */
+export const OS_SCORING_GRADIENT = [
+  "#00B000",  // 1 - excellent
+  "#40AD5A",  // 2 - good
+  "#86C440",  // 3 - above average
+  "#FFAA00",  // 4 - average
+  "#F28522",  // 5 - below average
+  "#E9002D",  // 6 - poor
+  "#8F003B",  // 7 - critical
+] as const;
+
+/**
+ * Planning category colours.
+ */
+export const OS_PLANNING_COLORS: Record<string, string> = {
+  residential:  "#FF1F5B",
+  commercial:   "#009ADE",
+  industrial:   "#F28522",
+  mixed_use:    "#AF58BA",
+  green_belt:   "#00CD6C",
+  conservation: "#A6761D",
+  flood_zone:   "#3C93C2",
+  heritage:     "#FFC61E",
+};
+
+/**
+ * Land ownership / registry colours.
+ */
+export const OS_LAND_COLORS: Record<string, string> = {
+  freehold:     "#009ADE",
+  leasehold:    "#AF58BA",
+  commonhold:   "#00CD6C",
+  crown:        "#FFC61E",
+  unknown:      "#A0B1BA",
+};
+
+/**
  * Get a layer colour from the OS qualitative palette by index,
  * with a fallback to the category colour.
  */
@@ -72,4 +132,23 @@ export function getOsLayerColor(category: string, index: number): string {
   const base = OS_CATEGORY_COLORS[category];
   if (base && index === 0) return base;
   return OS_QUALITATIVE[index % OS_QUALITATIVE.length];
+}
+
+/**
+ * Get scoring colour by normalised score (0-1).
+ */
+export function getScoreColor(score: number): string {
+  const clamped = Math.max(0, Math.min(1, score));
+  const idx = Math.min(
+    OS_SCORING_GRADIENT.length - 1,
+    Math.floor(clamped * OS_SCORING_GRADIENT.length)
+  );
+  return OS_SCORING_GRADIENT[idx];
+}
+
+/**
+ * Get constraint colour by severity level.
+ */
+export function getConstraintColor(severity: keyof typeof OS_CONSTRAINT_SEVERITY): string {
+  return OS_CONSTRAINT_SEVERITY[severity] || OS_CONSTRAINT_SEVERITY.info;
 }
