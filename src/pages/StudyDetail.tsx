@@ -75,7 +75,30 @@ export default function StudyDetail() {
   const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
   const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
 
-  const handleExportPdf = () => {
+  // Check if raw_score_data contains a GridwiseProject (from Gridwise Connect saves)
+  const rawScoreData = (study as any).raw_score_data as GridwiseProject | null;
+  const hasGridwiseProject = rawScoreData?.version === "GRIDWISE_CONNECT_V1";
+
+  const handleConvertToDesign = async () => {
+    if (!user || !id || !rawScoreData) return;
+    setConverting(true);
+    try {
+      const result = await convertConnectToDesign(rawScoreData, id, user.id);
+      if (result.warnings.length > 0) {
+        toast.warning(`Converted with warnings: ${result.warnings[0]}`);
+      } else {
+        toast.success(`Converted: ${result.cablesCreated} cable(s) + ${result.elementsCreated} equipment placed.`);
+      }
+      // Navigate to map in design mode
+      navigate(`/?study=${id}`);
+    } catch (err: any) {
+      toast.error(`Conversion failed: ${err.message}`);
+    } finally {
+      setConverting(false);
+    }
+  };
+
+
     generateAssessmentPdf({
       siteName: study.study_name,
       proposedKw: study.proposed_kw || 0,
