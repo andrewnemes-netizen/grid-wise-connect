@@ -36,6 +36,8 @@ interface Props {
   connectData?: ConnectData | null;
   /** Design cables to feed as POC candidates */
   designCables?: { cable_type: string; coordinates: [number, number][]; length_m: number; label: string | null }[];
+  /** Auto-detected route data from spatial queries */
+  autoDetectData?: RouteAutoDetectResult | null;
 }
 
 const STATE_CONFIG: Record<FeasibilityState, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
