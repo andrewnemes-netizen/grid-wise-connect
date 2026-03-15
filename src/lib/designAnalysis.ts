@@ -47,6 +47,16 @@ export interface DnoRuleOverrides {
   ruleset_version?: string;
 }
 
+/** Known upstream conditions at the point of connection (joint) */
+export interface UpstreamConditions {
+  /** Existing voltage drop % at the POC from the DNO network */
+  existing_vd_pct: number;
+  /** Existing impedance (Zs) at the POC in ohms */
+  existing_zs_ohms: number;
+  /** Source — 'manual' if user-entered, 'auto' if derived from network data */
+  source: "manual" | "auto";
+}
+
 export interface DesignAnalysisInput {
   cables: DesignCable[];
   elements: DesignElement[];
@@ -60,6 +70,8 @@ export interface DesignAnalysisInput {
   cable_specs: Record<string, CableSpec>;
   /** DNO-specific G81 rule overrides — takes priority over defaults */
   dno_rules?: DnoRuleOverrides;
+  /** Known upstream electrical conditions at the point of connection */
+  upstream?: UpstreamConditions;
 }
 
 export interface CableAnalysisResult {
@@ -123,6 +135,9 @@ export interface DesignAnalysisResult {
     suggestion_count: number;
     dno_code?: string;
     ruleset_version?: string;
+    upstream_vd_pct?: number;
+    upstream_zs_ohms?: number;
+    upstream_source?: "manual" | "auto";
   };
   engine_version: string;
   analysed_at: string;
@@ -172,8 +187,9 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
   const rawIb = (input.proposed_kw * 1000) / (Math.sqrt(3) * supplyV * pf);
   const Ib = rawIb * diversity;
 
-  let cumulativeZ = ze;
-  let cumulativeVdPct = 0;
+  // Start from upstream POC conditions if provided, otherwise from Ze
+  let cumulativeZ = input.upstream ? input.upstream.existing_zs_ohms : ze;
+  let cumulativeVdPct = input.upstream ? input.upstream.existing_vd_pct : 0;
 
   // Analyse each cable
   const cableResults: CableAnalysisResult[] = input.cables.map((cable) => {
@@ -332,6 +348,9 @@ export function runDesignAnalysis(input: DesignAnalysisInput): DesignAnalysisRes
       suggestion_count: allSuggestions.length,
       dno_code: dno?.dno_code,
       ruleset_version: dno?.ruleset_version,
+      upstream_vd_pct: input.upstream?.existing_vd_pct,
+      upstream_zs_ohms: input.upstream?.existing_zs_ohms,
+      upstream_source: input.upstream?.source,
     },
     engine_version: ENGINE_VERSION,
     analysed_at: new Date().toISOString(),

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Activity, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, Cable, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Activity, AlertTriangle, CheckCircle, XCircle, Lightbulb, Zap, Cable, Loader2, ChevronDown, ChevronRight, PlugZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -48,6 +48,9 @@ export function DesignAnalysisPanel({
   const [saving, setSaving] = useState(false);
   const [expandedCables, setExpandedCables] = useState<Set<string>>(new Set());
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [upstreamMode, setUpstreamMode] = useState<"auto" | "manual">("auto");
+  const [upstreamVdPct, setUpstreamVdPct] = useState<string>("");
+  const [upstreamZsOhms, setUpstreamZsOhms] = useState<string>("");
 
   const toggleCable = (id: string) => {
     setExpandedCables(prev => {
@@ -141,12 +144,21 @@ export function DesignAnalysisPanel({
         }
       }
 
+      // Build upstream conditions
+      const hasManualUpstream = upstreamMode === "manual" && (upstreamVdPct || upstreamZsOhms);
+      const upstream = hasManualUpstream ? {
+        existing_vd_pct: parseFloat(upstreamVdPct) || 0,
+        existing_zs_ohms: parseFloat(upstreamZsOhms) || 0.35,
+        source: "manual" as const,
+      } : undefined;
+
       const input: DesignAnalysisInput = {
         cables,
         elements,
         proposed_kw: proposedKw,
         cable_specs: cableSpecs,
         dno_rules: dnoRules,
+        upstream,
       };
 
       const analysisResult = runDesignAnalysis(input);
@@ -227,6 +239,72 @@ export function DesignAnalysisPanel({
             </div>
           </div>
 
+          {/* Upstream POC Conditions */}
+          {!result && (
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <PlugZap className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-semibold">Point of Connection</span>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant={upstreamMode === "auto" ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 text-[10px] flex-1"
+                  onClick={() => setUpstreamMode("auto")}
+                >
+                  Auto (Ze only)
+                </Button>
+                <Button
+                  variant={upstreamMode === "manual" ? "default" : "outline"}
+                  size="sm"
+                  className="h-6 text-[10px] flex-1"
+                  onClick={() => setUpstreamMode("manual")}
+                >
+                  Manual (DNO values)
+                </Button>
+              </div>
+              {upstreamMode === "manual" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-0.5">Existing VD at joint (%)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="10"
+                      value={upstreamVdPct}
+                      onChange={e => setUpstreamVdPct(e.target.value)}
+                      placeholder="e.g. 1.2"
+                      className="w-full h-7 px-2 text-xs border rounded bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-0.5">Zs at joint (Ω)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max="5"
+                      value={upstreamZsOhms}
+                      onChange={e => setUpstreamZsOhms(e.target.value)}
+                      placeholder="e.g. 0.28"
+                      className="w-full h-7 px-2 text-xs border rounded bg-background"
+                    />
+                  </div>
+                  <p className="col-span-2 text-[9px] text-muted-foreground">
+                    Enter values from DNO connection offer or existing network data at the joint/POC.
+                  </p>
+                </div>
+              )}
+              {upstreamMode === "auto" && (
+                <p className="text-[9px] text-muted-foreground">
+                  Analysis starts from Ze ({(0.35).toFixed(2)}Ω default). Use Manual mode to enter known DNO values at the joint.
+                </p>
+              )}
+            </div>
+          )}
+
           {!result ? (
             <Button className="w-full" onClick={runAnalysis} disabled={running}>
               {running ? (
@@ -272,6 +350,16 @@ export function DesignAnalysisPanel({
                     </span>
                   </div>
                 </div>
+                {/* Upstream POC info if manual values were used */}
+                {result.summary.upstream_source === "manual" && (
+                  <div className="rounded bg-muted/20 border border-dashed px-2 py-1.5 text-[10px] space-y-0.5">
+                    <span className="font-medium flex items-center gap-1"><PlugZap className="h-3 w-3" />POC Conditions (manual)</span>
+                    <div className="flex gap-4">
+                      <span>Upstream VD: <strong>{result.summary.upstream_vd_pct}%</strong></span>
+                      <span>Upstream Zs: <strong>{result.summary.upstream_zs_ohms}Ω</strong></span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Issue counts */}
                 <div className="flex gap-3 text-xs">
