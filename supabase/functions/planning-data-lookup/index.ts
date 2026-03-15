@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { dataset, latitude, longitude, limit, geometry_relation } = await req.json();
+    const { dataset, latitude, longitude, bbox, limit, geometry_relation } = await req.json();
 
     if (!dataset) {
       return new Response(
@@ -21,22 +21,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build query params
     const params = new URLSearchParams();
     params.set("dataset", dataset);
     params.set("limit", String(limit || 100));
+    params.set("geometry_relation", geometry_relation || "intersects");
 
-    if (latitude != null && longitude != null) {
-      params.set("latitude", String(latitude));
-      params.set("longitude", String(longitude));
-    }
-
-    if (geometry_relation) {
-      params.set("geometry_relation", geometry_relation);
+    // Prefer bbox (WKT polygon) over point query for reliable intersection
+    if (bbox) {
+      // bbox = [west, south, east, north]
+      const [w, s, e, n] = bbox;
+      const wkt = `POLYGON((${w} ${s},${e} ${s},${e} ${n},${w} ${n},${w} ${s}))`;
+      params.set("geometry", wkt);
+      console.log(`Planning data lookup: dataset=${dataset}, bbox WKT`);
+    } else if (latitude != null && longitude != null) {
+      // Fallback: create a small bbox around the point (~2km)
+      const buffer = 0.02;
+      const w = longitude - buffer;
+      const e = longitude + buffer;
+      const s = latitude - buffer;
+      const n = latitude + buffer;
+      const wkt = `POLYGON((${w} ${s},${e} ${s},${e} ${n},${w} ${n},${w} ${s}))`;
+      params.set("geometry", wkt);
+      console.log(`Planning data lookup: dataset=${dataset}, point-buffered WKT around ${latitude},${longitude}`);
     }
 
     const url = `${PLANNING_API}/entity.geojson?${params.toString()}`;
-    console.log("Planning data lookup:", url);
+    console.log("Planning URL:", url);
 
     const response = await fetch(url, {
       headers: { Accept: "application/geo+json, application/json" },
