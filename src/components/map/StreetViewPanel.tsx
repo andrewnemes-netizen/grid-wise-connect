@@ -206,33 +206,49 @@ export function StreetViewPanel({
   const projected = markers
     .map((m, i) => {
       const key = `${m.type}-${i}`;
-      const bearing = calculateBearing(lat, lng, m.lat, m.lng);
-      const distance = haversineM(lat, lng, m.lat, m.lng);
-      const pos = projectMarker(heading, bearing, distance, fov);
-      const override = markerOverrides[key];
-      if (override) {
-        return { ...m, ...pos, xPct: override.xPct, yPct: override.yPct, distance, key };
-      }
-      return { ...m, ...pos, distance, key };
+      const bearing = calculateBearing(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const distance = haversineM(cameraPosition.lat, cameraPosition.lng, m.lat, m.lng);
+      const pos = projectMarker(heading, pitch, bearing, distance, fov);
+      const offset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+
+      return {
+        ...m,
+        ...pos,
+        xPct: clamp(pos.xPct + offset.dxPct, 0, 100),
+        yPct: clamp(pos.yPct + offset.dyPct, 0, 100),
+        distance,
+        key,
+      };
     })
     .filter((m) => m.visible && m.distance < 200);
 
   // Drag handlers for marker repositioning
-  const handlePointerDown = useCallback((e: React.PointerEvent, key: string, currentXPct: number, currentYPct: number) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent, key: string) => {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    dragRef.current = { key, startX: e.clientX, startY: e.clientY, origXPct: currentXPct, origYPct: currentYPct };
-  }, []);
+    const currentOffset = markerOffsets[key] ?? { dxPct: 0, dyPct: 0 };
+    dragRef.current = {
+      key,
+      startX: e.clientX,
+      startY: e.clientY,
+      origDxPct: currentOffset.dxPct,
+      origDyPct: currentOffset.dyPct,
+    };
+  }, [markerOffsets]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
     const dx = ((e.clientX - dragRef.current.startX) / rect.width) * 100;
     const dy = ((e.clientY - dragRef.current.startY) / rect.height) * 100;
-    const newX = Math.max(0, Math.min(100, dragRef.current.origXPct + dx));
-    const newY = Math.max(0, Math.min(100, dragRef.current.origYPct + dy));
-    setMarkerOverrides(prev => ({ ...prev, [dragRef.current!.key]: { xPct: newX, yPct: newY } }));
+    setMarkerOffsets((prev) => ({
+      ...prev,
+      [dragRef.current!.key]: {
+        dxPct: dragRef.current!.origDxPct + dx,
+        dyPct: dragRef.current!.origDyPct + dy,
+      },
+    }));
   }, []);
 
   const handlePointerUp = useCallback(() => {
