@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { runDesignAnalysis, type DesignAnalysisResult, type DesignAnalysisInput, type CableSpec } from "@/lib/designAnalysis";
+import { runDesignAnalysis, type DesignAnalysisResult, type DesignAnalysisInput, type CableSpec, type DnoRuleOverrides } from "@/lib/designAnalysis";
 import type { DesignCable, DesignElement } from "@/hooks/useDesignMode";
 
 interface DesignAnalysisPanelProps {
