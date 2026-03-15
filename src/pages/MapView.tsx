@@ -515,6 +515,13 @@ const MapView = () => {
               } : undefined}
               boundaryGeojson={boundary.polygon ?? undefined}
               designCables={design.cables}
+              activeStudyId={activeStudy.studyId}
+              onConvertToDesign={(studyId) => {
+                setGridwiseLocation(null);
+                setActiveTool("design");
+                // Reload design elements to pick up newly created items
+                design.reload();
+              }}
             />
           )}
 

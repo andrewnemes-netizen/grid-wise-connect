@@ -9,13 +9,15 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2 } from "lucide-react";
+import { ArrowLeft, Map, Download, CheckCircle, AlertTriangle, Ruler, Shield, PoundSterling, FileText, Settings2, PencilRuler, Loader2 } from "lucide-react";
 import { generateAssessmentPdf, type PdfSections } from "@/lib/generateAssessmentPdf";
 import type { CostEstimate, CostLineItem, BomItem } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { useAuth } from "@/hooks/useAuth";
 import { StudyShareDialog } from "@/components/study/StudyShareDialog";
 import { StudyCommentsPanel } from "@/components/study/StudyCommentsPanel";
 import { StudyActivityFeed } from "@/components/study/StudyActivityFeed";
+import { toast } from "sonner";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
@@ -30,7 +32,9 @@ const statusColors: Record<string, string> = {
 export default function StudyDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: unitRates } = useUnitRates();
+  const [converting, setConverting] = useState(false);
   const [pdfSections, setPdfSections] = useState<PdfSections>({
     coverPage: true,
     executiveSummary: true,
@@ -69,7 +73,47 @@ export default function StudyDetail() {
   const costEstimate = study.cost_estimate_json as unknown as CostEstimate | null;
   const bomItems = (study.bom_json as unknown as BomItem[] | null) || [];
 
-  const handleExportPdf = () => {
+  const handleConvertToDesign = async () => {
+    if (!user || !id) return;
+    setConverting(true);
+    try {
+      const routeGeoJson = study.route_geojson as any;
+      if (!routeGeoJson?.coordinates?.length) {
+        toast.error("No route geometry found on this study.");
+        return;
+      }
+
+      // Build a minimal GridwiseProject-like structure for conversion
+      const coords = routeGeoJson.coordinates.map((c: number[]) => [c[0], c[1]] as [number, number]);
+      const cableType = study.voltage_level === "HV" ? "hv_cable" : "lv_main";
+
+      // Insert the route as a design cable
+      const { error: cableError } = await supabase.from("design_cables").insert({
+        study_id: id,
+        cable_type: cableType,
+        label: `${cableType === "hv_cable" ? "HV Cable" : "LV Main"} (from Connect)`,
+        coordinates: coords as any,
+        length_m: study.proposed_kw ? Math.round(coords.length * 10) : 0,
+        created_by: user.id,
+        properties_json: {
+          source: "study_conversion",
+          study_mode: study.mode,
+          dno: study.dno,
+        },
+      } as any);
+
+      if (cableError) throw cableError;
+
+      toast.success("Route converted to Design Mode cable. Opening map...");
+      navigate(`/?study=${id}`);
+    } catch (err: any) {
+      toast.error(`Conversion failed: ${err.message}`);
+    } finally {
+      setConverting(false);
+    }
+  };
+
+
     generateAssessmentPdf({
       siteName: study.study_name,
       proposedKw: study.proposed_kw || 0,
@@ -127,6 +171,19 @@ export default function StudyDetail() {
         </div>
         <div className="flex gap-2">
           <StudyShareDialog studyId={study.id} studyName={study.study_name} />
+          {study.mode === "connect" && study.route_geojson && (
+            <Button
+              variant="outline"
+              onClick={handleConvertToDesign}
+              disabled={converting}
+            >
+              {converting ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Converting…</>
+              ) : (
+                <><PencilRuler className="h-4 w-4 mr-2" />Convert to Design</>
+              )}
+            </Button>
+          )}
           <Button variant="outline" onClick={() => navigate(`/?study=${study.id}`)}>
             <Map className="h-4 w-4 mr-2" />Open on Map
           </Button>
