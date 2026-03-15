@@ -196,6 +196,17 @@ export function EvHubPanel({ lng, lat, onClose, connectData, designCables }: Pro
             </div>
           )}
 
+          {/* Design cables indicator */}
+          {designCables && designCables.length > 0 && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Design Cable Data</p>
+              <div className="flex items-center gap-3 text-xs">
+                <span><strong>{designCables.filter(c => c.cable_type === "lv_main" || c.cable_type === "lv_service").length}</strong> LV cables as POC candidates</span>
+              </div>
+              <Badge variant="secondary" className="text-[9px]">Design → Engine</Badge>
+            </div>
+          )}
+
           {/* Inputs */}
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
