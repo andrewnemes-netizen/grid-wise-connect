@@ -315,7 +315,7 @@ async function ingestViaRecords(
   opts: { where?: string; select?: string; order_by?: string }
 ): Promise<{ inserted: number; skipped: number }> {
   const baseUrl = entry.endpoint_records;
-  const batchSize = 100;
+  const batchSize = Math.min(100, getBatchSize(storageTable));
   let offset = 0;
   let totalInserted = 0;
   let totalSkipped = 0;
