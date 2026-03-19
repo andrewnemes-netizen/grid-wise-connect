@@ -230,8 +230,8 @@ async function ingestViaGeoJsonExport(
 
   if (features.length === 0) return { inserted: 0, skipped: 0 };
 
-  // Process in batches of 500
-  const batchSize = 500;
+  // Dynamic batch size based on geometry complexity
+  const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
 
