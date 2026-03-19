@@ -566,6 +566,19 @@ async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const resp = await fetch(url, { headers });
+
+      // If 403 with header auth, retry once with query param auth
+      if (resp.status === 403 && apiKey && attempt === 0 && !url.includes("apikey=")) {
+        await resp.text();
+        const separator = url.includes("?") ? "&" : "?";
+        const fallbackUrl = `${url}${separator}apikey=${apiKey}`;
+        console.warn(`[ingest] Header auth returned 403, retrying with query param: ${fallbackUrl}`);
+        const fallbackResp = await fetch(fallbackUrl);
+        if (fallbackResp.ok) return fallbackResp;
+        await fallbackResp.text();
+        // Fall through to normal retry logic
+      }
+
       if (resp.status === 429) {
         const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;
         console.warn(`[ingest] Rate limited, backing off ${Math.round(backoff)}ms`);
@@ -588,6 +601,20 @@ async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 
     }
   }
   throw new Error(`Failed to fetch ${url} after ${maxRetries} retries`);
+}
+
+/** Returns optimal batch size based on geometry complexity of the target table */
+function getBatchSize(storageTable: string): number {
+  switch (storageTable) {
+    case "geo_polygons":
+    case "geo_constraints":
+      return 50;  // Complex geometries - prevent statement timeout
+    case "geo_feeders":
+    case "geo_cables":
+      return 200; // Line geometries - moderate complexity
+    default:
+      return 500; // Points and substations - simple geometries
+  }
 }
 
 function sleep(ms: number): Promise<void> {
