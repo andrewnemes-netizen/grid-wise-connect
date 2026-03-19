@@ -118,11 +118,26 @@ Deno.serve(async (req) => {
     try {
       if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
         // ── Export-based GeoJSON full refresh ──
-        const result = await ingestViaGeoJsonExport(
-          supabase, entry, layerRow, storageTable, apiKey
-        );
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
+        try {
+          const result = await ingestViaGeoJsonExport(
+            supabase, entry, layerRow, storageTable, apiKey
+          );
+          totalInserted = result.inserted;
+          totalSkipped = result.skipped;
+        } catch (exportErr) {
+          const errMsg = String(exportErr);
+          if (errMsg.includes("Memory limit") || errMsg.includes("CPU Time")) {
+            console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
+            const result = await ingestViaRecords(
+              supabase, entry, layerRow, storageTable, apiKey,
+              { where, select: selectFields, order_by }
+            );
+            totalInserted = result.inserted;
+            totalSkipped = result.skipped;
+          } else {
+            throw exportErr;
+          }
+        }
 
       } else if (mode === "export" && entry.endpoint_export_csv) {
         // ── Export-based CSV full refresh (tabular datasets) ──
