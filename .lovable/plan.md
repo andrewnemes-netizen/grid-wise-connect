@@ -1,103 +1,53 @@
 
 
-## NPG Dataset Layer Strategy
+## End-to-End NPG GIS Layer Fix Plan
 
-The build error shown is an infrastructure issue (native SWC binding), not related to code changes. It typically resolves on retry.
+### Test Results Summary
 
-Here is the recommended grouping of NPG datasets into GIS layers, based on what you already have and what should be combined.
+I ran live ingestion tests against the NPG portal. Here's what I found:
 
----
+| Dataset | Records | Result | Issue |
+|---------|---------|--------|-------|
+| Smart Meter Penetration | 34 | **32 inserted** | Working |
+| NDP Planned Interventions | 279 | **265 inserted** | Working |
+| ECR 1MW+ | 950 | **950 inserted** | Working |
+| Flexibility Zones | 2298 | **Already ingested** | Working |
+| LCT Postal Sectors | 1254 | **0 inserted, all skipped** | Geometry mismatch |
+| Carbon Intensity by GSP | 3249 | **HTTP 403** | API auth not applied |
+| SLC31E Procurement | 831 | **Statement timeout** | Batch too large for polygons |
+| 33kV Live Ops | 855k | **HTTP 403** | Tabular, needs enrichment mode |
 
-### Recommended Layer Groupings
+### Issues Found (3 bugs to fix)
 
-```text
-LAYER NAME                          | DATASETS TO COMBINE                                    | STORAGE TABLE    | GEOMETRY
-────────────────────────────────────┼────────────────────────────────────────────────────────┼──────────────────┼──────────
-132kV Network                       | 132kV Circuit Live Ops + NPG EHV Feeders (already)     | geo_feeders      | LineString
-  → Merge operational data as attrs   into existing EHV Feeders layer (39k features)
+**Bug 1: Batch insert timeout for polygon data**
+The `batch_insert_geo_features` RPC processes 500 features per batch. For complex polygon geometries, `ST_GeomFromGeoJSON` is slow and causes statement timeouts. SLC31E (831 polygon records) and Carbon Intensity (3249) both fail.
 
-66kV Network                        | 66kV Circuit Live Ops                                  | geo_feeders      | LineString
-  → Populate existing empty 66kV layer with live ops data
+**Fix:** Reduce batch size dynamically based on storage table. Use 50 for `geo_polygons`/`geo_constraints`, keep 500 for point/line tables.
 
-33kV Network                        | 33kV Circuit Live Ops                                  | geo_feeders      | LineString
-  → Populate existing empty 33kV layer with live ops data
+**Bug 2: LCT Postal Sectors geometry mismatch**
+The LCT dataset has both `geo_point_2d` (Point) and `geo_shape` (Polygon). The GeoJSON export uses `geo_shape` as the primary geometry, producing Polygons. But the layer is registered as Point → `geo_points`. The `promoteGeometry` function rejects Polygons for a Point target, so all 1254 records are skipped.
 
-HV Overhead Feeders                 | npg_hv_oh_feeders (59k)                                | geo_feeders      | LineString
-  → New layer, overhead HV lines
+**Fix:** Change the LCT layer registry entry from `geo_points`/Point to `geo_polygons`/Polygon, since the shapes represent postal sector boundaries (polygons are more useful than centroids).
 
-LV Overhead Feeders                 | lv_oh_feeders (19k)                                    | geo_feeders      | LineString
-  → Populate existing empty LV OH layer
+**Bug 3: Carbon Intensity & 33kV Live Ops still return 403**
+The NPG_API_KEY was added but these datasets may require it in a different header format, or the previous sync ran before the key was saved. Need to verify the key is being sent correctly and retry.
 
-EHV & HV Supports                   | ehv-and-hv-supports-location (265k)                    | geo_points       | Point
-  → Pole/tower locations, large dataset
+**Fix:** The key is already in the code (`Authorization: Apikey ${apiKey}`). These just need a retry now that the key is configured. If 403 persists, add a fallback to try `apikey` query parameter.
 
-Substation Sites                    | substation_sites_list (60k)                             | geo_substations  | Point
-  → All substation locations with metadata
+### Implementation Steps
 
-Site Utilisation (Current)          | npg-site-utilisation (28k)                              | geo_substations  | Point
-  → Already have HV Substations Utilisation (27k), may be same data — verify before ingesting
+1. **Reduce polygon batch size in edge function** — Change `batchSize` from fixed 500 to dynamic: 50 for polygon/constraint tables, 200 for feeders/cables, 500 for point tables.
 
-Site Utilisation (Forecast)         | npg-site-utilisation-forecasted (29k)                   | geo_substations  | Point
-  → Future headroom predictions — new layer
+2. **Fix LCT layer registry** — Update `npg_lct_postal_sector` from `storage_table: geo_points, geometry_type: Point` to `storage_table: geo_polygons, geometry_type: Polygon`.
 
-Distribution Sub Service Areas      | distribution-substation-service-areas (57k)             | geo_polygons     | Polygon
-  → Service area boundaries per distribution sub
+3. **Add API key fallback** — If `Authorization: Apikey` header returns 403, retry with `?apikey=` query parameter as some ODS endpoints prefer that format.
 
-EHV Sub Combined Service Areas      | substation_combined_service_areas (683)                 | geo_polygons     | Polygon
-  → Already have Heat Map Substation Areas (683) — likely same, verify
+4. **Add statement timeout override** — Set `SET LOCAL statement_timeout = '120s'` at the start of `batch_insert_geo_features` RPC to prevent premature cancellation.
 
-Embedded Capacity Register          | ECR <1MW (1.7k) + ECR ≥1MW (950)                       | geo_substations  | Point
-  → Already have National ECR (17k) — combine or keep NPG-specific
+5. **Verify map rendering** — The map rendering pipeline (`get_geo_layer_geojson` RPC → `fetchLayerGeoJSON` → `addRegistryLayerToMap`) already handles all storage tables. The 4 successfully ingested layers (Smart Meter, NDP Interventions, ECR, Flexibility Zones) should render correctly on the map.
 
-NDP Demand Headroom                 | npg_ndp_demand_headroom (3.1k)                         | geo_substations  | Point
-  → Already ingested (954 features), refresh
+### Files to Change
 
-NDP Generation Headroom             | npg_ndp_generation_headroom (3.1k)                     | geo_substations  | Point
-  → New layer, generation-side headroom
-
-NDP Planned Interventions           | npg-network-development-report-planned-interventions   | geo_constraints  | Polygon
-  → Planned reinforcement works (279)
-
-Flexibility Services                | SLC31E Procurement (831) + Dispatch by EHV Zone (1.1k) | geo_polygons     | Polygon
-  → Combine into single "Flexibility Zones" layer
-
-DFES Forecasts                      | NPG DFES Primary (77k)                                 | geo_substations  | Point
-  → Future scenario planning data per primary
-
-Carbon Intensity by GSP             | 3_day_gsp_carbon_intensity (3.2k)                      | geo_polygons     | Polygon
-  → GSP-level carbon data with geometry
-
-LCT by Postal Sector               | lct-datasets-ps-upload (1.2k)                          | geo_points       | Point
-  → Low carbon technology penetration
-
-Smart Meter Penetration             | smartmap (34)                                          | geo_polygons     | Polygon
-  → Smart meter rollout coverage
-
-IDNO Zones                          | idno_regions (2k)                                      | geo_polygons     | Polygon
-  → Areas served by independent operators
-```
-
-### Priority Order (highest engineering value first)
-
-1. **132kV + 66kV + 33kV Live Ops** — merge operational data (loading, fault level) into existing feeder layers as `attrs_json`. This gives real-time network context.
-2. **Site Utilisation Forecast** — new layer showing future headroom, critical for connection planning.
-3. **HV OH Feeders + EHV/HV Supports** — complete the overhead network picture (currently only underground visible).
-4. **NDP Planned Interventions + Generation Headroom** — reinforcement pipeline visibility.
-5. **Distribution Sub Service Areas** — 57k polygons showing which sub feeds which area.
-6. **Flexibility Zones** — where DNO is procuring flex services (affects connection offers).
-7. **DFES Primary Forecasts** — future demand/generation scenarios.
-
-### Implementation Approach
-
-For each group above:
-1. Create a layer_registry entry (or use existing one) with correct `geometry_type` and `storage_table`
-2. Update the DNO_REGISTRY in `dno-open-data-ingest` to add field mappings for the new dataset
-3. For "merge" cases (e.g. 132kV ops into EHV feeders), the operational data joins via `attrs_json` on the existing features rather than creating duplicates
-4. For tabular-only datasets (no geometry), they attach as enrichment to the nearest spatial feature rather than standalone layers
-
-### Datasets to Skip (no GIS value)
-
-- Data Roadmap, Document Library, Glossary, Portal Downloads, LTDS Documents, Feature Page Dataset, ICP Briefings — pure metadata/docs
-- Generation Mix, Grid Supply Point Metering — time-series only, no spatial component
-- Research Use Cases, Third Party Data Sources — reference tables
+- `supabase/functions/npg-dataset-ingest/index.ts` — Dynamic batch sizing + API key fallback
+- Database migration — Update LCT layer registry entry + extend `batch_insert_geo_features` timeout
 
