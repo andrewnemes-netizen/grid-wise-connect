@@ -280,7 +280,7 @@ async function ingestViaCsvExport(
 
   if (rows.length === 0) return { inserted: 0, skipped: 0 };
 
-  const batchSize = 500;
+  const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
 
