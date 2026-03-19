@@ -118,11 +118,26 @@ Deno.serve(async (req) => {
     try {
       if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
         // ── Export-based GeoJSON full refresh ──
-        const result = await ingestViaGeoJsonExport(
-          supabase, entry, layerRow, storageTable, apiKey
-        );
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
+        try {
+          const result = await ingestViaGeoJsonExport(
+            supabase, entry, layerRow, storageTable, apiKey
+          );
+          totalInserted = result.inserted;
+          totalSkipped = result.skipped;
+        } catch (exportErr) {
+          const errMsg = String(exportErr);
+          if (errMsg.includes("Memory limit") || errMsg.includes("CPU Time")) {
+            console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
+            const result = await ingestViaRecords(
+              supabase, entry, layerRow, storageTable, apiKey,
+              { where, select: selectFields, order_by }
+            );
+            totalInserted = result.inserted;
+            totalSkipped = result.skipped;
+          } else {
+            throw exportErr;
+          }
+        }
 
       } else if (mode === "export" && entry.endpoint_export_csv) {
         // ── Export-based CSV full refresh (tabular datasets) ──
@@ -413,22 +428,42 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
 function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
-  // Try geo_point_2d first
-  if (rec.geo_point_2d) {
-    const gp = rec.geo_point_2d;
-    if (typeof gp === "string") {
-      const [lat, lon] = gp.split(",").map(Number);
-      if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
-    } else if (gp.lat != null && gp.lon != null) {
-      geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
-    }
-  }
+  const prefersPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
 
-  // Try geo_shape
-  if (!geom && rec.geo_shape) {
-    const shape = rec.geo_shape;
-    geom = shape.geometry || shape;
-    if (!geom?.type || !geom?.coordinates) geom = null;
+  if (prefersPolygon) {
+    // For polygon/constraint tables, try geo_shape first (contains actual polygons)
+    if (rec.geo_shape) {
+      const shape = rec.geo_shape;
+      geom = shape.geometry || shape;
+      if (!geom?.type || !geom?.coordinates) geom = null;
+    }
+    // Fallback to geo_point_2d
+    if (!geom && rec.geo_point_2d) {
+      const gp = rec.geo_point_2d;
+      if (typeof gp === "string") {
+        const [lat, lon] = gp.split(",").map(Number);
+        if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
+      } else if (gp.lat != null && gp.lon != null) {
+        geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
+      }
+    }
+  } else {
+    // For point/line tables, try geo_point_2d first (faster)
+    if (rec.geo_point_2d) {
+      const gp = rec.geo_point_2d;
+      if (typeof gp === "string") {
+        const [lat, lon] = gp.split(",").map(Number);
+        if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
+      } else if (gp.lat != null && gp.lon != null) {
+        geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
+      }
+    }
+    // Fallback to geo_shape
+    if (!geom && rec.geo_shape) {
+      const shape = rec.geo_shape;
+      geom = shape.geometry || shape;
+      if (!geom?.type || !geom?.coordinates) geom = null;
+    }
   }
 
   // Try named geometry field from registry
