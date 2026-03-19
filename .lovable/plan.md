@@ -1,53 +1,44 @@
 
 
-## End-to-End NPG GIS Layer Fix Plan
+## End-to-End NPG Retest Results
 
-### Test Results Summary
+### Test Summary
 
-I ran live ingestion tests against the NPG portal. Here's what I found:
-
-| Dataset | Records | Result | Issue |
+| Dataset | Records | Status | Notes |
 |---------|---------|--------|-------|
 | Smart Meter Penetration | 34 | **32 inserted** | Working |
 | NDP Planned Interventions | 279 | **265 inserted** | Working |
 | ECR 1MW+ | 950 | **950 inserted** | Working |
-| Flexibility Zones | 2298 | **Already ingested** | Working |
-| LCT Postal Sectors | 1254 | **0 inserted, all skipped** | Geometry mismatch |
-| Carbon Intensity by GSP | 3249 | **HTTP 403** | API auth not applied |
-| SLC31E Procurement | 831 | **Statement timeout** | Batch too large for polygons |
-| 33kV Live Ops | 855k | **HTTP 403** | Tabular, needs enrichment mode |
+| Flexibility Dispatch | 1,149 | **1,149 inserted** | Working |
+| SLC31E Procurement | 831 | **831 inserted** | Fixed (batch sizing) |
+| LCT Postal Sectors | 1,254 | **1,215 inserted** | Fixed (geometry type) |
+| Carbon Intensity by GSP | 3,249 | **0 inserted** | New bug found |
+| 33kV Live Ops | 855k | **Not attempted** | Tabular, needs enrichment |
 
-### Issues Found (3 bugs to fix)
+### New Bug: Geometry Priority in Records Mode
 
-**Bug 1: Batch insert timeout for polygon data**
-The `batch_insert_geo_features` RPC processes 500 features per batch. For complex polygon geometries, `ST_GeomFromGeoJSON` is slow and causes statement timeouts. SLC31E (831 polygon records) and Carbon Intensity (3249) both fail.
+**Root cause**: In `mapOdsRecordToRow`, `geo_point_2d` is checked before `geo_shape` (lines 416-431). For Carbon Intensity, both fields exist. The function picks `geo_point_2d` (Point), then `promoteGeometry` rejects it because the target table is `geo_polygons`. All 3,249 records are silently skipped.
 
-**Fix:** Reduce batch size dynamically based on storage table. Use 50 for `geo_polygons`/`geo_constraints`, keep 500 for point/line tables.
+The GeoJSON export mode doesn't have this problem because the export already resolves to the correct geometry. But the export hits **Memory limit exceeded** for this dataset (3,249 complex polygons), so it must fall back to records mode, where this bug triggers.
 
-**Bug 2: LCT Postal Sectors geometry mismatch**
-The LCT dataset has both `geo_point_2d` (Point) and `geo_shape` (Polygon). The GeoJSON export uses `geo_shape` as the primary geometry, producing Polygons. But the layer is registered as Point → `geo_points`. The `promoteGeometry` function rejects Polygons for a Point target, so all 1254 records are skipped.
+**Fix**: When the storage table is `geo_polygons` or `geo_constraints`, check `geo_shape` first. Only fall back to `geo_point_2d` if `geo_shape` is absent.
 
-**Fix:** Change the LCT layer registry entry from `geo_points`/Point to `geo_polygons`/Polygon, since the shapes represent postal sector boundaries (polygons are more useful than centroids).
+### Implementation
 
-**Bug 3: Carbon Intensity & 33kV Live Ops still return 403**
-The NPG_API_KEY was added but these datasets may require it in a different header format, or the previous sync ran before the key was saved. Need to verify the key is being sent correctly and retry.
+**File**: `supabase/functions/npg-dataset-ingest/index.ts`
 
-**Fix:** The key is already in the code (`Authorization: Apikey ${apiKey}`). These just need a retry now that the key is configured. If 403 persists, add a fallback to try `apikey` query parameter.
+In the `mapOdsRecordToRow` function (around line 415), reorder geometry extraction:
 
-### Implementation Steps
+1. If `storageTable` is `geo_polygons` or `geo_constraints`, try `geo_shape` first, then `geo_point_2d` as fallback
+2. Otherwise, keep current order: `geo_point_2d` first (faster for point tables)
 
-1. **Reduce polygon batch size in edge function** — Change `batchSize` from fixed 500 to dynamic: 50 for polygon/constraint tables, 200 for feeders/cables, 500 for point tables.
+This is a ~10-line change in the geometry resolution logic. After fixing, redeploy and re-ingest Carbon Intensity via records mode.
 
-2. **Fix LCT layer registry** — Update `npg_lct_postal_sector` from `storage_table: geo_points, geometry_type: Point` to `storage_table: geo_polygons, geometry_type: Polygon`.
+### Secondary: Auto-fallback from Export to Records
 
-3. **Add API key fallback** — If `Authorization: Apikey` header returns 403, retry with `?apikey=` query parameter as some ODS endpoints prefer that format.
-
-4. **Add statement timeout override** — Set `SET LOCAL statement_timeout = '120s'` at the start of `batch_insert_geo_features` RPC to prevent premature cancellation.
-
-5. **Verify map rendering** — The map rendering pipeline (`get_geo_layer_geojson` RPC → `fetchLayerGeoJSON` → `addRegistryLayerToMap`) already handles all storage tables. The 4 successfully ingested layers (Smart Meter, NDP Interventions, ECR, Flexibility Zones) should render correctly on the map.
+Currently if a GeoJSON export hits memory limits, the function crashes. Add a try/catch around the export fetch that falls back to records mode automatically for large polygon datasets. This prevents the need to manually switch modes.
 
 ### Files to Change
 
-- `supabase/functions/npg-dataset-ingest/index.ts` — Dynamic batch sizing + API key fallback
-- Database migration — Update LCT layer registry entry + extend `batch_insert_geo_features` timeout
+- `supabase/functions/npg-dataset-ingest/index.ts` — Reorder geometry priority based on storage table; add export-to-records fallback
 
