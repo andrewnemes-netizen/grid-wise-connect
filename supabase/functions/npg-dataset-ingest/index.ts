@@ -428,22 +428,42 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
 function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
-  // Try geo_point_2d first
-  if (rec.geo_point_2d) {
-    const gp = rec.geo_point_2d;
-    if (typeof gp === "string") {
-      const [lat, lon] = gp.split(",").map(Number);
-      if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
-    } else if (gp.lat != null && gp.lon != null) {
-      geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
-    }
-  }
+  const prefersPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
 
-  // Try geo_shape
-  if (!geom && rec.geo_shape) {
-    const shape = rec.geo_shape;
-    geom = shape.geometry || shape;
-    if (!geom?.type || !geom?.coordinates) geom = null;
+  if (prefersPolygon) {
+    // For polygon/constraint tables, try geo_shape first (contains actual polygons)
+    if (rec.geo_shape) {
+      const shape = rec.geo_shape;
+      geom = shape.geometry || shape;
+      if (!geom?.type || !geom?.coordinates) geom = null;
+    }
+    // Fallback to geo_point_2d
+    if (!geom && rec.geo_point_2d) {
+      const gp = rec.geo_point_2d;
+      if (typeof gp === "string") {
+        const [lat, lon] = gp.split(",").map(Number);
+        if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
+      } else if (gp.lat != null && gp.lon != null) {
+        geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
+      }
+    }
+  } else {
+    // For point/line tables, try geo_point_2d first (faster)
+    if (rec.geo_point_2d) {
+      const gp = rec.geo_point_2d;
+      if (typeof gp === "string") {
+        const [lat, lon] = gp.split(",").map(Number);
+        if (!isNaN(lat) && !isNaN(lon)) geom = { type: "Point", coordinates: [lon, lat] };
+      } else if (gp.lat != null && gp.lon != null) {
+        geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
+      }
+    }
+    // Fallback to geo_shape
+    if (!geom && rec.geo_shape) {
+      const shape = rec.geo_shape;
+      geom = shape.geometry || shape;
+      if (!geom?.type || !geom?.coordinates) geom = null;
+    }
   }
 
   // Try named geometry field from registry
