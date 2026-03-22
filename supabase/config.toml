@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.npg-dataset-ingest]
 verify_jwt = false
+
+[functions.dft-traffic-proxy]
+verify_jwt = false
