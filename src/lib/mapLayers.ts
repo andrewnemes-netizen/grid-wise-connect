@@ -219,21 +219,39 @@ export async function addRegistryLayerToMap(
 
   try {
     if (renderType === "circle") {
-      const circleColor = layer.slug === "npg_hv_substations_utilisation"
-        ? [
-            "match", ["get", "utilisation_band"],
-            "Low", "#00B000",
-            "Below Average", "#86C440",
-            "Average", "#FFAA00",
-            "Above Average", "#F28522",
-            "High", "#E9002D",
-            color,
-          ] as any
-        : color;
+      let circleColor: any = color;
+      let circleRadius: any = 6;
 
-      const circleRadius = layer.slug === "npg_hv_substations_utilisation"
-        ? ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 4, 14, 8] as any
-        : 6;
+      if (layer.slug === "npg_hv_substations_utilisation") {
+        circleColor = [
+          "match", ["get", "utilisation_band"],
+          "Low", "#00B000",
+          "Below Average", "#86C440",
+          "Average", "#FFAA00",
+          "Above Average", "#F28522",
+          "High", "#E9002D",
+          color,
+        ];
+        circleRadius = ["interpolate", ["linear"], ["zoom"], 6, 2, 10, 4, 14, 8];
+      } else if (layer.slug === "dft_traffic_count_points") {
+        // Data-driven colour by AADF volume (all_motor_vehicles in attrs_json)
+        circleColor = [
+          "interpolate", ["linear"],
+          ["coalesce", ["get", "all_motor_vehicles"], 0],
+          0, "#27AE60",      // green — low
+          5000, "#F1C40F",   // yellow
+          20000, "#E74C3C",  // red — high
+          50000, "#8E44AD",  // purple — very high
+        ];
+        circleRadius = [
+          "interpolate", ["linear"],
+          ["coalesce", ["get", "all_motor_vehicles"], 0],
+          0, 4,
+          5000, 6,
+          20000, 9,
+          50000, 13,
+        ];
+      }
 
       map.addLayer({
         id: layerMapId,
