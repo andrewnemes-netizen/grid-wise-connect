@@ -33,16 +33,17 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await userClient.auth.getUser(token);
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
+      console.error("[ingest] auth error:", authError?.message, "header present:", !!authHeader);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
-    const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    const { data: isAdmin, error: roleErr } = await supabase.rpc("has_role", { _user_id: user.id, _role: "admin" });
+    console.log("[ingest] user:", user.id, "isAdmin:", isAdmin, "roleErr:", roleErr?.message);
     if (!isAdmin) {
       return new Response(JSON.stringify({ error: "Admin role required" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
