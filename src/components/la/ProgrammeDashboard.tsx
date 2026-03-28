@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2 } from "lucide-react";
+import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -203,6 +203,14 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   };
 
   const errorRows = results.filter(r => r.error);
+  const portfolioReady = filtered.filter(r => !r.error && r.lng && r.lat);
+  const portfolioFail = filtered.filter(r => r.error || !r.lng || !r.lat);
+
+  const getPortfolioStatus = (r: ScoredRow) => {
+    if (r.error) return { ready: false, reason: `Error: ${r.error}` };
+    if (!r.lng || !r.lat) return { ready: false, reason: "Missing coordinates" };
+    return { ready: true, reason: "Ready" };
+  };
 
   const SortHeader = ({ label, k }: { label: string; k: SortKey }) => (
     <TableHead className="cursor-pointer select-none hover:bg-muted/50 text-xs" onClick={() => toggleSort(k)}>
@@ -248,10 +256,18 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex gap-4 text-xs">
+            <div className="flex gap-4 text-xs flex-wrap">
               <span><strong>{summary.total}</strong> sites scored</span>
               <span><strong>{summary.total_kw.toLocaleString()}</strong> kW total</span>
               <span><strong>£{summary.total_estimate.toLocaleString()}</strong> estimated</span>
+              <span className="text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> <strong>{portfolioReady.length}</strong> portfolio ready
+              </span>
+              {portfolioFail.length > 0 && (
+                <span className="text-destructive flex items-center gap-1">
+                  <XCircle className="h-3 w-3" /> <strong>{portfolioFail.length}</strong> not saveable
+                </span>
+              )}
               {summary.errors > 0 && (
                 <span className="text-destructive flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" /> {summary.errors} errors
@@ -322,6 +338,7 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
+                 <TableHead className="text-xs">Status</TableHead>
                   <SortHeader label="Phase" k="phase" />
                   <SortHeader label="Name" k="site_name" />
                   <TableHead className="text-xs">Postcode</TableHead>
@@ -346,8 +363,20 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r, i) => (
-                  <TableRow key={i} className={r.error ? "bg-destructive/5" : ""}>
+                {filtered.map((r, i) => {
+                  const status = getPortfolioStatus(r);
+                  return (
+                  <TableRow key={i} className={r.error ? "bg-destructive/5" : !status.ready ? "bg-muted/30" : ""}>
+                    <TableCell>
+                      <span title={status.reason} className="flex items-center gap-1">
+                        {status.ready
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          : <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                        <span className={`text-[10px] ${status.ready ? "text-emerald-700" : "text-destructive"}`}>
+                          {status.ready ? "Ready" : "Fail"}
+                        </span>
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-[10px] ${r.phase === 1 ? "border-emerald-300 text-emerald-700" : r.phase === 2 ? "border-amber-300 text-amber-700" : "border-red-300 text-red-700"}`}>
                         P{r.phase}
@@ -380,7 +409,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                     )}
                     <TableCell className="text-xs max-w-[160px] truncate" title={r.phase_rationale}>{r.phase_rationale}</TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
