@@ -1,49 +1,62 @@
 
 
-## Auto-Create & Link DNO Layers — Final Implementation Plan
+## Fix & Complete ENWL + SPEN Ingestion Pipeline
 
-### Confirmed: `slug` is globally unique on `layer_registry`
-`ON CONFLICT (slug)` is safe — no need for a composite `(slug, dno)` conflict target.
+### Current State
 
-### What we're building
+| DNO | Layers | With Data | Empty | Datasets Linked | Issues |
+|-----|--------|-----------|-------|-----------------|--------|
+| **ENWL** | 21 | 4 | 17 | 85 | 6 sync errors (timeouts + 520s), 17 layers never ingested |
+| **SPEN** | 4 | 3 | 1 | **0** | Auto-link never ran; "SPEN Line asset" has wrong config (Geometry type → geo_substations for line data) |
 
-1. **Database migration** — a `SECURITY DEFINER` RPC `auto_create_dno_layers(p_dno text, p_force boolean default false)` containing priority-ordered matching rules as a JSON array inside the function body. ENWL rules seeded first; adding another DNO later means adding an `ELSIF` block.
+### What Needs to Happen
 
-2. **Admin UI button** — "Auto-Create & Link Layers" in `NpgDatasetRegistry.tsx` that calls the RPC and shows a summary toast.
+**1. Fix SPEN auto_create_dno_layers rules**
 
-### Migration: RPC function
+The SPEN rules in the RPC created layers before datasets were linked (0 linked datasets). The existing 4 SPEN layers appear to have been created manually or from the old ingestion engine. The RPC needs to actually match SPEN dataset titles to layers. Looking at the discovered SPEN geospatial datasets:
 
-The function will:
-1. Select all geospatial datasets from `dno_dataset_registry` for the given DNO (filtered to `linked_layer_id IS NULL` unless `p_force = true`)
-2. Iterate a priority-ordered rules array where each rule has: `match_patterns` (ILIKE on `dataset_id`), `exclude_patterns`, and target layer config
-3. For each rule with matches: `INSERT INTO layer_registry ... ON CONFLICT (slug) DO UPDATE SET updated_at = now()` — returns the layer `id`
-4. Update matched datasets: `SET linked_layer_id = <id>, geometry_type = COALESCE(override, geometry_type), storage_table = COALESCE(override, storage_table)`
-5. Return JSON: `{layers_created, layers_reused, datasets_linked, datasets_skipped, unmatched}`
+- GIS Line Assets (SPD/SPT + SPM) — 6M rows total, should map to `geo_cables` with LineString override
+- GIS Point Assets (SPD/SPT + SPM) — 683k rows, should map to `geo_substations` with Point override  
+- Secondary Substation Polygons — 90k, `geo_polygons`
+- LV Monitoring — 45k points, `geo_points`
+- Smart Meter by Transformer — 35k points, `geo_points`
+- Smart Meter by Census Area — 16k polygons, `geo_polygons`
+- DFES Substation Polygons (SPD + SPM) — ~800 polygons, `geo_polygons`
+- Primary Substation Polygons (SPD + SPM + NDP variants) — ~1500 polygons, `geo_polygons`
+- Flexibility Assets + Deferred Reinforcement — ~400 polygons, `geo_polygons`
+- DNOA Polygons — 49 polygons, `geo_polygons`
+- Aggregated Smart Meter (Wirral + Ayrshire) — ~1500 points, `geo_points`
 
-**Tight matching strategy** (addressing ChatGPT's concern):
-- `%boundary%` is NOT used as a broad pattern. Service area datasets are matched with specific patterns: `%control-area%`, `%control-boundary%`, `%general-boundary%`, `%idno-polygon%`
-- `%overhead%` is combined with `%conductor%` OR voltage-specific prefixes like `%11kv-overhead%`, `%33kv-overhead%` to avoid false positives
-- Exclusion patterns prevent cross-contamination (e.g. `dfes-%` rule excludes `%sites%` which belong to substations)
-- Unmatched datasets are returned for manual review, not silently dropped
+The current SPEN rules may be too narrow or pattern-mismatched. I'll update the RPC with corrected SPEN rules that properly match these dataset titles.
 
-**16 ENWL layers** as previously agreed (substations, ECR, capacity heatmap, HV 11kV, HV 6.6kV, distribution TX, overhead conductors, NDP headroom, DFES forecasts, connection queue, service areas, flexibility, EV registrations, LCT data, environmental constraints, biodiversity).
+**2. Fix "SPEN Line asset" layer config**
 
-**Geometry overrides**: Overhead conductor datasets forced to `LineString` regardless of crawler detection.
+Currently has `geometry_type: Geometry` and `storage_table: geo_substations` — should be `geometry_type: LineString` and `storage_table: geo_cables`.
 
-**Storage tables**: Using existing tables only — `geo_substations` for point-based capacity/forecast data (consistent with NPG), `geo_cables` for linework, `geo_polygons` for general polygons, `geo_constraints` for environmental constraints, `geo_points` for non-substation point data like LCT.
+**3. Trigger ingestion for all empty ENWL layers**
 
-### UI Changes
+17 ENWL layers have linked datasets but 0 features. These need their datasets activated and synced. The ingestion is done via the admin UI ("Sync All Active") but requires datasets to be marked `active = true` first.
 
-In `NpgDatasetRegistry.tsx`:
-- Add "Auto-Create & Link Layers" button next to "Discover All Datasets"
-- Shows loading state during RPC call
-- Success toast with counts (layers created/reused, datasets linked, unmatched count)
-- If unmatched > 0, show a warning with the list of unmatched dataset titles
+**4. Handle timeout/520 errors**
 
-### Files to change
+Some ENWL datasets (LV Overhead Conductors, DFES LV Headroom/Peak Demand, DSO Primary Polygons) failed with timeouts or 520 errors. These are likely large datasets hitting the 150s edge function timeout. The fix is to ensure the ingest function handles these gracefully.
 
-| File | Change |
-|------|--------|
-| New migration | `auto_create_dno_layers` RPC function with ENWL rules |
-| `src/components/admin/NpgDatasetRegistry.tsx` | Add auto-link button, call RPC, display summary |
+### Implementation Steps
+
+| Step | File | Change |
+|------|------|--------|
+| 1 | New migration | Update `auto_create_dno_layers` RPC with corrected SPEN matching rules covering all geospatial datasets above |
+| 2 | New migration | Fix existing "SPEN Line asset" layer: update `storage_table` to `geo_cables`, `geometry_type` to `LineString` |
+| 3 | New migration | Activate (set `active = true`) all ENWL datasets that are linked to a layer but not yet active, so "Sync All" will pick them up |
+| 4 | `src/components/admin/NpgDatasetRegistry.tsx` | After auto-link, auto-activate all newly linked datasets so they're ready for Sync All |
+
+After implementation, the workflow is:
+1. Go to DNO Registry → select SPEN → click "Auto-Create & Link Layers"
+2. Click "Sync All Active" to start ingestion
+3. Switch to ENWL → click "Sync All Active" for remaining empty layers
+4. Check Layers panel on the map — data should appear
+
+### Technical Notes
+- SPEN GIS Line/Point Assets are very large (3M-6M rows). These will hit the 10k Opendatasoft API limit unless geographic partitioning is applied. Initial ingestion will capture the first 10k records per dataset — this is a known limitation documented in the architecture.
+- The 520 errors on ENWL DSO Primary Polygons suggest the backend was overloaded during batch insert; sequential re-sync should resolve this.
 
