@@ -79,6 +79,24 @@ const DNO_REGISTRY: DnoDef[] = [
       { key: "count_points", label: "Traffic Count Points (AADF)", dataset_id: "count-points", storage_table: "geo_points", geometry_type: "Point", expected_records: 23500 },
     ],
   },
+  {
+    key: "NAPTAN",
+    label: "NaPTAN Transport Nodes",
+    base_url: "https://naptan.api.dft.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "access_nodes", label: "Bus, Rail, Tram & Ferry Stops", dataset_id: "access-nodes", storage_table: "geo_points", geometry_type: "Point", expected_records: 400000 },
+    ],
+  },
+  {
+    key: "STATS19",
+    label: "DfT Road Accidents (STATS19)",
+    base_url: "https://data.dft.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "collisions", label: "Collision Data (Last 5 Years)", dataset_id: "road-casualty-statistics", storage_table: "geo_points", geometry_type: "Point", expected_records: 650000 },
+    ],
+  },
 ];
 
 const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -115,10 +133,10 @@ export function DnoApiSources() {
 
   const handleSync = async (dno: DnoDef, ds: DatasetDef) => {
     const syncKey = getSyncKey(dno.key, ds.key);
-    const isDft = dno.key === "DFT";
+    const isSelfContained = ["DFT", "NAPTAN", "STATS19"].includes(dno.key);
     const layerId = selectedLayer[syncKey];
 
-    if (!isDft && !layerId) {
+    if (!isSelfContained && !layerId) {
       toast.error("Select a target layer first");
       return;
     }
@@ -140,9 +158,15 @@ export function DnoApiSources() {
       }));
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const isDft = dno.key === "DFT";
-      const functionName = isDft ? "dft-traffic-proxy" : "dno-open-data-ingest";
-      const body = isDft
+      
+      // Route to appropriate edge function
+      const functionMap: Record<string, string> = {
+        DFT: "dft-traffic-proxy",
+        NAPTAN: "naptan-ingest",
+        STATS19: "stats19-ingest",
+      };
+      const functionName = functionMap[dno.key] || "dno-open-data-ingest";
+      const body = isSelfContained
         ? { action: "ingest" }
         : { dno: dno.key, dataset_key: ds.key, layer_id: layerId, batch_size: 100 };
 
@@ -280,7 +304,7 @@ export function DnoApiSources() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && dno.key !== "DFT")}
+                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && !["DFT", "NAPTAN", "STATS19"].includes(dno.key))}
                                 onClick={() => handleSync(dno, ds)}
                               >
                                 {state?.syncing ? (
