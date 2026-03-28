@@ -1,22 +1,31 @@
 
 
-## DfT Road Traffic Count Points — Map Layer Integration
+## Add DfT Traffic Ingest Button + Fix Auth + End-to-End Test
 
-### What we're building
+### What's needed
 
-A new map layer showing ~23,500 DfT traffic count point locations across England, with circle markers sized/coloured by traffic volume (AADF). Clicking a count point shows a detail panel with vehicle breakdown (cars, HGVs, buses, cycles). No API key needed — the DfT API is fully public.
+1. **Fix auth in `dft-traffic-proxy`** — Currently uses deprecated `getClaims()`. Replace with `getUser()` to match the standard pattern used across all other edge functions.
 
-### Architecture
+2. **Add DfT entry to the DnoApiSources admin panel** — Add a new DNO entry for "DfT Road Traffic" with a one-click "Ingest" button that calls the `dft-traffic-proxy` edge function with `action: "ingest"`. This follows the existing `DNO_REGISTRY` pattern but calls a different edge function endpoint.
 
-Following the existing pattern: edge function proxy → `geo_points` storage → `layer_registry` entry → map rendering via `useLayerManager`.
+3. **Verify layer registry entry exists** — The migration already inserted `dft_traffic_count_points` into `layer_registry`. The ingest function looks it up by slug.
 
 ### Implementation Steps
 
-**1. Create edge function `dft-traffic-proxy`**
-- Fetches from `https://roadtraffic.dft.gov.uk/api/count-points` with pagination (`page[size]=1000`)
-- Extracts `latitude`, `longitude`, `road_name`, `road_category`, `local_authority_name`, and latest AADF data
-- Returns GeoJSON FeatureCollection for ingestion into `geo_points`
-- Also supports a detail endpoint: given a count point ID, fetches `/api/average-annual-daily-flow?filter[count_point_id]=X` to return vehicle breakdown
+**Step 1: Fix `supabase/functions/dft-traffic-proxy/index.ts`**
+- Replace `getClaims(token)` with `getUser(token)` for auth verification
+- Extract `user_id` from `user.id` instead of `claims.sub`
 
-**2. Database migration**
-- Insert a `layer_registry` entry: slug `dft_traffic_count_points`, category `Transport`, dno
+**Step 2: Edit `src/components/admin/DnoApiSources.tsx`**
+- Add a new entry to `DNO_REGISTRY` for DfT:
+  ```
+  { key: "DFT", label: "DfT Road Traffic", base_url: "https://roadtraffic.dft.gov.uk", status: "live", datasets: [
+    { key: "count_points", label: "Traffic Count Points (AADF)", dataset_id: "count-points", storage_table: "geo_points", geometry_type: "Point", expected_records: 23500 }
+  ]}
+  ```
+- In `handleSync`, add a branch: if `dno.key === "DFT"`, call `dft-traffic-proxy` with `{ action: "ingest" }` instead of `dno-open-data-ingest`
+
+### Files to Change
+- `supabase/functions/dft-traffic-proxy/index.ts` — Fix auth method
+- `src/components/admin/DnoApiSources.tsx` — Add DfT registry entry + sync handler branch
+
