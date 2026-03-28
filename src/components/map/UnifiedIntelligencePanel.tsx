@@ -256,12 +256,12 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       if (scoreRes.data.nearest_points && onConnectionLines) {
         const lines: ConnectionLine[] = [];
         const origin: [number, number] = [lng, lat];
-        if (res.data.nearest_points.primary)
-          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, res.data.nearest_points.primary], color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
-        if (res.data.nearest_points.feeder)
-          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, res.data.nearest_points.feeder], color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
-        if (res.data.nearest_points.cable)
-          lines.push({ id: "line-cable", label: "Cable", coords: [origin, res.data.nearest_points.cable], color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
+        if (scoreRes.data.nearest_points.primary)
+          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, scoreRes.data.nearest_points.primary], color: "#e74c3c", distance_m: scoreRes.data.distances?.primary_m || 0 });
+        if (scoreRes.data.nearest_points.feeder)
+          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, scoreRes.data.nearest_points.feeder], color: "#9b59b6", distance_m: scoreRes.data.distances?.feeder_m || 0 });
+        if (scoreRes.data.nearest_points.cable)
+          lines.push({ id: "line-cable", label: "Cable", coords: [origin, scoreRes.data.nearest_points.cable], color: "#e67e22", distance_m: scoreRes.data.distances?.capacity_segment_m || 0 });
         onConnectionLines(lines);
       }
     } catch (err: any) {
