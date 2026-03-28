@@ -27,56 +27,7 @@ interface DnoDef {
   datasets: DatasetDef[];
 }
 
-const DNO_REGISTRY: DnoDef[] = [
-  {
-    key: "NPG",
-    label: "Northern Powergrid",
-    base_url: "https://northernpowergrid.opendatasoft.com",
-    status: "live",
-    datasets: [
-      { key: "primary_substations", label: "Primary Substations + Utilisation", dataset_id: "heatmapdatatable", storage_table: "geo_substations", geometry_type: "Point", expected_records: 670 },
-      { key: "supply_areas", label: "Supply Area Polygons", dataset_id: "heatmapsubstationareas", storage_table: "geo_polygons", geometry_type: "MultiPolygon", expected_records: 683 },
-      { key: "ehv_feeders", label: "EHV Feeders", dataset_id: "npg-ehv-feeders", storage_table: "geo_feeders", geometry_type: "LineString", expected_records: 7850 },
-      { key: "lv_supports", label: "LV Support Locations", dataset_id: "lv-support-locations", storage_table: "geo_points", geometry_type: "Point", expected_records: 175709 },
-    ],
-  },
-  {
-    key: "UKPN",
-    label: "UK Power Networks",
-    base_url: "https://ukpowernetworks.opendatasoft.com",
-    status: "auth_required",
-    datasets: [
-      { key: "licence_boundaries", label: "Licence Boundaries", dataset_id: "ukpn-licence-boundaries", storage_table: "geo_polygons", geometry_type: "MultiPolygon", expected_records: 3 },
-    ],
-  },
-  {
-    key: "NGED",
-    label: "National Grid ED",
-    base_url: "https://connecteddata.nationalgrid.co.uk",
-    status: "blocked",
-    datasets: [],
-  },
-  {
-    key: "SPEN",
-    label: "SP Energy Networks",
-    base_url: "https://opendata.spenergynetworks.co.uk",
-    status: "blocked",
-    datasets: [],
-  },
-  {
-    key: "ENWL",
-    label: "Electricity North West",
-    base_url: "https://electricitynorthwest.opendatasoft.com",
-    status: "live",
-    datasets: [],
-  },
-  {
-    key: "SSEN",
-    label: "Scottish & Southern",
-    base_url: "https://data.ssen.co.uk",
-    status: "blocked",
-    datasets: [],
-  },
+const EXTERNAL_API_REGISTRY: DnoDef[] = [
   {
     key: "DFT",
     label: "DfT Road Traffic",
@@ -102,6 +53,33 @@ const DNO_REGISTRY: DnoDef[] = [
     status: "live",
     datasets: [
       { key: "collisions", label: "Collision Data (Last 5 Years)", dataset_id: "road-casualty-statistics", storage_table: "geo_points", geometry_type: "Point", expected_records: 650000 },
+    ],
+  },
+  {
+    key: "OS",
+    label: "OS Features API",
+    base_url: "https://api.os.uk/features",
+    status: "live",
+    datasets: [
+      { key: "os_highways", label: "Highway Network (OS Open Roads)", dataset_id: "os-open-roads", storage_table: "geo_feeders", geometry_type: "LineString", expected_records: 0 },
+    ],
+  },
+  {
+    key: "LANDREG",
+    label: "HM Land Registry",
+    base_url: "https://landregistry.data.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "inspire_polygons", label: "INSPIRE Index Polygons", dataset_id: "inspire-index", storage_table: "geo_polygons", geometry_type: "MultiPolygon", expected_records: 0 },
+    ],
+  },
+  {
+    key: "PLANNING",
+    label: "Planning Data (DLUHC)",
+    base_url: "https://www.planning.data.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "planning_apps", label: "Planning Applications", dataset_id: "planning-application", storage_table: "geo_points", geometry_type: "Point", expected_records: 0 },
     ],
   },
 ];
@@ -276,16 +254,15 @@ export function DnoApiSources() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5" />
-            DNO Open Data API Sources
+            External API Sources
           </CardTitle>
           <CardDescription>
-            Pull live network data from UK DNO open data portals directly into your layer registry.
-            All DNOs use the Opendatasoft API framework.
+            Pull live data from government and national data portals. DNO network data is managed in the DNO Registry tab.
           </CardDescription>
         </CardHeader>
       </Card>
 
-      {DNO_REGISTRY.map((dno) => {
+      {EXTERNAL_API_REGISTRY.map((dno) => {
         const statusBadge = STATUS_BADGES[dno.status];
         return (
           <Card key={dno.key}>

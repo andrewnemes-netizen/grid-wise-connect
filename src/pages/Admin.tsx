@@ -5,9 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, Database, SlidersHorizontal, Layers, Zap, Globe, Radar } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar } from "lucide-react";
 import { format } from "date-fns";
-import { DataUploader } from "@/components/admin/DataUploader";
+
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
 import { LayerManagement } from "@/components/admin/LayerManagement";
 import { UserRolesManagement } from "@/components/admin/UserRolesManagement";
@@ -40,20 +40,16 @@ const Admin = () => {
       <Tabs defaultValue="layers">
         <TabsList>
           <TabsTrigger value="layers"><Layers className="h-3.5 w-3.5 mr-1.5" />Layers</TabsTrigger>
-          <TabsTrigger value="data"><Database className="h-3.5 w-3.5 mr-1.5" />Site Data</TabsTrigger>
           <TabsTrigger value="rates"><SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Unit Rates</TabsTrigger>
           <TabsTrigger value="evhub"><Zap className="h-3.5 w-3.5 mr-1.5" />EV Hub Rules</TabsTrigger>
+          <TabsTrigger value="dno"><Radar className="h-3.5 w-3.5 mr-1.5" />DNO Registry</TabsTrigger>
+          <TabsTrigger value="api"><Globe className="h-3.5 w-3.5 mr-1.5" />External APIs</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
-          <TabsTrigger value="api"><Globe className="h-3.5 w-3.5 mr-1.5" />API Sources</TabsTrigger>
-          <TabsTrigger value="npg"><Radar className="h-3.5 w-3.5 mr-1.5" />NPG Registry</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
         </TabsList>
 
         <TabsContent value="layers" className="mt-4">
           <LayerManagement />
-        </TabsContent>
-        <TabsContent value="data" className="mt-4">
-          <DataUploader />
         </TabsContent>
         <TabsContent value="rates" className="mt-4">
           <UnitRatesSettings />
@@ -61,14 +57,14 @@ const Admin = () => {
         <TabsContent value="evhub" className="mt-4">
           <EvHubRulesEditor />
         </TabsContent>
-        <TabsContent value="users" className="mt-4">
-          <UserRolesManagement />
+        <TabsContent value="dno" className="mt-4">
+          <NpgDatasetRegistry />
         </TabsContent>
         <TabsContent value="api" className="mt-4">
           <DnoApiSources />
         </TabsContent>
-        <TabsContent value="npg" className="mt-4">
-          <NpgDatasetRegistry />
+        <TabsContent value="users" className="mt-4">
+          <UserRolesManagement />
         </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
