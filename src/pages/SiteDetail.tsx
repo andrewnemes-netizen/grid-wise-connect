@@ -42,11 +42,14 @@ const SiteDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sites")
-        .select("*, lng:geom.st_x(), lat:geom.st_y()")
+        .select("*")
         .eq("id", id!)
         .single();
       if (error) throw error;
-      return data;
+
+      // Extract lat/lng from PostGIS geom via RPC
+      const { data: coordData } = await supabase.rpc("site_coords", { site_id: id! }).maybeSingle();
+      return { ...data, _lng: coordData?.lng ?? null, _lat: coordData?.lat ?? null };
     },
     enabled: !!id,
   });
