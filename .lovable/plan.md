@@ -1,40 +1,52 @@
 
 
-## Fix: kW Estimation From Charger Columns
+## Unify Cost Engine Across All System Entry Points
 
-### Two Bugs
+### Problem
 
-**Bug 1 — Fallback default of 7kW is wrong**
-Lines 207-210: if `estimateKwFromChargers` returns 0 (because all counts are zero, or no `proposed_kw` column), the code defaults to 7kW. This is incorrect — 0 chargers means 0kW. Remove the default.
+The system has **two separate cost engines** producing different results:
 
-**Bug 2 — Fuzzy matching may miss actual WYCA headers**
-The current matching logic uses nested string-contains checks that are brittle. The actual WYCA headers look like:
-- "Number of Lower Range Standard Chargers (3.7kW - < 6kW)"
-- "Number of Rapid Sockets (50kW - 149kW)"
+1. **`estimateConnectionCost`** in `src/lib/connectionCosts.ts` — the canonical engine used by the map connection assessment, portfolio, site detail, quick estimate, and PDF export. Most of these correctly pass dynamic `unitRates` from the admin console via `useUnitRates()`.
 
-The normalization replaces spaces with `_` but the matching checks for substrings like `"lower"` + `"3.7"` + `"charger"/"socket"`. This should work, but the issue might be that `charger` and `socket` columns for the same band are matching the wrong entry due to iteration order. Need to make matching more robust.
+2. **`estimateTotalCost`** in `supabase/functions/score-sites-batch/index.ts` (lines 123-143) — a hardcoded simplified clone used by the LA Programme batch scorer. It uses **fixed inline rates** (£85/m cable, £147/m blended excavation, flat 1.24× multiplier, always adds transformer cost even for LV).
 
-### Changes
+Additionally, **`useActiveStudy.ts`** calls `estimateConnectionCost` without passing unit rates (line 108), so it falls back to `DEFAULT_UNIT_RATES` instead of the admin-configured rates.
 
-**`src/components/la/CsvIntakePanel.tsx`**
+### Misalignments Found
 
-1. **Remove the 7kW default** (lines 207-210) — if kW is 0, store 0. A site with all-zero charger counts has 0kW capacity.
+| Location | Uses Admin Rates? | Issue |
+|----------|:-:|-------|
+| `score-sites-batch` edge function | No | Entirely separate hardcoded engine; adds transformer for LV; flat 1.24× instead of % fees |
+| `useActiveStudy.ts` (study save) | No | Calls `estimateConnectionCost()` without `unitRates` param |
+| `gridwise/commercialEngine.ts` | Optional | Falls back to `DEFAULT_UNIT_RATES` if caller doesn't pass rates |
+| Portfolio page | Yes | Already correct |
+| CostEstimatePanel | Yes | Already correct |
+| SiteDetail page | Yes | Already correct |
+| QuickEstimate page | Yes | Already correct |
+| PDF export | Partial | Uses passed rates but some call sites don't pass them |
 
-2. **Simplify `estimateKwFromChargers`** — replace the fragile nested-loop fuzzy matching with a cleaner approach: normalize all column names, then match each against a pattern table using simple keyword sets:
+### Fix Plan
 
-```text
-Pattern: ["lower", "3.7"] → 3.7kW per unit
-Pattern: ["higher", "6kw"] or ["higher", "6_kw"] → 7kW per unit  
-Pattern: ["fast", "8kw"] or ["fast", "49kw"] → 22kW per unit
-Pattern: ["rapid", "50kw"] or ["rapid", "149kw"] → 50kW per unit
-```
+**1. `supabase/functions/score-sites-batch/index.ts`** — Replace `estimateTotalCost` with logic that mirrors `estimateConnectionCost`:
+- Fetch `unit_rates` row from the database at the start of the function (one query, reused for all sites)
+- Apply the same voltage thresholds (LV ≤80kW, HV ≤1500kW, EHV above)
+- Only add transformer cost for HV/EHV (not LV)
+- Use separate footway/carriageway/verge excavation with surface split
+- Apply design_fee_pct + project_management_pct + contingency_pct instead of flat 1.24×
+- Include LV-specific items (service cable, feeder pillar, cutout, pot end) matching the main engine
+- Include mains extension logic when distance > threshold
 
-Iterate all columns once, check which band they match, sum `count × rate`. No double-counting (track matched columns).
+**2. `src/hooks/useActiveStudy.ts`** — Pass unit rates to `estimateConnectionCost`:
+- Import and call `useUnitRates()` hook
+- Pass the rates to both `estimateConnectionCost()` and `generateBom()` calls
 
-3. **Show 0kW in the preview table** when a site genuinely has zero chargers — this gives the user visibility that something may be wrong with that row.
+**3. `src/lib/generateAssessmentPdf.ts`** — Audit call sites to ensure rates are passed through (the function accepts `unitRates` param but callers may not pass it)
 
 ### Files to Change
+
 | File | Change |
 |------|--------|
-| `src/components/la/CsvIntakePanel.tsx` | Remove 7kW default; rewrite `estimateKwFromChargers` with simpler pattern matching |
+| `supabase/functions/score-sites-batch/index.ts` | Rewrite `estimateTotalCost` to mirror `connectionCosts.ts` logic; fetch `unit_rates` from DB |
+| `src/hooks/useActiveStudy.ts` | Import `useUnitRates`, pass rates to `estimateConnectionCost` and `generateBom` |
+| `src/lib/generateAssessmentPdf.ts` | Verify rates are passed at all call sites |
 
