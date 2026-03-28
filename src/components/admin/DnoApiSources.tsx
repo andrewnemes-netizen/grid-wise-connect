@@ -133,10 +133,10 @@ export function DnoApiSources() {
 
   const handleSync = async (dno: DnoDef, ds: DatasetDef) => {
     const syncKey = getSyncKey(dno.key, ds.key);
-    const isDft = dno.key === "DFT";
+    const isSelfContained = ["DFT", "NAPTAN", "STATS19"].includes(dno.key);
     const layerId = selectedLayer[syncKey];
 
-    if (!isDft && !layerId) {
+    if (!isSelfContained && !layerId) {
       toast.error("Select a target layer first");
       return;
     }
@@ -158,9 +158,15 @@ export function DnoApiSources() {
       }));
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const isDft = dno.key === "DFT";
-      const functionName = isDft ? "dft-traffic-proxy" : "dno-open-data-ingest";
-      const body = isDft
+      
+      // Route to appropriate edge function
+      const functionMap: Record<string, string> = {
+        DFT: "dft-traffic-proxy",
+        NAPTAN: "naptan-ingest",
+        STATS19: "stats19-ingest",
+      };
+      const functionName = functionMap[dno.key] || "dno-open-data-ingest";
+      const body = isSelfContained
         ? { action: "ingest" }
         : { dno: dno.key, dataset_key: ds.key, layer_id: layerId, batch_size: 100 };
 
