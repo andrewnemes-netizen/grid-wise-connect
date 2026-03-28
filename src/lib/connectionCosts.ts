@@ -400,10 +400,18 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
 
   const items: BomItem[] = [];
 
-  // Cable
-  const cableType = voltageLevel === "LV" ? "185mm² 4-core XLPE" : voltageLevel === "HV" ? "300mm² 3-core XLPE 11kV" : "300mm² 3-core XLPE 33kV";
-  const cableRate = voltageLevel === "LV" ? rates.cable_lv_per_m : voltageLevel === "HV" ? rates.cable_hv_per_m : rates.cable_ehv_per_m;
-  items.push({ category: "Cable", item: cableType, quantity: cableDistance, unit: "m", unit_cost: cableRate, total_cost: cableDistance * cableRate });
+  // Cable — selected based on load current and DNO kVA thresholds
+  const selectedCable = selectCableForLoad(proposed_kw, voltageLevel);
+  const designCurrent_A = (proposed_kw * 1000) / (Math.sqrt(3) * 415 * 0.95);
+  const kva = proposed_kw / 0.95;
+  items.push({
+    category: "Cable",
+    item: `${selectedCable.cable_type} (${kva.toFixed(0)} kVA, Ib=${designCurrent_A.toFixed(1)}A, Iz=${selectedCable.current_rating_a}A)`,
+    quantity: cableDistance,
+    unit: "m",
+    unit_cost: selectedCable.cost_per_m,
+    total_cost: cableDistance * selectedCable.cost_per_m,
+  });
 
   // Ducting
   items.push({ category: "Cable", item: "150mm HDPE duct", quantity: cableDistance, unit: "m", unit_cost: rates.duct_per_m, total_cost: cableDistance * rates.duct_per_m });
