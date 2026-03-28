@@ -7,15 +7,17 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-/**
- * NaPTAN Transport Nodes Ingestion
- *
- * Fetches bus stops, rail stations, tram stops etc from the NaPTAN API
- * and stores them as geo_points for the transport accessibility layer.
- *
- * Actions:
- *  - ingest: Paginate all access nodes, write to geo_points
- */
+const NAPTAN_CSV_URL =
+  "https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv";
+
+// Key stop types to ingest
+const KEEP_STOP_TYPES = new Set(["BCT", "RLY", "MET", "PLT", "FER", "RSE", "TMU"]);
+
+// Map stop type codes to friendly node_type
+const NODE_TYPE_MAP: Record<string, string> = {
+  BCT: "bus", RLY: "rail", RSE: "rail", MET: "tram", PLT: "tram", TMU: "tram", FER: "ferry",
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -32,7 +34,6 @@ serve(async (req) => {
       });
     }
 
-    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -58,9 +59,8 @@ serve(async (req) => {
     }
 
     const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
-    const userId = userData.user.id;
     const { data: isAdmin } = await serviceClient.rpc("has_role", {
-      _user_id: userId,
+      _user_id: userData.user.id,
       _role: "admin",
     });
     if (!isAdmin) {
@@ -70,7 +70,6 @@ serve(async (req) => {
       });
     }
 
-    // Find layer registry entry
     const { data: layerMeta } = await serviceClient
       .from("layer_registry")
       .select("id")
@@ -78,107 +77,21 @@ serve(async (req) => {
       .single();
 
     if (!layerMeta) {
-      return new Response(JSON.stringify({ error: "Layer registry entry not found for naptan_transport_nodes" }), {
+      return new Response(JSON.stringify({ error: "Layer not found for naptan_transport_nodes" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const layerId = layerMeta.id;
-    let totalInserted = 0;
-    let pageNum = 1;
-    const pageSize = 1000;
-
-    // Filter to main stop types: bus (BCT), rail (RLY), tram/metro (MET, PLT), ferry (FER)
-    const stopTypes = ["BCT", "RLY", "MET", "PLT", "FER"];
-
-    for (const stopType of stopTypes) {
-      pageNum = 1;
-      while (true) {
-        const offset = (pageNum - 1) * pageSize;
-        const url = `https://naptan.api.dft.gov.uk/v1/access-nodes?stopTypes=${stopType}&page=${pageNum}&pageSize=${pageSize}`;
-        console.log(`Fetching NaPTAN ${stopType} page ${pageNum}: ${url}`);
-
-        let resp: Response;
-        try {
-          resp = await fetch(url, {
-            headers: { "Accept": "application/json" },
-          });
-        } catch (fetchErr) {
-          console.error(`Fetch error for ${stopType} page ${pageNum}:`, fetchErr);
-          break;
-        }
-
-        if (!resp.ok) {
-          console.error(`NaPTAN API error on ${stopType} page ${pageNum}: ${resp.status}`);
-          // Try to consume response body
-          try { await resp.text(); } catch {}
-          break;
-        }
-
-        let nodes: any[];
-        try {
-          const json = await resp.json();
-          nodes = Array.isArray(json) ? json : (json.stops || json.data || json.member || []);
-        } catch {
-          console.error(`JSON parse error for ${stopType} page ${pageNum}`);
-          break;
-        }
-
-        if (nodes.length === 0) break;
-
-        const geoRows = nodes
-          .filter((n: any) => n.latitude && n.longitude)
-          .map((n: any) => ({
-            layer_id: layerId,
-            dno: "National",
-            asset_id: n.atcoCode || n.naptanCode || String(n.id),
-            name: n.commonName || n.localityName || `${stopType} Stop`,
-            geom: `SRID=4326;POINT(${n.longitude} ${n.latitude})`,
-            attrs_json: {
-              atco_code: n.atcoCode,
-              naptan_code: n.naptanCode,
-              stop_type: n.stopType || stopType,
-              bearing: n.bearing,
-              locality_name: n.localityName,
-              parent_locality: n.parentLocalityName,
-              indicator: n.indicator,
-              street: n.street,
-              status: n.status,
-              node_type: stopType === "RLY" ? "rail" : stopType === "BCT" ? "bus" : stopType === "MET" || stopType === "PLT" ? "tram" : "ferry",
-            },
-          }));
-
-        if (geoRows.length > 0) {
-          // Batch in chunks of 500
-          for (let i = 0; i < geoRows.length; i += 500) {
-            const batch = geoRows.slice(i, i + 500);
-            const { error: insertErr } = await serviceClient
-              .from("geo_points")
-              .upsert(batch, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
-            if (insertErr) {
-              console.error(`Insert error ${stopType} page ${pageNum} batch ${i}:`, insertErr);
-            } else {
-              totalInserted += batch.length;
-            }
-          }
-        }
-
-        if (nodes.length < pageSize) break;
-        pageNum++;
-        // Rate limit
-        await new Promise((r) => setTimeout(r, 300));
-      }
-    }
-
-    // Update feature count
-    await serviceClient
-      .from("layer_registry")
-      .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
-      .eq("id", layerId);
+    // Background processing
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    EdgeRuntime.waitUntil(processNaptan(serviceClient, layerMeta.id));
 
     return new Response(
-      JSON.stringify({ success: true, total_inserted: totalInserted }),
+      JSON.stringify({
+        success: true,
+        message: "NaPTAN ingestion started in background. Check layer_registry feature_count for progress.",
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
@@ -189,3 +102,130 @@ serve(async (req) => {
     });
   }
 });
+
+async function processNaptan(serviceClient: any, layerId: string) {
+  try {
+    console.log("Downloading NaPTAN CSV...");
+    const csvResp = await fetch(NAPTAN_CSV_URL);
+    if (!csvResp.ok) {
+      console.error(`NaPTAN CSV download failed: ${csvResp.status}`);
+      return;
+    }
+
+    const csvText = await csvResp.text();
+    const lines = csvText.split("\n");
+    const header = lines[0].split(",").map((h: string) => h.trim().replace(/"/g, ""));
+
+    // Find column indices
+    const idx = (name: string) => header.findIndex((h: string) => h === name);
+    const iAtco = idx("ATCOCode");
+    const iNaptan = idx("NaptanCode");
+    const iName = idx("CommonName");
+    const iLat = idx("Latitude");
+    const iLon = idx("Longitude");
+    const iStopType = idx("StopType");
+    const iLocality = idx("LocalityName");
+    const iParentLocality = idx("ParentLocalityName");
+    const iStreet = idx("Street");
+    const iIndicator = idx("Indicator");
+    const iBearing = idx("Bearing");
+    const iStatus = idx("Status");
+
+    console.log(`NaPTAN CSV: ${lines.length - 1} rows, ${header.length} cols`);
+
+    let totalInserted = 0;
+    let skipped = 0;
+    const batchSize = 500;
+    let batch: any[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const cols = line.split(",").map((c: string) => c.trim().replace(/"/g, ""));
+
+      const stopType = cols[iStopType];
+      if (!KEEP_STOP_TYPES.has(stopType)) {
+        skipped++;
+        continue;
+      }
+
+      // Check status — skip inactive
+      const status = cols[iStatus];
+      if (status && status.toLowerCase() !== "active" && status.toLowerCase() !== "new") {
+        skipped++;
+        continue;
+      }
+
+      const lat = parseFloat(cols[iLat]);
+      const lon = parseFloat(cols[iLon]);
+      if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
+        skipped++;
+        continue;
+      }
+
+      const atcoCode = cols[iAtco] || `naptan_${i}`;
+
+      batch.push({
+        layer_id: layerId,
+        dno: "National",
+        asset_id: atcoCode,
+        name: cols[iName] || `${stopType} Stop`,
+        geom: `SRID=4326;POINT(${lon} ${lat})`,
+        attrs_json: {
+          atco_code: atcoCode,
+          naptan_code: cols[iNaptan] || null,
+          stop_type: stopType,
+          node_type: NODE_TYPE_MAP[stopType] || "bus",
+          locality_name: cols[iLocality] || null,
+          parent_locality: cols[iParentLocality] || null,
+          street: cols[iStreet] || null,
+          indicator: cols[iIndicator] || null,
+          bearing: cols[iBearing] || null,
+          status: status || null,
+        },
+      });
+
+      if (batch.length >= batchSize) {
+        const { error: insertErr } = await serviceClient
+          .from("geo_points")
+          .upsert(batch, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
+        if (insertErr) {
+          console.error(`NaPTAN insert error at row ${i}:`, insertErr);
+        } else {
+          totalInserted += batch.length;
+        }
+        batch = [];
+
+        if (totalInserted % 10000 === 0) {
+          console.log(`NaPTAN progress: ${totalInserted} inserted, ${skipped} skipped`);
+          await serviceClient
+            .from("layer_registry")
+            .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
+            .eq("id", layerId);
+        }
+      }
+    }
+
+    // Final batch
+    if (batch.length > 0) {
+      const { error: insertErr } = await serviceClient
+        .from("geo_points")
+        .upsert(batch, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
+      if (insertErr) {
+        console.error("NaPTAN final batch error:", insertErr);
+      } else {
+        totalInserted += batch.length;
+      }
+    }
+
+    await serviceClient
+      .from("layer_registry")
+      .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
+      .eq("id", layerId);
+
+    console.log(`NaPTAN complete: ${totalInserted} inserted, ${skipped} skipped`);
+  } catch (err) {
+    console.error("NaPTAN background processing error:", err);
+  }
+}
