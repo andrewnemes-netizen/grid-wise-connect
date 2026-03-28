@@ -854,7 +854,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y += 22;
 
     // Breakdown summary by category
-    const categories = ["Cable", "Excavation", "Equipment"];
+    const categories = ["Cable", "Excavation", "Equipment", "Labour"];
     let subtotal = 0;
     categories.forEach(cat => {
       const catTotal = estimate!.breakdown.filter(b => b.category.toLowerCase() === cat.toLowerCase()).reduce((s, b) => s + b.total, 0);
@@ -863,8 +863,8 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
         metricRow(cat, formatGBP(catTotal), 50);
       }
     });
-    metricRow("Subtotal", formatGBP(subtotal), 50);
-    const feesTotal = estimate.total_estimate - subtotal;
+    metricRow("Subtotal", formatGBP(estimate.subtotal), 50);
+    const feesTotal = estimate.total_estimate - estimate.subtotal;
     metricRow("Fees + Contingency", formatGBP(feesTotal), 50);
 
     y += 3;
