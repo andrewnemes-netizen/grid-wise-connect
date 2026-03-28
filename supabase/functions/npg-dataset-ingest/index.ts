@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
       NPG: "NPG_API_KEY",
       ENWL: "ENWL_API_KEY",
       SPEN: "SPEN_API_KEY",
+      NGED: "NGED_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";
     const apiKey = Deno.env.get(apiKeyEnvName) || null;
@@ -188,10 +189,15 @@ async function performIngest(
 
   try {
     const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
+    const isCkan = entry.dno === "NGED";
 
-    if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
+    if (isCkan) {
+      // NGED uses CKAN API — different ingestion path
+      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+    } else if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
       if (layerNeedsShape) {
-        // Skip GeoJSON export (centroids only), use records mode for geo_shape
         console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
         totalInserted = result.inserted;
