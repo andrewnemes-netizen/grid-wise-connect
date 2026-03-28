@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   RefreshCw, CheckCircle, XCircle, Loader2, Database, Globe, Search,
   Download, MapPin, FileSpreadsheet, Clock, AlertTriangle, Radar,
-  ChevronDown, ChevronUp, Eye
+  ChevronDown, ChevronUp, Eye, Layers, Info
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
