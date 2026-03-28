@@ -90,6 +90,28 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Early return for non-geospatial datasets linked to spatial layers
+    const spatialTables = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints", "geo_substations", "geo_points"];
+    if (!entry.is_geospatial && spatialTables.includes(layerRow.storage_table)) {
+      await supabase
+        .from("dno_dataset_registry")
+        .update({
+          last_sync_status: "skipped",
+          last_sync_error: "Tabular dataset — no geometry to ingest into spatial layer",
+          last_sync_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", registry_id);
+
+      return new Response(JSON.stringify({
+        accepted: false,
+        skipped: true,
+        reason: "Tabular dataset linked to spatial layer — no geometry available",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Mark as processing immediately
     await supabase
       .from("dno_dataset_registry")
@@ -106,8 +128,26 @@ Deno.serve(async (req) => {
     console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 
     // Offload heavy work to background via EdgeRuntime.waitUntil
+    // Wrap with timeout safety net — mark as error if not done in 55s
     EdgeRuntime.waitUntil(
-      performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by })
+      Promise.race([
+        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }),
+        new Promise<void>(async (_, reject) => {
+          await new Promise(r => setTimeout(r, 55000));
+          reject(new Error("Background ingest timed out after 55s"));
+        }),
+      ]).catch(async (err) => {
+        console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
+        await supabase
+          .from("dno_dataset_registry")
+          .update({
+            last_sync_status: "error",
+            last_sync_error: String(err),
+            last_sync_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", registry_id);
+      })
     );
 
     // Return immediately

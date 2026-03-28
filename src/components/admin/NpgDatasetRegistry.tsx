@@ -212,17 +212,27 @@ export function NpgDatasetRegistry() {
   // ── Sync All Active ──
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
+    // Filter out non-geospatial datasets linked to spatial layers
+    const syncable = activeLinkedDatasets.filter(ds => ds.is_geospatial);
+    const skippedTabular = activeLinkedDatasets.length - syncable.length;
+    if (skippedTabular > 0) {
+      toast.info(`Skipping ${skippedTabular} tabular dataset(s) — no geometry to ingest`);
+    }
+
     let successCount = 0;
     let failCount = 0;
-    for (const ds of activeLinkedDatasets) {
+    // Sequential processing with delay to avoid overwhelming the database
+    for (const ds of syncable) {
       try {
         await handleIngest(ds, "export");
         successCount++;
+        // Wait 2s between datasets to avoid 502s from concurrent load
+        await new Promise(r => setTimeout(r, 2000));
       } catch {
         failCount++;
       }
     }
-    toast.success(`Sync All complete: ${successCount} succeeded, ${failCount} failed`);
+    toast.success(`Sync All complete: ${successCount} started, ${failCount} failed`);
     setSyncAllRunning(false);
     queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
   };
