@@ -41,6 +41,7 @@ interface Props {
   onClose: () => void;
   onSaved?: () => void;
   onConnectionLines?: (lines: ConnectionLine[]) => void;
+  onCaptureMapScreenshot?: () => Promise<string | null>;
 }
 
 interface ScoreResult {
@@ -141,7 +142,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines }: Props) {
+export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: Props) {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
@@ -289,6 +290,16 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
     if (!lng || !lat || !result || !user) return;
     setSaving(true);
     try {
+      // Capture map screenshot with all visible infrastructure
+      let mapScreenshot: string | null = null;
+      if (onCaptureMapScreenshot) {
+        try {
+          mapScreenshot = await onCaptureMapScreenshot();
+        } catch (e) {
+          console.warn("Map screenshot capture failed:", e);
+        }
+      }
+
       const enrichedRawData = {
         ...result,
         // Persist computed intelligence so SiteDetail can display it
@@ -308,6 +319,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         cost_band: costBand,
         safety_incidents: safetyResult?.accident_summary?.total ?? 0,
         ai_safety_narrative: safetyResult?.ai_narrative ?? null,
+        map_screenshot: mapScreenshot,
       };
       const { error } = await supabase.from("sites").insert({
         site_name: siteName || "Unnamed Site",
