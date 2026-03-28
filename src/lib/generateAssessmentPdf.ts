@@ -794,7 +794,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       er.flags.forEach((f) => {
         checkPage(6);
         doc.setTextColor(f.severity === "error" ? BRAND.red : BRAND.amber);
-        doc.text(f.severity === "error" ? "✗" : "⚠", margin + 2, y);
+        doc.text(f.severity === "error" ? "X" : "!", margin + 2, y);
         doc.setTextColor(BRAND.black);
         doc.text(f.message, margin + 8, y);
         y += 4;
