@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,17 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [isSaving, setIsSaving] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleSelect = useCallback((idx: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const filtered = useMemo(() => {
     let list = results.filter(r => {
@@ -93,6 +104,14 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     });
     return list;
   }, [results, filterPhase, filterBand, sortKey, sortDir]);
+
+  const selectAllReady = useCallback(() => {
+    const readyIndices = new Set<number>();
+    filtered.forEach((r, i) => {
+      if (!r.error && r.lng && r.lat) readyIndices.add(i);
+    });
+    setSelected(readyIndices);
+  }, [filtered]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -129,12 +148,14 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   const saveToPortfolio = async () => {
     if (!user) { toast.error("Please log in"); return; }
 
-    const validRows = filtered.filter(r => !r.error && r.lng && r.lat);
-    if (validRows.length === 0) { toast.error("No valid sites to save"); return; }
+    const rowsToSave = selected.size > 0
+      ? Array.from(selected).map(i => filtered[i]).filter(r => !r.error && r.lng && r.lat)
+      : filtered.filter(r => !r.error && r.lng && r.lat);
+    if (rowsToSave.length === 0) { toast.error("No valid sites selected to save"); return; }
 
     setIsSaving(true);
     try {
-      const siteInserts = validRows.map(r => ({
+      const siteInserts = rowsToSave.map(r => ({
         site_name: r.site_name,
         postcode: r.postcode,
         proposed_kw: r.proposed_kw,
@@ -274,13 +295,21 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <Button size="sm" variant="ghost" onClick={selectAllReady} className="text-xs h-8">
+                Select All Ready ({portfolioReady.length})
+              </Button>
+              {selected.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={clearSelection} className="text-xs h-8 text-muted-foreground">
+                  Clear ({selected.size})
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={exportCsv}>
                 <Download className="mr-1 h-3 w-3" /> Export CSV
               </Button>
               <Button size="sm" onClick={saveToPortfolio} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
-                Save to Portfolio
+                Save {selected.size > 0 ? `${selected.size} Selected` : "All Ready"} to Portfolio
               </Button>
             </div>
           </div>
@@ -338,7 +367,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                 <TableHead className="text-xs">Status</TableHead>
+                 <TableHead className="text-xs w-8"></TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
                   <SortHeader label="Phase" k="phase" />
                   <SortHeader label="Name" k="site_name" />
                   <TableHead className="text-xs">Postcode</TableHead>
@@ -367,6 +397,15 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                   const status = getPortfolioStatus(r);
                   return (
                   <TableRow key={i} className={r.error ? "bg-destructive/5" : !status.ready ? "bg-muted/30" : ""}>
+                    <TableCell className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(i)}
+                        onChange={() => toggleSelect(i)}
+                        disabled={!status.ready}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                      />
+                    </TableCell>
                     <TableCell>
                       <span title={status.reason} className="flex items-center gap-1">
                         {status.ready
