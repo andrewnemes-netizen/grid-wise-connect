@@ -115,9 +115,10 @@ export function DnoApiSources() {
 
   const handleSync = async (dno: DnoDef, ds: DatasetDef) => {
     const syncKey = getSyncKey(dno.key, ds.key);
+    const isDft = dno.key === "DFT";
     const layerId = selectedLayer[syncKey];
 
-    if (!layerId) {
+    if (!isDft && !layerId) {
       toast.error("Select a target layer first");
       return;
     }
@@ -279,7 +280,7 @@ export function DnoApiSources() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={state?.syncing || dno.status !== "live" || !selectedLayer[syncKey]}
+                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && dno.key !== "DFT")}
                                 onClick={() => handleSync(dno, ds)}
                               >
                                 {state?.syncing ? (
