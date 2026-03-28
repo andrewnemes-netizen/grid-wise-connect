@@ -277,14 +277,26 @@ export function NpgDatasetRegistry() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Globe className="h-5 w-5" />
-                NPG Dataset Registry
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">
-                Auto-discovered from northernpowergrid.opendatasoft.com — Explore API v2.1
-              </CardDescription>
+            <div className="flex items-center gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Globe className="h-5 w-5" />
+                  {dnoConfig[selectedDno].label} Dataset Registry
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  Auto-discovered from {dnoConfig[selectedDno].portalUrl} — Explore API v2.1
+                </CardDescription>
+              </div>
+              <Select value={selectedDno} onValueChange={(v: any) => setSelectedDno(v)}>
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(dnoConfig).map(([key, cfg]) => (
+                    <SelectItem key={key} value={key} className="text-xs">{cfg.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleCrawl} disabled={crawling} size="sm">
