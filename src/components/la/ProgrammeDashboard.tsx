@@ -397,6 +397,15 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                   const status = getPortfolioStatus(r);
                   return (
                   <TableRow key={i} className={r.error ? "bg-destructive/5" : !status.ready ? "bg-muted/30" : ""}>
+                    <TableCell className="w-8">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(i)}
+                        onChange={() => toggleSelect(i)}
+                        disabled={!status.ready}
+                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                      />
+                    </TableCell>
                     <TableCell>
                       <span title={status.reason} className="flex items-center gap-1">
                         {status.ready
