@@ -304,7 +304,7 @@ export function DnoApiSources() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && dno.key !== "DFT")}
+                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && !["DFT", "NAPTAN", "STATS19"].includes(dno.key))}
                                 onClick={() => handleSync(dno, ds)}
                               >
                                 {state?.syncing ? (
