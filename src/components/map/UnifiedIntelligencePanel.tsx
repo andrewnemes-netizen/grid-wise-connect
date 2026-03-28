@@ -142,7 +142,6 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines }: Props) {
 export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: Props) {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
