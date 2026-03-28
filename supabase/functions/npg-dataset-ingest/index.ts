@@ -128,6 +128,7 @@ Deno.serve(async (req) => {
       NPG: "NPG_API_KEY",
       ENWL: "ENWL_API_KEY",
       SPEN: "SPEN_API_KEY",
+      NGED: "NGED_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";
     const apiKey = Deno.env.get(apiKeyEnvName) || null;
@@ -188,10 +189,15 @@ async function performIngest(
 
   try {
     const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
+    const isCkan = entry.dno === "NGED";
 
-    if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
+    if (isCkan) {
+      // NGED uses CKAN API — different ingestion path
+      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+    } else if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
       if (layerNeedsShape) {
-        // Skip GeoJSON export (centroids only), use records mode for geo_shape
         console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
         totalInserted = result.inserted;
@@ -426,6 +432,226 @@ async function ingestViaRecords(
   }
 
   return { inserted: totalInserted, skipped: totalSkipped };
+}
+
+// ─── CKAN (NGED) Ingestion ───────────────────────────────────────────────────
+
+const CKAN_BASE = "https://connecteddata.nationalgrid.co.uk";
+
+async function ingestViaCkan(
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
+): Promise<{ inserted: number; skipped: number }> {
+  // Strategy priority:
+  // 1. GeoJSON resource URL (direct download)
+  // 2. CKAN datastore_search (paginated JSON)
+  // 3. CSV resource URL (direct download)
+
+  if (entry.endpoint_export_geojson) {
+    console.log(`[ingest] CKAN: Using GeoJSON resource for ${entry.dataset_id}`);
+    try {
+      return await ingestViaCkanGeoJson(supabase, entry, layerRow, storageTable, apiKey);
+    } catch (err) {
+      console.warn(`[ingest] CKAN GeoJSON failed: ${err}, trying datastore...`);
+    }
+  }
+
+  if (entry.endpoint_records) {
+    console.log(`[ingest] CKAN: Using datastore_search for ${entry.dataset_id}`);
+    try {
+      return await ingestViaCkanDatastore(supabase, entry, layerRow, storageTable, apiKey);
+    } catch (err) {
+      console.warn(`[ingest] CKAN datastore failed: ${err}, trying CSV...`);
+    }
+  }
+
+  if (entry.endpoint_export_csv) {
+    console.log(`[ingest] CKAN: Using CSV resource for ${entry.dataset_id}`);
+    return await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
+  }
+
+  throw new Error(`No usable data endpoint for NGED dataset ${entry.dataset_id}`);
+}
+
+async function ingestViaCkanGeoJson(
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
+): Promise<{ inserted: number; skipped: number }> {
+  const url = entry.endpoint_export_geojson;
+  const headers: Record<string, string> = {};
+  if (apiKey) headers["Authorization"] = apiKey;
+
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) throw new Error(`GeoJSON fetch failed: HTTP ${resp.status}`);
+
+  const geojson = await resp.json();
+  const features = geojson.features || [];
+  console.log(`[ingest] CKAN GeoJSON: ${features.length} features`);
+  if (features.length === 0) return { inserted: 0, skipped: 0 };
+
+  const batchSize = getBatchSize(storageTable);
+  let totalInserted = 0;
+  let totalSkipped = 0;
+
+  for (let i = 0; i < features.length; i += batchSize) {
+    const batch = features.slice(i, i + batchSize);
+    const mapped = batch.map((f: any) => mapFeatureToRow(f, entry, layerRow, storageTable)).filter(Boolean);
+    totalSkipped += batch.length - mapped.length;
+
+    if (mapped.length > 0) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable,
+        _features_json: JSON.stringify(mapped),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? mapped.length;
+    }
+  }
+
+  return { inserted: totalInserted, skipped: totalSkipped };
+}
+
+async function ingestViaCkanDatastore(
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
+): Promise<{ inserted: number; skipped: number }> {
+  const baseUrl = entry.endpoint_records; // e.g. .../datastore_search?resource_id=XXX
+  const headers: Record<string, string> = {};
+  if (apiKey) headers["Authorization"] = apiKey;
+
+  let offset = 0;
+  const limit = 100;
+  let totalInserted = 0;
+  let totalSkipped = 0;
+
+  while (true) {
+    const url = `${baseUrl}&limit=${limit}&offset=${offset}`;
+    console.log(`[ingest] CKAN datastore page: ${url}`);
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) throw new Error(`Datastore search failed: HTTP ${resp.status}`);
+
+    const data = await resp.json();
+    if (!data.success) throw new Error(`Datastore search returned success=false`);
+
+    const records = data.result?.records || [];
+    if (records.length === 0) break;
+
+    const mapped = records.map((rec: any) =>
+      mapCkanRecordToRow(rec, entry, layerRow, storageTable)
+    ).filter(Boolean);
+
+    totalSkipped += records.length - mapped.length;
+
+    if (mapped.length > 0) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable,
+        _features_json: JSON.stringify(mapped),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? mapped.length;
+    }
+
+    offset += records.length;
+    if (records.length < limit) break;
+    if (offset >= 10000) {
+      console.warn(`[ingest] CKAN: Hit 10k record cap at offset ${offset}`);
+      break;
+    }
+
+    await sleep(200);
+  }
+
+  return { inserted: totalInserted, skipped: totalSkipped };
+}
+
+function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
+  let geom: any = null;
+
+  // NGED data often has easting/northing (BNG) or lat/lon columns
+  const lat = parseNum(rec.Latitude || rec.latitude || rec.lat || rec.LATITUDE);
+  const lon = parseNum(rec.Longitude || rec.longitude || rec.lon || rec.lng || rec.LONGITUDE);
+  const easting = parseNum(rec.Easting || rec.easting || rec.EASTING || rec.x);
+  const northing = parseNum(rec.Northing || rec.northing || rec.NORTHING || rec.y);
+
+  if (lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    geom = { type: "Point", coordinates: [lon, lat] };
+  } else if (easting != null && northing != null && easting > 100000 && northing > 100000) {
+    // BNG to WGS84 approximate conversion
+    const wgs = bngToWgs84Approx(easting, northing);
+    if (wgs) geom = { type: "Point", coordinates: [wgs.lon, wgs.lat] };
+  }
+
+  // Check for GeoJSON geometry field
+  if (!geom && rec.geojson) {
+    try {
+      const g = typeof rec.geojson === "string" ? JSON.parse(rec.geojson) : rec.geojson;
+      if (g.type && g.coordinates) geom = g;
+    } catch {}
+  }
+
+  if (!geom) return null;
+
+  geom = promoteGeometry(geom, storageTable);
+  if (!geom) return null;
+
+  // Build attrs from all non-geometry fields
+  const attrs: Record<string, any> = {};
+  const skipKeys = new Set(["_id", "geojson", "Latitude", "Longitude", "latitude", "longitude",
+    "lat", "lon", "lng", "Easting", "Northing", "easting", "northing", "EASTING", "NORTHING",
+    "LATITUDE", "LONGITUDE", "x", "y"]);
+  for (const [key, val] of Object.entries(rec)) {
+    if (!skipKeys.has(key) && val != null && typeof val !== "object") {
+      attrs[key] = val;
+    }
+  }
+
+  return {
+    geom_geojson: JSON.stringify(geom),
+    layer_id: entry.linked_layer_id,
+    dno: entry.dno,
+    name: rec.Name || rec.name || rec["Substation Name"] || rec.SubstationName || null,
+    asset_id: rec.AssetID || rec.asset_id || rec["Asset ID"] || rec._id?.toString() || null,
+    attrs_json: attrs,
+    status: rec.Status || rec.status || "active",
+    capacity_kw: parseNum(rec.InstalledCapacityMW || rec.FirmCapacity) != null
+      ? (parseNum(rec.InstalledCapacityMW) != null ? parseNum(rec.InstalledCapacityMW)! * 1000 : parseNum(rec.FirmCapacity))
+      : null,
+    demand_kw: parseNum(rec.MaxDemand || rec.max_demand),
+    headroom_kw: parseNum(rec.Headroom || rec.headroom),
+    utilisation_pct: parseNum(rec.Utilisation || rec.utilisation_pct),
+    voltage_kv: parseNum(rec.Voltage || rec.voltage_kv || rec["Voltage (kV)"]),
+    feeder_ref: rec.FeederRef || rec.feeder_ref || rec.CircuitID || null,
+    capacity_value: parseNum(rec.capacity_value),
+    capacity_unit: rec.capacity_unit || null,
+    capacity_flag: rec.capacity_flag || "unknown",
+    constraint_type: rec.constraint_type || null,
+  };
+}
+
+// Approximate BNG (OSGB36) to WGS84 conversion
+function bngToWgs84Approx(e: number, n: number): { lat: number; lon: number } | null {
+  // Helmert transform approximation
+  const a = 6377563.396, b = 6356256.909;
+  const e0 = 400000, n0 = -100000;
+  const f0 = 0.9996012717, phi0 = 0.85521133, lam0 = -0.034906585;
+  const ee = (a * a - b * b) / (a * a);
+
+  let phi = phi0, M = 0;
+  for (let i = 0; i < 10; i++) {
+    phi = (n - n0 - M) / (a * f0) + phi;
+    const Ma = (1 + ee / 4 + (ee * ee) * 5 / 64) * phi0;
+    const Mb = (1 + ee / 4 + (ee * ee) * 5 / 64) * phi;
+    M = b * f0 * ((Mb - Ma)
+      - (3 * (1 + ee / 4) / 2) * Math.sin(phi - phi0) * Math.cos(phi + phi0));
+  }
+  // Simplified: just use linear approximation for UK
+  const lat = 49.0 + (n - 0) / 111320;
+  const lon = -8.0 + (e - 0) / (111320 * Math.cos(lat * Math.PI / 180));
+
+  // Better: use simple affine for UK region
+  const latApprox = (n - (-100000)) / 111320 + 49.0;
+  const lonApprox = (e - 400000) / (111320 * Math.cos(54.0 * Math.PI / 180)) + (-2.0);
+
+  if (latApprox < 49 || latApprox > 61 || lonApprox < -9 || lonApprox > 3) return null;
+  return { lat: latApprox, lon: lonApprox };
 }
 
 // ─── Mapping Helpers ─────────────────────────────────────────────────────────
