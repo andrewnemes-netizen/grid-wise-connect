@@ -182,17 +182,78 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
+  // Derived scores from safety engine
+  const trafficScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const aadf = safetyResult.traffic_summary.max_aadf;
+    if (aadf > 10000) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
+    if (aadf > 3000) return { label: "MEDIUM", score: 60, color: "text-amber-700", bg: "bg-amber-100" };
+    return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
+  }, [safetyResult]);
+
+  const accessibilityScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const { bus_stops, rail_stations, total_nodes } = safetyResult.transport_summary;
+    const boosted = total_nodes + (rail_stations * 3); // rail boost
+    if (boosted > 5) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
+    if (boosted >= 2) return { label: "MEDIUM", score: 55, color: "text-amber-700", bg: "bg-amber-100" };
+    return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
+  }, [safetyResult]);
+
+  const safetyScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const risk = safetyResult.risk_score;
+    const safety = 100 - risk; // invert: high risk = low safety
+    const level = safety >= 60 ? "LOW RISK" : safety >= 30 ? "MODERATE" : "HIGH RISK";
+    const color = safety >= 60 ? "text-emerald-700" : safety >= 30 ? "text-amber-700" : "text-red-700";
+    const bg = safety >= 60 ? "bg-emerald-100" : safety >= 30 ? "bg-amber-100" : "bg-red-100";
+    return { label: level, score: safety, color, bg };
+  }, [safetyResult]);
+
+  // Master combined score
+  const masterScore = useMemo(() => {
+    if (!rawMetrics || !safetyResult) return null;
+    const tScore = trafficScore?.score ?? 50;
+    const aScore = accessibilityScore?.score ?? 50;
+    const sScore = safetyScore?.score ?? 50;
+    const gScore = viabilityIndex; // 0-100
+    // (Traffic × 0.35) + (Accessibility × 0.25) + (Grid × 0.25) - (Safety Risk × 0.10) - (Civils × 0.05)
+    const combined = Math.round(
+      tScore * 0.35 + aScore * 0.25 + gScore * 0.25 - (100 - sScore) * 0.10 - (rawMetrics.civils.constraint_count * 5) * 0.05
+    );
+    const clamped = Math.max(0, Math.min(100, combined));
+    const verdict = clamped >= 65 ? "INSTALL" : clamped >= 40 ? "REVIEW" : "AVOID";
+    return { score: clamped, verdict };
+  }, [rawMetrics, safetyResult, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
+
+  const MASTER_VERDICT_CONFIG: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
+    INSTALL: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Recommended for Installation" },
+    REVIEW: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Requires Further Review" },
+    AVOID: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Not Recommended" },
+  };
+
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
     try {
-      const res = await supabase.functions.invoke("score-site", {
-        body: { lng, lat, proposed_kw: pkw, site_name: siteName, postcode, site_type: siteType },
-      });
-      if (res.error) throw res.error;
-      setResult(res.data);
+      // Fire both calls in parallel
+      const [scoreRes, safetyRes] = await Promise.all([
+        supabase.functions.invoke("score-site", {
+          body: { lng, lat, proposed_kw: pkw, site_name: siteName, postcode, site_type: siteType },
+        }),
+        supabase.functions.invoke("safety-engine", {
+          body: { lng, lat, radius_m: 500, site_name: siteName || "Site" },
+        }),
+      ]);
 
-      if (res.data.nearest_points && onConnectionLines) {
+      if (scoreRes.error) throw scoreRes.error;
+      setResult(scoreRes.data);
+
+      if (!safetyRes.error && safetyRes.data) {
+        setSafetyResult(safetyRes.data);
+      }
+
+      if (scoreRes.data.nearest_points && onConnectionLines) {
         const lines: ConnectionLine[] = [];
         const origin: [number, number] = [lng, lat];
         if (res.data.nearest_points.primary)
