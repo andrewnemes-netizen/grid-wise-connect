@@ -172,6 +172,49 @@ Deno.serve(async (req) => {
       utilisation_band: s.utilisation_band,
     }));
 
+    // Resolve traffic + NaPTAN data
+    const [trafficPoints, naptanNodes] = await Promise.all([trafficPromise, naptanPromise]);
+
+    // Extract traffic AADF — check attrs_json for all_motor_vehicles
+    const trafficData = (trafficPoints || []).map((t: any) => ({
+      count_point_id: t.attrs_json?.count_point_id || t.asset_id,
+      road_name: t.attrs_json?.road_name || t.name,
+      all_motor_vehicles: t.attrs_json?.all_motor_vehicles || 0,
+      road_category: t.attrs_json?.road_category,
+      distance_m: t.distance_m,
+    }));
+    const maxAadf = Math.max(0, ...trafficData.map((t: any) => t.all_motor_vehicles || 0));
+
+    // If max AADF is 0 but we have count points, try live DfT API for the nearest one
+    let liveAadf = maxAadf;
+    if (maxAadf === 0 && trafficData.length > 0) {
+      const nearestCpId = trafficData[0].count_point_id;
+      try {
+        const aadfUrl = `https://roadtraffic.dft.gov.uk/api/average-annual-daily-flow?filter[count_point_id]=${nearestCpId}&page[size]=1&sort=-year`;
+        const aadfResp = await fetch(aadfUrl, { signal: AbortSignal.timeout(8000) });
+        if (aadfResp.ok) {
+          const aadfJson = await aadfResp.json();
+          const aadfRows = aadfJson.data || aadfJson.rows || [];
+          if (aadfRows.length > 0) {
+            liveAadf = aadfRows[0].all_motor_vehicles || 0;
+            trafficData[0].all_motor_vehicles = liveAadf;
+          }
+        }
+      } catch {
+        // Non-critical — proceed with 0
+      }
+    }
+
+    // Extract NaPTAN accessibility data
+    const busStops = (naptanNodes || []).filter((n: any) => {
+      const t = n.attrs_json?.node_type || n.attrs_json?.stop_type || "";
+      return t === "bus" || t === "BCT" || t === "BCS";
+    }).length;
+    const railStations = (naptanNodes || []).filter((n: any) => {
+      const t = n.attrs_json?.node_type || n.attrs_json?.stop_type || "";
+      return t === "rail" || t === "RLY" || t === "MET";
+    }).length;
+
     // Check user roles for output filtering — lightweight query, Supabase client is fine here
     const { data: roles } = await supabase
       .from("user_roles")
@@ -183,8 +226,16 @@ Deno.serve(async (req) => {
 
     let result = scoreData;
 
-    // Add nearest_substations to the result for all users
-    result = { ...result, nearest_substations: nearestSubstations };
+    // Add enrichment data to the result
+    result = {
+      ...result,
+      nearest_substations: nearestSubstations,
+      traffic_aadf: liveAadf,
+      traffic_count_points: trafficData.length,
+      nearby_bus_stops: busStops,
+      nearby_rail_stations: railStations,
+      nearby_transport_nodes: (naptanNodes || []).length,
+    };
 
     // Filter output for clients
     if (!isInternal) {
