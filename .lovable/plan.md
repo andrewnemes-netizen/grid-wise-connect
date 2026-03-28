@@ -1,61 +1,65 @@
 
 
-## NPG End-to-End Fix Plan
+## NPG Registry ↔ GIS Map — End-to-End Audit Results
 
-### Current State (from DB audit)
+### Current State Summary
 
-- 96 total NPG datasets discovered, only **8 active**, only **6 linked** to layers
-- Of those 6 linked datasets:
-  - **2 SUCCESS**: `embedded-capacity-register` (950 rows), `embedded-capacity-register-part-2` (1731 rows)
-  - **1 ERROR**: `3_day_gsp_carbon_intensity` — 502 Bad Gateway from Supabase RPC (batch_insert overwhelmed by concurrent syncs)
-  - **2 STUCK "processing"**: `ehv-and-hv-supports-location` (storage mismatch: dr=geo_substations, lr=geo_points), `npg-live-33kv-circuit` (tabular, no geometry, linked to geo_feeders)
-  - **1 FALSE SUCCESS**: `30_day_gsp_carbon_intensity` — 0 rows inserted, 27434 skipped (tabular, no geometry)
-- **3 storage table mismatches** between dataset registry and layer registry
-- Many important spatial datasets (Distribution Sub Service Areas, HV Underground Cables, Substation Sites, etc.) are inactive and unlinked
+**Data IS in the database** — the ingestion pipeline works. But several layers appear empty on the map due to stale metadata and configuration issues.
 
-### Root Causes
+### Issues Found
 
-1. **Concurrent "Sync All" overwhelms Supabase** — fires all ingests simultaneously, causing 502 from PostgREST
-2. **Storage table mismatches** — `promoteGeometry` rejects features when dataset registry says `geo_substations` but layer says `geo_points`
-3. **Tabular datasets linked to spatial layers** — no geometry to extract, all records skipped
-4. **Stuck "processing" status** — background jobs that fail silently never update status back
-5. **Most datasets not activated or linked** — only 8 of 96 are active
+**1. Stale `feature_count` on 6 layers (data exists but count = 0)**
 
-### Fixes
+These layers have real data but `layer_registry.feature_count` was never updated (the 55s timeout killed the background job before the count update ran):
 
-**Fix 1: Sequential "Sync All" with delay**
+| Layer | Actual Rows | Displayed Count |
+|-------|------------|-----------------|
+| EHV & HV Supports | 447,000 | 0 |
+| Embedded Capacity Register | 8,993 | 0 |
+| Substation Map Data - Table | 2,680 | 0 |
+| Carbon Intensity by GSP | 3,556 | 0 |
+| Substation Sites | unknown | 0 |
+| LV Support | 74,500 | 30,000 (stale) |
 
-In `NpgDatasetRegistry.tsx`, change the "Sync All Active" handler to process datasets sequentially (one at a time with a 2s gap) instead of firing all concurrently. This prevents 502s from overwhelming the database.
+The count is cosmetic in the toggle panel but signals "empty" to admins.
 
-**Fix 2: Fix storage table mismatches via migration**
+**2. Disabled layers that have data**
 
-```sql
--- ehv-and-hv-supports-location: registry says geo_substations, layer says geo_points → update registry
-UPDATE dno_dataset_registry SET storage_table = 'geo_points' 
-WHERE dataset_id = 'ehv-and-hv-supports-location' AND dno = 'NPG';
+`npg_cables_hv` (HV Underground Cables) has 10,000 rows but `enabled = false` — it won't appear in the layer toggle panel at all.
 
--- Clear stuck processing statuses
-UPDATE dno_dataset_registry SET last_sync_status = 'never', last_sync_error = NULL 
-WHERE last_sync_status = 'processing' AND dno = 'NPG';
-```
+**3. Geometry type "Geometry" on 3 layers**
 
-**Fix 3: Skip tabular datasets in Sync All**
+`lv_support`, `npg_network_development_plan_thermal_demand_headroom`, and `heatmap_test_substations` have `geometry_type = 'Geometry'` instead of a specific type. The `getRenderType()` function in `mapLayers.ts` defaults to `"circle"` for unrecognized types, which works for points but would break if the data contained lines or polygons.
 
-In the ingest function, if `is_geospatial = false` and the layer expects spatial data (geo_polygons/feeders/cables), return early with a clear "skipped: tabular data" status instead of attempting ingestion.
+**4. 55-second timeout too aggressive**
 
-**Fix 4: Auto-link more datasets to existing layers**
+The `EdgeRuntime.waitUntil` timeout of 55s kills large ingests (447k supports, 74k LV supports) before they complete and before `feature_count` gets updated. The `waitUntil` API allows up to 150s in Deno Deploy.
 
-Run a migration that links unlinked active geospatial datasets to matching layer_registry entries based on name/category matching, and activate key datasets that have matching layers (e.g., `substation_sites_list` → Substation Sites, `distribution-substation-service-areas` → Distribution Sub Service Areas, etc.).
+**5. Duplicate layer entries**
 
-**Fix 5: Timeout guard in background ingest**
+`npg_cables_hv` (disabled, 10k rows from NPG API) duplicates `hv_underground_cable` (enabled, 262k rows from manual upload). Same for some feeder layers.
 
-Wrap `performIngest` in a try/catch that always updates the registry status, even if the background job crashes. Add a `setTimeout` safety net that marks the job as "error" if it hasn't completed within 55 seconds.
+### Fix Plan
+
+**Fix 1: Database migration — sync feature_counts and enable layers**
+
+Run a single SQL migration that:
+- Updates `feature_count` for all NPG layers from actual row counts in storage tables
+- Enables `npg_cables_hv` (or merges its data into the existing `hv_underground_cable` layer)
+- Sets `geometry_type` to `'Point'` for `lv_support` and `npg_network_development_plan_thermal_demand_headroom` (their data is points)
+
+**Fix 2: Increase background timeout from 55s to 150s**
+
+In `npg-dataset-ingest/index.ts`, change the timeout from 55,000ms to 150,000ms. Edge functions support up to 150s for background tasks via `waitUntil`.
+
+**Fix 3: Move feature_count update BEFORE the timeout boundary**
+
+Restructure `performIngest` to update `feature_count` as part of the success status update (lines 219-232), ensuring it runs even if the timeout fires. Better: update count incrementally after each batch insert rather than a single count query at the end.
 
 ### Files to Change
 
 | File | Change |
 |------|--------|
-| `src/components/admin/NpgDatasetRegistry.tsx` | Sequential sync with delays; skip tabular datasets; clear stuck statuses |
-| `supabase/functions/npg-dataset-ingest/index.ts` | Early return for tabular→spatial mismatches; timeout safety net; use layer's storage_table (not registry's) consistently |
-| Database migration | Fix mismatches, clear stuck statuses, auto-link key datasets |
+| Database migration | Sync feature_counts from actual data, enable npg_cables_hv, fix geometry_type for Geometry layers |
+| `supabase/functions/npg-dataset-ingest/index.ts` | Increase timeout to 150s; update feature_count after each batch |
 
