@@ -1,54 +1,40 @@
 
 
-## NPG Layers End-to-End Test — Results
+## Fix: kW Estimation From Charger Columns
 
-### Status: PASS — Everything works correctly
+### Two Bugs
 
-The full data pipeline has been verified at every stage:
+**Bug 1 — Fallback default of 7kW is wrong**
+Lines 207-210: if `estimateKwFromChargers` returns 0 (because all counts are zero, or no `proposed_kw` column), the code defaults to 7kW. This is incorrect — 0 chargers means 0kW. Remove the default.
 
-### Database Audit Results
+**Bug 2 — Fuzzy matching may miss actual WYCA headers**
+The current matching logic uses nested string-contains checks that are brittle. The actual WYCA headers look like:
+- "Number of Lower Range Standard Chargers (3.7kW - < 6kW)"
+- "Number of Rapid Sockets (50kW - 149kW)"
 
-| Layer | Storage Table | Actual Rows | Geometry SRID | Enabled |
-|-------|--------------|-------------|---------------|---------|
-| HV Substations (Utilisation) | geo_substations | 27,402 | 4326 ✅ | ✅ |
-| EHV Feeders | geo_feeders | 47,100 | 4326 ✅ | ✅ |
-| HV Underground Cable | geo_cables | 262,589 | 4326 ✅ | ✅ |
-| HV Underground Cables (API) | geo_cables | 10,000 | — | ✅ |
-| 132kV Circuit Live Data | geo_cables | 47,100 | — | ✅ |
-| EHV & HV Supports | geo_points | 447,000 | — | ✅ |
-| LV Support | geo_points | 74,500 | — | ✅ |
-| Embedded Capacity Register | geo_substations | 8,993 | — | ✅ |
-| Substation Map Data | geo_substations | 2,680 | — | ✅ |
-| NPg Thermal Demand Headroom | geo_substations | 954 | — | ✅ |
-| Carbon Intensity by GSP | geo_polygons | 3,556 | — | ✅ |
-| Heat Map Data - Sub Areas | geo_polygons | 1,366 | — | ✅ |
-| Flexibility Zones | geo_polygons | 3,129 | — | ✅ |
-| LCT by Postal Sector | geo_polygons | 1,215 | — | ✅ |
-| Distribution Sub Service Areas | geo_polygons | 683 | — | ✅ |
-| NDP Planned Interventions | geo_constraints | 265 | — | ✅ |
+The normalization replaces spaces with `_` but the matching checks for substrings like `"lower"` + `"3.7"` + `"charger"/"socket"`. This should work, but the issue might be that `charger` and `socket` columns for the same band are matching the wrong entry due to iteration order. Need to make matching more robust.
 
-### Pipeline Checks
+### Changes
 
-- **RPC `get_geo_layer_geojson`**: Works — tested bbox query returning 5,000 features in viewport ✅
-- **RLS policies**: All spatial tables have `SELECT` for authenticated users ✅
-- **`getRenderType()`**: Handles Point→circle, LineString/MultiLineString→line, Polygon→fill ✅
-- **`fetchLayerGeoJSON()`**: Correctly resolves by UUID or slug, calls RPC ✅
-- **Layer Toggle Panel**: Fetches enabled layers, groups by DNO/category ✅
-- **`selectedDno` default**: `null` (shows all DNOs) ✅
+**`src/components/la/CsvIntakePanel.tsx`**
 
-### No code changes needed
+1. **Remove the 7kW default** (lines 207-210) — if kW is 0, store 0. A site with all-zero charger counts has 0kW capacity.
 
-The layers are working. To see them on the map, ensure:
+2. **Simplify `estimateKwFromChargers`** — replace the fragile nested-loop fuzzy matching with a cleaner approach: normalize all column names, then match each against a pattern table using simple keyword sets:
 
-1. **Navigate to NPG territory** — northern England (Newcastle, Leeds, Hull area)
-2. **Zoom to level 8+** — most layers have `min_zoom: 8`
-3. **Toggle layers ON** in the Layer Toggle Panel (right side)
-4. **DNO filter** can be set to "NPG" or left on "All"
+```text
+Pattern: ["lower", "3.7"] → 3.7kW per unit
+Pattern: ["higher", "6kw"] or ["higher", "6_kw"] → 7kW per unit  
+Pattern: ["fast", "8kw"] or ["fast", "49kw"] → 22kW per unit
+Pattern: ["rapid", "50kw"] or ["rapid", "149kw"] → 50kW per unit
+```
 
-### Layers with zero data (expected)
+Iterate all columns once, check which band they match, sum `count × rate`. No double-counting (track matched columns).
 
-These are registered but have no ingested data yet — they need a sync from the NPG API:
-- DFES Primary Forecasts, NDP Generation Headroom, HV Overhead Feeders, IDNO Zones, Substation Sites List, Primary Substation Points
+3. **Show 0kW in the preview table** when a site genuinely has zero chargers — this gives the user visibility that something may be wrong with that row.
 
-These can be populated by running "Sync All Active" from Admin → NPG Dataset Registry.
+### Files to Change
+| File | Change |
+|------|--------|
+| `src/components/la/CsvIntakePanel.tsx` | Remove 7kW default; rewrite `estimateKwFromChargers` with simpler pattern matching |
 
