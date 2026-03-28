@@ -107,8 +107,8 @@ export function useActiveStudy() {
         const routeLen = computeRouteLength(routeGeoJson);
         const distances = { primary_m: routeLen, feeder_m: routeLen, capacity_segment_m: routeLen };
         const vOverride = (voltageLevel || study.voltage_level || "Auto") as VoltageOverride;
-        const costEst = estimateConnectionCost({ proposed_kw: kw, distances, voltage_override: vOverride });
-        const bomItems = generateBom({ proposed_kw: kw, distances, voltage_override: vOverride });
+        const costEst = estimateConnectionCost({ proposed_kw: kw, distances, voltage_override: vOverride }, unitRates);
+        const bomItems = generateBom({ proposed_kw: kw, distances, voltage_override: vOverride }, unitRates);
         await supabase
           .from("studies")
           .update({
@@ -122,7 +122,7 @@ export function useActiveStudy() {
         toast.success("Cost estimate saved to study");
       }
     },
-    [study]
+    [study, unitRates]
   );
 
   const runRulesEngine = useCallback(
