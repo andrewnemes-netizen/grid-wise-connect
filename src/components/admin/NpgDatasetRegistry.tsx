@@ -257,10 +257,16 @@ export function NpgDatasetRegistry() {
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
     // Filter out non-geospatial datasets linked to spatial layers
-    const syncable = activeLinkedDatasets.filter(ds => ds.is_geospatial);
-    const skippedTabular = activeLinkedDatasets.length - syncable.length;
-    if (skippedTabular > 0) {
-      toast.info(`Skipping ${skippedTabular} tabular dataset(s) — no geometry to ingest`);
+    // Skip tabular datasets AND datasets with no usable endpoints
+    const syncable = activeLinkedDatasets.filter(ds => {
+      if (!ds.is_geospatial) return false;
+      // Skip datasets with no data endpoints (PDF/portal-only)
+      if (!ds.endpoint_export_csv && !ds.endpoint_export_geojson && !(ds as any).endpoint_records) return false;
+      return true;
+    });
+    const skippedCount = activeLinkedDatasets.length - syncable.length;
+    if (skippedCount > 0) {
+      toast.info(`Skipping ${skippedCount} dataset(s) — no geometry or no API endpoint`);
     }
 
     let successCount = 0;
@@ -675,6 +681,20 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
           {format(new Date(ds.last_sync_at), "dd MMM HH:mm")}
         </span>
       </div>
+    );
+  }
+
+  if (ds.last_sync_status === "skipped") {
+    return (
+      <Tooltip>
+        <TooltipTrigger>
+          <span className="text-[10px] text-amber-500 flex items-center gap-0.5">
+            <AlertTriangle className="h-2.5 w-2.5" />
+            No API
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs">{ds.last_sync_error || "Manual download only"}</TooltipContent>
+      </Tooltip>
     );
   }
 
