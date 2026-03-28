@@ -2013,6 +2013,10 @@ export type Database = {
             }
             Returns: string
           }
+      auto_create_dno_layers: {
+        Args: { p_dno: string; p_force?: boolean }
+        Returns: Json
+      }
       batch_insert_geo_features: {
         Args: { _features_json: string; _table_name: string }
         Returns: number

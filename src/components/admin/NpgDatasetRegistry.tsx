@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   RefreshCw, CheckCircle, XCircle, Loader2, Database, Globe, Search,
   Download, MapPin, FileSpreadsheet, Clock, AlertTriangle, Radar,
-  ChevronDown, ChevronUp, Eye
+  ChevronDown, ChevronUp, Eye, Layers, Info
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,6 +56,8 @@ export function NpgDatasetRegistry() {
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL">("NPG");
+  const [autoLinking, setAutoLinking] = useState(false);
+  const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
 
   const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
     NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
@@ -215,6 +217,39 @@ export function NpgDatasetRegistry() {
 
   // Active+linked datasets for "Sync All"
   const activeLinkedDatasets = datasets.filter(d => d.active && d.linked_layer_id);
+  const unlinkdGeoCount = datasets.filter(d => d.is_geospatial && !d.linked_layer_id).length;
+
+  // ── Auto-Create & Link Layers ──
+  const handleAutoLink = async () => {
+    setAutoLinking(true);
+    setAutoLinkResult(null);
+    try {
+      const { data, error } = await supabase.rpc('auto_create_dno_layers', {
+        p_dno: selectedDno,
+        p_force: false,
+      });
+      if (error) throw error;
+
+      const result = data as any;
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setAutoLinkResult(result);
+      const unmatchedCount = result.unmatched?.length || 0;
+      toast.success(
+        `${result.layers_created} layers created, ${result.layers_reused} reused, ${result.datasets_linked} datasets linked` +
+        (unmatchedCount > 0 ? ` — ${unmatchedCount} unmatched` : '')
+      );
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+      queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
+    } catch (err: any) {
+      toast.error(`Auto-link failed: ${err.message}`);
+    } finally {
+      setAutoLinking(false);
+    }
+  };
 
   // ── Sync All Active ──
   const handleSyncAll = async () => {
@@ -298,10 +333,19 @@ export function NpgDatasetRegistry() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button onClick={handleCrawl} disabled={crawling} size="sm">
                 {crawling ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Radar className="h-4 w-4 mr-1" />}
                 {crawling ? "Crawling…" : "Discover All Datasets"}
+              </Button>
+              <Button
+                onClick={handleAutoLink}
+                disabled={autoLinking || unlinkdGeoCount === 0}
+                size="sm"
+                variant="secondary"
+              >
+                {autoLinking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Layers className="h-4 w-4 mr-1" />}
+                {autoLinking ? "Linking…" : `Auto-Create & Link Layers${unlinkdGeoCount > 0 ? ` (${unlinkdGeoCount})` : ''}`}
               </Button>
               <Button
                 onClick={handleSyncAll}
@@ -342,6 +386,52 @@ export function NpgDatasetRegistry() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Auto-Link Results */}
+      {autoLinkResult && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Layers className="h-4 w-4 text-primary" />
+              Auto-Link Summary — {autoLinkResult.dno}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+              <div><span className="text-muted-foreground">Layers Created:</span> <strong>{autoLinkResult.layers_created}</strong></div>
+              <div><span className="text-muted-foreground">Layers Reused:</span> <strong>{autoLinkResult.layers_reused}</strong></div>
+              <div><span className="text-muted-foreground">Datasets Linked:</span> <strong>{autoLinkResult.datasets_linked}</strong></div>
+              <div><span className="text-muted-foreground">Skipped:</span> <strong>{autoLinkResult.datasets_skipped}</strong></div>
+              <div>
+                <span className="text-muted-foreground">Unmatched:</span>{' '}
+                <strong className={autoLinkResult.unmatched?.length > 0 ? "text-amber-600" : ""}>
+                  {autoLinkResult.unmatched?.length || 0}
+                </strong>
+              </div>
+            </div>
+            {autoLinkResult.unmatched?.length > 0 && (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs gap-1">
+                    <AlertTriangle className="h-3 w-3 text-amber-600" />
+                    Show unmatched datasets
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                    {autoLinkResult.unmatched.map((u: any, i: number) => (
+                      <div key={i} className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3 shrink-0" />
+                        <span className="font-mono">{u.dataset_id}</span>
+                        <span>— {u.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dataset Table */}
       {isLoading ? (
