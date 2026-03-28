@@ -392,16 +392,22 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
               )}
 
               {/* ── Score Breakdown Bars ── */}
-              {safetyResult && (
+              {(safetyResult || result) && (
                 <div className="space-y-2">
                   <SectionHeader icon={Gauge} title="Score Breakdown" />
                   <div className="rounded-md border bg-muted/10 p-3 space-y-2.5">
-                    {[
-                      { label: "🚦 Traffic Demand", data: trafficScore, detail: `${safetyResult.traffic_summary.max_aadf.toLocaleString()} AADF` },
-                      { label: "🚶 Accessibility", data: accessibilityScore, detail: `${safetyResult.transport_summary.bus_stops} bus, ${safetyResult.transport_summary.rail_stations} rail` },
-                      { label: "⚡ Grid Feasibility", data: { label: band, score: viabilityIndex, color: verdict.color, bg: verdict.bg.split(" ")[0] }, detail: `${viabilityIndex}/100` },
-                      { label: "🛑 Safety", data: safetyScore, detail: `${safetyResult.accident_summary.total} incidents` },
-                    ].map((item) => (
+                    {(() => {
+                      const aadf = Math.max(safetyResult?.traffic_summary?.max_aadf ?? 0, result?.traffic_aadf ?? 0);
+                      const busCount = Math.max(safetyResult?.transport_summary?.bus_stops ?? 0, result?.nearby_bus_stops ?? 0);
+                      const railCount = Math.max(safetyResult?.transport_summary?.rail_stations ?? 0, result?.nearby_rail_stations ?? 0);
+                      const incidents = safetyResult?.accident_summary?.total ?? 0;
+                      return [
+                        { label: "🚦 Traffic Demand", data: trafficScore, detail: `${aadf.toLocaleString()} AADF` },
+                        { label: "🚶 Accessibility", data: accessibilityScore, detail: `${busCount} bus, ${railCount} rail` },
+                        { label: "⚡ Grid Feasibility", data: { label: band, score: viabilityIndex, color: verdict.color, bg: verdict.bg.split(" ")[0] }, detail: `${viabilityIndex}/100` },
+                        { label: "🛑 Safety", data: safetyScore, detail: `${incidents} incidents` },
+                      ];
+                    })().map((item) => (
                       <div key={item.label} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] text-foreground">{item.label}</span>
