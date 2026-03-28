@@ -302,6 +302,9 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
       const enrichedRawData = {
         ...result,
+        // Persist pin coordinates so SiteDetail can link back to map
+        lng,
+        lat,
         // Persist computed intelligence so SiteDetail can display it
         master_score: masterScore?.score ?? null,
         master_verdict: masterScore?.verdict ?? null,
