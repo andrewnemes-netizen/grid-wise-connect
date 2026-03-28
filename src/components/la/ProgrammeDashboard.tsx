@@ -5,14 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown } from "lucide-react";
+import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface ScoredRow {
   site_name: string;
   postcode: string;
   proposed_kw: number;
   site_type: string;
+  lng?: number;
+  lat?: number;
   viability_index: number;
   band: string;
   grid_readiness: string;
@@ -29,6 +34,11 @@ interface ScoredRow {
   distance_capacity_m: number;
   phase: number;
   phase_rationale: string;
+  traffic_aadf?: number;
+  nearby_bus_stops?: number;
+  nearby_rail_stations?: number;
+  accident_count?: number;
+  master_score?: number;
   error?: string;
 }
 
@@ -63,10 +73,12 @@ const phaseConfig = [
 type SortKey = "viability_index" | "total_estimate" | "proposed_kw" | "site_name" | "phase";
 
 export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
+  const { user } = useAuth();
   const [filterPhase, setFilterPhase] = useState("all");
   const [filterBand, setFilterBand] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [isSaving, setIsSaving] = useState(false);
 
   const filtered = useMemo(() => {
     let list = results.filter(r => {
@@ -92,7 +104,7 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       "Site Name", "Postcode", "Proposed kW", "Site Type", "Phase", "Phase Rationale",
       "Viability Index", "Band", "Grid Readiness", "Deployment Class",
       "Cost Band", "Total Estimate (£)", "Confidence", "Reinforcement %",
-      "Best POC",
+      "Best POC", "Traffic AADF", "Bus Stops", "Rail Stations", "Accidents",
       ...(isInternal ? ["Headroom (kW)", "Utilisation %", "Distance Primary (m)", "Distance Feeder (m)", "Distance Capacity (m)"] : []),
       "Error",
     ];
@@ -100,7 +112,7 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       r.site_name, r.postcode, r.proposed_kw, r.site_type, r.phase, r.phase_rationale,
       r.viability_index, r.band, r.grid_readiness, r.deployment_class,
       r.cost_band, r.total_estimate, r.confidence, r.reinforcement_probability,
-      r.best_poc,
+      r.best_poc, r.traffic_aadf ?? 0, r.nearby_bus_stops ?? 0, r.nearby_rail_stations ?? 0, r.accident_count ?? 0,
       ...(isInternal ? [r.headroom_kw ?? "", r.utilisation_pct ?? "", r.distance_primary_m, r.distance_feeder_m, r.distance_capacity_m] : []),
       r.error || "",
     ]);
@@ -112,6 +124,80 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     a.download = `la-programme-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveToPortfolio = async () => {
+    if (!user) { toast.error("Please log in"); return; }
+
+    const validRows = filtered.filter(r => !r.error && r.lng && r.lat);
+    if (validRows.length === 0) { toast.error("No valid sites to save"); return; }
+
+    setIsSaving(true);
+    try {
+      const siteInserts = validRows.map(r => ({
+        site_name: r.site_name,
+        postcode: r.postcode,
+        proposed_kw: r.proposed_kw,
+        site_type: r.site_type,
+        created_by: user.id,
+        viability_index: r.viability_index,
+        score: r.band,
+        grid_readiness: r.grid_readiness,
+        deployment_class: r.deployment_class,
+        cost_band: r.cost_band,
+        reinforcement_probability: r.reinforcement_probability,
+        status: "scored",
+        score_reasons: [r.phase_rationale],
+        next_steps: r.deployment_class === "Fast Deploy"
+          ? ["Submit G99 application", "Arrange point of connection meeting"]
+          : ["Commission detailed feasibility study", "Submit connection application"],
+        raw_score_data: {
+          master_score: r.master_score ?? r.viability_index,
+          viability_index: r.viability_index,
+          band: r.band,
+          grid_readiness: r.grid_readiness,
+          deployment_class: r.deployment_class,
+          cost_band: r.cost_band,
+          total_estimate: r.total_estimate,
+          confidence: r.confidence,
+          reinforcement_probability: r.reinforcement_probability,
+          best_poc: r.best_poc,
+          headroom_kw: r.headroom_kw,
+          utilisation_pct: r.utilisation_pct,
+          traffic_aadf: r.traffic_aadf ?? 0,
+          nearby_bus_stops: r.nearby_bus_stops ?? 0,
+          nearby_rail_stations: r.nearby_rail_stations ?? 0,
+          accident_count: r.accident_count ?? 0,
+          distances: {
+            primary_m: r.distance_primary_m,
+            feeder_m: r.distance_feeder_m,
+            capacity_segment_m: r.distance_capacity_m,
+          },
+          phase: r.phase,
+          phase_rationale: r.phase_rationale,
+          source: "la_programme_batch",
+        },
+      }));
+
+      // Insert in batches of 50
+      let saved = 0;
+      for (let i = 0; i < siteInserts.length; i += 50) {
+        const batch = siteInserts.slice(i, i + 50);
+        const { error } = await supabase.from("sites").insert(batch as any);
+        if (error) {
+          console.error("Portfolio save error:", error);
+          toast.error(`Save error at batch ${Math.floor(i / 50) + 1}: ${error.message}`);
+          break;
+        }
+        saved += batch.length;
+      }
+
+      toast.success(`Saved ${saved} sites to portfolio`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const errorRows = results.filter(r => r.error);
@@ -170,9 +256,15 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </span>
               )}
             </div>
-            <Button size="sm" variant="outline" onClick={exportCsv}>
-              <Download className="mr-1 h-3 w-3" /> Export Programme CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={exportCsv}>
+                <Download className="mr-1 h-3 w-3" /> Export CSV
+              </Button>
+              <Button size="sm" onClick={saveToPortfolio} disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                Save to Portfolio
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -232,14 +324,15 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                   <SortHeader label="Name" k="site_name" />
                   <TableHead className="text-xs">Postcode</TableHead>
                   <SortHeader label="kW" k="proposed_kw" />
-                  <SortHeader label="Viability" k="viability_index" />
+                  <SortHeader label="Score" k="viability_index" />
                   <TableHead className="text-xs">Band</TableHead>
+                  <TableHead className="text-xs">Traffic</TableHead>
+                  <TableHead className="text-xs">Access</TableHead>
+                  <TableHead className="text-xs">Safety</TableHead>
                   <TableHead className="text-xs">Grid</TableHead>
                   <TableHead className="text-xs">Deploy</TableHead>
                   <TableHead className="text-xs">Cost</TableHead>
                   <SortHeader label="Est. (£)" k="total_estimate" />
-                  <TableHead className="text-xs">Confidence</TableHead>
-                  <TableHead className="text-xs">Reinforce %</TableHead>
                   <TableHead className="text-xs">Best POC</TableHead>
                   {isInternal && (
                     <>
@@ -269,12 +362,13 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                     <TableCell>
                       <Badge variant="outline" className={`text-[10px] ${scoreBadge[r.band] || ""}`}>{r.band}</Badge>
                     </TableCell>
+                    <TableCell className="text-xs">{(r.traffic_aadf ?? 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs">{r.nearby_bus_stops ?? 0}b/{r.nearby_rail_stations ?? 0}r</TableCell>
+                    <TableCell className="text-xs">{r.accident_count ?? 0}</TableCell>
                     <TableCell className="text-xs">{r.grid_readiness}</TableCell>
                     <TableCell className="text-xs">{r.deployment_class}</TableCell>
                     <TableCell className="text-xs">{r.cost_band}</TableCell>
                     <TableCell className="text-xs">£{r.total_estimate.toLocaleString()}</TableCell>
-                    <TableCell className="text-xs">{r.confidence}</TableCell>
-                    <TableCell className="text-xs">{r.reinforcement_probability}%</TableCell>
                     <TableCell className="text-xs max-w-[120px] truncate" title={r.best_poc}>{r.best_poc}</TableCell>
                     {isInternal && (
                       <>

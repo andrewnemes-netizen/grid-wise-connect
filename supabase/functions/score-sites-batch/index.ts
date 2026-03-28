@@ -7,16 +7,16 @@ const corsHeaders = {
 };
 
 // ── Configurable Phasing Thresholds ──
-const VIABILITY_BAND_CUTOFFS = { GREEN: 65, AMBER: 40 }; // >=65 GREEN, >=40 AMBER, else RED
-const COST_BAND_BREAKPOINTS = { LOW: 80000, MEDIUM: 250000 }; // <80k=£, <250k=££, else £££
+const VIABILITY_BAND_CUTOFFS = { GREEN: 65, AMBER: 40 };
+const COST_BAND_BREAKPOINTS = { LOW: 80000, MEDIUM: 250000 };
 const PHASE_RULES = {
-  // Phase 1: Quick Wins — GREEN + Fast Deploy + low cost
   1: (r: ScoredRow) => r.band === "GREEN" && r.deployment_class === "Fast Deploy" && r.cost_band === "£",
-  // Phase 2: Moderate Works — AMBER or needs reinforcement but not complex
   2: (r: ScoredRow) => r.band !== "RED" && r.deployment_class !== "Complex",
-  // Phase 3: Strategic / Complex — everything else
   3: (_r: ScoredRow) => true,
 };
+
+// Master score weights (same as UnifiedIntelligencePanel)
+const WEIGHTS = { traffic: 0.35, accessibility: 0.25, grid: 0.25, safety: 0.10, civils: 0.05 };
 
 interface SiteInput {
   site_name: string;
@@ -48,10 +48,16 @@ interface ScoredRow {
   distance_capacity_m: number;
   phase: number;
   phase_rationale: string;
+  // New 4-pillar fields
+  traffic_aadf: number;
+  nearby_bus_stops: number;
+  nearby_rail_stations: number;
+  accident_count: number;
+  master_score: number;
   error?: string;
 }
 
-// ── Scoring helpers (mirrored from client scoringEngine) ──
+// ── Scoring helpers ──
 function clamp(v: number): number { return Math.max(0, Math.min(100, v)); }
 
 function connectionScore(d: number, headroom: number | null, util: number | null, capFlag: string): number {
@@ -129,7 +135,7 @@ function estimateTotalCost(proposedKw: number, distances: { primary_m: number; f
   if (headroom !== null && proposedKw > headroom) reinforcement = (proposedKw - headroom) * 85;
 
   const subtotal = cable + excavation + joints + switchgear + tx + metering + reinforcement;
-  const total = Math.round(subtotal * 1.24); // 8% design + 6% PM + 10% contingency
+  const total = Math.round(subtotal * 1.24);
   const confidence = dist < 500 ? "high" : dist < 1500 ? "medium" : "low";
   return { total, confidence };
 }
@@ -140,7 +146,43 @@ function assignPhase(row: ScoredRow): { phase: number; rationale: string } {
   return { phase: 3, rationale: `Strategic: ${row.band} viability, ${row.deployment_class}, ${row.cost_band} cost` };
 }
 
-// ── Geocode postcode via postcodes.io ──
+// Traffic pillar score (0-100)
+function trafficPillarScore(aadf: number): number {
+  if (aadf >= 30000) return 100;
+  if (aadf >= 15000) return 80;
+  if (aadf >= 5000) return 60;
+  if (aadf >= 1000) return 40;
+  if (aadf > 0) return 20;
+  return 0;
+}
+
+// Accessibility pillar score (0-100)
+function accessibilityPillarScore(busStops: number, railStations: number): number {
+  let s = 0;
+  s += Math.min(busStops * 10, 60);
+  s += Math.min(railStations * 30, 40);
+  return clamp(s);
+}
+
+// Safety pillar score (penalty, 0-100 where 100 = worst)
+function safetyPenaltyScore(accidents: number): number {
+  if (accidents >= 10) return 100;
+  if (accidents >= 5) return 60;
+  if (accidents >= 1) return 30;
+  return 0;
+}
+
+// Compute master score using 4-pillar weighting
+function computeMasterScore(gridScore: number, trafficScore: number, accessScore: number, safetyPenalty: number, civilsPenalty: number): number {
+  return clamp(Math.round(
+    trafficScore * WEIGHTS.traffic +
+    accessScore * WEIGHTS.accessibility +
+    gridScore * WEIGHTS.grid -
+    safetyPenalty * WEIGHTS.safety -
+    civilsPenalty * WEIGHTS.civils
+  ));
+}
+
 async function geocodePostcode(postcode: string): Promise<{ lng: number; lat: number } | null> {
   try {
     const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode.trim())}`);
@@ -149,6 +191,27 @@ async function geocodePostcode(postcode: string): Promise<{ lng: number; lat: nu
     if (json.status !== 200 || !json.result) return null;
     return { lng: json.result.longitude, lat: json.result.latitude };
   } catch { return null; }
+}
+
+// ── Spatial query helpers ──
+async function queryNearbyPoints(supabase: any, slug: string, lng: number, lat: number, radiusM: number, limit = 50): Promise<any[]> {
+  try {
+    const { data, error } = await supabase.rpc("nearby_geo_points_by_slug", {
+      p_slug: slug,
+      p_lng: lng,
+      p_lat: lat,
+      p_radius_m: radiusM,
+      p_limit: limit,
+    });
+    if (error) {
+      console.error(`nearby query error for ${slug}:`, error.message);
+      return [];
+    }
+    return data || [];
+  } catch (e) {
+    console.error(`nearby query exception for ${slug}:`, e);
+    return [];
+  }
 }
 
 Deno.serve(async (req) => {
@@ -171,7 +234,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Check admin/engineer role
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
     const userRoles = (roles || []).map((r: { role: string }) => r.role);
     if (!userRoles.includes("admin") && !userRoles.includes("engineer")) {
@@ -186,14 +248,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Maximum 500 sites per batch" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // No need to look up layer IDs — we use slugs directly with nearby_geo_points_by_slug
+    const DFT_SLUG = "dft_traffic_count_points";
+    const NAPTAN_SLUG = "naptan_transport_nodes";
+    const STATS19_SLUG = "stats19_accidents";
+
     const results: ScoredRow[] = [];
 
-    // Process concurrently in batches of 5
     const BATCH_SIZE = 5;
     for (let i = 0; i < sites.length; i += BATCH_SIZE) {
       const batch = sites.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.allSettled(batch.map(async (site): Promise<ScoredRow> => {
-        // Geocode
         const geo = await geocodePostcode(site.postcode);
         if (!geo) {
           return {
@@ -204,16 +269,38 @@ Deno.serve(async (req) => {
             best_poc: "N/A", headroom_kw: null, utilisation_pct: null,
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Could not geocode postcode",
+            traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
             error: `Invalid postcode: ${site.postcode}`,
           };
         }
 
-        // Call score_site_from_lnglat
-        const { data: scoreData, error: scoreError } = await supabase.rpc("score_site_from_lnglat", {
-          _lng: geo.lng, _lat: geo.lat, _proposed_kw: site.proposed_kw || 0,
-        });
+        // Run grid scoring + spatial enrichment in parallel
+        const [scoreResult, substationResult, trafficResult, naptanResult, stats19Result] = await Promise.allSettled([
+          supabase.rpc("score_site_from_lnglat", { _lng: geo.lng, _lat: geo.lat, _proposed_kw: site.proposed_kw || 0 }),
+          (async () => {
+            let substations: any[] = [];
+            const radii = [0.02, 0.05, 0.1];
+            for (const offset of radii) {
+              const poly = { type: "Polygon", coordinates: [[[geo.lng - offset, geo.lat - offset], [geo.lng + offset, geo.lat - offset], [geo.lng + offset, geo.lat + offset], [geo.lng - offset, geo.lat + offset], [geo.lng - offset, geo.lat - offset]]] };
+              const { data } = await supabase.rpc("search_substations_in_polygon", { _geojson: JSON.stringify(poly), _limit: 5 });
+              substations = data || [];
+              if (substations.length > 0) break;
+            }
+            return substations;
+          })(),
+          queryNearbyPoints(supabase, DFT_SLUG, geo.lng, geo.lat, 2000, 20),
+          queryNearbyPoints(supabase, NAPTAN_SLUG, geo.lng, geo.lat, 500, 50),
+          queryNearbyPoints(supabase, STATS19_SLUG, geo.lng, geo.lat, 200, 50),
+        ]);
 
-        if (scoreError) {
+        const scoreData = scoreResult.status === "fulfilled" ? (scoreResult.value as any)?.data : null;
+        const scoreError = scoreResult.status === "fulfilled" ? (scoreResult.value as any)?.error : scoreResult.reason;
+        const substations = substationResult.status === "fulfilled" ? (substationResult.value as any) : [];
+        const trafficPoints = trafficResult.status === "fulfilled" ? (trafficResult.value as any[]) : [];
+        const naptanPoints = naptanResult.status === "fulfilled" ? (naptanResult.value as any[]) : [];
+        const stats19Points = stats19Result.status === "fulfilled" ? (stats19Result.value as any[]) : [];
+
+        if (scoreError && !scoreData) {
           return {
             site_name: site.site_name, postcode: site.postcode, proposed_kw: site.proposed_kw,
             site_type: site.site_type || "other", lng: geo.lng, lat: geo.lat,
@@ -222,19 +309,32 @@ Deno.serve(async (req) => {
             best_poc: "N/A", headroom_kw: null, utilisation_pct: null,
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Scoring failed",
-            error: scoreError.message,
+            traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            error: scoreError?.message || String(scoreError),
           };
         }
 
-        // Search nearest substations
-        let substations: any[] = [];
-        const radii = [0.02, 0.05, 0.1];
-        for (const offset of radii) {
-          const poly = { type: "Polygon", coordinates: [[[geo.lng - offset, geo.lat - offset], [geo.lng + offset, geo.lat - offset], [geo.lng + offset, geo.lat + offset], [geo.lng - offset, geo.lat + offset], [geo.lng - offset, geo.lat - offset]]] };
-          const { data } = await supabase.rpc("search_substations_in_polygon", { _geojson: JSON.stringify(poly), _limit: 5 });
-          substations = data || [];
-          if (substations.length > 0) break;
+        // Extract traffic AADF
+        let maxAadf = 0;
+        for (const tp of trafficPoints) {
+          const attrs = tp.attrs_json || {};
+          const v = Number(attrs.all_motor_vehicles) || 0;
+          if (v > maxAadf) maxAadf = v;
         }
+
+        // Count bus stops and rail stations
+        let busStops = 0;
+        let railStations = 0;
+        for (const np of naptanPoints) {
+          const attrs = np.attrs_json || {};
+          const st = attrs.stop_type || "";
+          if (st === "BCT" || st === "BCS" || st === "BCQ") busStops++;
+          else if (st === "RLY" || st === "RSE" || st === "RPL" || st === "MET") railStations++;
+          else busStops++; // default to bus
+        }
+
+        // Count accidents
+        const accidentCount = stats19Points.length;
 
         const nearestSub = substations[0];
         const distances = scoreData?.distances || {};
@@ -258,8 +358,16 @@ Deno.serve(async (req) => {
         const conn = connectionScore(primaryDist, headroom, util, capFlag);
         const civ = civilsScore(constraintCount, ndp, wayleave);
         const dep = deploymentScore(ratio, distBand);
-        const viabilityIndex = Math.round(conn * 0.55 + civ * 0.35 + dep * 0.10);
-        const band = getViabilityBand(viabilityIndex);
+        const gridViability = Math.round(conn * 0.55 + civ * 0.35 + dep * 0.10);
+
+        // Compute 4-pillar master score
+        const tScore = trafficPillarScore(maxAadf);
+        const aScore = accessibilityPillarScore(busStops, railStations);
+        const sPenalty = safetyPenaltyScore(accidentCount);
+        const cPenalty = 100 - civ;
+        const masterScore = computeMasterScore(gridViability, tScore, aScore, sPenalty, cPenalty);
+
+        const band = getViabilityBand(masterScore);
         const dc = getDeploymentClass(headroom, site.proposed_kw, util, constraintCount, ndp);
         const gr = getGridReadiness(headroom, util, site.proposed_kw);
         const rp = getReinforcementProbability(headroom, site.proposed_kw);
@@ -270,11 +378,13 @@ Deno.serve(async (req) => {
         const row: ScoredRow = {
           site_name: site.site_name, postcode: site.postcode, proposed_kw: site.proposed_kw,
           site_type: site.site_type || "other", lng: geo.lng, lat: geo.lat,
-          viability_index: viabilityIndex, band, grid_readiness: gr, deployment_class: dc,
+          viability_index: masterScore, band, grid_readiness: gr, deployment_class: dc,
           reinforcement_probability: rp, cost_band: cb, total_estimate: total, confidence,
           best_poc: bestPoc, headroom_kw: headroom, utilisation_pct: util,
           distance_primary_m: Math.round(primaryDist), distance_feeder_m: Math.round(feederDist), distance_capacity_m: Math.round(capacityDist),
           phase: 0, phase_rationale: "",
+          traffic_aadf: maxAadf, nearby_bus_stops: busStops, nearby_rail_stations: railStations,
+          accident_count: accidentCount, master_score: masterScore,
         };
 
         const phasing = assignPhase(row);
@@ -293,13 +403,14 @@ Deno.serve(async (req) => {
             deployment_class: "Complex", reinforcement_probability: 90, cost_band: "£££",
             total_estimate: 0, confidence: "low", best_poc: "N/A", headroom_kw: null,
             utilisation_pct: null, distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
-            phase: 3, phase_rationale: "Processing error", error: String(r.reason),
+            phase: 3, phase_rationale: "Processing error",
+            traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            error: String(r.reason),
           });
         }
       }
     }
 
-    // Summary
     const summary = {
       total: results.length,
       errors: results.filter(r => r.error).length,
