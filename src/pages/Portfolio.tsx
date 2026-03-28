@@ -13,6 +13,49 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X } from "lucide-react";
 import { format } from "date-fns";
 import { PortfolioAnalytics } from "@/components/portfolio/PortfolioAnalytics";
+import { estimateConnectionCost } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
+
+function formatGBP(amount: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function getSiteEstimatedCost(site: any, unitRates: any): number | null {
+  const raw = (site?.raw_score_data || {}) as any;
+  const persisted = Number(raw?.cost_estimate?.total_estimate ?? raw?.costEstimate?.total_estimate);
+  if (Number.isFinite(persisted)) return persisted;
+
+  const fallback = Number(raw?.total_estimate ?? raw?.totalEstimate);
+  if (Number.isFinite(fallback)) return fallback;
+
+  if (!site?.proposed_kw || site.proposed_kw <= 0) return null;
+  const distanceSource = raw?.distances || site?.connection_options || raw?.connection_options;
+  if (!distanceSource || typeof distanceSource !== "object") return null;
+
+  const distances = {
+    primary_m: Number(distanceSource.primary_m),
+    feeder_m: Number(distanceSource.feeder_m),
+    capacity_segment_m: Number(distanceSource.capacity_segment_m),
+  };
+
+  if (![distances.primary_m, distances.feeder_m, distances.capacity_segment_m].every((v) => Number.isFinite(v))) {
+    return null;
+  }
+
+  const estimate = estimateConnectionCost(
+    {
+      proposed_kw: site.proposed_kw,
+      distances,
+      constraints: raw?.constraints || null,
+    },
+    unitRates
+  );
+  return estimate.total_estimate;
+}
 
 const scoreBadge: Record<string, string> = {
   GREEN: "bg-emerald-100 text-emerald-800 border-emerald-300",
@@ -34,6 +77,7 @@ const COST_BAND_ORDER: Record<string, number> = { "£": 1, "££": 2, "£££": 
 const Portfolio = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { data: unitRates } = useUnitRates();
   const [search, setSearch] = useState("");
   const [filterScore, setFilterScore] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -103,11 +147,11 @@ const Portfolio = () => {
   };
 
   const exportCsv = () => {
-    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Reinforcement %", "Status", "Created"];
+    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Status", "Created"];
     const rows = filtered.map((s: any) => [
       s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
       s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
-      s.cost_band || "", s.reinforcement_probability ?? "", s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
+      s.cost_band || "", getSiteEstimatedCost(s, unitRates) ?? "", s.reinforcement_probability ?? "", s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
     ]);
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -229,13 +273,17 @@ const Portfolio = () => {
                     { label: "Grid Readiness", key: "grid_readiness", fmt: (v: any) => v || "—" },
                     { label: "Deployment", key: "deployment_class", fmt: (v: any) => v || "—" },
                     { label: "Cost Band", key: "cost_band", fmt: (v: any) => v || "—" },
+                    { label: "Estimated Cost", key: "id", fmt: (_: any, s?: any) => {
+                      const total = s ? getSiteEstimatedCost(s, unitRates) : null;
+                      return total != null ? formatGBP(total) : "—";
+                    } },
                     { label: "Reinforcement %", key: "reinforcement_probability", fmt: (v: any) => v != null ? `${v}%` : "—" },
                     { label: "Proposed kW", key: "proposed_kw", fmt: (v: any) => v || "—" },
                   ].map(row => (
                     <tr key={row.label} className="border-t">
                       <td className="py-1.5 pr-4 text-muted-foreground">{row.label}</td>
                       {compareSites.map((s: any) => (
-                        <td key={s.id} className="text-center py-1.5 px-2 font-medium">{row.fmt(s[row.key])}</td>
+                        <td key={s.id} className="text-center py-1.5 px-2 font-medium">{row.fmt(s[row.key], s)}</td>
                       ))}
                     </tr>
                   ))}
@@ -262,7 +310,8 @@ const Portfolio = () => {
                 <SortHeader label="Viability" k="viability_index" />
                 <SortHeader label="Grid" k="grid_readiness" />
                 <SortHeader label="Deploy" k="deployment_class" />
-                <SortHeader label="Cost" k="cost_band" />
+                <SortHeader label="Cost Band" k="cost_band" />
+                <TableHead>Est. Cost</TableHead>
                 <SortHeader label="Reinforce %" k="reinforcement_probability" />
                 <TableHead>Status</TableHead>
                 <SortHeader label="Created" k="created_at" />
@@ -309,6 +358,12 @@ const Portfolio = () => {
                       {site.cost_band ? (
                         <Badge variant={site.cost_band === "£" ? "default" : site.cost_band === "££" ? "secondary" : "destructive"}>{site.cost_band}</Badge>
                       ) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs" onClick={() => navigate(`/site/${site.id}`)}>
+                      {(() => {
+                        const total = getSiteEstimatedCost(site, unitRates);
+                        return total != null ? formatGBP(total) : "—";
+                      })()}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}>{site.reinforcement_probability != null ? `${site.reinforcement_probability}%` : "—"}</TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
