@@ -79,6 +79,25 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [isSaving, setIsSaving] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleSelect = useCallback((idx: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  }, []);
+
+  const selectAllReady = useCallback(() => {
+    const readyIndices = new Set<number>();
+    filtered.forEach((r, i) => {
+      if (!r.error && r.lng && r.lat) readyIndices.add(i);
+    });
+    setSelected(readyIndices);
+  }, [filtered]);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const filtered = useMemo(() => {
     let list = results.filter(r => {
