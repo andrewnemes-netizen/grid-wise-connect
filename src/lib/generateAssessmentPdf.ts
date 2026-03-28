@@ -248,7 +248,22 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     addPage();
   }
 
-  // ── HEADER BAR ──
+  const addHeaderBar = () => {
+    doc.setFillColor(BRAND.darkGreen);
+    doc.rect(0, 0, pageW, 28, "F");
+    doc.setTextColor(BRAND.white);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("ECOPOWER ENERGY", margin, 12);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Connection Feasibility Report", margin, 18);
+    doc.setFontSize(8);
+    doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
+    doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
+    y = 36;
+  };
+
   // ── LOCATION MAP PAGE (after cover, before content) ──
   if (input.locationMapScreenshot) {
     addHeaderBar();
@@ -256,7 +271,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     try {
       const imgW = contentW;
-      const imgH = imgW * 0.65; // ~landscape ratio
+      const imgH = imgW * 0.65;
       checkPage(imgH + 50);
       doc.addImage(input.locationMapScreenshot, "PNG", margin, y, imgW, imgH);
 
@@ -275,14 +290,11 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setTextColor(BRAND.black);
       doc.text("N", naX, naY + 8, { align: "center" });
 
-      // Scale bar (bottom-left of map)
+      // Scale bar (bottom-left)
       const sbX = margin + 6;
       const sbY = y + imgH - 6;
-      const mapSpanM = 800; // ~800m span for pin-centred view
-      const scaleM = 200;
-      const barW = (scaleM / mapSpanM) * imgW;
+      const barW = (200 / 800) * imgW;
       const clampedBarW = Math.min(Math.max(barW, 12), 40);
-
       doc.setFillColor(255, 255, 255);
       doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "F");
       doc.setDrawColor(BRAND.grey);
@@ -303,7 +315,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       console.warn("Failed to add location map to PDF:", e);
     }
 
-    // Legend for location map
+    // Map legend
     const locationLegend = [
       { label: "Site Location", color: "#e74c3c", type: "circle" as const },
       { label: "Connection Lines", color: "#9b59b6", type: "line" as const },
@@ -313,16 +325,13 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       { label: "NDP Projects", color: "#f59e0b", type: "circle" as const },
       { label: "Constraints", color: "#dc2626", type: "line" as const },
     ];
-
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(BRAND.grey);
     doc.text("MAP KEY", margin + 2, y);
     y += 4;
-
     doc.setFont("helvetica", "normal");
     doc.setTextColor(BRAND.black);
-    // Render legend in 2 columns
     const colW2 = contentW / 2;
     locationLegend.forEach((item, i) => {
       const col = i < 4 ? 0 : 1;
@@ -348,27 +357,10 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setFont("helvetica", "italic");
       doc.setTextColor(BRAND.grey);
       doc.text(`Infrastructure surrounding ${input.siteName}. All visible network layers shown at time of assessment.`, margin, y);
-      y += 6;
     }
 
     addPage();
   }
-
-  const addHeaderBar = () => {
-    doc.setFillColor(BRAND.darkGreen);
-    doc.rect(0, 0, pageW, 28, "F");
-    doc.setTextColor(BRAND.white);
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("ECOPOWER ENERGY", margin, 12);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("Connection Feasibility Report", margin, 18);
-    doc.setFontSize(8);
-    doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
-    doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
-    y = 36;
-  };
 
   addHeaderBar();
 
