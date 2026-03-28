@@ -281,7 +281,7 @@ export function NpgDatasetRegistry() {
               <div>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Globe className="h-5 w-5" />
-                  {dnoConfig[selectedDno].label} Dataset Registry
+                  DNO Dataset Registry — {dnoConfig[selectedDno].label}
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
                   Auto-discovered from {dnoConfig[selectedDno].portalUrl} — Explore API v2.1
@@ -356,7 +356,7 @@ export function NpgDatasetRegistry() {
           <CardContent className="py-12 text-center text-muted-foreground">
             <Globe className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No datasets discovered yet.</p>
-            <p className="text-xs mt-1">Click "Discover All Datasets" to crawl the NPG portal.</p>
+            <p className="text-xs mt-1">Click "Discover All Datasets" to crawl the {dnoConfig[selectedDno].label} portal.</p>
           </CardContent>
         </Card>
       ) : (
@@ -506,7 +506,7 @@ export function NpgDatasetRegistry() {
                                       </Button>
                                     </a>
                                   </TooltipTrigger>
-                                  <TooltipContent>View on NPG Portal</TooltipContent>
+                                  <TooltipContent>View on {dnoConfig[selectedDno].label} Portal</TooltipContent>
                                 </Tooltip>
                               )}
                               <Button
