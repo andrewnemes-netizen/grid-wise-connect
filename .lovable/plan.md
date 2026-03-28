@@ -1,58 +1,61 @@
 
 
-## NPG Dataset Ingestion — End-to-End Audit & Fix Plan
+## NPG End-to-End Fix Plan
 
-### Issues Found
+### Current State (from DB audit)
 
-**1. Crawler geometry detection bug (root cause of most failures)**
-The catalog crawler picks the FIRST geo field it encounters. Many NPG datasets have BOTH `geo_point_2d` AND `geo_shape` fields. The crawler finds `geo_point_2d` first, marks the dataset as "Point", and sets `storage_table: geo_substations`. But the actual useful geometry lives in `geo_shape` (polygons/lines).
+- 96 total NPG datasets discovered, only **8 active**, only **6 linked** to layers
+- Of those 6 linked datasets:
+  - **2 SUCCESS**: `embedded-capacity-register` (950 rows), `embedded-capacity-register-part-2` (1731 rows)
+  - **1 ERROR**: `3_day_gsp_carbon_intensity` — 502 Bad Gateway from Supabase RPC (batch_insert overwhelmed by concurrent syncs)
+  - **2 STUCK "processing"**: `ehv-and-hv-supports-location` (storage mismatch: dr=geo_substations, lr=geo_points), `npg-live-33kv-circuit` (tabular, no geometry, linked to geo_feeders)
+  - **1 FALSE SUCCESS**: `30_day_gsp_carbon_intensity` — 0 rows inserted, 27434 skipped (tabular, no geometry)
+- **3 storage table mismatches** between dataset registry and layer registry
+- Many important spatial datasets (Distribution Sub Service Areas, HV Underground Cables, Substation Sites, etc.) are inactive and unlinked
 
-Affected datasets: Distribution Substation Service Areas, HV Overhead Feeders, LV Overhead Feeders, IDNO Regions, and more.
+### Root Causes
 
-**2. 403 errors on exports**
-Two datasets fail with HTTP 403: `3_day_gsp_carbon_intensity` and `npg-live-33kv-circuit`. The `fetchWithRetry` function passes the API key via header auth, and falls back to query param — but the GeoJSON/CSV export URLs may need the key appended differently. The export URLs are bare (no auth params), and the retry logic only tries query param fallback on the first attempt.
-
-**3. Tabular datasets linked to spatial layers**
-`30_day_gsp_carbon_intensity` (tabular, no geometry) is linked to a polygon layer. `npg-live-33kv-circuit` (tabular, 855k time-series records) is linked to a feeders layer. These are operational time-series data meant for enrichment of existing features, not spatial ingestion. The ingest function correctly rejects them (no geometry → null → skipped), but this isn't communicated clearly.
-
-**4. Storage table mismatches between dataset registry and layer registry**
-The ingest function uses `layerRow.storage_table` (correct), but `promoteGeometry` will reject features where the geometry family doesn't match the target table. For example, HV Overhead Feeders has polygon `geo_shape` but the layer expects `LineString` — these are coverage area polygons, not cable routes.
+1. **Concurrent "Sync All" overwhelms Supabase** — fires all ingests simultaneously, causing 502 from PostgREST
+2. **Storage table mismatches** — `promoteGeometry` rejects features when dataset registry says `geo_substations` but layer says `geo_points`
+3. **Tabular datasets linked to spatial layers** — no geometry to extract, all records skipped
+4. **Stuck "processing" status** — background jobs that fail silently never update status back
+5. **Most datasets not activated or linked** — only 8 of 96 are active
 
 ### Fixes
 
-**Fix 1: Crawler — prefer `geo_shape` over `geo_point_2d`**
+**Fix 1: Sequential "Sync All" with delay**
 
-In `npg-catalog-crawler/index.ts`, change the geometry field detection to prioritise `geo_shape` (which contains actual polygons/lines) over `geo_point_2d` (which is just a centroid). Also fix the `storage_table` guess accordingly.
+In `NpgDatasetRegistry.tsx`, change the "Sync All Active" handler to process datasets sequentially (one at a time with a 2s gap) instead of firing all concurrently. This prevents 502s from overwhelming the database.
 
-```text
-Before: finds first field with type geo_point_2d or geo_shape
-After:  prefers geo_shape if both exist → sets geometry_type and storage_table correctly
+**Fix 2: Fix storage table mismatches via migration**
+
+```sql
+-- ehv-and-hv-supports-location: registry says geo_substations, layer says geo_points → update registry
+UPDATE dno_dataset_registry SET storage_table = 'geo_points' 
+WHERE dataset_id = 'ehv-and-hv-supports-location' AND dno = 'NPG';
+
+-- Clear stuck processing statuses
+UPDATE dno_dataset_registry SET last_sync_status = 'never', last_sync_error = NULL 
+WHERE last_sync_status = 'processing' AND dno = 'NPG';
 ```
 
-**Fix 2: Ingest — pass API key to all export fetches**
+**Fix 3: Skip tabular datasets in Sync All**
 
-The `ingestViaGeoJsonExport` and `ingestViaCsvExport` functions already pass `apiKey` to `fetchWithRetry`. But `fetchWithRetry` uses `Authorization: Apikey ${apiKey}` header which some ODS export endpoints reject. Fix: always append `?apikey=` to export URLs when API key is available, since exports are simple file downloads that don't accept header auth consistently.
+In the ingest function, if `is_geospatial = false` and the layer expects spatial data (geo_polygons/feeders/cables), return early with a clear "skipped: tabular data" status instead of attempting ingestion.
 
-**Fix 3: Ingest — use `geo_shape` for GeoJSON exports when layer expects polygons/lines**
+**Fix 4: Auto-link more datasets to existing layers**
 
-When the linked layer's `storage_table` is `geo_polygons`, `geo_feeders`, or `geo_cables`, and the GeoJSON export features contain Point geometry (from the centroid), fall back to records mode which can extract `geo_shape` properly.
+Run a migration that links unlinked active geospatial datasets to matching layer_registry entries based on name/category matching, and activate key datasets that have matching layers (e.g., `substation_sites_list` → Substation Sites, `distribution-substation-service-areas` → Distribution Sub Service Areas, etc.).
 
-**Fix 4: Registry data cleanup migration**
+**Fix 5: Timeout guard in background ingest**
 
-Update existing registry rows to correct the `geometry_type` and `storage_table` for datasets that have `geo_shape`:
-- Datasets with both `geo_point_2d` and `geo_shape` → set `geometry_type` to the shape type
-- Mark tabular time-series datasets (`npg-live-*`) with a flag so the UI shows them as "enrichment only"
-
-**Fix 5: UI — show sync issues clearly**
-
-Add a warning badge when a dataset's `storage_table` doesn't match its linked layer's `storage_table`. Add a "Sync All Active" button to batch-ingest all active+linked datasets.
+Wrap `performIngest` in a try/catch that always updates the registry status, even if the background job crashes. Add a `setTimeout` safety net that marks the job as "error" if it hasn't completed within 55 seconds.
 
 ### Files to Change
 
 | File | Change |
 |------|--------|
-| `supabase/functions/npg-catalog-crawler/index.ts` | Prefer `geo_shape` over `geo_point_2d` in geometry detection; fix storage_table guess |
-| `supabase/functions/npg-dataset-ingest/index.ts` | Append API key as query param for exports; fallback to records mode when export geometry mismatches layer |
-| `src/components/admin/NpgDatasetRegistry.tsx` | Add mismatch warnings, "Sync All Active" button |
-| Database migration | Update existing registry rows with corrected geometry_type and storage_table |
+| `src/components/admin/NpgDatasetRegistry.tsx` | Sequential sync with delays; skip tabular datasets; clear stuck statuses |
+| `supabase/functions/npg-dataset-ingest/index.ts` | Early return for tabular→spatial mismatches; timeout safety net; use layer's storage_table (not registry's) consistently |
+| Database migration | Fix mismatches, clear stuck statuses, auto-link key datasets |
 
