@@ -1,36 +1,50 @@
 
 
-## Fix NaPTAN Memory Limit + End-to-End Test Results
+## Fix NaPTAN Partial Ingestion — CPU Timeout at 140k/434k
 
-### Test Results So Far
+### Problem
 
-| Component | Status | Details |
-|-----------|--------|---------|
-| Safety Engine | **PASS** | Returns risk score, accident counts, AI narrative |
-| Score Site | **PASS** | Returns distances, constraints, nearest substations |
-| DfT Traffic | **PASS** | 46,251 count points ingested |
-| STATS19 Accidents | **PASS** | 131,000 records ingested |
-| NaPTAN Transport | **FAIL** | Memory limit exceeded — 0 records |
+The NaPTAN ingestion hit `CPU Time exceeded` after inserting 140,000 of ~300k eligible records (434k total minus ~100k filtered). The `EdgeRuntime.waitUntil` background task has a ~60s CPU budget, which isn't enough for the full dataset. The Leeds area and many other regions have zero NaPTAN data because the CSV rows for those areas come after the 140k cutoff.
 
-### Root Cause
+### Solution: Resumable Chunked Ingestion
 
-The NaPTAN CSV is ~100MB+ (~434k rows). Line 115 does `await csvResp.text()` which loads the entire file into memory, exceeding the Supabase edge function memory limit (~150MB).
+Split the ingestion into resumable chunks. Each invocation processes N records then stops. The admin UI auto-chains calls until complete.
 
-### Fix: Stream-Parse the CSV
+### Implementation
 
-Rewrite `processNaptan` to use the Deno `ReadableStream` API to read the CSV response body as a stream, parsing line-by-line without buffering the entire file. This is the same pattern used by the STATS19 ingest for large files.
+**1. Update `supabase/functions/naptan-ingest/index.ts`**
 
-**Approach:**
-1. Use `csvResp.body.getReader()` to read chunks
-2. Maintain a line buffer, splitting on newlines
-3. Parse and batch-insert as lines arrive
-4. Never hold the full CSV in memory
+- Accept an optional `offset` parameter in the request body (default 0)
+- Track how many CSV lines have been processed (not just inserted)
+- After processing ~40k eligible records (well within CPU budget), stop and return `{ done: false, next_offset: <line_number>, inserted: N }`
+- When the CSV is fully consumed, return `{ done: true, total_inserted: N }`
+- Keep the streaming parser but add line counting and early termination
 
-### Impact
+```text
+Request:  { action: "ingest", offset: 0 }
+Response: { done: false, next_offset: 85000, inserted: 40000 }
 
-Once NaPTAN data loads, the safety engine's accessibility scores will populate (bus stops, rail stations), completing the decision engine's 4-pillar scoring: Traffic, Safety, Grid, and Accessibility.
+Request:  { action: "ingest", offset: 85000 }
+Response: { done: false, next_offset: 170000, inserted: 40000 }
+
+... repeat until done: true
+```
+
+**2. Update `src/components/admin/DnoApiSources.tsx`**
+
+- For NaPTAN sync, implement a loop: call the edge function, if `done === false`, immediately call again with the returned `next_offset`
+- Show progress in the UI ("Ingesting NaPTAN: 80,000 / ~300,000...")
+- Continue until `done === true`
+
+### Technical Details
+
+- The CSV is ordered geographically (roughly south to north by ATCO code prefix), so offset-based resumption via line counting works reliably
+- Each chunk skips `offset` lines from the CSV start, which means re-downloading the CSV each call — but the streaming reader can skip lines cheaply without parsing them
+- Batch size per call: ~40k eligible records (takes ~30s CPU, safely under the 60s limit)
+- The `upsert` with `onConflict: "layer_id,asset_id"` ensures idempotent re-runs
 
 ### Files to Change
 
-- `supabase/functions/naptan-ingest/index.ts` — Replace `csvResp.text()` with streaming line parser
+- `supabase/functions/naptan-ingest/index.ts` — Add offset/resume logic, synchronous processing (no waitUntil), return progress
+- `src/components/admin/DnoApiSources.tsx` — Auto-chain NaPTAN calls in a loop until complete
 
