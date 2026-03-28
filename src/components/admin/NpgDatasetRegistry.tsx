@@ -56,6 +56,8 @@ export function NpgDatasetRegistry() {
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL">("NPG");
+  const [autoLinking, setAutoLinking] = useState(false);
+  const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
 
   const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
     NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
