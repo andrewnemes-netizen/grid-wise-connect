@@ -315,25 +315,25 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     const pillars = [
       {
-        icon: "🚦",
+        icon: "[T]",
         label: "Traffic Demand",
         value: input.trafficAadf != null ? `${input.trafficAadf.toLocaleString()} AADF` : "N/A",
         badge: input.trafficLabel || "NO DATA",
       },
       {
-        icon: "🚶",
+        icon: "[A]",
         label: "Accessibility",
         value: `${input.nearbyBusStops ?? 0} bus, ${input.nearbyRailStations ?? 0} rail`,
         badge: input.accessibilityLabel || "NO DATA",
       },
       {
-        icon: "⚡",
+        icon: "[G]",
         label: "Grid Feasibility",
         value: input.gridViabilityIndex != null ? `${input.gridViabilityIndex}/100` : "N/A",
         badge: input.score || "N/A",
       },
       {
-        icon: "🛑",
+        icon: "[S]",
         label: "Safety",
         value: `${input.safetyIncidents ?? 0} incidents`,
         badge: input.safetyLabel || "N/A",
@@ -794,7 +794,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       er.flags.forEach((f) => {
         checkPage(6);
         doc.setTextColor(f.severity === "error" ? BRAND.red : BRAND.amber);
-        doc.text(f.severity === "error" ? "✗" : "⚠", margin + 2, y);
+        doc.text(f.severity === "error" ? "X" : "!", margin + 2, y);
         doc.setTextColor(BRAND.black);
         doc.text(f.message, margin + 8, y);
         y += 4;
