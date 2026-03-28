@@ -42,7 +42,7 @@ const SiteDetail = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sites")
-        .select("*")
+        .select("*, lng:geom.st_x(), lat:geom.st_y()")
         .eq("id", id!)
         .single();
       if (error) throw error;
