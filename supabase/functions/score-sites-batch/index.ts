@@ -248,19 +248,10 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Maximum 500 sites per batch" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Look up layer IDs once for traffic, NaPTAN, STATS19
-    const { data: layers } = await supabase
-      .from("layer_registry")
-      .select("id, slug")
-      .in("slug", ["dft_traffic_count_points", "naptan_transport_nodes", "stats19_accidents"]);
-
-    const layerMap: Record<string, string> = {};
-    for (const l of (layers || [])) {
-      layerMap[l.slug] = l.id;
-    }
-    const dftLayerId = layerMap["dft_traffic_count_points"] || "";
-    const naptanLayerId = layerMap["naptan_transport_nodes"] || "";
-    const stats19LayerId = layerMap["stats19_accidents"] || "";
+    // No need to look up layer IDs — we use slugs directly with nearby_geo_points_by_slug
+    const DFT_SLUG = "dft_traffic_count_points";
+    const NAPTAN_SLUG = "naptan_transport_nodes";
+    const STATS19_SLUG = "stats19_accidents";
 
     const results: ScoredRow[] = [];
 
