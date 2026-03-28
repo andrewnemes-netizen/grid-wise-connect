@@ -315,25 +315,25 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     const pillars = [
       {
-        icon: "🚦",
+        icon: "[T]",
         label: "Traffic Demand",
         value: input.trafficAadf != null ? `${input.trafficAadf.toLocaleString()} AADF` : "N/A",
         badge: input.trafficLabel || "NO DATA",
       },
       {
-        icon: "🚶",
+        icon: "[A]",
         label: "Accessibility",
         value: `${input.nearbyBusStops ?? 0} bus, ${input.nearbyRailStations ?? 0} rail`,
         badge: input.accessibilityLabel || "NO DATA",
       },
       {
-        icon: "⚡",
+        icon: "[G]",
         label: "Grid Feasibility",
         value: input.gridViabilityIndex != null ? `${input.gridViabilityIndex}/100` : "N/A",
         badge: input.score || "N/A",
       },
       {
-        icon: "🛑",
+        icon: "[S]",
         label: "Safety",
         value: `${input.safetyIncidents ?? 0} incidents`,
         badge: input.safetyLabel || "N/A",
