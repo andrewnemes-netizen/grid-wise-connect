@@ -1,37 +1,38 @@
 
 
-## Fix NGED "No Usable Data Endpoint" Errors
+## Add Gas Network Registry & Map Layer Tab
 
-### Root Cause
+### Overview
+Create a parallel Gas Distribution Network (GDN) registry system alongside the existing DNO (electricity) registry, starting with Cadent as the first source. This includes a new admin tab, a new map layer tab, and the Cadent crawler edge function.
 
-I examined the actual NGED CKAN API responses and the database. Here's what's happening:
+### Changes
 
-**Of 90 NGED datasets discovered:**
-- 42 are geospatial, but only 19 have any data endpoints (CSV/datastore)
-- **23 geospatial datasets have ZERO data endpoints** — their CKAN packages only contain PDF attachments and links to `dataportal2.nationalgrid.co.uk` (a separate download portal requiring manual download of SHP/DWG files). These are the ones showing "No usable data endpoint" errors.
-- 65 datasets have `endpoint_records` set (datastore-enabled CSVs), and 65 have `endpoint_export_csv` — these should be ingestable but some are non-geospatial
+| # | File | Change |
+|---|------|--------|
+| 1 | `supabase/functions/cadent-catalog-crawler/index.ts` | Create Opendatasoft v2.1 crawler for `cadentgas.opendatasoft.com`. No API key needed (public). Clone UKPN crawler pattern, set `DNO_KEY = "CADENT"`. Map `geo_shape` fields to `geo_cables`, `geo_point_2d` to `geo_points`. |
+| 2 | `supabase/config.toml` | Add `[functions.cadent-catalog-crawler]` with `verify_jwt = false`. |
+| 3 | `src/components/admin/GasDatasetRegistry.tsx` | New component — clone of `NpgDatasetRegistry.tsx` but for gas networks. Initial `gdnConfig` map with `CADENT: { label: "Cadent Gas", crawler: "cadent-catalog-crawler", portalUrl: "cadentgas.opendatasoft.com" }`. Same crawl/ingest/auto-link/sync-all UI. Uses same `dno_dataset_registry` table (the `dno` column will store `CADENT`, `NGN`, `SGN`, `WWU` etc). |
+| 4 | `src/pages/Admin.tsx` | Add new "Gas Registry" tab (with a `Flame` icon) between "DNO Registry" and "External APIs". Import and render `GasDatasetRegistry`. |
+| 5 | `src/components/map/LayerTogglePanel.tsx` | Add a 5th tab called "Gas" (with `Flame` icon) in the tabs grid (change `grid-cols-4` to `grid-cols-5`). Filter `registryLayers` where `dno` matches gas operators (`CADENT`, `NGN`, `SGN`, `WWU`) and render them in the same DNO→Category tree structure as the Network tab. Remove gas operators from the Network tab filter so they don't appear in both. |
+| 6 | Migration | Add Cadent matching rules to `auto_create_dno_layers` RPC: `gas.*pipe\|gpi` → "Cadent Gas Pipes" (`geo_cables`, LineString), `network.*zone\|boundary` → "Cadent Network Zones" (`geo_polygons`, Polygon), `pressure` → "Cadent Pressure Data" (`geo_points`, Point). |
 
-The crawler correctly discovers these datasets but sets `endpoint_records = null`, `endpoint_export_csv = null`, `endpoint_export_geojson = null` because the CKAN resources are just PDFs and external URLs. The ingest function then fails because there's literally no API to pull data from.
+### Gas GDN Operators (Future-Ready)
+The `gdnConfig` in the Gas Registry will be extensible for:
+- **CADENT** — Opendatasoft API (building now)
+- **NGN** — Northern Gas Networks (future, pending API verification)
+- **SGN** — Scotia Gas Networks (future, login required)
+- **WWU** — Wales & West Utilities (future, request-based)
 
-### Two Problems to Fix
+### How It Works
+- Gas datasets use the **same `dno_dataset_registry` table** — the `dno` column stores `CADENT`, `NGN`, etc.
+- Gas layers use the **same `layer_registry` + `geo_*` storage tables** — they just have `dno = "CADENT"` etc.
+- The map layer panel separates gas from electricity by checking the `dno` value against a known gas operator list.
+- The admin console has a dedicated "Gas Registry" tab so gas and electricity discovery are managed independently.
 
-**Problem 1: 23 datasets with no endpoints error out on Sync All**
-These need to be gracefully skipped. The user wants them kept active but marked as non-ingestable.
-
-**Problem 2: 17 datasets WITH valid endpoints haven't been tried yet (status = `never`)**
-These need their error status reset so Sync All picks them up.
-
-### Implementation
-
-| Step | File | Change |
-|------|------|--------|
-| 1 | `supabase/functions/npg-dataset-ingest/index.ts` | In `ingestViaCkan`, before throwing "No usable data endpoint", return early with status `skipped` and a clear message ("Data only available via manual download from dataportal2.nationalgrid.co.uk") instead of throwing an error. Update the registry entry with `last_sync_status = 'skipped'` and a descriptive note. |
-| 2 | `supabase/functions/nged-catalog-crawler/index.ts` | In `processPackage`, detect when resources are only PDFs/external links (no CSV, no GeoJSON, no datastore) and set a flag like `endpoint_notes: "Data available via dataportal2.nationalgrid.co.uk manual download only"` in the registry entry. This makes it clear in the admin UI why there's no endpoint. |
-| 3 | `src/components/admin/NpgDatasetRegistry.tsx` | In `SyncStatus` component, add handling for `skipped` status to show a clear "No API — manual download" indicator instead of an error. In `handleSyncAll`, skip datasets where all three endpoints are null to avoid unnecessary function calls. |
-| 4 | Migration | Reset the 22 errored NGED datasets: for those with valid endpoints, set status back to `never` so Sync All retries them; for those without endpoints, set status to `skipped` with a descriptive note. |
-
-### Expected Outcome
-- **17 datasets with valid CKAN datastore endpoints** will be ingested via Sync All (substation loading, capacity registers, connection queues, DFES, smart meter aggregated data, etc.)
-- **23 datasets without endpoints** will show "Skipped — manual download only" instead of errors
-- No more red error toasts flooding the admin UI during Sync All
+### After Implementation
+1. Go to **Admin → Gas Registry → Cadent Gas**
+2. Click **Discover All Datasets** to crawl the Cadent portal
+3. Click **Auto-Link Layers** to create GIS layer entries
+4. Click **Sync All Active** to ingest gas pipe data
+5. On the map, click the **Gas** tab in the Layers panel to toggle gas layers
 
