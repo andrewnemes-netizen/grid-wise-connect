@@ -93,6 +93,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Traffic AADF + NaPTAN queries (fire in parallel with substation search) ──
+    const trafficPromise = fetch(
+      `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+        body: JSON.stringify({ p_slug: "dft_traffic_count_points", p_lng: lng, p_lat: lat, p_radius_m: 1000, p_limit: 20 }),
+        signal: AbortSignal.timeout(15000),
+      }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+
+    const naptanPromise = fetch(
+      `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+        body: JSON.stringify({ p_slug: "naptan_transport_nodes", p_lng: lng, p_lat: lat, p_radius_m: 500, p_limit: 50 }),
+        signal: AbortSignal.timeout(15000),
+      }
+    ).then(r => r.ok ? r.json() : []).catch(() => []);
+
     // Adaptive radius search for nearest substations: 2km → 5km → 10km
     // Also via direct fetch to bypass the 8s PostgREST statement timeout
     let substations: any[] = [];
