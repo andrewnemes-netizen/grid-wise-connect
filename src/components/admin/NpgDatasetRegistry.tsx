@@ -55,15 +55,21 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL">("NPG");
 
-  // Fetch all datasets from registry
+  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
+    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
+    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com" },
+  };
+
+  // Fetch all datasets from registry for selected DNO
   const { data: datasets = [], isLoading } = useQuery({
-    queryKey: ["npg-dataset-registry"],
+    queryKey: ["dno-dataset-registry", selectedDno],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("dno_dataset_registry")
         .select("*")
-        .eq("dno", "NPG")
+        .eq("dno", selectedDno)
         .order("title");
       if (error) throw error;
       return data as DatasetEntry[];
