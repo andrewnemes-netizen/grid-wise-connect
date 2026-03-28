@@ -13,8 +13,8 @@ const STATS19_URL =
 /**
  * STATS19 Road Accident Data Ingestion
  *
- * Downloads the last 5 years of collision data from DfT,
- * parses CSV, and stores as geo_points for the accident hotspot layer.
+ * Uses EdgeRuntime.waitUntil to process the large CSV in the background,
+ * returning immediately to avoid CPU timeout.
  */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -85,37 +85,55 @@ serve(async (req) => {
 
     const layerId = layerMeta.id;
 
-    // Download CSV
+    // Kick off background processing via waitUntil
+    // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
+    EdgeRuntime.waitUntil(processStats19(serviceClient, layerId));
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "STATS19 ingestion started in background. Check layer_registry feature_count for progress.",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    console.error("STATS19 ingest error:", err);
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});
+
+async function processStats19(serviceClient: any, layerId: string) {
+  try {
     console.log("Downloading STATS19 CSV...");
     const csvResp = await fetch(STATS19_URL);
     if (!csvResp.ok) {
-      return new Response(JSON.stringify({ error: `CSV download failed: ${csvResp.status}` }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      console.error(`CSV download failed: ${csvResp.status}`);
+      return;
     }
 
     const csvText = await csvResp.text();
     const lines = csvText.split("\n");
-    const header = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""));
+    const header = lines[0].split(",").map((h: string) => h.trim().replace(/"/g, ""));
 
-    // Find column indices
-    const idxAccidentIndex = header.findIndex((h) => h.toLowerCase().includes("accident_index"));
-    const idxLat = header.findIndex((h) => h.toLowerCase() === "latitude");
-    const idxLon = header.findIndex((h) => h.toLowerCase() === "longitude");
-    const idxSeverity = header.findIndex((h) => h.toLowerCase().includes("accident_severity"));
-    const idxDate = header.findIndex((h) => h.toLowerCase() === "date");
-    const idxDay = header.findIndex((h) => h.toLowerCase().includes("day_of_week"));
-    const idxRoadClass = header.findIndex((h) => h.toLowerCase().includes("road_class") || h.toLowerCase().includes("first_road_class"));
-    const idxRoadNumber = header.findIndex((h) => h.toLowerCase().includes("first_road_number"));
-    const idxSpeedLimit = header.findIndex((h) => h.toLowerCase().includes("speed_limit"));
-    const idxLightConditions = header.findIndex((h) => h.toLowerCase().includes("light_conditions"));
-    const idxWeather = header.findIndex((h) => h.toLowerCase().includes("weather_conditions"));
-    const idxRoadSurface = header.findIndex((h) => h.toLowerCase().includes("road_surface"));
-    const idxCasualties = header.findIndex((h) => h.toLowerCase().includes("number_of_casualties"));
-    const idxVehicles = header.findIndex((h) => h.toLowerCase().includes("number_of_vehicles"));
-    const idxUrbanRural = header.findIndex((h) => h.toLowerCase().includes("urban_or_rural"));
-    const idxLocalAuth = header.findIndex((h) => h.toLowerCase().includes("local_authority"));
+    const idxAccidentIndex = header.findIndex((h: string) => h.toLowerCase().includes("accident_index"));
+    const idxLat = header.findIndex((h: string) => h.toLowerCase() === "latitude");
+    const idxLon = header.findIndex((h: string) => h.toLowerCase() === "longitude");
+    const idxSeverity = header.findIndex((h: string) => h.toLowerCase().includes("accident_severity"));
+    const idxDate = header.findIndex((h: string) => h.toLowerCase() === "date");
+    const idxDay = header.findIndex((h: string) => h.toLowerCase().includes("day_of_week"));
+    const idxRoadClass = header.findIndex((h: string) => h.toLowerCase().includes("road_class") || h.toLowerCase().includes("first_road_class"));
+    const idxRoadNumber = header.findIndex((h: string) => h.toLowerCase().includes("first_road_number"));
+    const idxSpeedLimit = header.findIndex((h: string) => h.toLowerCase().includes("speed_limit"));
+    const idxLightConditions = header.findIndex((h: string) => h.toLowerCase().includes("light_conditions"));
+    const idxWeather = header.findIndex((h: string) => h.toLowerCase().includes("weather_conditions"));
+    const idxRoadSurface = header.findIndex((h: string) => h.toLowerCase().includes("road_surface"));
+    const idxCasualties = header.findIndex((h: string) => h.toLowerCase().includes("number_of_casualties"));
+    const idxVehicles = header.findIndex((h: string) => h.toLowerCase().includes("number_of_vehicles"));
+    const idxUrbanRural = header.findIndex((h: string) => h.toLowerCase().includes("urban_or_rural"));
+    const idxLocalAuth = header.findIndex((h: string) => h.toLowerCase().includes("local_authority"));
 
     console.log(`CSV has ${lines.length - 1} data rows. Header cols: ${header.length}`);
 
@@ -124,15 +142,13 @@ serve(async (req) => {
     const batchSize = 500;
     let batch: any[] = [];
 
-    // Severity mapping
     const severityMap: Record<string, string> = { "1": "Fatal", "2": "Serious", "3": "Slight" };
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Simple CSV parse (DfT data uses simple comma separation)
-      const cols = line.split(",").map((c) => c.trim().replace(/"/g, ""));
+      const cols = line.split(",").map((c: string) => c.trim().replace(/"/g, ""));
 
       const lat = parseFloat(cols[idxLat]);
       const lon = parseFloat(cols[idxLon]);
@@ -181,9 +197,13 @@ serve(async (req) => {
         }
         batch = [];
 
-        // Log progress every 10k
         if (totalInserted % 10000 === 0) {
           console.log(`STATS19 progress: ${totalInserted} inserted, ${skipped} skipped`);
+          // Update feature count periodically
+          await serviceClient
+            .from("layer_registry")
+            .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
+            .eq("id", layerId);
         }
       }
     }
@@ -200,21 +220,14 @@ serve(async (req) => {
       }
     }
 
-    // Update feature count
+    // Update final feature count
     await serviceClient
       .from("layer_registry")
       .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
       .eq("id", layerId);
 
-    return new Response(
-      JSON.stringify({ success: true, total_inserted: totalInserted, skipped }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.log(`STATS19 complete: ${totalInserted} inserted, ${skipped} skipped`);
   } catch (err) {
-    console.error("STATS19 ingest error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("STATS19 background processing error:", err);
   }
-});
+}
