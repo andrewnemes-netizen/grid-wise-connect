@@ -55,7 +55,7 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN">("NPG");
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED">("NPG");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
 
@@ -63,6 +63,7 @@ export function NpgDatasetRegistry() {
     NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
     ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com" },
     SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com" },
+    NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk" },
   };
 
   // Fetch all datasets from registry for selected DNO
