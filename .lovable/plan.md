@@ -1,31 +1,36 @@
 
 
-## Add DfT Traffic Ingest Button + Fix Auth + End-to-End Test
+## Fix NaPTAN Memory Limit + End-to-End Test Results
 
-### What's needed
+### Test Results So Far
 
-1. **Fix auth in `dft-traffic-proxy`** — Currently uses deprecated `getClaims()`. Replace with `getUser()` to match the standard pattern used across all other edge functions.
+| Component | Status | Details |
+|-----------|--------|---------|
+| Safety Engine | **PASS** | Returns risk score, accident counts, AI narrative |
+| Score Site | **PASS** | Returns distances, constraints, nearest substations |
+| DfT Traffic | **PASS** | 46,251 count points ingested |
+| STATS19 Accidents | **PASS** | 131,000 records ingested |
+| NaPTAN Transport | **FAIL** | Memory limit exceeded — 0 records |
 
-2. **Add DfT entry to the DnoApiSources admin panel** — Add a new DNO entry for "DfT Road Traffic" with a one-click "Ingest" button that calls the `dft-traffic-proxy` edge function with `action: "ingest"`. This follows the existing `DNO_REGISTRY` pattern but calls a different edge function endpoint.
+### Root Cause
 
-3. **Verify layer registry entry exists** — The migration already inserted `dft_traffic_count_points` into `layer_registry`. The ingest function looks it up by slug.
+The NaPTAN CSV is ~100MB+ (~434k rows). Line 115 does `await csvResp.text()` which loads the entire file into memory, exceeding the Supabase edge function memory limit (~150MB).
 
-### Implementation Steps
+### Fix: Stream-Parse the CSV
 
-**Step 1: Fix `supabase/functions/dft-traffic-proxy/index.ts`**
-- Replace `getClaims(token)` with `getUser(token)` for auth verification
-- Extract `user_id` from `user.id` instead of `claims.sub`
+Rewrite `processNaptan` to use the Deno `ReadableStream` API to read the CSV response body as a stream, parsing line-by-line without buffering the entire file. This is the same pattern used by the STATS19 ingest for large files.
 
-**Step 2: Edit `src/components/admin/DnoApiSources.tsx`**
-- Add a new entry to `DNO_REGISTRY` for DfT:
-  ```
-  { key: "DFT", label: "DfT Road Traffic", base_url: "https://roadtraffic.dft.gov.uk", status: "live", datasets: [
-    { key: "count_points", label: "Traffic Count Points (AADF)", dataset_id: "count-points", storage_table: "geo_points", geometry_type: "Point", expected_records: 23500 }
-  ]}
-  ```
-- In `handleSync`, add a branch: if `dno.key === "DFT"`, call `dft-traffic-proxy` with `{ action: "ingest" }` instead of `dno-open-data-ingest`
+**Approach:**
+1. Use `csvResp.body.getReader()` to read chunks
+2. Maintain a line buffer, splitting on newlines
+3. Parse and batch-insert as lines arrive
+4. Never hold the full CSV in memory
+
+### Impact
+
+Once NaPTAN data loads, the safety engine's accessibility scores will populate (bus stops, rail stations), completing the decision engine's 4-pillar scoring: Traffic, Safety, Grid, and Accessibility.
 
 ### Files to Change
-- `supabase/functions/dft-traffic-proxy/index.ts` — Fix auth method
-- `src/components/admin/DnoApiSources.tsx` — Add DfT registry entry + sync handler branch
+
+- `supabase/functions/naptan-ingest/index.ts` — Replace `csvResp.text()` with streaming line parser
 
