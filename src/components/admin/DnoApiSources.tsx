@@ -64,6 +64,13 @@ const DNO_REGISTRY: DnoDef[] = [
     datasets: [],
   },
   {
+    key: "ENWL",
+    label: "Electricity North West",
+    base_url: "https://electricitynorthwest.opendatasoft.com",
+    status: "live",
+    datasets: [],
+  },
+  {
     key: "SSEN",
     label: "Scottish & Southern",
     base_url: "https://data.ssen.co.uk",

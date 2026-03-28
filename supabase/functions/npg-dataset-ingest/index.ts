@@ -123,7 +123,13 @@ Deno.serve(async (req) => {
       .eq("id", registry_id);
 
     const storageTable = layerRow.storage_table;
-    const apiKey = Deno.env.get("NPG_API_KEY") || null;
+    // DNO-aware API key lookup
+    const dnoApiKeyMap: Record<string, string> = {
+      NPG: "NPG_API_KEY",
+      ENWL: "ENWL_API_KEY",
+    };
+    const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";
+    const apiKey = Deno.env.get(apiKeyEnvName) || null;
 
     console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 

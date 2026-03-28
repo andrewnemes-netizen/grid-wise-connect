@@ -55,15 +55,21 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL">("NPG");
 
-  // Fetch all datasets from registry
+  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
+    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
+    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com" },
+  };
+
+  // Fetch all datasets from registry for selected DNO
   const { data: datasets = [], isLoading } = useQuery({
-    queryKey: ["npg-dataset-registry"],
+    queryKey: ["dno-dataset-registry", selectedDno],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("dno_dataset_registry")
         .select("*")
-        .eq("dno", "NPG")
+        .eq("dno", selectedDno)
         .order("title");
       if (error) throw error;
       return data as DatasetEntry[];
@@ -92,8 +98,9 @@ export function NpgDatasetRegistry() {
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const crawlerFn = dnoConfig[selectedDno].crawler;
       const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/npg-catalog-crawler`,
+        `https://${projectId}.supabase.co/functions/v1/${crawlerFn}`,
         {
           method: "POST",
           headers: {
@@ -106,8 +113,8 @@ export function NpgDatasetRegistry() {
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
-      toast.success(`Discovered ${result.total_discovered} datasets, upserted ${result.inserted}`);
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      toast.success(`Discovered ${result.total_discovered} ${selectedDno} datasets, upserted ${result.inserted}`);
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
     } catch (err: any) {
       toast.error(`Crawl failed: ${err.message}`);
     } finally {
@@ -144,7 +151,7 @@ export function NpgDatasetRegistry() {
         pollSyncStatus(entry.id, entry.title);
       } else {
         toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
-        queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+        queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
       }
     } catch (err: any) {
       toast.error(`Ingest failed: ${err.message}`);
@@ -175,11 +182,11 @@ export function NpgDatasetRegistry() {
       } else if (data.last_sync_status === "error") {
         toast.error(`❌ ${title}: ${data.last_sync_error}`);
       }
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
       return;
     }
     toast.warning(`${title}: Still processing — check back shortly`);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // ── Link layer ──
@@ -193,7 +200,7 @@ export function NpgDatasetRegistry() {
       toast.error(`Failed to link: ${error.message}`);
     } else {
       toast.success("Layer linked");
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
     }
   };
 
@@ -203,7 +210,7 @@ export function NpgDatasetRegistry() {
       .from("dno_dataset_registry")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", entryId);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // Active+linked datasets for "Sync All"
@@ -234,7 +241,7 @@ export function NpgDatasetRegistry() {
     }
     toast.success(`Sync All complete: ${successCount} started, ${failCount} failed`);
     setSyncAllRunning(false);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // Filtering
@@ -270,14 +277,26 @@ export function NpgDatasetRegistry() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Globe className="h-5 w-5" />
-                NPG Dataset Registry
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">
-                Auto-discovered from northernpowergrid.opendatasoft.com — Explore API v2.1
-              </CardDescription>
+            <div className="flex items-center gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Globe className="h-5 w-5" />
+                  {dnoConfig[selectedDno].label} Dataset Registry
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  Auto-discovered from {dnoConfig[selectedDno].portalUrl} — Explore API v2.1
+                </CardDescription>
+              </div>
+              <Select value={selectedDno} onValueChange={(v: any) => setSelectedDno(v)}>
+                <SelectTrigger className="w-[160px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(dnoConfig).map(([key, cfg]) => (
+                    <SelectItem key={key} value={key} className="text-xs">{cfg.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex gap-2">
               <Button onClick={handleCrawl} disabled={crawling} size="sm">
