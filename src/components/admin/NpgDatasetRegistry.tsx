@@ -534,6 +534,15 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
     return <span className="text-[10px] text-muted-foreground">Never</span>;
   }
 
+  if (ds.last_sync_status === "processing") {
+    return (
+      <span className="text-[10px] text-primary flex items-center gap-0.5">
+        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+        Processing…
+      </span>
+    );
+  }
+
   if (ds.last_sync_status === "success") {
     return (
       <div className="text-[10px]">
