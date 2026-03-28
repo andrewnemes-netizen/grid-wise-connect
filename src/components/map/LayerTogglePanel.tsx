@@ -329,11 +329,15 @@ export function LayerTogglePanel({
         {expanded && (
           <div className="border-t">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-4">
+              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-5">
                 <TabsTrigger value="network" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Zap className="h-3 w-3" />
                   Network
                   {networkVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{networkVisibleCount}</Badge>}
+                </TabsTrigger>
+                <TabsTrigger value="gas" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
+                  <Flame className="h-3 w-3" />
+                  Gas
                 </TabsTrigger>
                 <TabsTrigger value="osopen" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Compass className="h-3 w-3" />
@@ -397,6 +401,40 @@ export function LayerTogglePanel({
                 <div className="pt-1.5 border-t mt-1">
                   <p className="text-[10px] text-muted-foreground px-1">Layers auto-refresh as you pan the map. Click features for details.</p>
                 </div>
+              </TabsContent>
+
+              {/* Gas Tab */}
+              <TabsContent value="gas" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {gasTree.size === 0 ? (
+                  <div className="py-4 text-center space-y-1.5">
+                    <Flame className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-[11px] text-muted-foreground">No gas network layers available.</p>
+                    <p className="text-[10px] text-muted-foreground">Discover Cadent datasets in Admin → Gas Registry.</p>
+                  </div>
+                ) : (
+                  Array.from(gasTree.entries()).map(([dno, catMap]) => (
+                    <div key={dno} className="space-y-0.5">
+                      {gasTree.size > 1 && (
+                        <div className="flex items-center gap-1.5 px-1 pt-1">
+                          <Badge variant="outline" className="text-[9px] font-semibold">{dno}</Badge>
+                        </div>
+                      )}
+                      {Array.from(catMap.entries()).map(([category, catLayers]) => (
+                        <CategoryGroup
+                          key={`gas:${dno}:${category}`}
+                          groupKey={`gas:${dno}:${category}`}
+                          category={category}
+                          layers={catLayers}
+                          collapsedGroups={collapsedGroups}
+                          toggleGroup={toggleGroup}
+                          visibility={visibility}
+                          loadingLayers={loadingLayers}
+                          onToggle={onToggle}
+                        />
+                      ))}
+                    </div>
+                  ))
+                )}
               </TabsContent>
 
               {/* Planning Tab */}
