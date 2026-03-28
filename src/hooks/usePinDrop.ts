@@ -34,6 +34,7 @@ export function usePinDrop(map: maplibregl.Map | null) {
 
   return {
     pinLocation,
+    setPinLocation,
     showSiteCheck,
     handlePinClick,
     clearPin,
