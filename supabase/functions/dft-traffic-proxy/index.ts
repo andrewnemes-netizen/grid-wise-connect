@@ -97,6 +97,54 @@ async function handleDetail(countPointId: number | string) {
   });
 }
 
+/** Fetch latest AADF for a batch of count point IDs and return a map */
+async function fetchAadfBatch(cpIds: number[]): Promise<Map<number, any>> {
+  const map = new Map<number, any>();
+  if (cpIds.length === 0) return map;
+
+  // Fetch AADF from the bulk endpoint filtered by latest year
+  // The DfT API doesn't support filtering by multiple IDs, so we fetch recent AADF pages
+  // and match by count_point_id. For efficiency, we fetch the latest year's data in bulk.
+  // Strategy: fetch AADF sorted by -year with a large page, collect matches.
+  const idSet = new Set(cpIds);
+  let page = 1;
+  let found = 0;
+
+  while (found < cpIds.length && page <= 100) {
+    try {
+      const url = `${DFT_BASE}/average-annual-daily-flow?page[size]=1000&page[number]=${page}&sort=-year`;
+      const resp = await fetch(url);
+      if (!resp.ok) break;
+      const json = await resp.json();
+      const rows = json.data || json.rows || [];
+      if (rows.length === 0) break;
+
+      for (const r of rows) {
+        const cpId = r.count_point_id;
+        if (idSet.has(cpId) && !map.has(cpId)) {
+          map.set(cpId, {
+            all_motor_vehicles: r.all_motor_vehicles,
+            cars_and_taxis: r.cars_and_taxis,
+            buses_and_coaches: r.buses_and_coaches,
+            all_hgvs: r.all_hgvs,
+            pedal_cycles: r.pedal_cycles,
+            year: r.year,
+          });
+          found++;
+        }
+      }
+
+      if (rows.length < 1000) break;
+      page++;
+      await new Promise((r) => setTimeout(r, 300));
+    } catch {
+      break;
+    }
+  }
+
+  return map;
+}
+
 /** Paginate all count points, attach latest AADF, upsert into geo_points */
 async function handleIngest(req: Request) {
   // Auth check
@@ -158,6 +206,43 @@ async function handleIngest(req: Request) {
   let pageNum = 1;
   const pageSize = 1000;
 
+  // Also build a map of count_point_id → latest AADF by paginating the AADF endpoint
+  // We fetch AADF in parallel batches as we go
+  const aadfCache = new Map<number, any>();
+
+  // Pre-fetch some AADF pages to build the cache
+  console.log("Pre-fetching AADF data...");
+  for (let ap = 1; ap <= 50; ap++) {
+    try {
+      const url = `${DFT_BASE}/average-annual-daily-flow?page[size]=1000&page[number]=${ap}&sort=-year`;
+      const resp = await fetch(url);
+      if (!resp.ok) break;
+      const json = await resp.json();
+      const rows = json.data || json.rows || [];
+      if (rows.length === 0) break;
+
+      for (const r of rows) {
+        const cpId = r.count_point_id;
+        if (!aadfCache.has(cpId)) {
+          aadfCache.set(cpId, {
+            all_motor_vehicles: r.all_motor_vehicles,
+            cars_and_taxis: r.cars_and_taxis,
+            buses_and_coaches: r.buses_and_coaches,
+            all_hgvs: r.all_hgvs,
+            pedal_cycles: r.pedal_cycles,
+            year: r.year,
+          });
+        }
+      }
+
+      if (rows.length < 1000) break;
+      await new Promise((r) => setTimeout(r, 200));
+    } catch {
+      break;
+    }
+  }
+  console.log(`AADF cache built with ${aadfCache.size} entries`);
+
   // Paginate through count points
   while (true) {
     const cpUrl = `${DFT_BASE}/count-points?page[size]=${pageSize}&page[number]=${pageNum}`;
@@ -172,29 +257,40 @@ async function handleIngest(req: Request) {
     const rows: CountPointRaw[] = cpJson.rows || cpJson.data || [];
     if (rows.length === 0) break;
 
-    // Build geo_points rows
+    // Build geo_points rows with AADF enrichment
     const geoRows = rows
       .filter((r) => r.latitude && r.longitude)
-      .map((r) => ({
-        layer_id: layerId,
-        dno: "National",
-        asset_id: String(r.count_point_id || r.id),
-        name: r.road_name || `Count Point ${r.count_point_id || r.id}`,
-        geom: `SRID=4326;POINT(${r.longitude} ${r.latitude})`,
-        attrs_json: {
-          count_point_id: r.count_point_id || r.id,
-          road_name: r.road_name,
-          road_category: r.road_category,
-          road_type: r.road_type,
-          local_authority: r.local_authority_name,
-          region: r.region_name,
-        },
-      }));
+      .map((r) => {
+        const cpId = r.count_point_id || r.id;
+        const aadf = aadfCache.get(cpId);
+        return {
+          layer_id: layerId,
+          dno: "National",
+          asset_id: String(cpId),
+          name: r.road_name || `Count Point ${cpId}`,
+          geom: `SRID=4326;POINT(${r.longitude} ${r.latitude})`,
+          attrs_json: {
+            count_point_id: cpId,
+            road_name: r.road_name,
+            road_category: r.road_category,
+            road_type: r.road_type,
+            local_authority: r.local_authority_name,
+            region: r.region_name,
+            // AADF enrichment
+            all_motor_vehicles: aadf?.all_motor_vehicles ?? null,
+            cars_and_taxis: aadf?.cars_and_taxis ?? null,
+            buses_and_coaches: aadf?.buses_and_coaches ?? null,
+            all_hgvs: aadf?.all_hgvs ?? null,
+            pedal_cycles: aadf?.pedal_cycles ?? null,
+            aadf_year: aadf?.year ?? null,
+          },
+        };
+      });
 
     if (geoRows.length > 0) {
       const { error: insertErr } = await serviceClient
         .from("geo_points")
-        .upsert(geoRows, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
+        .upsert(geoRows, { onConflict: "layer_id,asset_id", ignoreDuplicates: false });
 
       if (insertErr) {
         console.error(`Insert error page ${pageNum}:`, insertErr);
@@ -217,7 +313,7 @@ async function handleIngest(req: Request) {
     .eq("id", layerId);
 
   return new Response(
-    JSON.stringify({ success: true, total_inserted: totalInserted, pages_fetched: pageNum }),
+    JSON.stringify({ success: true, total_inserted: totalInserted, pages_fetched: pageNum, aadf_cached: aadfCache.size }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 }
