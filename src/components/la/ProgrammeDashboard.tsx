@@ -295,13 +295,21 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <Button size="sm" variant="ghost" onClick={selectAllReady} className="text-xs h-8">
+                Select All Ready ({portfolioReady.length})
+              </Button>
+              {selected.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={clearSelection} className="text-xs h-8 text-muted-foreground">
+                  Clear ({selected.size})
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={exportCsv}>
                 <Download className="mr-1 h-3 w-3" /> Export CSV
               </Button>
               <Button size="sm" onClick={saveToPortfolio} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
-                Save to Portfolio
+                Save {selected.size > 0 ? `${selected.size} Selected` : "All Ready"} to Portfolio
               </Button>
             </div>
           </div>
