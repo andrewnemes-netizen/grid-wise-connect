@@ -289,16 +289,51 @@ const MapView = () => {
   }, [connect.connectEndpoints, captureScreenshot]);
 
   // Screenshot handler for UnifiedIntelligencePanel (pin-drop centred)
+  // Auto-loads infrastructure layers so substations, cables etc. appear in the capture
   const handlePinScreenshot = useCallback(async (): Promise<string | null> => {
     if (!map || !pin.pinLocation) return null;
     const { lng, lat } = pin.pinLocation;
     // Buffer ~300m around pin so nearby infrastructure is visible
     const BUFFER = 0.004;
-    const bounds = new maplibregl.LngLatBounds(
-      [lng - BUFFER, lat - BUFFER],
-      [lng + BUFFER, lat + BUFFER]
-    );
+    const bbox: [number, number, number, number] = [lng - BUFFER, lat - BUFFER, lng + BUFFER, lat + BUFFER];
+    const bounds = new maplibregl.LngLatBounds([bbox[0], bbox[1]], [bbox[2], bbox[3]]);
     map.fitBounds(bounds, { padding: 40, duration: 0 });
+
+    // --- Auto-load infrastructure layers ---
+    const INFRA_SLUGS = [
+      "npg_hv_substations_utilisation",
+      "npg_hv_underground_cables",
+      "npg_ehv_underground_cables",
+      "npg_ehv_feeders",
+      "npg_hv_feeders_33kv",
+      "npg_hv_feeders_66kv",
+      "npg_ndp_projects",
+    ];
+
+    const tempLayerIds: string[] = [];
+    try {
+      // Find registry entries for infra slugs
+      const infraLayers = registryLayers.filter((l) => INFRA_SLUGS.includes(l.slug));
+
+      // Load each layer that isn't already visible on the map
+      const loadPromises = infraLayers.map(async (layer, idx) => {
+        const sourceId = `source-${layer.id}`;
+        const alreadyVisible = !!map.getSource(sourceId);
+        if (alreadyVisible) return; // already on map
+
+        try {
+          const geojson = await fetchLayerGeoJSON(layer.id, bbox);
+          if (!geojson.features.length) return;
+          addRegistryLayerToMap(map, layer, geojson, idx);
+          tempLayerIds.push(layer.id);
+        } catch (err) {
+          console.warn(`Screenshot: failed to load ${layer.slug}:`, err);
+        }
+      });
+      await Promise.all(loadPromises);
+    } catch (err) {
+      console.warn("Screenshot: infra layer loading failed:", err);
+    }
 
     // Add temporary pin marker as GeoJSON so it renders on canvas
     const srcId = "pin-screenshot-src";
@@ -327,19 +362,32 @@ const MapView = () => {
         } catch {
           resolve(null);
         } finally {
+          // Clean up pin marker
           try {
             if (map.getLayer(layerId)) map.removeLayer(layerId);
             if (map.getLayer(strokeId)) map.removeLayer(strokeId);
             if (map.getSource(srcId)) map.removeSource(srcId);
           } catch {}
+          // Clean up temporarily-added infra layers
+          for (const id of tempLayerIds) {
+            try {
+              const mid = `layer-${id}`;
+              if (map.getLayer(mid)) map.removeLayer(mid);
+              if (map.getLayer(`${mid}-outline`)) map.removeLayer(`${mid}-outline`);
+              if (map.getLayer(`${mid}-heat`)) map.removeLayer(`${mid}-heat`);
+              const sid = `source-${id}`;
+              if (map.getSource(sid)) map.removeSource(sid);
+            } catch {}
+          }
         }
       };
+      // Wait a bit longer for infra layers to render
       setTimeout(() => {
         if (map.areTilesLoaded()) capture();
         else map.once("idle", capture);
-      }, 600);
+      }, 800);
     });
-  }, [map, pin.pinLocation]);
+  }, [map, pin.pinLocation, registryLayers]);
 
   return (
     <div className="relative h-full w-full">
