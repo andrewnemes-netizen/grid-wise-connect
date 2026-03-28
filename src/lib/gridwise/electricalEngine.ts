@@ -6,6 +6,7 @@
  */
 
 import { runElectricalValidation, type ElectricalValidationResult } from "../electricalEngine";
+import { selectCableForLoad } from "../connectionCosts";
 import type { SiteInput, FeasibilityDecision, RouteDesign, ElectricalDesign } from "./types";
 
 /**
@@ -24,17 +25,23 @@ export function runElectricalEngine(
   const lvMainCable = feasibility.electrical_sizing.lv_main_cable;
 
   if (serviceCable !== "PENDING" && lvMainCable !== "PENDING") {
-    // TODO: Look up actual impedance and ratings from cable_catalogue
-    // For now, use conservative defaults for the validation framework
+    // Select cables based on load using DNO kVA thresholds
+    const voltageLevel = input.proposed_kw <= 80 ? "LV" as const : input.proposed_kw <= 1500 ? "HV" as const : "EHV" as const;
+    const mainsCable = selectCableForLoad(input.proposed_kw, voltageLevel);
+    // Service cable is typically one size down for LV, same for HV/EHV
+    const serviceCableSelection = voltageLevel === "LV"
+      ? selectCableForLoad(input.proposed_kw * 0.5, "LV") // Service portion carries less
+      : mainsCable;
+
     try {
       validation = runElectricalValidation({
         proposed_kw: input.proposed_kw,
-        mains_length_m: route.route_quantities.total_length_m * 0.7, // Approximate mains portion
-        service_length_m: route.route_quantities.total_length_m * 0.3, // Approximate service portion
-        mains_impedance_per_km: 0.32, // Conservative 185mm² XLPE
-        service_impedance_per_km: 0.64, // Conservative 95mm² XLPE
-        mains_rating_a: 400,
-        service_rating_a: 200,
+        mains_length_m: route.route_quantities.total_length_m * 0.7,
+        service_length_m: route.route_quantities.total_length_m * 0.3,
+        mains_impedance_per_km: mainsCable.impedance_per_km,
+        service_impedance_per_km: serviceCableSelection.impedance_per_km,
+        mains_rating_a: mainsCable.current_rating_a,
+        service_rating_a: serviceCableSelection.current_rating_a,
         diversity_factor: input.diversity_factor ?? 1.0,
       });
     } catch (e) {
