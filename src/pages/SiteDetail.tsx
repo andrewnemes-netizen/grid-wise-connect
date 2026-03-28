@@ -198,7 +198,7 @@ const SiteDetail = () => {
           const lat = raw.lat ?? raw.latitude;
           const lng = raw.lng ?? raw.longitude;
           if (lat && lng) {
-            navigate(`/map?lat=${lat}&lng=${lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}`);
+            navigate(`/?lat=${lat}&lng=${lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}`);
           } else {
             toast({ title: "No coordinates", description: "This site has no location data to show on the map.", variant: "destructive" });
           }
