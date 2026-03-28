@@ -88,10 +88,11 @@ export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest
 
         {/* Cost breakdown bars */}
         <div className="mt-3 space-y-1">
-          {[
+        {[
             { label: "Cable", value: estimate.cable_cost, color: "bg-blue-500" },
             { label: "Excavation", value: estimate.excavation_cost, color: "bg-amber-500" },
             { label: "Equipment", value: estimate.equipment_cost, color: "bg-purple-500" },
+            { label: "Labour", value: estimate.labour_cost, color: "bg-emerald-500" },
             ...(estimate.reinforcement_cost > 0 ? [{ label: "Reinforcement", value: estimate.reinforcement_cost, color: "bg-red-500" }] : []),
           ].map((bar) => (
             <div key={bar.label} className="flex items-center gap-2 text-[10px]">

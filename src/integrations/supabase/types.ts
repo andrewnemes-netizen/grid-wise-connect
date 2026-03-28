@@ -1676,6 +1676,8 @@ export type Database = {
         Row: {
           cable_ehv_per_m: number
           cable_hv_per_m: number
+          cable_joint_kit_185mm: number
+          cable_joint_kit_pot_end: number
           cable_lv_per_m: number
           cable_marker_tape_per_m: number
           contingency_pct: number
@@ -1688,12 +1690,18 @@ export type Database = {
           excavation_verge_per_m: number
           feeder_pillar_each: number
           id: string
+          joint_bay_carriageway: number
+          joint_bay_footway: number
+          joint_bay_soft: number
           jointing_each: number
           jointing_lv_each: number
+          lv_joint_team_day: number
+          mains_extension_threshold_m: number
           metering_ct: number
           metering_wc: number
           project_management_pct: number
           reinforcement_per_kw_over_capacity: number
+          service_cable_35mm_per_m: number
           switchgear_circuit_breaker: number
           switchgear_ring_main: number
           termination_each: number
@@ -1707,6 +1715,8 @@ export type Database = {
         Insert: {
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
+          cable_joint_kit_185mm?: number
+          cable_joint_kit_pot_end?: number
           cable_lv_per_m?: number
           cable_marker_tape_per_m?: number
           contingency_pct?: number
@@ -1719,12 +1729,18 @@ export type Database = {
           excavation_verge_per_m?: number
           feeder_pillar_each?: number
           id?: string
+          joint_bay_carriageway?: number
+          joint_bay_footway?: number
+          joint_bay_soft?: number
           jointing_each?: number
           jointing_lv_each?: number
+          lv_joint_team_day?: number
+          mains_extension_threshold_m?: number
           metering_ct?: number
           metering_wc?: number
           project_management_pct?: number
           reinforcement_per_kw_over_capacity?: number
+          service_cable_35mm_per_m?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
           termination_each?: number
@@ -1738,6 +1754,8 @@ export type Database = {
         Update: {
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
+          cable_joint_kit_185mm?: number
+          cable_joint_kit_pot_end?: number
           cable_lv_per_m?: number
           cable_marker_tape_per_m?: number
           contingency_pct?: number
@@ -1750,12 +1768,18 @@ export type Database = {
           excavation_verge_per_m?: number
           feeder_pillar_each?: number
           id?: string
+          joint_bay_carriageway?: number
+          joint_bay_footway?: number
+          joint_bay_soft?: number
           jointing_each?: number
           jointing_lv_each?: number
+          lv_joint_team_day?: number
+          mains_extension_threshold_m?: number
           metering_ct?: number
           metering_wc?: number
           project_management_pct?: number
           reinforcement_per_kw_over_capacity?: number
+          service_cable_35mm_per_m?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
           termination_each?: number

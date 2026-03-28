@@ -39,6 +39,15 @@ export function useUnitRates() {
         project_management_pct: Number(data.project_management_pct),
         contingency_pct: Number(data.contingency_pct),
         reinforcement_per_kw_over_capacity: Number(data.reinforcement_per_kw_over_capacity),
+        // SOR rates
+        lv_joint_team_day: Number((data as any).lv_joint_team_day) || DEFAULT_UNIT_RATES.lv_joint_team_day,
+        joint_bay_soft: Number((data as any).joint_bay_soft) || DEFAULT_UNIT_RATES.joint_bay_soft,
+        joint_bay_footway: Number((data as any).joint_bay_footway) || DEFAULT_UNIT_RATES.joint_bay_footway,
+        joint_bay_carriageway: Number((data as any).joint_bay_carriageway) || DEFAULT_UNIT_RATES.joint_bay_carriageway,
+        cable_joint_kit_185mm: Number((data as any).cable_joint_kit_185mm) || DEFAULT_UNIT_RATES.cable_joint_kit_185mm,
+        cable_joint_kit_pot_end: Number((data as any).cable_joint_kit_pot_end) || DEFAULT_UNIT_RATES.cable_joint_kit_pot_end,
+        service_cable_35mm_per_m: Number((data as any).service_cable_35mm_per_m) || DEFAULT_UNIT_RATES.service_cable_35mm_per_m,
+        mains_extension_threshold_m: Number((data as any).mains_extension_threshold_m) || DEFAULT_UNIT_RATES.mains_extension_threshold_m,
       };
     },
     staleTime: 5 * 60 * 1000,
