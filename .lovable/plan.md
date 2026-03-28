@@ -1,47 +1,33 @@
 
 
-## Build ENWL (Electricity North West) Registry & Layers
+## Admin Panel Cleanup
 
-### What We're Building
+### Changes
 
-A full discovery-and-ingestion pipeline for ENWL's Opendatasoft portal (`electricitynorthwest.opendatasoft.com`), reusing the proven NPG pattern. The API key will be stored securely as a backend secret.
+**1. Rename "NPG Registry" → "DNO Registry"**
+- Update tab label and icon in `Admin.tsx`
+- Update heading/description inside `NpgDatasetRegistry.tsx`
 
-### Steps
+**2. Repurpose "API Sources" → "External APIs"**
+- Remove DNO entries (NPG, UKPN, NGED, SPEN, SSEN, ENWL) from the hardcoded `DNO_REGISTRY` in `DnoApiSources.tsx` — these are now managed via DNO Registry
+- Keep/add non-DNO sources: DfT Road Traffic, NaPTAN, Stats19, OS Features, Land Registry, Planning Data
+- Rename tab label to "External APIs" with appropriate icon
+- Rename component heading
 
-**1. Store ENWL API key as a secret**
-- Use the secrets tool to securely store `ENWL_API_KEY` = `96c63b2b2ba8172274a1e3e51db9a279888ecf6463d992e30911dff0`
+**3. Remove "Site Data" tab**
+- Remove the `DataUploader` tab from `Admin.tsx`
+- Keep `DataUploader.tsx` file for now (no deletion) in case the spreadsheet import logic is needed later
 
-**2. Create `supabase/functions/enwl-catalog-crawler/index.ts`**
-- Clone of `npg-catalog-crawler` with:
-  - `BASE_URL` → `https://electricitynorthwest.opendatasoft.com/api/explore/v2.1`
-  - `DNO_KEY` → `"ENWL"`
-  - Reads `ENWL_API_KEY` from env for authenticated requests
-  - Same pagination, schema detection, and upsert logic into `dno_dataset_registry`
-
-**3. Update `supabase/functions/npg-dataset-ingest/index.ts`**
-- Generalise to handle ENWL datasets too — when the registry entry has `dno = "ENWL"`, use the ENWL portal base URL and `ENWL_API_KEY`
-- Currently hardcoded to NPG URLs; add a lookup map: `{ NPG: { base, apiKeyEnv }, ENWL: { base, apiKeyEnv } }`
-
-**4. Generalise `NpgDatasetRegistry.tsx` → support multiple DNOs**
-- Add a DNO selector (NPG / ENWL) at the top
-- Filter `dno_dataset_registry` by selected DNO
-- "Discover Datasets" calls the appropriate crawler function (`npg-catalog-crawler` or `enwl-catalog-crawler`)
-- Ingest/sync calls remain the same (the ingest function reads DNO from registry)
-
-**5. Update `DnoApiSources.tsx`**
-- Add ENWL entry with status `"live"` and correct base URL
-
-**6. Register new edge function in `supabase/config.toml`**
-- Add `[functions.enwl-catalog-crawler]` with `verify_jwt = false`
+**4. Reorder tabs logically**
+```
+Layers | Unit Rates | EV Hub Rules | DNO Registry | External APIs | Users & Roles | Audit Log
+```
 
 ### Files to Change
 
 | File | Change |
 |------|--------|
-| Secret: `ENWL_API_KEY` | Store API key via secrets tool |
-| `supabase/functions/enwl-catalog-crawler/index.ts` | New — clone of NPG crawler for ENWL portal |
-| `supabase/functions/npg-dataset-ingest/index.ts` | Generalise to support ENWL base URL + API key |
-| `src/components/admin/NpgDatasetRegistry.tsx` | Add DNO selector, call correct crawler per DNO |
-| `src/components/admin/DnoApiSources.tsx` | Add ENWL as `"live"` DNO |
-| `supabase/config.toml` | Register `enwl-catalog-crawler` function |
+| `src/pages/Admin.tsx` | Remove Site Data tab, rename NPG Registry → DNO Registry, rename API Sources → External APIs, reorder tabs |
+| `src/components/admin/NpgDatasetRegistry.tsx` | Update title/description text from "NPG" to "DNO Dataset Registry" |
+| `src/components/admin/DnoApiSources.tsx` | Remove DNO entries from hardcoded registry, add non-DNO external API sources (DfT, NaPTAN, Stats19, OS, Land Registry, Planning) |
 
