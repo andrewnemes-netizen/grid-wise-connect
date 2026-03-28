@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.ukpn-catalog-crawler]
 verify_jwt = false
+
+[functions.cadent-catalog-crawler]
+verify_jwt = false

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame } from "lucide-react";
 import { format } from "date-fns";
 
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
@@ -14,6 +14,7 @@ import { UserRolesManagement } from "@/components/admin/UserRolesManagement";
 import { EvHubRulesEditor } from "@/components/admin/EvHubRulesEditor";
 import { DnoApiSources } from "@/components/admin/DnoApiSources";
 import { NpgDatasetRegistry } from "@/components/admin/NpgDatasetRegistry";
+import { GasDatasetRegistry } from "@/components/admin/GasDatasetRegistry";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -43,6 +44,7 @@ const Admin = () => {
           <TabsTrigger value="rates"><SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Unit Rates</TabsTrigger>
           <TabsTrigger value="evhub"><Zap className="h-3.5 w-3.5 mr-1.5" />EV Hub Rules</TabsTrigger>
           <TabsTrigger value="dno"><Radar className="h-3.5 w-3.5 mr-1.5" />DNO Registry</TabsTrigger>
+          <TabsTrigger value="gas"><Flame className="h-3.5 w-3.5 mr-1.5" />Gas Registry</TabsTrigger>
           <TabsTrigger value="api"><Globe className="h-3.5 w-3.5 mr-1.5" />External APIs</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
@@ -59,6 +61,9 @@ const Admin = () => {
         </TabsContent>
         <TabsContent value="dno" className="mt-4">
           <NpgDatasetRegistry />
+        </TabsContent>
+        <TabsContent value="gas" className="mt-4">
+          <GasDatasetRegistry />
         </TabsContent>
         <TabsContent value="api" className="mt-4">
           <DnoApiSources />
