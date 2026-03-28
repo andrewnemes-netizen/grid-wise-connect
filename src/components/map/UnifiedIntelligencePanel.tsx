@@ -3,6 +3,7 @@ import {
   X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2,
   Search, ClipboardCheck, FolderOpen, Download, Activity, Gauge, TrendingUp,
   PoundSterling, ChevronDown, ChevronUp, Shield, Truck, Cable, FileText, BatteryCharging,
+  TrafficCone, Bus, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +73,17 @@ interface ScoreResult {
   }>;
 }
 
+interface SafetyResult {
+  risk_score: number;
+  risk_level: "HIGH" | "MEDIUM" | "LOW";
+  recommendation: string;
+  accident_summary: { total: number; fatal: number; serious: number; slight: number; radius_m: number };
+  traffic_summary: { count_points_nearby: number; max_aadf: number };
+  transport_summary: { bus_stops: number; rail_stations: number; total_nodes: number };
+  sub_scores: { accident_risk: number; traffic_risk: number; pedestrian_exposure: number };
+  ai_narrative?: string | null;
+}
+
 const SITE_TYPES = [
   { value: "depot", label: "Depot" },
   { value: "workplace", label: "Workplace" },
@@ -137,6 +149,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
+  const [safetyResult, setSafetyResult] = useState<SafetyResult | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
 
   const pkw = Number(proposedKw) || 0;
@@ -169,25 +182,86 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
+  // Derived scores from safety engine
+  const trafficScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const aadf = safetyResult.traffic_summary.max_aadf;
+    if (aadf > 10000) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
+    if (aadf > 3000) return { label: "MEDIUM", score: 60, color: "text-amber-700", bg: "bg-amber-100" };
+    return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
+  }, [safetyResult]);
+
+  const accessibilityScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const { bus_stops, rail_stations, total_nodes } = safetyResult.transport_summary;
+    const boosted = total_nodes + (rail_stations * 3); // rail boost
+    if (boosted > 5) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
+    if (boosted >= 2) return { label: "MEDIUM", score: 55, color: "text-amber-700", bg: "bg-amber-100" };
+    return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
+  }, [safetyResult]);
+
+  const safetyScore = useMemo(() => {
+    if (!safetyResult) return null;
+    const risk = safetyResult.risk_score;
+    const safety = 100 - risk; // invert: high risk = low safety
+    const level = safety >= 60 ? "LOW RISK" : safety >= 30 ? "MODERATE" : "HIGH RISK";
+    const color = safety >= 60 ? "text-emerald-700" : safety >= 30 ? "text-amber-700" : "text-red-700";
+    const bg = safety >= 60 ? "bg-emerald-100" : safety >= 30 ? "bg-amber-100" : "bg-red-100";
+    return { label: level, score: safety, color, bg };
+  }, [safetyResult]);
+
+  // Master combined score
+  const masterScore = useMemo(() => {
+    if (!rawMetrics || !safetyResult) return null;
+    const tScore = trafficScore?.score ?? 50;
+    const aScore = accessibilityScore?.score ?? 50;
+    const sScore = safetyScore?.score ?? 50;
+    const gScore = viabilityIndex; // 0-100
+    // (Traffic × 0.35) + (Accessibility × 0.25) + (Grid × 0.25) - (Safety Risk × 0.10) - (Civils × 0.05)
+    const combined = Math.round(
+      tScore * 0.35 + aScore * 0.25 + gScore * 0.25 - (100 - sScore) * 0.10 - (rawMetrics.civils.constraint_count * 5) * 0.05
+    );
+    const clamped = Math.max(0, Math.min(100, combined));
+    const verdict = clamped >= 65 ? "INSTALL" : clamped >= 40 ? "REVIEW" : "AVOID";
+    return { score: clamped, verdict };
+  }, [rawMetrics, safetyResult, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
+
+  const MASTER_VERDICT_CONFIG: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
+    INSTALL: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Recommended for Installation" },
+    REVIEW: { icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 border-amber-200", label: "Requires Further Review" },
+    AVOID: { icon: XCircle, color: "text-red-600", bg: "bg-red-50 border-red-200", label: "Not Recommended" },
+  };
+
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
     try {
-      const res = await supabase.functions.invoke("score-site", {
-        body: { lng, lat, proposed_kw: pkw, site_name: siteName, postcode, site_type: siteType },
-      });
-      if (res.error) throw res.error;
-      setResult(res.data);
+      // Fire both calls in parallel
+      const [scoreRes, safetyRes] = await Promise.all([
+        supabase.functions.invoke("score-site", {
+          body: { lng, lat, proposed_kw: pkw, site_name: siteName, postcode, site_type: siteType },
+        }),
+        supabase.functions.invoke("safety-engine", {
+          body: { lng, lat, radius_m: 500, site_name: siteName || "Site" },
+        }),
+      ]);
 
-      if (res.data.nearest_points && onConnectionLines) {
+      if (scoreRes.error) throw scoreRes.error;
+      setResult(scoreRes.data);
+
+      if (!safetyRes.error && safetyRes.data) {
+        setSafetyResult(safetyRes.data);
+      }
+
+      if (scoreRes.data.nearest_points && onConnectionLines) {
         const lines: ConnectionLine[] = [];
         const origin: [number, number] = [lng, lat];
-        if (res.data.nearest_points.primary)
-          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, res.data.nearest_points.primary], color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
-        if (res.data.nearest_points.feeder)
-          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, res.data.nearest_points.feeder], color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
-        if (res.data.nearest_points.cable)
-          lines.push({ id: "line-cable", label: "Cable", coords: [origin, res.data.nearest_points.cable], color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
+        if (scoreRes.data.nearest_points.primary)
+          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, scoreRes.data.nearest_points.primary], color: "#e74c3c", distance_m: scoreRes.data.distances?.primary_m || 0 });
+        if (scoreRes.data.nearest_points.feeder)
+          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, scoreRes.data.nearest_points.feeder], color: "#9b59b6", distance_m: scoreRes.data.distances?.feeder_m || 0 });
+        if (scoreRes.data.nearest_points.cable)
+          lines.push({ id: "line-cable", label: "Cable", coords: [origin, scoreRes.data.nearest_points.cable], color: "#e67e22", distance_m: scoreRes.data.distances?.capacity_segment_m || 0 });
         onConnectionLines(lines);
       }
     } catch (err: any) {
@@ -286,17 +360,99 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
           {/* ====================== RESULTS ====================== */}
           {result && rawMetrics && (
             <>
-              {/* ── Section 1: Overall Verdict ── */}
-              <div className={`rounded-lg border p-4 ${verdict.bg}`}>
+              {/* ── Master Score (if safety data available) ── */}
+              {masterScore && (
+                <div className={`rounded-lg border p-4 ${MASTER_VERDICT_CONFIG[masterScore.verdict].bg}`}>
+                  <div className="flex items-center gap-3">
+                    {(() => { const MIcon = MASTER_VERDICT_CONFIG[masterScore.verdict].icon; return <MIcon className={`h-8 w-8 ${MASTER_VERDICT_CONFIG[masterScore.verdict].color}`} />; })()}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className={`text-lg font-bold ${MASTER_VERDICT_CONFIG[masterScore.verdict].color}`}>{masterScore.verdict}</span>
+                        <span className={`text-3xl font-black ${MASTER_VERDICT_CONFIG[masterScore.verdict].color}`}>{masterScore.score}</span>
+                      </div>
+                      <p className={`text-xs ${MASTER_VERDICT_CONFIG[masterScore.verdict].color}`}>{MASTER_VERDICT_CONFIG[masterScore.verdict].label}</p>
+                      <p className={`text-[10px] ${MASTER_VERDICT_CONFIG[masterScore.verdict].color} opacity-70`}>Combined Site Score (0–100)</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Score Breakdown Bars ── */}
+              {safetyResult && (
+                <div className="space-y-2">
+                  <SectionHeader icon={Gauge} title="Score Breakdown" />
+                  <div className="rounded-md border bg-muted/10 p-3 space-y-2.5">
+                    {[
+                      { label: "🚦 Traffic Demand", data: trafficScore, detail: `${safetyResult.traffic_summary.max_aadf.toLocaleString()} AADF` },
+                      { label: "🚶 Accessibility", data: accessibilityScore, detail: `${safetyResult.transport_summary.bus_stops} bus, ${safetyResult.transport_summary.rail_stations} rail` },
+                      { label: "⚡ Grid Feasibility", data: { label: band, score: viabilityIndex, color: verdict.color, bg: verdict.bg.split(" ")[0] }, detail: `${viabilityIndex}/100` },
+                      { label: "🛑 Safety", data: safetyScore, detail: `${safetyResult.accident_summary.total} incidents` },
+                    ].map((item) => (
+                      <div key={item.label} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-foreground">{item.label}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground">{item.detail}</span>
+                            <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${item.data?.color || ""}`}>{item.data?.label || "—"}</Badge>
+                          </div>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${(item.data?.score ?? 0) >= 60 ? "bg-emerald-500" : (item.data?.score ?? 0) >= 30 ? "bg-amber-500" : "bg-red-500"}`}
+                            style={{ width: `${Math.min(item.data?.score ?? 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Accident Detail ── */}
+              {safetyResult && safetyResult.accident_summary.total > 0 && (
+                <div className="space-y-2">
+                  <SectionHeader icon={ShieldAlert} title={`Safety Analysis (${safetyResult.accident_summary.radius_m}m)`} />
+                  <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-md bg-red-50 border border-red-200 p-2">
+                        <span className="text-lg font-bold text-red-600">{safetyResult.accident_summary.fatal}</span>
+                        <p className="text-[9px] text-red-600">Fatal</p>
+                      </div>
+                      <div className="rounded-md bg-orange-50 border border-orange-200 p-2">
+                        <span className="text-lg font-bold text-orange-600">{safetyResult.accident_summary.serious}</span>
+                        <p className="text-[9px] text-orange-600">Serious</p>
+                      </div>
+                      <div className="rounded-md bg-yellow-50 border border-yellow-200 p-2">
+                        <span className="text-lg font-bold text-yellow-600">{safetyResult.accident_summary.slight}</span>
+                        <p className="text-[9px] text-yellow-600">Slight</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── AI Safety Narrative ── */}
+              {safetyResult?.ai_narrative && (
+                <div className="space-y-2">
+                  <SectionHeader icon={FileText} title="AI Safety Assessment" />
+                  <div className="rounded-md border bg-muted/10 p-3">
+                    <p className="text-[11px] text-foreground leading-relaxed whitespace-pre-line">{safetyResult.ai_narrative}</p>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* ── Grid Viability (existing) ── */}
+              <div className={`rounded-lg border p-3 ${verdict.bg}`}>
                 <div className="flex items-center gap-3">
-                  <verdict.icon className={`h-7 w-7 ${verdict.color}`} />
+                  <verdict.icon className={`h-5 w-5 ${verdict.color}`} />
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
-                      <span className={`text-lg font-bold ${verdict.color}`}>{band}</span>
-                      <span className={`text-2xl font-black ${verdict.color}`}>{viabilityIndex}</span>
+                      <span className={`text-sm font-bold ${verdict.color}`}>Grid: {band}</span>
+                      <span className={`text-lg font-black ${verdict.color}`}>{viabilityIndex}</span>
                     </div>
-                    <p className={`text-xs ${verdict.color}`}>{verdict.label}</p>
-                    <p className={`text-[10px] ${verdict.color} opacity-70`}>Viability Index (0–100)</p>
+                    <p className={`text-[10px] ${verdict.color} opacity-70`}>Grid Viability Index</p>
                   </div>
                 </div>
               </div>
