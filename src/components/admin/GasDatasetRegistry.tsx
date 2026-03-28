@@ -80,6 +80,7 @@ export function GasDatasetRegistry() {
       if (error) throw error;
       return data as DatasetEntry[];
     },
+    refetchOnMount: "always",
   });
 
   const { data: layers = [] } = useQuery({

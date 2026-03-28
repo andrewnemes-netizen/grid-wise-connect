@@ -79,6 +79,7 @@ export function NpgDatasetRegistry() {
       if (error) throw error;
       return data as DatasetEntry[];
     },
+    refetchOnMount: "always",
   });
 
   // Fetch layers for linking
