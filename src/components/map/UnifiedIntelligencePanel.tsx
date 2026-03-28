@@ -73,6 +73,17 @@ interface ScoreResult {
   }>;
 }
 
+interface SafetyResult {
+  risk_score: number;
+  risk_level: "HIGH" | "MEDIUM" | "LOW";
+  recommendation: string;
+  accident_summary: { total: number; fatal: number; serious: number; slight: number; radius_m: number };
+  traffic_summary: { count_points_nearby: number; max_aadf: number };
+  transport_summary: { bus_stops: number; rail_stations: number; total_nodes: number };
+  sub_scores: { accident_risk: number; traffic_risk: number; pedestrian_exposure: number };
+  ai_narrative?: string | null;
+}
+
 const SITE_TYPES = [
   { value: "depot", label: "Depot" },
   { value: "workplace", label: "Workplace" },
