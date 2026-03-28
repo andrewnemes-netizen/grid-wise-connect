@@ -289,7 +289,7 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.slice(0, 20).map((r, i) => (
+                  {rows.map((r, i) => (
                     <TableRow key={i}>
                       <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                       <TableCell className="text-xs">{r.site_name}</TableCell>
@@ -302,13 +302,6 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
                       <TableCell className="text-xs">{r.site_type}</TableCell>
                     </TableRow>
                   ))}
-                  {rows.length > 20 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-xs text-center text-muted-foreground">
-                        …{rows.length - 20} more rows
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </div>
