@@ -155,7 +155,7 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
 
     setIsSaving(true);
     try {
-      const siteInserts = validRows.map(r => ({
+      const siteInserts = rowsToSave.map(r => ({
         site_name: r.site_name,
         postcode: r.postcode,
         proposed_kw: r.proposed_kw,
