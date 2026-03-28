@@ -158,6 +158,66 @@ function resolveVoltageLevel(proposed_kw: number, voltage_override?: VoltageOver
   return proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
 }
 
+/**
+ * UK DNO cable selection thresholds (kVA → cable size)
+ * Based on standard DNO connection policies:
+ *   ≤69 kVA  → 35mm² concentric / 25mm² 4c
+ *   ≤138 kVA → 70mm² 4c
+ *   ≤207 kVA → 95mm² 4c
+ *   ≤276 kVA → 120mm² 4c
+ *   ≤400 kVA → 185mm² 4c
+ *   >400 kVA → 300mm² 4c
+ *
+ * Design current: Ib = kW / (√3 × 0.415kV) = kW / 0.719
+ * kVA = kW / power_factor (0.95 default)
+ */
+export interface CableSelection {
+  cable_type: string;
+  size_mm2: number;
+  current_rating_a: number;
+  cost_per_m: number;
+  impedance_per_km: number;
+}
+
+/** Default LV cable lookup table matching cable_catalogue entries */
+const LV_CABLE_THRESHOLDS: { max_kva: number; cable: CableSelection }[] = [
+  { max_kva: 69,  cable: { cable_type: "25mm² 4c XLPE/SWA",  size_mm2: 25,  current_rating_a: 89,  cost_per_m: 12.50, impedance_per_km: 1.538 } },
+  { max_kva: 138, cable: { cable_type: "70mm² 4c XLPE/SWA",  size_mm2: 70,  current_rating_a: 160, cost_per_m: 22.00, impedance_per_km: 0.568 } },
+  { max_kva: 207, cable: { cable_type: "95mm² 4c XLPE/SWA",  size_mm2: 95,  current_rating_a: 200, cost_per_m: 28.00, impedance_per_km: 0.411 } },
+  { max_kva: 276, cable: { cable_type: "120mm² 4c XLPE/SWA", size_mm2: 120, current_rating_a: 230, cost_per_m: 34.00, impedance_per_km: 0.325 } },
+  { max_kva: 400, cable: { cable_type: "185mm² 4c XLPE/SWA", size_mm2: 185, current_rating_a: 295, cost_per_m: 48.00, impedance_per_km: 0.210 } },
+  { max_kva: 999, cable: { cable_type: "300mm² 4c XLPE/SWA", size_mm2: 300, current_rating_a: 400, cost_per_m: 68.00, impedance_per_km: 0.130 } },
+];
+
+const HV_CABLE_THRESHOLDS: { max_kva: number; cable: CableSelection }[] = [
+  { max_kva: 3000,  cable: { cable_type: "95mm² 3c XLPE 11kV",  size_mm2: 95,  current_rating_a: 250, cost_per_m: 65.00, impedance_per_km: 0.411 } },
+  { max_kva: 6000,  cable: { cable_type: "185mm² 3c XLPE 11kV", size_mm2: 185, current_rating_a: 370, cost_per_m: 95.00, impedance_per_km: 0.210 } },
+  { max_kva: 99999, cable: { cable_type: "300mm² 3c XLPE 11kV", size_mm2: 300, current_rating_a: 480, cost_per_m: 130.00, impedance_per_km: 0.130 } },
+];
+
+const EHV_CABLE_THRESHOLDS: { max_kva: number; cable: CableSelection }[] = [
+  { max_kva: 10000, cable: { cable_type: "300mm² 1c XLPE 33kV", size_mm2: 300, current_rating_a: 500, cost_per_m: 180.00, impedance_per_km: 0.130 } },
+  { max_kva: 20000, cable: { cable_type: "630mm² 1c XLPE 33kV", size_mm2: 630, current_rating_a: 730, cost_per_m: 280.00, impedance_per_km: 0.064 } },
+  { max_kva: 99999, cable: { cable_type: "800mm² 1c XLPE 33kV", size_mm2: 800, current_rating_a: 830, cost_per_m: 320.00, impedance_per_km: 0.050 } },
+];
+
+/**
+ * Select the correct cable based on proposed kW and voltage level.
+ * Uses DNO standard kVA thresholds to determine minimum cable size.
+ */
+export function selectCableForLoad(proposed_kw: number, voltageLevel: "LV" | "HV" | "EHV", pf = 0.95): CableSelection {
+  const kva = proposed_kw / pf;
+  const thresholds = voltageLevel === "LV" ? LV_CABLE_THRESHOLDS
+    : voltageLevel === "HV" ? HV_CABLE_THRESHOLDS
+    : EHV_CABLE_THRESHOLDS;
+
+  for (const t of thresholds) {
+    if (kva <= t.max_kva) return t.cable;
+  }
+  // Fallback to largest
+  return thresholds[thresholds.length - 1].cable;
+}
+
 export function estimateConnectionCost(
   input: EstimateInput,
   rates: UnitRates = DEFAULT_UNIT_RATES
@@ -166,10 +226,8 @@ export function estimateConnectionCost(
   const breakdown: CostLineItem[] = [];
 
   const voltageLevel = resolveVoltageLevel(proposed_kw, input.voltage_override);
-  const cableRate =
-    voltageLevel === "LV" ? rates.cable_lv_per_m :
-    voltageLevel === "HV" ? rates.cable_hv_per_m :
-    rates.cable_ehv_per_m;
+  const selectedCable = selectCableForLoad(proposed_kw, voltageLevel);
+  const cableRate = selectedCable.cost_per_m;
 
   // Cable distance = nearest relevant connection point, capped at practical maximums
   const rawCableDistance =
@@ -183,7 +241,7 @@ export function estimateConnectionCost(
   const cableCost = Math.round(cableDistance * cableRate);
   breakdown.push({
     category: "Cable",
-    description: `${voltageLevel} cable (${cableDistance}m)`,
+    description: `${selectedCable.cable_type} (${cableDistance}m)`,
     quantity: cableDistance,
     unit: "m",
     unit_rate: cableRate,
