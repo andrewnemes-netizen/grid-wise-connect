@@ -469,7 +469,18 @@ async function ingestViaCkan(
     return await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
   }
 
-  throw new Error(`No usable data endpoint for NGED dataset ${entry.dataset_id}`);
+  // No usable endpoint — gracefully skip instead of erroring
+  console.log(`[ingest] CKAN: No usable data endpoint for ${entry.dataset_id} — marking as skipped`);
+  await supabase
+    .from("dno_dataset_registry")
+    .update({
+      last_sync_status: "skipped",
+      last_sync_error: "Data only available via manual download from dataportal2.nationalgrid.co.uk — no API/CSV/GeoJSON endpoint",
+      last_sync_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", entry.id);
+  return { inserted: 0, skipped: 0 };
 }
 
 async function ingestViaCkanGeoJson(
