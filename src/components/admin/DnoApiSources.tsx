@@ -166,6 +166,57 @@ export function DnoApiSources() {
         STATS19: "stats19-ingest",
       };
       const functionName = functionMap[dno.key] || "dno-open-data-ingest";
+
+      // NaPTAN uses chunked auto-chaining
+      if (dno.key === "NAPTAN") {
+        let offset = 0;
+        let totalInserted = 0;
+        let chunkNum = 0;
+
+        while (true) {
+          chunkNum++;
+          setSyncStates(prev => ({
+            ...prev,
+            [syncKey]: { syncing: true, progress: Math.min(90, 10 + chunkNum * 10), result: null, error: null },
+          }));
+
+          const resp = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/${functionName}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ action: "ingest", offset }),
+            }
+          );
+
+          const result = await resp.json();
+          if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+
+          totalInserted = result.inserted ?? totalInserted + (result.chunk_inserted ?? 0);
+          toast.info(`NaPTAN: ${totalInserted.toLocaleString()} records so far (chunk ${chunkNum})…`);
+
+          if (result.done) {
+            setSyncStates(prev => ({
+              ...prev,
+              [syncKey]: {
+                syncing: false,
+                progress: 100,
+                result: { inserted: totalInserted, skipped: 0, total: totalInserted },
+              },
+            }));
+            toast.success(`NaPTAN complete: ${totalInserted.toLocaleString()} transport nodes ingested`);
+            return;
+          }
+
+          offset = result.next_offset;
+          // Refresh token between chunks
+          await supabase.auth.refreshSession();
+        }
+      }
+
       const body = isSelfContained
         ? { action: "ingest" }
         : { dno: dno.key, dataset_key: ds.key, layer_id: layerId, batch_size: 100 };
