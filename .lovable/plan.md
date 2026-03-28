@@ -1,50 +1,56 @@
 
 
-## Fix NaPTAN Partial Ingestion — CPU Timeout at 140k/434k
+## Fix Traffic + Accessibility Pillar Data Gaps
 
 ### Problem
 
-The NaPTAN ingestion hit `CPU Time exceeded` after inserting 140,000 of ~300k eligible records (434k total minus ~100k filtered). The `EdgeRuntime.waitUntil` background task has a ~60s CPU budget, which isn't enough for the full dataset. The Leeds area and many other regions have zero NaPTAN data because the CSV rows for those areas come after the 140k cutoff.
+The site analysis runs end-to-end but two of four scoring pillars return zero data:
+- **Traffic**: 0 AADF despite 46.3k DfT count points in the database
+- **Accessibility**: 0 bus/0 rail despite 17k NaPTAN records
 
-### Solution: Resumable Chunked Ingestion
+This causes strong grid sites (80/100) to receive an AVOID verdict (29/100).
 
-Split the ingestion into resumable chunks. Each invocation processes N records then stops. The admin UI auto-chains calls until complete.
+### Root Cause Investigation Needed
 
-### Implementation
+**Traffic (0 AADF):** The `score-site` edge function and the `score_site_from_lnglat` database function likely don't query the `geo_points` table for DfT traffic data. The scoring was built before DfT data was ingested. The traffic score in the Unified Intelligence Panel may be reading from a field that was never populated.
 
-**1. Update `supabase/functions/naptan-ingest/index.ts`**
+**Accessibility (0 bus/rail):** The safety engine queries NaPTAN from `geo_points`, but only ~17k of ~300k eligible records were ingested (the chunked ingestion may not have been triggered). Leeds records likely weren't reached.
 
-- Accept an optional `offset` parameter in the request body (default 0)
-- Track how many CSV lines have been processed (not just inserted)
-- After processing ~40k eligible records (well within CPU budget), stop and return `{ done: false, next_offset: <line_number>, inserted: N }`
-- When the CSV is fully consumed, return `{ done: true, total_inserted: N }`
-- Keep the streaming parser but add line counting and early termination
+### Plan
 
-```text
-Request:  { action: "ingest", offset: 0 }
-Response: { done: false, next_offset: 85000, inserted: 40000 }
+**1. Wire traffic AADF into the scoring pipeline**
 
-Request:  { action: "ingest", offset: 85000 }
-Response: { done: false, next_offset: 170000, inserted: 40000 }
+In `supabase/functions/score-site/index.ts` (or the `score_site_from_lnglat` DB function):
+- Add a spatial query against `geo_points` filtered by the DfT traffic layer ID
+- Find count points within 500m of the site
+- Extract the `all_motor_vehicles` property and return the max AADF value
+- Return this as `traffic_aadf` in the score-site response
 
-... repeat until done: true
-```
+In `src/components/map/UnifiedIntelligencePanel.tsx`:
+- Read `traffic_aadf` from the score result and display it in the Traffic pillar
+- Use it to calculate a traffic demand score (e.g., >10k AADF = HIGH, 5-10k = MEDIUM, <5k = LOW)
 
-**2. Update `src/components/admin/DnoApiSources.tsx`**
+**2. Wire accessibility (NaPTAN) into the scoring pipeline**
 
-- For NaPTAN sync, implement a loop: call the edge function, if `done === false`, immediately call again with the returned `next_offset`
-- Show progress in the UI ("Ingesting NaPTAN: 80,000 / ~300,000...")
-- Continue until `done === true`
+In `supabase/functions/score-site/index.ts`:
+- Add a spatial query against `geo_points` filtered by the NaPTAN layer ID
+- Count bus stops within 250m and rail stations within 500m
+- Return as `nearby_bus_stops` and `nearby_rail_stations`
 
-### Technical Details
+In `src/components/map/UnifiedIntelligencePanel.tsx`:
+- Read these counts and display them in the Accessibility pillar
+- Score using the existing formula (bus count + rail×3 multiplier)
 
-- The CSV is ordered geographically (roughly south to north by ATCO code prefix), so offset-based resumption via line counting works reliably
-- Each chunk skips `offset` lines from the CSV start, which means re-downloading the CSV each call — but the streaming reader can skip lines cheaply without parsing them
-- Batch size per call: ~40k eligible records (takes ~30s CPU, safely under the 60s limit)
-- The `upsert` with `onConflict: "layer_id,asset_id"` ensures idempotent re-runs
+**3. Ensure NaPTAN data covers Leeds**
+
+The chunked ingestion needs to be run from Admin → API Sources. If the data only covers southern England, the user needs to trigger additional sync chunks. No code change needed — just a note to run it.
 
 ### Files to Change
 
-- `supabase/functions/naptan-ingest/index.ts` — Add offset/resume logic, synchronous processing (no waitUntil), return progress
-- `src/components/admin/DnoApiSources.tsx` — Auto-chain NaPTAN calls in a loop until complete
+- `supabase/functions/score-site/index.ts` — Add geo_points queries for DfT traffic + NaPTAN within radius
+- `src/components/map/UnifiedIntelligencePanel.tsx` — Read and display traffic AADF + accessibility counts from score-site response
+
+### Technical Detail
+
+The `geo_points` table has a `geom` geography column with a spatial index. Queries use `ST_DWithin(geom, ST_Point(lng, lat)::geography, radius_m)` filtered by `layer_id` matching the DfT or NaPTAN layer registry entry. The layer IDs are looked up from `layer_registry` by slug (`dft_traffic_count_points`, `naptan_transport_nodes`).
 
