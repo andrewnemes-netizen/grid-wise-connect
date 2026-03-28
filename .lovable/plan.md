@@ -1,40 +1,69 @@
 
 
-## Fix Score-Site Traffic + Accessibility Data (All Returning 0)
+## Connect LA Programme to Full Intelligence Flow + Portfolio Save
 
-### Problem Found
+### Current State
 
-The `score-site` edge function returns `traffic_aadf: 0`, `nearby_bus_stops: 0`, `nearby_transport_nodes: 0` for Leeds despite:
-- **86 DfT traffic points** within 2km in the database
-- **314 NaPTAN nodes** within 2km (40 within 500m, including bus stops with `stop_type: BCT`)
-- The `nearby_geo_points_by_slug` DB function works correctly when called directly
+The LA Programme batch scorer (`score-sites-batch` edge function) uses its **own simplified scoring logic** — it calls only `score_site_from_lnglat` RPC and substation search. It does NOT:
 
-**Root cause**: The PostgREST fetch calls to `nearby_geo_points_by_slug` in the edge function are silently failing (caught by `.catch(() => [])`). Most likely the edge function needs redeployment, or the PostgREST calls are timing out due to the 8s default statement timeout on large tables (383k+ geo_points rows with geography casts).
+1. Call the `score-site` edge function (which provides traffic AADF, accessibility/NaPTAN, grid feasibility)
+2. Call the `safety-engine` edge function (STATS19 accidents, AI safety narrative)
+3. Save scored sites to the `sites` table (portfolio)
 
-### Additional issue: Traffic AADF values are null
-
-All DfT count points near Leeds have `all_motor_vehicles: null` in `attrs_json`. The AADF backfill sync hasn't been run. The live DfT API fallback exists but also returns 0 (likely the DfT API response structure changed — `data` vs `rows` mismatch).
+The results exist only in-memory on the dashboard and can be exported as CSV, but nothing persists.
 
 ### Plan
 
-**1. Add error logging to score-site edge function**
+**1. Add "Save to Portfolio" button on ProgrammeDashboard**
 
-Replace the silent `.catch(() => [])` on both traffic and NaPTAN fetches with `.catch((e) => { console.error("traffic fetch error:", e); return []; })` so we can see what's actually failing.
+- Add a "Save All to Portfolio" button next to the existing "Export CSV" button
+- On click, batch-insert all scored sites into the `sites` table with enriched `raw_score_data` (same format the UnifiedIntelligencePanel uses)
+- Each site gets: `site_name`, `postcode`, `proposed_kw`, `site_type`, `viability_index`, `score` (band), `grid_readiness`, `deployment_class`, `cost_band`, `raw_score_data` (full JSON), `geom` (PostGIS point from lng/lat)
+- Skip sites that errored during scoring
+- Show toast with count of saved sites
 
-**2. Add a direct-query fallback for traffic + NaPTAN**
+**2. Enrich batch scoring with traffic + accessibility + safety data**
 
-Instead of relying solely on the PostgREST RPC call (which may hit statement timeouts), add a fallback that uses the Supabase client SDK to query `geo_points` directly with layer_id filter + spatial distance. This bypasses PostgREST timeout issues.
+Update `score-sites-batch` edge function to call the `score-site` edge function internally (via fetch to the same Supabase functions URL) for each site instead of duplicating scoring logic. This ensures each batch-scored site gets:
+- Traffic AADF from DfT count points
+- Accessibility counts from NaPTAN nodes
+- Safety data from STATS19
+- The same master score weighting used in the intelligence panel
 
-**3. Redeploy score-site**
+However, calling `score-site` + `safety-engine` per site in a 500-site batch would be too slow (each takes ~5-10s). Instead:
 
-The edge function may be running stale code from before the traffic/NaPTAN enrichment was added.
+**Pragmatic approach**: Keep the current fast batch scorer for grid-only scoring, but add the traffic/accessibility/safety queries directly into `score-sites-batch` using the same direct SQL queries that `score-site` uses (ST_DWithin on geo_points filtered by layer_id). This avoids HTTP overhead per site.
 
-**4. Fix DfT AADF live fallback**
+**3. Files to change**
 
-The DfT API response uses `data[].attributes.all_motor_vehicles` not `data[].all_motor_vehicles`. Fix the response parsing.
+| File | Change |
+|------|--------|
+| `supabase/functions/score-sites-batch/index.ts` | Add traffic (DfT), accessibility (NaPTAN), and safety (STATS19) spatial queries per site. Include results in scored row output. Compute master_score using the 4-pillar weighting. |
+| `src/components/la/ProgrammeDashboard.tsx` | Add "Save All to Portfolio" button. Insert scored sites into `sites` table with full `raw_score_data`. Add traffic/accessibility/safety columns to the results table and CSV export. |
+| `src/pages/LaProgramme.tsx` | No changes needed (already passes results to dashboard) |
 
-### Files to Change
+### Technical Detail
 
-- `supabase/functions/score-site/index.ts` — Add error logging, add direct-query fallback, fix DfT AADF response parsing
-- Redeploy edge function
+Traffic/accessibility/safety queries in `score-sites-batch` will use the service-role Supabase client to run direct table queries:
+
+```text
+-- Traffic (per site, ~2km radius)
+SELECT attrs_json->>'all_motor_vehicles' FROM geo_points
+WHERE layer_id = <dft_layer_id>
+AND ST_DWithin(geom, ST_Point(lng,lat)::geography, 2000)
+
+-- NaPTAN (per site, ~500m radius)  
+SELECT name, attrs_json FROM geo_points
+WHERE layer_id = <naptan_layer_id>
+AND ST_DWithin(geom, ST_Point(lng,lat)::geography, 500)
+
+-- STATS19 (per site, ~200m radius)
+SELECT attrs_json FROM geo_points
+WHERE layer_id = <stats19_layer_id>
+AND ST_DWithin(geom, ST_Point(lng,lat)::geography, 200)
+```
+
+The layer IDs are looked up once at function start from `layer_registry` by slug. The master score combines: Traffic 35% + Accessibility 25% + Grid 25% + Safety -10% + Civils -5%.
+
+Portfolio save uses `supabase.from("sites").insert(rows)` with `created_by` set to the authenticated user.
 
