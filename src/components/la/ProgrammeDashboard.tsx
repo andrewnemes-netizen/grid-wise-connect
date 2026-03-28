@@ -148,8 +148,10 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   const saveToPortfolio = async () => {
     if (!user) { toast.error("Please log in"); return; }
 
-    const validRows = filtered.filter(r => !r.error && r.lng && r.lat);
-    if (validRows.length === 0) { toast.error("No valid sites to save"); return; }
+    const rowsToSave = selected.size > 0
+      ? Array.from(selected).map(i => filtered[i]).filter(r => !r.error && r.lng && r.lat)
+      : filtered.filter(r => !r.error && r.lng && r.lat);
+    if (rowsToSave.length === 0) { toast.error("No valid sites selected to save"); return; }
 
     setIsSaving(true);
     try {
