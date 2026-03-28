@@ -46,10 +46,7 @@ const SiteDetail = () => {
         .eq("id", id!)
         .single();
       if (error) throw error;
-
-      // Extract lat/lng from PostGIS geom via RPC
-      const { data: coordData } = await supabase.rpc("site_coords", { site_id: id! }).maybeSingle();
-      return { ...data, _lng: coordData?.lng ?? null, _lat: coordData?.lat ?? null };
+      return data;
     },
     enabled: !!id,
   });
