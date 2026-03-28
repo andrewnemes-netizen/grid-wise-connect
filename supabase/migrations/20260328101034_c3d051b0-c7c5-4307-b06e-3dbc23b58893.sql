@@ -1,0 +1,1 @@
+CREATE INDEX idx_geo_points_geom_geography ON public.geo_points USING gist ((geom::geography));
