@@ -1,5 +1,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useRef, useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 import maplibregl from "maplibre-gl";
 import { Undo2, CheckCircle2, Trash2, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -69,6 +71,8 @@ function CableDrawingBar({ vertices, onUndo, onFinish }: { vertices: [number, nu
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { toast: mapToast } = useToast();
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "streetview" | null>(null);
@@ -100,6 +104,41 @@ const MapView = () => {
   const planning = usePlanningLayers();
   const landRegistry = useLandRegistryLayers();
   const osOpen = useOsOpenLayers();
+
+  // Deep-link: fly to site from Portfolio → Site Detail
+  useEffect(() => {
+    if (!map || !mapLoaded) return;
+    const lat = parseFloat(searchParams.get("lat") || "");
+    const lng = parseFloat(searchParams.get("lng") || "");
+    const siteName = searchParams.get("siteName") || "";
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    // Clear params so refresh doesn't re-trigger
+    setSearchParams({}, { replace: true });
+
+    map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
+
+    // Drop a marker
+    markerRef.current?.remove();
+    const marker = new maplibregl.Marker({ color: "hsl(100, 38%, 30%)" })
+      .setLngLat([lng, lat])
+      .setPopup(
+        new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(
+          `<div style="font-size:12px"><strong>${siteName || "Site"}</strong></div>`
+        )
+      )
+      .addTo(map);
+    marker.togglePopup();
+    markerRef.current = marker;
+
+    // Also trigger the pin so intelligence panel can pick it up
+    pin.setPinLocation({ lng, lat });
+
+    mapToast({
+      title: `${siteName || "Site"} loaded`,
+      description: "Use the Connect tool to draw your route and de-risk the connection.",
+    });
+  }, [map, mapLoaded]);
 
   // Auto-save boundary to study when finished
   useEffect(() => {
