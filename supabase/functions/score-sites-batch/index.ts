@@ -506,7 +506,7 @@ Deno.serve(async (req) => {
         const dc = getDeploymentClass(headroom, site.proposed_kw, util, constraintCount, ndp);
         const gr = getGridReadiness(headroom, util, site.proposed_kw);
         const rp = getReinforcementProbability(headroom, site.proposed_kw);
-        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom);
+        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom, unitRates);
         const cb = getCostBand(total);
         const bestPoc = nearestSub?.site_name || "Unknown";
 
