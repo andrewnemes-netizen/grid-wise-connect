@@ -409,7 +409,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                     )}
                     <TableCell className="text-xs max-w-[160px] truncate" title={r.phase_rationale}>{r.phase_rationale}</TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
