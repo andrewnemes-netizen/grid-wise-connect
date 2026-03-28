@@ -1,62 +1,43 @@
 
 
-## Fix & Complete ENWL + SPEN Ingestion Pipeline
+## Finish ENWL & SPEN Ingestion — Current Status & Fix Plan
 
 ### Current State
 
-| DNO | Layers | With Data | Empty | Datasets Linked | Issues |
-|-----|--------|-----------|-------|-----------------|--------|
-| **ENWL** | 21 | 4 | 17 | 85 | 6 sync errors (timeouts + 520s), 17 layers never ingested |
-| **SPEN** | 4 | 3 | 1 | **0** | Auto-link never ran; "SPEN Line asset" has wrong config (Geometry type → geo_substations for line data) |
+| DNO | Layers | Populated | Empty | Root Causes |
+|-----|--------|-----------|-------|-------------|
+| **ENWL** | 21 | 6 | 15 | 20 datasets never synced (status `processing` stuck or `never`); 6 failed with timeouts (150s limit); 2 failed with 403 Forbidden |
+| **SPEN** | 18 | 9 | 9 | 3 datasets hit 403 Forbidden (GIS Line/Point assets, Secondary Substations); 3 timed out (LV Monitoring, Smart Meter); 4 never synced |
 
-### What Needs to Happen
+### Three Issues To Fix
 
-**1. Fix SPEN auto_create_dno_layers rules**
+**Issue 1: Stuck "processing" datasets (ENWL)**
+Multiple ENWL datasets show `last_sync_status = 'processing'` but `last_sync_at IS NULL` — they were never actually sent to the ingest function. This happened because the bulk activation migration set them active, but the "Sync All" button was never clicked for them, OR they got stuck without the timeout catching them. Fix: reset these to `never` so "Sync All" picks them up cleanly.
 
-The SPEN rules in the RPC created layers before datasets were linked (0 linked datasets). The existing 4 SPEN layers appear to have been created manually or from the old ingestion engine. The RPC needs to actually match SPEN dataset titles to layers. Looking at the discovered SPEN geospatial datasets:
+**Issue 2: 150s timeout on large datasets**
+Datasets like ENWL LV Overhead Conductors (47k rows), ENWL DFES LV Headroom (61k rows), SPEN LV Monitoring (45k rows), and SPEN Smart Meter datasets (15k-35k rows) all exceed the 150s background timeout. The ingest function fetches via paginated Records API at 100 rows/page, which is too slow for large datasets. Fix: increase batch size from 100 to 500 for Records API pagination and increase timeout to 280s.
 
-- GIS Line Assets (SPD/SPT + SPM) — 6M rows total, should map to `geo_cables` with LineString override
-- GIS Point Assets (SPD/SPT + SPM) — 683k rows, should map to `geo_substations` with Point override  
-- Secondary Substation Polygons — 90k, `geo_polygons`
-- LV Monitoring — 45k points, `geo_points`
-- Smart Meter by Transformer — 35k points, `geo_points`
-- Smart Meter by Census Area — 16k polygons, `geo_polygons`
-- DFES Substation Polygons (SPD + SPM) — ~800 polygons, `geo_polygons`
-- Primary Substation Polygons (SPD + SPM + NDP variants) — ~1500 polygons, `geo_polygons`
-- Flexibility Assets + Deferred Reinforcement — ~400 polygons, `geo_polygons`
-- DNOA Polygons — 49 polygons, `geo_polygons`
-- Aggregated Smart Meter (Wirral + Ayrshire) — ~1500 points, `geo_points`
-
-The current SPEN rules may be too narrow or pattern-mismatched. I'll update the RPC with corrected SPEN rules that properly match these dataset titles.
-
-**2. Fix "SPEN Line asset" layer config**
-
-Currently has `geometry_type: Geometry` and `storage_table: geo_substations` — should be `geometry_type: LineString` and `storage_table: geo_cables`.
-
-**3. Trigger ingestion for all empty ENWL layers**
-
-17 ENWL layers have linked datasets but 0 features. These need their datasets activated and synced. The ingestion is done via the admin UI ("Sync All Active") but requires datasets to be marked `active = true` first.
-
-**4. Handle timeout/520 errors**
-
-Some ENWL datasets (LV Overhead Conductors, DFES LV Headroom/Peak Demand, DSO Primary Polygons) failed with timeouts or 520 errors. These are likely large datasets hitting the 150s edge function timeout. The fix is to ensure the ingest function handles these gracefully.
+**Issue 3: 403 Forbidden on certain datasets**
+ENWL `dfes-2024-bsp-sites` and SPEN `spd_spt_gis_shapefiles_line_assets`, `spd_spt_gis_shapefiles_point_assets`, and `secondary_substation_polygons` return 403 errors. These datasets require special API permissions or are not publicly accessible even with the API key. Fix: mark these as `active = false` with a clear error note so they don't block "Sync All", and log them as access-restricted.
 
 ### Implementation Steps
 
 | Step | File | Change |
 |------|------|--------|
-| 1 | New migration | Update `auto_create_dno_layers` RPC with corrected SPEN matching rules covering all geospatial datasets above |
-| 2 | New migration | Fix existing "SPEN Line asset" layer: update `storage_table` to `geo_cables`, `geometry_type` to `LineString` |
-| 3 | New migration | Activate (set `active = true`) all ENWL datasets that are linked to a layer but not yet active, so "Sync All" will pick them up |
-| 4 | `src/components/admin/NpgDatasetRegistry.tsx` | After auto-link, auto-activate all newly linked datasets so they're ready for Sync All |
+| 1 | New migration | Reset stuck `processing` datasets (where `last_sync_at IS NULL`) back to status `never`; deactivate 403-blocked datasets with error note |
+| 2 | `supabase/functions/npg-dataset-ingest/index.ts` | Increase Records API page size from 100 to 500; increase background timeout from 150s to 280s; add early exit if total records exceeds 10k (Opendatasoft hard limit) to avoid wasted pagination |
+| 3 | `supabase/functions/npg-dataset-ingest/index.ts` | For GeoJSON export mode, add streaming fetch with `response.body` reader to handle large exports without OOM |
 
-After implementation, the workflow is:
-1. Go to DNO Registry → select SPEN → click "Auto-Create & Link Layers"
-2. Click "Sync All Active" to start ingestion
-3. Switch to ENWL → click "Sync All Active" for remaining empty layers
-4. Check Layers panel on the map — data should appear
+### After Implementation
 
-### Technical Notes
-- SPEN GIS Line/Point Assets are very large (3M-6M rows). These will hit the 10k Opendatasoft API limit unless geographic partitioning is applied. Initial ingestion will capture the first 10k records per dataset — this is a known limitation documented in the architecture.
-- The 520 errors on ENWL DSO Primary Polygons suggest the backend was overloaded during batch insert; sequential re-sync should resolve this.
+1. Go to **Admin → DNO Registry → ENWL** → click **"Sync All Active"** — the 20+ unsynced datasets will now process with faster pagination
+2. Switch to **SPEN** → click **"Sync All Active"** — the 4 unsynced datasets will process
+3. Datasets that previously timed out should now complete within the 280s window
+4. 403-blocked datasets will be deactivated and clearly flagged — these need different API permissions from the DNO
+
+### Expected Outcome After Sync
+
+- **ENWL**: ~15 more layers populated (Substations, DFES Forecasts, Overhead Conductors, Service Areas, Flexibility Sites, etc.)
+- **SPEN**: ~5 more layers populated (DFES Polygons, LV Monitoring, Smart Meter, Secondary Substations — minus the 403-blocked ones)
+- Total new features: estimated 50-100k across both DNOs
 
