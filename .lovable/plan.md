@@ -1,56 +1,40 @@
 
 
-## Fix Traffic + Accessibility Pillar Data Gaps
+## Fix Score-Site Traffic + Accessibility Data (All Returning 0)
 
-### Problem
+### Problem Found
 
-The site analysis runs end-to-end but two of four scoring pillars return zero data:
-- **Traffic**: 0 AADF despite 46.3k DfT count points in the database
-- **Accessibility**: 0 bus/0 rail despite 17k NaPTAN records
+The `score-site` edge function returns `traffic_aadf: 0`, `nearby_bus_stops: 0`, `nearby_transport_nodes: 0` for Leeds despite:
+- **86 DfT traffic points** within 2km in the database
+- **314 NaPTAN nodes** within 2km (40 within 500m, including bus stops with `stop_type: BCT`)
+- The `nearby_geo_points_by_slug` DB function works correctly when called directly
 
-This causes strong grid sites (80/100) to receive an AVOID verdict (29/100).
+**Root cause**: The PostgREST fetch calls to `nearby_geo_points_by_slug` in the edge function are silently failing (caught by `.catch(() => [])`). Most likely the edge function needs redeployment, or the PostgREST calls are timing out due to the 8s default statement timeout on large tables (383k+ geo_points rows with geography casts).
 
-### Root Cause Investigation Needed
+### Additional issue: Traffic AADF values are null
 
-**Traffic (0 AADF):** The `score-site` edge function and the `score_site_from_lnglat` database function likely don't query the `geo_points` table for DfT traffic data. The scoring was built before DfT data was ingested. The traffic score in the Unified Intelligence Panel may be reading from a field that was never populated.
-
-**Accessibility (0 bus/rail):** The safety engine queries NaPTAN from `geo_points`, but only ~17k of ~300k eligible records were ingested (the chunked ingestion may not have been triggered). Leeds records likely weren't reached.
+All DfT count points near Leeds have `all_motor_vehicles: null` in `attrs_json`. The AADF backfill sync hasn't been run. The live DfT API fallback exists but also returns 0 (likely the DfT API response structure changed — `data` vs `rows` mismatch).
 
 ### Plan
 
-**1. Wire traffic AADF into the scoring pipeline**
+**1. Add error logging to score-site edge function**
 
-In `supabase/functions/score-site/index.ts` (or the `score_site_from_lnglat` DB function):
-- Add a spatial query against `geo_points` filtered by the DfT traffic layer ID
-- Find count points within 500m of the site
-- Extract the `all_motor_vehicles` property and return the max AADF value
-- Return this as `traffic_aadf` in the score-site response
+Replace the silent `.catch(() => [])` on both traffic and NaPTAN fetches with `.catch((e) => { console.error("traffic fetch error:", e); return []; })` so we can see what's actually failing.
 
-In `src/components/map/UnifiedIntelligencePanel.tsx`:
-- Read `traffic_aadf` from the score result and display it in the Traffic pillar
-- Use it to calculate a traffic demand score (e.g., >10k AADF = HIGH, 5-10k = MEDIUM, <5k = LOW)
+**2. Add a direct-query fallback for traffic + NaPTAN**
 
-**2. Wire accessibility (NaPTAN) into the scoring pipeline**
+Instead of relying solely on the PostgREST RPC call (which may hit statement timeouts), add a fallback that uses the Supabase client SDK to query `geo_points` directly with layer_id filter + spatial distance. This bypasses PostgREST timeout issues.
 
-In `supabase/functions/score-site/index.ts`:
-- Add a spatial query against `geo_points` filtered by the NaPTAN layer ID
-- Count bus stops within 250m and rail stations within 500m
-- Return as `nearby_bus_stops` and `nearby_rail_stations`
+**3. Redeploy score-site**
 
-In `src/components/map/UnifiedIntelligencePanel.tsx`:
-- Read these counts and display them in the Accessibility pillar
-- Score using the existing formula (bus count + rail×3 multiplier)
+The edge function may be running stale code from before the traffic/NaPTAN enrichment was added.
 
-**3. Ensure NaPTAN data covers Leeds**
+**4. Fix DfT AADF live fallback**
 
-The chunked ingestion needs to be run from Admin → API Sources. If the data only covers southern England, the user needs to trigger additional sync chunks. No code change needed — just a note to run it.
+The DfT API response uses `data[].attributes.all_motor_vehicles` not `data[].all_motor_vehicles`. Fix the response parsing.
 
 ### Files to Change
 
-- `supabase/functions/score-site/index.ts` — Add geo_points queries for DfT traffic + NaPTAN within radius
-- `src/components/map/UnifiedIntelligencePanel.tsx` — Read and display traffic AADF + accessibility counts from score-site response
-
-### Technical Detail
-
-The `geo_points` table has a `geom` geography column with a spatial index. Queries use `ST_DWithin(geom, ST_Point(lng, lat)::geography, radius_m)` filtered by `layer_id` matching the DfT or NaPTAN layer registry entry. The layer IDs are looked up from `layer_registry` by slug (`dft_traffic_count_points`, `naptan_transport_nodes`).
+- `supabase/functions/score-site/index.ts` — Add error logging, add direct-query fallback, fix DfT AADF response parsing
+- Redeploy edge function
 
