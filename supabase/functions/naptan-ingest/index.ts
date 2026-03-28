@@ -10,10 +10,8 @@ const corsHeaders = {
 const NAPTAN_CSV_URL =
   "https://naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv";
 
-// Key stop types to ingest
 const KEEP_STOP_TYPES = new Set(["BCT", "RLY", "MET", "PLT", "FER", "RSE", "TMU"]);
 
-// Map stop type codes to friendly node_type
 const NODE_TYPE_MAP: Record<string, string> = {
   BCT: "bus", RLY: "rail", RSE: "rail", MET: "tram", PLT: "tram", TMU: "tram", FER: "ferry",
 };
@@ -83,14 +81,13 @@ serve(async (req) => {
       });
     }
 
-    // Background processing
     // @ts-ignore EdgeRuntime is available in Supabase Edge Functions
-    EdgeRuntime.waitUntil(processNaptan(serviceClient, layerMeta.id));
+    EdgeRuntime.waitUntil(processNaptanStreaming(serviceClient, layerMeta.id));
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "NaPTAN ingestion started in background. Check layer_registry feature_count for progress.",
+        message: "NaPTAN ingestion started in background (streaming mode). Check layer_registry feature_count for progress.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -103,121 +100,175 @@ serve(async (req) => {
   }
 });
 
-async function processNaptan(serviceClient: any, layerId: string) {
+// Parse a single CSV line handling quoted fields
+function parseCSVLine(line: string): string[] {
+  const cols: string[] = [];
+  let cur = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuote = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuote = true;
+      } else if (ch === ',') {
+        cols.push(cur.trim());
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
+async function processNaptanStreaming(serviceClient: any, layerId: string) {
   try {
-    console.log("Downloading NaPTAN CSV...");
+    console.log("Downloading NaPTAN CSV (streaming)...");
     const csvResp = await fetch(NAPTAN_CSV_URL);
-    if (!csvResp.ok) {
+    if (!csvResp.ok || !csvResp.body) {
       console.error(`NaPTAN CSV download failed: ${csvResp.status}`);
       return;
     }
 
-    const csvText = await csvResp.text();
-    const lines = csvText.split("\n");
-    const header = lines[0].split(",").map((h: string) => h.trim().replace(/"/g, ""));
-
-    // Find column indices
-    const idx = (name: string) => header.findIndex((h: string) => h === name);
-    const iAtco = idx("ATCOCode");
-    const iNaptan = idx("NaptanCode");
-    const iName = idx("CommonName");
-    const iLat = idx("Latitude");
-    const iLon = idx("Longitude");
-    const iStopType = idx("StopType");
-    const iLocality = idx("LocalityName");
-    const iParentLocality = idx("ParentLocalityName");
-    const iStreet = idx("Street");
-    const iIndicator = idx("Indicator");
-    const iBearing = idx("Bearing");
-    const iStatus = idx("Status");
-
-    console.log(`NaPTAN CSV: ${lines.length - 1} rows, ${header.length} cols`);
+    const reader = csvResp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let header: string[] | null = null;
+    let headerIndices: Record<string, number> = {};
 
     let totalInserted = 0;
     let skipped = 0;
-    const batchSize = 500;
     let batch: any[] = [];
+    const batchSize = 500;
+    let lineNum = 0;
 
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const cols = line.split(",").map((c: string) => c.trim().replace(/"/g, ""));
-
-      const stopType = cols[iStopType];
-      if (!KEEP_STOP_TYPES.has(stopType)) {
-        skipped++;
-        continue;
-      }
-
-      // Check status — skip inactive
-      const status = cols[iStatus];
-      if (status && status.toLowerCase() !== "active" && status.toLowerCase() !== "new") {
-        skipped++;
-        continue;
-      }
-
-      const lat = parseFloat(cols[iLat]);
-      const lon = parseFloat(cols[iLon]);
-      if (!lat || !lon || isNaN(lat) || isNaN(lon)) {
-        skipped++;
-        continue;
-      }
-
-      const atcoCode = cols[iAtco] || `naptan_${i}`;
-
-      batch.push({
-        layer_id: layerId,
-        dno: "National",
-        asset_id: atcoCode,
-        name: cols[iName] || `${stopType} Stop`,
-        geom: `SRID=4326;POINT(${lon} ${lat})`,
-        attrs_json: {
-          atco_code: atcoCode,
-          naptan_code: cols[iNaptan] || null,
-          stop_type: stopType,
-          node_type: NODE_TYPE_MAP[stopType] || "bus",
-          locality_name: cols[iLocality] || null,
-          parent_locality: cols[iParentLocality] || null,
-          street: cols[iStreet] || null,
-          indicator: cols[iIndicator] || null,
-          bearing: cols[iBearing] || null,
-          status: status || null,
-        },
-      });
-
-      if (batch.length >= batchSize) {
-        const { error: insertErr } = await serviceClient
-          .from("geo_points")
-          .upsert(batch, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
-        if (insertErr) {
-          console.error(`NaPTAN insert error at row ${i}:`, insertErr);
-        } else {
-          totalInserted += batch.length;
-        }
-        batch = [];
-
-        if (totalInserted % 10000 === 0) {
-          console.log(`NaPTAN progress: ${totalInserted} inserted, ${skipped} skipped`);
-          await serviceClient
-            .from("layer_registry")
-            .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
-            .eq("id", layerId);
-        }
-      }
-    }
-
-    // Final batch
-    if (batch.length > 0) {
+    const flush = async () => {
+      if (batch.length === 0) return;
       const { error: insertErr } = await serviceClient
         .from("geo_points")
         .upsert(batch, { onConflict: "layer_id,asset_id", ignoreDuplicates: true });
       if (insertErr) {
-        console.error("NaPTAN final batch error:", insertErr);
+        console.error(`NaPTAN insert error at ~line ${lineNum}:`, insertErr);
       } else {
         totalInserted += batch.length;
       }
+      batch = [];
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+      // Keep last partial line in buffer
+      buffer = lines.pop() || "";
+
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        lineNum++;
+
+        // First line is header
+        if (!header) {
+          header = parseCSVLine(line);
+          for (let i = 0; i < header.length; i++) {
+            headerIndices[header[i]] = i;
+          }
+          console.log(`NaPTAN header parsed: ${header.length} cols`);
+          continue;
+        }
+
+        const cols = parseCSVLine(line);
+
+        const stopType = cols[headerIndices["StopType"]] || "";
+        if (!KEEP_STOP_TYPES.has(stopType)) { skipped++; continue; }
+
+        const status = cols[headerIndices["Status"]] || "";
+        if (status && status.toLowerCase() !== "active" && status.toLowerCase() !== "new") { skipped++; continue; }
+
+        const lat = parseFloat(cols[headerIndices["Latitude"]] || "");
+        const lon = parseFloat(cols[headerIndices["Longitude"]] || "");
+        if (!lat || !lon || isNaN(lat) || isNaN(lon)) { skipped++; continue; }
+
+        const atcoCode = cols[headerIndices["ATCOCode"]] || `naptan_${lineNum}`;
+
+        batch.push({
+          layer_id: layerId,
+          dno: "National",
+          asset_id: atcoCode,
+          name: cols[headerIndices["CommonName"]] || `${stopType} Stop`,
+          geom: `SRID=4326;POINT(${lon} ${lat})`,
+          attrs_json: {
+            atco_code: atcoCode,
+            naptan_code: cols[headerIndices["NaptanCode"]] || null,
+            stop_type: stopType,
+            node_type: NODE_TYPE_MAP[stopType] || "bus",
+            locality_name: cols[headerIndices["LocalityName"]] || null,
+            parent_locality: cols[headerIndices["ParentLocalityName"]] || null,
+            street: cols[headerIndices["Street"]] || null,
+            indicator: cols[headerIndices["Indicator"]] || null,
+            bearing: cols[headerIndices["Bearing"]] || null,
+            status: status || null,
+          },
+        });
+
+        if (batch.length >= batchSize) {
+          await flush();
+          if (totalInserted % 10000 === 0 && totalInserted > 0) {
+            console.log(`NaPTAN progress: ${totalInserted} inserted, ${skipped} skipped`);
+            await serviceClient
+              .from("layer_registry")
+              .update({ feature_count: totalInserted, updated_at: new Date().toISOString() })
+              .eq("id", layerId);
+          }
+        }
+      }
     }
+
+    // Process remaining buffer
+    if (buffer.trim() && header) {
+      const cols = parseCSVLine(buffer.trim());
+      const stopType = cols[headerIndices["StopType"]] || "";
+      if (KEEP_STOP_TYPES.has(stopType)) {
+        const status = cols[headerIndices["Status"]] || "";
+        const lat = parseFloat(cols[headerIndices["Latitude"]] || "");
+        const lon = parseFloat(cols[headerIndices["Longitude"]] || "");
+        if (lat && lon && !isNaN(lat) && !isNaN(lon) &&
+            (!status || status.toLowerCase() === "active" || status.toLowerCase() === "new")) {
+          const atcoCode = cols[headerIndices["ATCOCode"]] || `naptan_final`;
+          batch.push({
+            layer_id: layerId, dno: "National", asset_id: atcoCode,
+            name: cols[headerIndices["CommonName"]] || `${stopType} Stop`,
+            geom: `SRID=4326;POINT(${lon} ${lat})`,
+            attrs_json: {
+              atco_code: atcoCode, naptan_code: cols[headerIndices["NaptanCode"]] || null,
+              stop_type: stopType, node_type: NODE_TYPE_MAP[stopType] || "bus",
+              locality_name: cols[headerIndices["LocalityName"]] || null,
+              parent_locality: cols[headerIndices["ParentLocalityName"]] || null,
+              street: cols[headerIndices["Street"]] || null,
+              indicator: cols[headerIndices["Indicator"]] || null,
+              bearing: cols[headerIndices["Bearing"]] || null, status: status || null,
+            },
+          });
+        }
+      }
+    }
+
+    // Final flush
+    await flush();
 
     await serviceClient
       .from("layer_registry")
@@ -226,6 +277,6 @@ async function processNaptan(serviceClient: any, layerId: string) {
 
     console.log(`NaPTAN complete: ${totalInserted} inserted, ${skipped} skipped`);
   } catch (err) {
-    console.error("NaPTAN background processing error:", err);
+    console.error("NaPTAN streaming error:", err);
   }
 }
