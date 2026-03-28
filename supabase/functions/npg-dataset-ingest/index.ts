@@ -130,6 +130,7 @@ Deno.serve(async (req) => {
       SPEN: "SPEN_API_KEY",
       NGED: "NGED_API_KEY",
       UKPN: "UKPN_API_KEY",
+      CADENT: "CADENT_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || null;
     const apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
