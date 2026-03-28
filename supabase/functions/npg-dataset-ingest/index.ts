@@ -395,6 +395,15 @@ async function ingestViaRecords(
     console.log(`[ingest] Records page: ${url}`);
 
     const resp = await fetchWithRetry(url, apiKey);
+    if (resp.status === 403) {
+      console.warn(`[ingest] 403 Forbidden for ${entry.dataset_id} — marking as skipped`);
+      await supabase.from("dno_dataset_registry").update({
+        last_sync_status: "skipped",
+        last_sync_error: "403 Forbidden — restricted dataset, elevated portal permissions required",
+        last_sync_at: new Date().toISOString(),
+      }).eq("id", entry.id);
+      return { inserted: 0, skipped: 0 };
+    }
     if (!resp.ok) {
       const errText = await resp.text();
       throw new Error(`Records API error ${resp.status}: ${errText}`);
@@ -848,7 +857,16 @@ function promoteGeometry(geom: any, storageTable: string): any | null {
     if (geomFamily !== targetFamily) return null;
   }
 
+  // Strip Z coordinates (3D → 2D) to avoid "Geometry has Z dimension" errors
+  geom.coordinates = stripZ(geom.coordinates);
   return geom;
+}
+
+function stripZ(coords: any): any {
+  if (typeof coords[0] === "number") {
+    return coords.slice(0, 2);
+  }
+  return coords.map(stripZ);
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
