@@ -23,7 +23,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Custom fetch with 30s abort so the edge function doesn't hit the wall-clock limit
     const fetchWithTimeout = (url: RequestInfo | URL, init?: RequestInit) => {
       const controller = new AbortController();
       const id = setTimeout(() => controller.abort(), 30000);
@@ -51,8 +50,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Score the site — use a service-role client that bypasses the default 8s PostgREST timeout
-    // by going directly via the REST endpoint with a long-lived abort controller
+    // Score the site via direct REST call (bypasses 8s PostgREST statement timeout)
     const scoreController = new AbortController();
     const scoreTimer = setTimeout(() => scoreController.abort(), 28000);
 
@@ -93,31 +91,60 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Traffic AADF + NaPTAN queries (fire in parallel with substation search) ──
-    const trafficPromise = fetch(
-      `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
-        body: JSON.stringify({ p_slug: "dft_traffic_count_points", p_lng: lng, p_lat: lat, p_radius_m: 1000, p_limit: 20 }),
-        signal: AbortSignal.timeout(15000),
-      }
-    ).then(r => r.ok ? r.json() : []).catch(() => []);
+    // ── Traffic + NaPTAN: Direct SQL queries via supabase-js (bypasses RPC timeout issues) ──
+    // First, look up layer_ids by slug
+    const { data: layers } = await supabase
+      .from("layer_registry")
+      .select("id, slug")
+      .in("slug", ["dft_traffic_count_points", "naptan_transport_nodes"]);
 
-    const naptanPromise = fetch(
-      `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
-        body: JSON.stringify({ p_slug: "naptan_transport_nodes", p_lng: lng, p_lat: lat, p_radius_m: 500, p_limit: 50 }),
-        signal: AbortSignal.timeout(15000),
-      }
-    ).then(r => r.ok ? r.json() : []).catch(() => []);
+    const trafficLayerId = layers?.find((l: any) => l.slug === "dft_traffic_count_points")?.id;
+    const naptanLayerId = layers?.find((l: any) => l.slug === "naptan_transport_nodes")?.id;
 
-    // Adaptive radius search for nearest substations: 2km → 5km → 10km
-    // Also via direct fetch to bypass the 8s PostgREST statement timeout
+    console.log("Layer IDs — traffic:", trafficLayerId, "naptan:", naptanLayerId);
+
+    // Use direct PostgREST RPC with proper error logging
+    const trafficPromise = trafficLayerId
+      ? fetch(
+          `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+            body: JSON.stringify({ p_slug: "dft_traffic_count_points", p_lng: lng, p_lat: lat, p_radius_m: 1000, p_limit: 20 }),
+            signal: AbortSignal.timeout(15000),
+          }
+        ).then(async r => {
+          if (!r.ok) {
+            const errText = await r.text();
+            console.error("Traffic RPC error:", r.status, errText);
+            return [];
+          }
+          return r.json();
+        }).catch((e) => { console.error("Traffic fetch error:", e.message); return []; })
+      : Promise.resolve([]);
+
+    const naptanPromise = naptanLayerId
+      ? fetch(
+          `${supabaseUrl}/rest/v1/rpc/nearby_geo_points_by_slug`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` },
+            body: JSON.stringify({ p_slug: "naptan_transport_nodes", p_lng: lng, p_lat: lat, p_radius_m: 500, p_limit: 50 }),
+            signal: AbortSignal.timeout(15000),
+          }
+        ).then(async r => {
+          if (!r.ok) {
+            const errText = await r.text();
+            console.error("NaPTAN RPC error:", r.status, errText);
+            return [];
+          }
+          return r.json();
+        }).catch((e) => { console.error("NaPTAN fetch error:", e.message); return []; })
+      : Promise.resolve([]);
+
+    // Adaptive radius search for nearest substations
     let substations: any[] = [];
-    const radii = [0.02, 0.05, 0.1]; // ~2km, ~5km, ~10km
+    const radii = [0.02, 0.05, 0.1];
 
     for (const offset of radii) {
       const searchPolygon = {
@@ -157,10 +184,9 @@ Deno.serve(async (req) => {
         break;
       }
 
-      if (substations.length > 0) break; // Found results, stop expanding
+      if (substations.length > 0) break;
     }
 
-    // Map substations to response format
     const nearestSubstations = substations.map((s: any) => ({
       site_name: s.site_name,
       site_id: s.site_id,
@@ -172,10 +198,13 @@ Deno.serve(async (req) => {
       utilisation_band: s.utilisation_band,
     }));
 
-    // Resolve traffic + NaPTAN data
+    // Resolve traffic + NaPTAN
     const [trafficPoints, naptanNodes] = await Promise.all([trafficPromise, naptanPromise]);
 
-    // Extract traffic AADF — check attrs_json for all_motor_vehicles
+    console.log("Traffic points returned:", trafficPoints?.length || 0);
+    console.log("NaPTAN nodes returned:", naptanNodes?.length || 0);
+
+    // Extract traffic AADF
     const trafficData = (trafficPoints || []).map((t: any) => ({
       count_point_id: t.attrs_json?.count_point_id || t.asset_id,
       road_name: t.attrs_json?.road_name || t.name,
@@ -185,23 +214,31 @@ Deno.serve(async (req) => {
     }));
     const maxAadf = Math.max(0, ...trafficData.map((t: any) => t.all_motor_vehicles || 0));
 
-    // If max AADF is 0 but we have count points, try live DfT API for the nearest one
+    // If max AADF is 0, try live DfT API for the nearest count point
     let liveAadf = maxAadf;
     if (maxAadf === 0 && trafficData.length > 0) {
       const nearestCpId = trafficData[0].count_point_id;
+      console.log("AADF is 0, trying live DfT API for count point:", nearestCpId);
       try {
         const aadfUrl = `https://roadtraffic.dft.gov.uk/api/average-annual-daily-flow?filter[count_point_id]=${nearestCpId}&page[size]=1&sort=-year`;
         const aadfResp = await fetch(aadfUrl, { signal: AbortSignal.timeout(8000) });
         if (aadfResp.ok) {
           const aadfJson = await aadfResp.json();
-          const aadfRows = aadfJson.data || aadfJson.rows || [];
+          // DfT API returns { data: [{ id, type, attributes: { all_motor_vehicles, ... } }] }
+          const aadfRows = aadfJson.data || [];
           if (aadfRows.length > 0) {
-            liveAadf = aadfRows[0].all_motor_vehicles || 0;
+            // Try attributes.all_motor_vehicles first (DfT JSON:API format), then top-level
+            const row = aadfRows[0];
+            liveAadf = row?.attributes?.all_motor_vehicles || row?.all_motor_vehicles || 0;
             trafficData[0].all_motor_vehicles = liveAadf;
+            console.log("Live DfT AADF:", liveAadf);
           }
+        } else {
+          const errText = await aadfResp.text();
+          console.error("DfT AADF API error:", aadfResp.status, errText);
         }
-      } catch {
-        // Non-critical — proceed with 0
+      } catch (e: any) {
+        console.error("DfT AADF fallback error:", e.message);
       }
     }
 
@@ -215,7 +252,9 @@ Deno.serve(async (req) => {
       return t === "rail" || t === "RLY" || t === "MET";
     }).length;
 
-    // Check user roles for output filtering — lightweight query, Supabase client is fine here
+    console.log("Bus stops:", busStops, "Rail stations:", railStations);
+
+    // Check user roles
     const { data: roles } = await supabase
       .from("user_roles")
       .select("role")
@@ -226,7 +265,7 @@ Deno.serve(async (req) => {
 
     let result = scoreData;
 
-    // Add enrichment data to the result
+    // Add enrichment data
     result = {
       ...result,
       nearest_substations: nearestSubstations,
@@ -252,6 +291,11 @@ Deno.serve(async (req) => {
         next_steps: result.next_steps,
         data_timestamp: result.data_timestamp,
         nearest_substations: nearestSubstations,
+        traffic_aadf: liveAadf,
+        traffic_count_points: trafficData.length,
+        nearby_bus_stops: busStops,
+        nearby_rail_stations: railStations,
+        nearby_transport_nodes: (naptanNodes || []).length,
         distance_bands: {
           primary: distanceBand(distances.primary_m),
           feeder: distanceBand(distances.feeder_m),
