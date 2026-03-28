@@ -43,41 +43,29 @@ const normalizeHeader = (h: string): string => {
 };
 
 /** Estimate total kW from WYCA-style charger count columns */
-function estimateKwFromChargers(mapped: Record<string, any>): number {
-  let totalKw = 0;
-  const fields: [string, number][] = [
-    ["number_of_lower_range_standard_chargers_(3.7kw___<_6kw)", 3.7],
-    ["number_of_lower_range_standard_sockets_(3.7kw___<_6kw)", 3.7],
-    ["number_of_higher_range_standard_chargers_(6kw___<_8kw)", 7],
-    ["number_of_higher_range_standard_sockets_(6_kw___<_8kw)", 7],
-    ["number_of_fast_chargers_(8kw_49kw)", 22],
-    ["number_of_fast_sockets_(8kw_49kw)", 22],
-    ["number_of_rapid_chargers_(50kw___149kw)", 50],
-    ["number_of_rapid_sockets_(50kw___149kw)", 50],
+function estimateKwFromChargers(row: Record<string, any>): number {
+  const patterns: { keywords: string[]; rate: number }[] = [
+    { keywords: ["lower", "3.7"], rate: 3.7 },
+    { keywords: ["higher", "6kw"], rate: 7 },
+    { keywords: ["higher", "6_kw"], rate: 7 },
+    { keywords: ["fast", "8kw"], rate: 22 },
+    { keywords: ["fast", "49kw"], rate: 22 },
+    { keywords: ["rapid", "50kw"], rate: 50 },
+    { keywords: ["rapid", "149kw"], rate: 50 },
   ];
 
-  for (const [key, kw] of fields) {
-    // Try exact match or fuzzy match
-    for (const [mk, mv] of Object.entries(mapped)) {
-      const normKey = mk.toLowerCase().replace(/[\s\-\u00a0]+/g, "_");
-      if (normKey.includes("lower") && normKey.includes("3.7") && key.includes("lower") &&
-          ((key.includes("charger") && normKey.includes("charger")) || (key.includes("socket") && normKey.includes("socket")))) {
-        totalKw += (Number(mv) || 0) * kw;
-        break;
-      }
-      if (normKey.includes("higher") && normKey.includes("6kw") && key.includes("higher") &&
-          ((key.includes("charger") && normKey.includes("charger")) || (key.includes("socket") && normKey.includes("socket")))) {
-        totalKw += (Number(mv) || 0) * kw;
-        break;
-      }
-      if (normKey.includes("fast") && key.includes("fast") &&
-          ((key.includes("charger") && normKey.includes("charger")) || (key.includes("socket") && normKey.includes("socket")))) {
-        totalKw += (Number(mv) || 0) * kw;
-        break;
-      }
-      if (normKey.includes("rapid") && key.includes("rapid") &&
-          ((key.includes("charger") && normKey.includes("charger")) || (key.includes("socket") && normKey.includes("socket")))) {
-        totalKw += (Number(mv) || 0) * kw;
+  let totalKw = 0;
+  const matched = new Set<string>();
+
+  for (const [rawKey, rawVal] of Object.entries(row)) {
+    const norm = rawKey.toLowerCase().replace(/[\s\-\u00a0]+/g, "_");
+    if (matched.has(norm)) continue;
+
+    for (const { keywords, rate } of patterns) {
+      if (keywords.every(kw => norm.includes(kw))) {
+        const count = Number(rawVal) || 0;
+        totalKw += count * rate;
+        matched.add(norm);
         break;
       }
     }
@@ -204,9 +192,8 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
             // Try estimating from charger columns
             kw = estimateKwFromChargers(mapped);
           }
-          if (kw <= 0) {
-            // Default minimum for a site with chargers
-            kw = 7; // single standard charger default
+          if (kw < 0) {
+            kw = 0;
           }
 
           // Resolve site_type
