@@ -217,6 +217,39 @@ export function NpgDatasetRegistry() {
 
   // Active+linked datasets for "Sync All"
   const activeLinkedDatasets = datasets.filter(d => d.active && d.linked_layer_id);
+  const unlinkdGeoCount = datasets.filter(d => d.is_geospatial && !d.linked_layer_id).length;
+
+  // ── Auto-Create & Link Layers ──
+  const handleAutoLink = async () => {
+    setAutoLinking(true);
+    setAutoLinkResult(null);
+    try {
+      const { data, error } = await supabase.rpc('auto_create_dno_layers', {
+        p_dno: selectedDno,
+        p_force: false,
+      });
+      if (error) throw error;
+
+      const result = data as any;
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setAutoLinkResult(result);
+      const unmatchedCount = result.unmatched?.length || 0;
+      toast.success(
+        `${result.layers_created} layers created, ${result.layers_reused} reused, ${result.datasets_linked} datasets linked` +
+        (unmatchedCount > 0 ? ` — ${unmatchedCount} unmatched` : '')
+      );
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+      queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
+    } catch (err: any) {
+      toast.error(`Auto-link failed: ${err.message}`);
+    } finally {
+      setAutoLinking(false);
+    }
+  };
 
   // ── Sync All Active ──
   const handleSyncAll = async () => {
