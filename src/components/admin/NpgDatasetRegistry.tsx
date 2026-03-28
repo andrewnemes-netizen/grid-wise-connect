@@ -333,10 +333,19 @@ export function NpgDatasetRegistry() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button onClick={handleCrawl} disabled={crawling} size="sm">
                 {crawling ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Radar className="h-4 w-4 mr-1" />}
                 {crawling ? "Crawling…" : "Discover All Datasets"}
+              </Button>
+              <Button
+                onClick={handleAutoLink}
+                disabled={autoLinking || unlinkdGeoCount === 0}
+                size="sm"
+                variant="secondary"
+              >
+                {autoLinking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Layers className="h-4 w-4 mr-1" />}
+                {autoLinking ? "Linking…" : `Auto-Create & Link Layers${unlinkdGeoCount > 0 ? ` (${unlinkdGeoCount})` : ''}`}
               </Button>
               <Button
                 onClick={handleSyncAll}
