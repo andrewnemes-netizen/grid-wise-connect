@@ -380,6 +380,33 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Maximum 500 sites per batch" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Fetch admin-configured unit rates from the database (one query, reused for all sites)
+    let unitRates: UnitRatesRow = FALLBACK_RATES;
+    try {
+      const { data: ratesRow } = await supabase.from("unit_rates").select("*").limit(1).single();
+      if (ratesRow) {
+        unitRates = {
+          cable_lv_per_m: Number(ratesRow.cable_lv_per_m), cable_hv_per_m: Number(ratesRow.cable_hv_per_m), cable_ehv_per_m: Number(ratesRow.cable_ehv_per_m),
+          duct_per_m: Number(ratesRow.duct_per_m),
+          excavation_footway_per_m: Number(ratesRow.excavation_footway_per_m), excavation_carriageway_per_m: Number(ratesRow.excavation_carriageway_per_m), excavation_verge_per_m: Number(ratesRow.excavation_verge_per_m),
+          jointing_each: Number(ratesRow.jointing_each), jointing_lv_each: Number(ratesRow.jointing_lv_each), termination_each: Number(ratesRow.termination_each),
+          switchgear_ring_main: Number(ratesRow.switchgear_ring_main), switchgear_circuit_breaker: Number(ratesRow.switchgear_circuit_breaker),
+          transformer_500kva: Number(ratesRow.transformer_500kva), transformer_1000kva: Number(ratesRow.transformer_1000kva), transformer_1500kva: Number(ratesRow.transformer_1500kva),
+          metering_ct: Number(ratesRow.metering_ct), metering_wc: Number(ratesRow.metering_wc),
+          feeder_pillar_each: Number(ratesRow.feeder_pillar_each), cutout_100a_3ph: Number(ratesRow.cutout_100a_3ph),
+          earthing_lot: Number(ratesRow.earthing_lot), transformer_plinth_each: Number(ratesRow.transformer_plinth_each), cable_marker_tape_per_m: Number(ratesRow.cable_marker_tape_per_m),
+          design_fee_pct: Number(ratesRow.design_fee_pct), project_management_pct: Number(ratesRow.project_management_pct), contingency_pct: Number(ratesRow.contingency_pct),
+          reinforcement_per_kw_over_capacity: Number(ratesRow.reinforcement_per_kw_over_capacity),
+          lv_joint_team_day: Number(ratesRow.lv_joint_team_day),
+          joint_bay_soft: Number(ratesRow.joint_bay_soft), joint_bay_footway: Number(ratesRow.joint_bay_footway), joint_bay_carriageway: Number(ratesRow.joint_bay_carriageway),
+          cable_joint_kit_185mm: Number(ratesRow.cable_joint_kit_185mm), cable_joint_kit_pot_end: Number(ratesRow.cable_joint_kit_pot_end),
+          service_cable_35mm_per_m: Number(ratesRow.service_cable_35mm_per_m), mains_extension_threshold_m: Number(ratesRow.mains_extension_threshold_m),
+        };
+      }
+    } catch (e) {
+      console.warn("Failed to fetch unit_rates, using defaults:", e);
+    }
+
     // No need to look up layer IDs — we use slugs directly with nearby_geo_points_by_slug
     const DFT_SLUG = "dft_traffic_count_points";
     const NAPTAN_SLUG = "naptan_transport_nodes";
