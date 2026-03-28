@@ -123,7 +123,7 @@ const SiteDetail = () => {
         costBand,
         nearestSubstations,
         unitRates: unitRates || undefined,
-        skipSave: true,
+        skipSave: false,
       });
       toast({ title: "PDF exported" });
     } catch (e: any) {
