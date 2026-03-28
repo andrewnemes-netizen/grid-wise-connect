@@ -129,9 +129,10 @@ Deno.serve(async (req) => {
       ENWL: "ENWL_API_KEY",
       SPEN: "SPEN_API_KEY",
       NGED: "NGED_API_KEY",
+      UKPN: "UKPN_API_KEY",
     };
-    const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";
-    const apiKey = Deno.env.get(apiKeyEnvName) || null;
+    const apiKeyEnvName = dnoApiKeyMap[entry.dno] || null;
+    const apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
 
     console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 
