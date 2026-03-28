@@ -71,6 +71,12 @@ interface ScoreResult {
     utilisation_band: string | null;
     distance_m?: number;
   }>;
+  // Traffic + Accessibility enrichment from score-site
+  traffic_aadf?: number;
+  traffic_count_points?: number;
+  nearby_bus_stops?: number;
+  nearby_rail_stations?: number;
+  nearby_transport_nodes?: number;
 }
 
 interface SafetyResult {
@@ -182,23 +188,31 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
-  // Derived scores from safety engine
+  // Derived scores — use safety engine data first, fall back to score-site enrichment
   const trafficScore = useMemo(() => {
-    if (!safetyResult) return null;
-    const aadf = safetyResult.traffic_summary.max_aadf;
+    const safetyAadf = safetyResult?.traffic_summary?.max_aadf ?? 0;
+    const scoreAadf = result?.traffic_aadf ?? 0;
+    const aadf = Math.max(safetyAadf, scoreAadf);
     if (aadf > 10000) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
     if (aadf > 3000) return { label: "MEDIUM", score: 60, color: "text-amber-700", bg: "bg-amber-100" };
-    return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
-  }, [safetyResult]);
+    if (aadf > 0) return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
+    return { label: "NO DATA", score: 25, color: "text-muted-foreground", bg: "bg-muted" };
+  }, [safetyResult, result]);
 
   const accessibilityScore = useMemo(() => {
-    if (!safetyResult) return null;
-    const { bus_stops, rail_stations, total_nodes } = safetyResult.transport_summary;
+    const safetyBus = safetyResult?.transport_summary?.bus_stops ?? 0;
+    const safetyRail = safetyResult?.transport_summary?.rail_stations ?? 0;
+    const scoreBus = result?.nearby_bus_stops ?? 0;
+    const scoreRail = result?.nearby_rail_stations ?? 0;
+    const bus_stops = Math.max(safetyBus, scoreBus);
+    const rail_stations = Math.max(safetyRail, scoreRail);
+    const total_nodes = bus_stops + rail_stations;
     const boosted = total_nodes + (rail_stations * 3); // rail boost
     if (boosted > 5) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
     if (boosted >= 2) return { label: "MEDIUM", score: 55, color: "text-amber-700", bg: "bg-amber-100" };
-    return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
-  }, [safetyResult]);
+    if (total_nodes > 0) return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
+    return { label: "NO DATA", score: 20, color: "text-muted-foreground", bg: "bg-muted" };
+  }, [safetyResult, result]);
 
   const safetyScore = useMemo(() => {
     if (!safetyResult) return null;
@@ -212,7 +226,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   // Master combined score
   const masterScore = useMemo(() => {
-    if (!rawMetrics || !safetyResult) return null;
+    if (!rawMetrics) return null;
     const tScore = trafficScore?.score ?? 50;
     const aScore = accessibilityScore?.score ?? 50;
     const sScore = safetyScore?.score ?? 50;
@@ -224,7 +238,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
     const clamped = Math.max(0, Math.min(100, combined));
     const verdict = clamped >= 65 ? "INSTALL" : clamped >= 40 ? "REVIEW" : "AVOID";
     return { score: clamped, verdict };
-  }, [rawMetrics, safetyResult, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
+  }, [rawMetrics, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
 
   const MASTER_VERDICT_CONFIG: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
     INSTALL: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Recommended for Installation" },
@@ -378,16 +392,22 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
               )}
 
               {/* ── Score Breakdown Bars ── */}
-              {safetyResult && (
+              {(safetyResult || result) && (
                 <div className="space-y-2">
                   <SectionHeader icon={Gauge} title="Score Breakdown" />
                   <div className="rounded-md border bg-muted/10 p-3 space-y-2.5">
-                    {[
-                      { label: "🚦 Traffic Demand", data: trafficScore, detail: `${safetyResult.traffic_summary.max_aadf.toLocaleString()} AADF` },
-                      { label: "🚶 Accessibility", data: accessibilityScore, detail: `${safetyResult.transport_summary.bus_stops} bus, ${safetyResult.transport_summary.rail_stations} rail` },
-                      { label: "⚡ Grid Feasibility", data: { label: band, score: viabilityIndex, color: verdict.color, bg: verdict.bg.split(" ")[0] }, detail: `${viabilityIndex}/100` },
-                      { label: "🛑 Safety", data: safetyScore, detail: `${safetyResult.accident_summary.total} incidents` },
-                    ].map((item) => (
+                    {(() => {
+                      const aadf = Math.max(safetyResult?.traffic_summary?.max_aadf ?? 0, result?.traffic_aadf ?? 0);
+                      const busCount = Math.max(safetyResult?.transport_summary?.bus_stops ?? 0, result?.nearby_bus_stops ?? 0);
+                      const railCount = Math.max(safetyResult?.transport_summary?.rail_stations ?? 0, result?.nearby_rail_stations ?? 0);
+                      const incidents = safetyResult?.accident_summary?.total ?? 0;
+                      return [
+                        { label: "🚦 Traffic Demand", data: trafficScore, detail: `${aadf.toLocaleString()} AADF` },
+                        { label: "🚶 Accessibility", data: accessibilityScore, detail: `${busCount} bus, ${railCount} rail` },
+                        { label: "⚡ Grid Feasibility", data: { label: band, score: viabilityIndex, color: verdict.color, bg: verdict.bg.split(" ")[0] }, detail: `${viabilityIndex}/100` },
+                        { label: "🛑 Safety", data: safetyScore, detail: `${incidents} incidents` },
+                      ];
+                    })().map((item) => (
                       <div key={item.label} className="space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] text-foreground">{item.label}</span>
