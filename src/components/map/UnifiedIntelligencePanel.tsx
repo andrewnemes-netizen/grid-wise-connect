@@ -226,7 +226,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   // Master combined score
   const masterScore = useMemo(() => {
-    if (!rawMetrics || !safetyResult) return null;
+    if (!rawMetrics) return null;
     const tScore = trafficScore?.score ?? 50;
     const aScore = accessibilityScore?.score ?? 50;
     const sScore = safetyScore?.score ?? 50;
@@ -238,7 +238,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
     const clamped = Math.max(0, Math.min(100, combined));
     const verdict = clamped >= 65 ? "INSTALL" : clamped >= 40 ? "REVIEW" : "AVOID";
     return { score: clamped, verdict };
-  }, [rawMetrics, safetyResult, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
+  }, [rawMetrics, trafficScore, accessibilityScore, safetyScore, viabilityIndex]);
 
   const MASTER_VERDICT_CONFIG: Record<string, { icon: typeof CheckCircle; color: string; bg: string; label: string }> = {
     INSTALL: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", label: "Recommended for Installation" },
