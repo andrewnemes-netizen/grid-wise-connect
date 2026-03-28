@@ -194,14 +194,14 @@ async function geocodePostcode(postcode: string): Promise<{ lng: number; lat: nu
 }
 
 // ── Spatial query helpers ──
-async function queryNearbyPoints(supabase: any, layerId: string, lng: number, lat: number, radiusM: number, limit = 50): Promise<any[]> {
+async function queryNearbyPoints(supabase: any, slug: string, lng: number, lat: number, radiusM: number, limit = 50): Promise<any[]> {
   try {
     const { data, error } = await supabase.rpc("nearby_geo_points_by_slug", {
-      _layer_id: layerId,
-      _lng: lng,
-      _lat: lat,
-      _radius_m: radiusM,
-      _limit: limit,
+      p_slug: slug,
+      p_lng: lng,
+      p_lat: lat,
+      p_radius_m: radiusM,
+      p_limit: limit,
     });
     if (error) {
       console.error(`nearby query error for layer ${layerId}:`, error.message);
