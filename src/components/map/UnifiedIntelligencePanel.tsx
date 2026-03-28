@@ -71,6 +71,12 @@ interface ScoreResult {
     utilisation_band: string | null;
     distance_m?: number;
   }>;
+  // Traffic + Accessibility enrichment from score-site
+  traffic_aadf?: number;
+  traffic_count_points?: number;
+  nearby_bus_stops?: number;
+  nearby_rail_stations?: number;
+  nearby_transport_nodes?: number;
 }
 
 interface SafetyResult {
