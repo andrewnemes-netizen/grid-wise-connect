@@ -172,14 +172,14 @@ function processDataset(ds: any): Record<string, any> {
   const metas = meta.metas?.default || {};
   const fields = meta.fields || [];
 
-  // Detect geometry
-  const geoField = fields.find((f: any) =>
-    f.type === "geo_point_2d" || f.type === "geo_shape"
-  );
+  // Detect geometry — prefer geo_shape (actual polygons/lines) over geo_point_2d (centroid)
+  const geoShapeField = fields.find((f: any) => f.type === "geo_shape");
+  const geoPointField = fields.find((f: any) => f.type === "geo_point_2d");
+  const geoField = geoShapeField || geoPointField;
   const isGeospatial = !!geoField;
   const geometryField = geoField?.name || null;
   const geometryType = geoField?.type === "geo_point_2d" ? "Point" :
-    geoField?.type === "geo_shape" ? "Geometry" : null;
+    geoField?.type === "geo_shape" ? "Polygon" : null;
 
   // Build endpoint URLs
   const endpointBase = `${BASE_URL}/catalog/datasets/${datasetId}`;
@@ -211,11 +211,14 @@ function processDataset(ds: any): Record<string, any> {
   let storageTable = "geo_points";
   if (!isGeospatial) {
     storageTable = "geo_points"; // tabular, will need special handling
+  } else if (geoShapeField && !geoPointField) {
+    // Shape-only → polygons (could be lines, corrected at ingest)
+    storageTable = "geo_polygons";
+  } else if (geoShapeField && geoPointField) {
+    // Both fields → the shape has the real geometry, points are centroids
+    storageTable = "geo_polygons";
   } else if (geometryType === "Point") {
     storageTable = "geo_substations";
-  } else if (geoField?.type === "geo_shape") {
-    // Could be polygon or line — we'll detect at ingest time
-    storageTable = "geo_polygons";
   }
 
   return {

@@ -118,24 +118,39 @@ Deno.serve(async (req) => {
     try {
       if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
         // ── Export-based GeoJSON full refresh ──
-        try {
-          const result = await ingestViaGeoJsonExport(
-            supabase, entry, layerRow, storageTable, apiKey
+        // Check if layer expects non-point geometry — GeoJSON exports often only have centroids
+        const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
+        
+        if (layerNeedsShape) {
+          // Skip GeoJSON export (it only has centroids), go straight to records mode 
+          // which can extract geo_shape fields properly
+          console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
+          const result = await ingestViaRecords(
+            supabase, entry, layerRow, storageTable, apiKey,
+            { where, select: selectFields, order_by }
           );
           totalInserted = result.inserted;
           totalSkipped = result.skipped;
-        } catch (exportErr) {
-          const errMsg = String(exportErr);
-          if (errMsg.includes("Memory limit") || errMsg.includes("CPU Time")) {
-            console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
-            const result = await ingestViaRecords(
-              supabase, entry, layerRow, storageTable, apiKey,
-              { where, select: selectFields, order_by }
+        } else {
+          try {
+            const result = await ingestViaGeoJsonExport(
+              supabase, entry, layerRow, storageTable, apiKey
             );
             totalInserted = result.inserted;
             totalSkipped = result.skipped;
-          } else {
-            throw exportErr;
+          } catch (exportErr) {
+            const errMsg = String(exportErr);
+            if (errMsg.includes("Memory limit") || errMsg.includes("CPU Time")) {
+              console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
+              const result = await ingestViaRecords(
+                supabase, entry, layerRow, storageTable, apiKey,
+                { where, select: selectFields, order_by }
+              );
+              totalInserted = result.inserted;
+              totalSkipped = result.skipped;
+            } else {
+              throw exportErr;
+            }
           }
         }
 
@@ -595,24 +610,16 @@ function parseNum(v: any): number | null {
 }
 
 async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 3): Promise<Response> {
-  const headers: Record<string, string> = {};
-  if (apiKey) headers["Authorization"] = `Apikey ${apiKey}`;
+  // Always use query param auth for export URLs (ODS export endpoints often reject header auth)
+  let effectiveUrl = url;
+  if (apiKey && !url.includes("apikey=")) {
+    const separator = url.includes("?") ? "&" : "?";
+    effectiveUrl = `${url}${separator}apikey=${apiKey}`;
+  }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const resp = await fetch(url, { headers });
-
-      // If 403 with header auth, retry once with query param auth
-      if (resp.status === 403 && apiKey && attempt === 0 && !url.includes("apikey=")) {
-        await resp.text();
-        const separator = url.includes("?") ? "&" : "?";
-        const fallbackUrl = `${url}${separator}apikey=${apiKey}`;
-        console.warn(`[ingest] Header auth returned 403, retrying with query param: ${fallbackUrl}`);
-        const fallbackResp = await fetch(fallbackUrl);
-        if (fallbackResp.ok) return fallbackResp;
-        await fallbackResp.text();
-        // Fall through to normal retry logic
-      }
+      const resp = await fetch(effectiveUrl);
 
       if (resp.status === 429) {
         const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;

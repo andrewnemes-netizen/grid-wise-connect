@@ -50,6 +50,7 @@ interface DatasetEntry {
 export function NpgDatasetRegistry() {
   const queryClient = useQueryClient();
   const [crawling, setCrawling] = useState(false);
+  const [syncAllRunning, setSyncAllRunning] = useState(false);
   const [search, setSearch] = useState("");
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
@@ -174,6 +175,27 @@ export function NpgDatasetRegistry() {
     queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
   };
 
+  // Active+linked datasets for "Sync All"
+  const activeLinkedDatasets = datasets.filter(d => d.active && d.linked_layer_id);
+
+  // ── Sync All Active ──
+  const handleSyncAll = async () => {
+    setSyncAllRunning(true);
+    let successCount = 0;
+    let failCount = 0;
+    for (const ds of activeLinkedDatasets) {
+      try {
+        await handleIngest(ds, "export");
+        successCount++;
+      } catch {
+        failCount++;
+      }
+    }
+    toast.success(`Sync All complete: ${successCount} succeeded, ${failCount} failed`);
+    setSyncAllRunning(false);
+    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+  };
+
   // Filtering
   const filtered = datasets.filter(ds => {
     if (search && !ds.title.toLowerCase().includes(search.toLowerCase()) &&
@@ -216,10 +238,21 @@ export function NpgDatasetRegistry() {
                 Auto-discovered from northernpowergrid.opendatasoft.com — Explore API v2.1
               </CardDescription>
             </div>
-            <Button onClick={handleCrawl} disabled={crawling} size="sm">
-              {crawling ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Radar className="h-4 w-4 mr-1" />}
-              {crawling ? "Crawling…" : "Discover All Datasets"}
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={handleCrawl} disabled={crawling} size="sm">
+                {crawling ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Radar className="h-4 w-4 mr-1" />}
+                {crawling ? "Crawling…" : "Discover All Datasets"}
+              </Button>
+              <Button
+                onClick={handleSyncAll}
+                disabled={syncAllRunning || activeLinkedDatasets.length === 0}
+                size="sm"
+                variant="outline"
+              >
+                {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
+                {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedDatasets.length})`}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pb-3">
@@ -357,21 +390,47 @@ export function NpgDatasetRegistry() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Select
-                              value={ds.linked_layer_id || ""}
-                              onValueChange={v => handleLinkLayer(ds.id, v)}
-                            >
-                              <SelectTrigger className="w-[160px] h-7 text-[10px]">
-                                <SelectValue placeholder="Link layer…" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {layers.map(l => (
-                                  <SelectItem key={l.id} value={l.id} className="text-xs">
-                                    {l.display_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            {(() => {
+                              const linkedLayer = ds.linked_layer_id ? layers.find(l => l.id === ds.linked_layer_id) : null;
+                              const hasMismatch = linkedLayer && ds.storage_table && linkedLayer.storage_table !== ds.storage_table;
+                              return (
+                                <div className="space-y-0.5">
+                                  <Select
+                                    value={ds.linked_layer_id || ""}
+                                    onValueChange={v => handleLinkLayer(ds.id, v)}
+                                  >
+                                    <SelectTrigger className="w-[160px] h-7 text-[10px]">
+                                      <SelectValue placeholder="Link layer…" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {layers.map(l => (
+                                        <SelectItem key={l.id} value={l.id} className="text-xs">
+                                          {l.display_name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {hasMismatch && (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="outline" className="text-[9px] text-amber-600 border-amber-400">
+                                          <AlertTriangle className="h-2 w-2 mr-0.5" />
+                                          Table mismatch
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs text-xs">
+                                        Dataset suggests <strong>{ds.storage_table}</strong> but layer uses <strong>{linkedLayer?.storage_table}</strong>. Ingest uses the layer's table.
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {!ds.is_geospatial && ds.linked_layer_id && (
+                                    <Badge variant="outline" className="text-[9px] text-blue-600 border-blue-400">
+                                      Enrichment only
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <SyncStatus ds={ds} />
