@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +14,15 @@ import {
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
+import { estimateConnectionCost } from "@/lib/connectionCosts";
+
+function formatGBP(amount: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
 const scoreConfig: Record<string, { icon: typeof CheckCircle; color: string; bg: string }> = {
   GREEN: { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
@@ -82,7 +92,52 @@ const SiteDetail = () => {
   const reinforcementProb = raw.reinforcement_probability ?? site.reinforcement_probability ?? null;
   const costBand = raw.cost_band || site.cost_band || null;
   const nearestSubstations = raw.nearest_substations || raw.nearestSubstations || [];
-  const distances = raw.distances || null;
+  const distances = useMemo(() => {
+    const source = raw.distances || site.connection_options || raw.connection_options;
+    if (!source || typeof source !== "object") return null;
+    const primary = Number((source as any).primary_m);
+    const feeder = Number((source as any).feeder_m);
+    const capacity = Number((source as any).capacity_segment_m);
+    if (![primary, feeder, capacity].every((v) => Number.isFinite(v))) return null;
+    return {
+      primary_m: primary,
+      feeder_m: feeder,
+      capacity_segment_m: capacity,
+    };
+  }, [raw.distances, raw.connection_options, site.connection_options]);
+
+  const persistedEstimate = raw.cost_estimate || raw.costEstimate || null;
+  const fallbackTotalEstimate = Number(raw.total_estimate ?? raw.totalEstimate);
+
+  const costEstimate = useMemo(() => {
+    if (persistedEstimate?.total_estimate != null) return persistedEstimate;
+    if (Number.isFinite(fallbackTotalEstimate)) {
+      return {
+        total_estimate: fallbackTotalEstimate,
+        confidence: raw.cost_confidence || raw.confidence || null,
+      };
+    }
+    if (!distances || !site.proposed_kw || site.proposed_kw <= 0) return null;
+    return estimateConnectionCost({
+      proposed_kw: site.proposed_kw,
+      distances,
+      constraints,
+      nearest_headroom_kw: nearestSubstations?.[0]?.transformer_headroom_kw ?? undefined,
+    }, unitRates);
+  }, [
+    persistedEstimate,
+    fallbackTotalEstimate,
+    raw.cost_confidence,
+    raw.confidence,
+    distances,
+    site.proposed_kw,
+    constraints,
+    nearestSubstations,
+    unitRates,
+  ]);
+
+  const totalEstimate = typeof costEstimate?.total_estimate === "number" ? costEstimate.total_estimate : null;
+  const costConfidence = costEstimate?.confidence || null;
   const constraints = raw.constraints || null;
   const connectionOptions = (site.connection_options || raw.connection_options) as any;
 
@@ -100,7 +155,7 @@ const SiteDetail = () => {
         score: site.score || "AMBER",
         reasons,
         nextSteps,
-        distances,
+        distances: distances || undefined,
         constraints,
         masterScore,
         masterVerdict,
@@ -224,6 +279,8 @@ const SiteDetail = () => {
             {feederConstraintRisk && <div className="flex justify-between"><span className="text-muted-foreground">Feeder Constraint Risk</span><span>{feederConstraintRisk}</span></div>}
             {reinforcementProb != null && <div className="flex justify-between"><span className="text-muted-foreground">Reinforcement Probability</span><span>{reinforcementProb}%</span></div>}
             {costBand && <div className="flex justify-between"><span className="text-muted-foreground">Cost Band</span><span>{costBand}</span></div>}
+            {totalEstimate != null && <div className="flex justify-between"><span className="text-muted-foreground">Estimated Cost</span><span className="font-semibold">{formatGBP(totalEstimate)}</span></div>}
+            {costConfidence && <div className="flex justify-between"><span className="text-muted-foreground">Estimate Confidence</span><span className="capitalize">{costConfidence}</span></div>}
             {!bestPoc && !recommendedVoltage && <p className="text-xs text-muted-foreground">No connection strategy data</p>}
           </CardContent>
         </Card>
