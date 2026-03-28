@@ -71,6 +71,8 @@ function CableDrawingBar({ vertices, onUndo, onFinish }: { vertices: [number, nu
 
 const MapView = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { toast: mapToast } = useToast();
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
   const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "streetview" | null>(null);
