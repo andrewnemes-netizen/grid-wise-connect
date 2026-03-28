@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 import { estimateConnectionCost, generateBom } from "@/lib/connectionCosts";
 import type { VoltageOverride } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
 
 export interface ActiveStudy {
   id: string;
@@ -28,6 +29,7 @@ export function useActiveStudy() {
   const studyId = searchParams.get("study");
   const [study, setStudy] = useState<ActiveStudy | null>(null);
   const [loading, setLoading] = useState(false);
+  const { data: unitRates } = useUnitRates();
 
   useEffect(() => {
     if (!studyId) {

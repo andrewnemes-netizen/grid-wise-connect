@@ -120,24 +120,154 @@ function getReinforcementProbability(headroom: number | null, proposedKw: number
   return 90;
 }
 
-function estimateTotalCost(proposedKw: number, distances: { primary_m: number; feeder_m: number; capacity_segment_m: number }, headroom: number | null): { total: number; confidence: string } {
+// Unit rates type matching the DB table / client-side engine
+interface UnitRatesRow {
+  cable_lv_per_m: number; cable_hv_per_m: number; cable_ehv_per_m: number;
+  duct_per_m: number;
+  excavation_footway_per_m: number; excavation_carriageway_per_m: number; excavation_verge_per_m: number;
+  jointing_each: number; jointing_lv_each: number; termination_each: number;
+  switchgear_ring_main: number; switchgear_circuit_breaker: number;
+  transformer_500kva: number; transformer_1000kva: number; transformer_1500kva: number;
+  metering_ct: number; metering_wc: number;
+  feeder_pillar_each: number; cutout_100a_3ph: number;
+  earthing_lot: number; transformer_plinth_each: number; cable_marker_tape_per_m: number;
+  design_fee_pct: number; project_management_pct: number; contingency_pct: number;
+  reinforcement_per_kw_over_capacity: number;
+  lv_joint_team_day: number;
+  joint_bay_soft: number; joint_bay_footway: number; joint_bay_carriageway: number;
+  cable_joint_kit_185mm: number; cable_joint_kit_pot_end: number;
+  service_cable_35mm_per_m: number; mains_extension_threshold_m: number;
+}
+
+// Hardcoded defaults matching src/lib/connectionCosts.ts DEFAULT_UNIT_RATES
+const FALLBACK_RATES: UnitRatesRow = {
+  cable_lv_per_m: 85, cable_hv_per_m: 145, cable_ehv_per_m: 280,
+  duct_per_m: 12,
+  excavation_footway_per_m: 120, excavation_carriageway_per_m: 210, excavation_verge_per_m: 65,
+  jointing_each: 2800, jointing_lv_each: 366, termination_each: 450,
+  switchgear_ring_main: 18500, switchgear_circuit_breaker: 35000,
+  transformer_500kva: 22000, transformer_1000kva: 38000, transformer_1500kva: 52000,
+  metering_ct: 4500, metering_wc: 1200,
+  feeder_pillar_each: 3200, cutout_100a_3ph: 850,
+  earthing_lot: 3500, transformer_plinth_each: 4200, cable_marker_tape_per_m: 2,
+  design_fee_pct: 0.08, project_management_pct: 0.06, contingency_pct: 0.10,
+  reinforcement_per_kw_over_capacity: 85,
+  lv_joint_team_day: 1620,
+  joint_bay_soft: 850, joint_bay_footway: 1330, joint_bay_carriageway: 2360,
+  cable_joint_kit_185mm: 366.23, cable_joint_kit_pot_end: 182.53,
+  service_cable_35mm_per_m: 8.50, mains_extension_threshold_m: 25,
+};
+
+/**
+ * Mirrors estimateConnectionCost from src/lib/connectionCosts.ts
+ * Uses admin-configured unit_rates from the database.
+ */
+function estimateTotalCost(
+  proposedKw: number,
+  distances: { primary_m: number; feeder_m: number; capacity_segment_m: number },
+  headroom: number | null,
+  r: UnitRatesRow,
+): { total: number; confidence: string } {
   const vl = proposedKw <= 80 ? "LV" : proposedKw <= 1500 ? "HV" : "EHV";
-  const cableRate = vl === "LV" ? 85 : vl === "HV" ? 145 : 280;
   const rawDist = vl === "LV" ? distances.capacity_segment_m : vl === "HV" ? distances.feeder_m : distances.primary_m;
   const maxDist = vl === "LV" ? 500 : vl === "HV" ? 3000 : 5000;
   const dist = Math.min(rawDist, maxDist);
 
-  const cable = dist * cableRate;
-  const excavation = dist * (0.6 * 120 + 0.3 * 210 + 0.1 * 65);
-  const joints = Math.max(2, Math.ceil(dist / 250)) * 2800;
-  const switchgear = vl !== "LV" ? 18500 : 0;
-  const tx = proposedKw <= 500 ? 22000 : proposedKw <= 1000 ? 38000 : Math.ceil(proposedKw / 1500) * 52000;
-  const metering = vl === "LV" ? 1200 : 4500;
-  let reinforcement = 0;
-  if (headroom !== null && proposedKw > headroom) reinforcement = (proposedKw - headroom) * 85;
+  // Surface split: 60% footway, 30% carriageway, 10% verge (same default as main engine)
+  const footwayM = Math.round(dist * 0.6);
+  const carriagewayM = Math.round(dist * 0.3);
+  const vergeM = Math.round(dist * 0.1);
 
-  const subtotal = cable + excavation + joints + switchgear + tx + metering + reinforcement;
-  const total = Math.round(subtotal * 1.24);
+  const threshold = r.mains_extension_threshold_m;
+  const needsMainsExtension = vl === "LV" && dist > threshold;
+
+  // --- CABLE (material) ---
+  let cableCost = 0;
+  if (vl === "LV") {
+    const serviceCableLen = needsMainsExtension ? threshold : dist;
+    cableCost += serviceCableLen * r.service_cable_35mm_per_m;
+    if (needsMainsExtension) {
+      const mainsLen = dist - threshold;
+      cableCost += mainsLen * 48.0; // 185mm² 4c XLPE/SWA mains extension
+    }
+  } else {
+    const cableRate = vl === "HV" ? r.cable_hv_per_m : r.cable_ehv_per_m;
+    cableCost = dist * cableRate;
+  }
+  // Ducting
+  cableCost += dist * r.duct_per_m;
+
+  // --- EXCAVATION ---
+  const excavation = footwayM * r.excavation_footway_per_m
+    + carriagewayM * r.excavation_carriageway_per_m
+    + vergeM * r.excavation_verge_per_m;
+
+  // --- EQUIPMENT ---
+  let equipment = 0;
+
+  // Joint bay + cable joint kit (LV mains extension only)
+  if (needsMainsExtension) {
+    equipment += r.joint_bay_footway; // dominant surface
+    equipment += r.cable_joint_kit_185mm;
+  }
+
+  // Joints
+  if (vl !== "LV") {
+    const jointCount = Math.max(2, Math.ceil(dist / 250));
+    equipment += jointCount * r.jointing_each;
+  } else {
+    equipment += r.cable_joint_kit_pot_end; // pot end
+  }
+
+  // Terminations
+  equipment += 2 * r.termination_each;
+
+  // Switchgear — HV/EHV only
+  if (vl !== "LV") equipment += r.switchgear_ring_main;
+
+  // LV endpoint equipment
+  if (vl === "LV") equipment += r.feeder_pillar_each + r.cutout_100a_3ph;
+
+  // Transformer — HV/EHV ONLY (NOT LV)
+  if (vl !== "LV") {
+    if (proposedKw <= 500) equipment += r.transformer_500kva;
+    else if (proposedKw <= 1000) equipment += r.transformer_1000kva;
+    else equipment += Math.ceil(proposedKw / 1500) * r.transformer_1500kva;
+  }
+
+  // Metering
+  equipment += vl === "LV" ? r.metering_wc : r.metering_ct;
+
+  // Earthing & plinth — HV/EHV only
+  if (vl !== "LV") {
+    equipment += r.earthing_lot;
+    equipment += r.transformer_plinth_each;
+  }
+
+  // Cable marker tape
+  equipment += dist * r.cable_marker_tape_per_m;
+
+  // --- LABOUR ---
+  let labourDays = Math.max(0.5, (dist / 100) * 0.5); // cable pulling
+  const jointCount = vl !== "LV" ? Math.max(2, Math.ceil(dist / 250)) : 1;
+  labourDays += (jointCount + (needsMainsExtension ? 1 : 0)) * 0.5; // jointing
+  labourDays += 2 * 0.25; // terminations
+  labourDays += 0.5; // testing
+  if (needsMainsExtension) labourDays += 0.5;
+  labourDays = Math.round(labourDays * 2) / 2;
+  const labourCost = Math.round(labourDays * r.lv_joint_team_day);
+
+  // --- REINFORCEMENT ---
+  let reinforcement = 0;
+  if (headroom !== null && proposedKw > headroom) {
+    reinforcement = (proposedKw - headroom) * r.reinforcement_per_kw_over_capacity;
+  }
+
+  const subtotal = cableCost + excavation + equipment + labourCost + reinforcement;
+  const designFee = Math.round(subtotal * r.design_fee_pct);
+  const pmFee = Math.round(subtotal * r.project_management_pct);
+  const contingency = Math.round(subtotal * r.contingency_pct);
+  const total = Math.round(subtotal + designFee + pmFee + contingency);
   const confidence = dist < 500 ? "high" : dist < 1500 ? "medium" : "low";
   return { total, confidence };
 }
