@@ -138,8 +138,14 @@ export function NpgDatasetRegistry() {
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
-      toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      if (result.accepted) {
+        toast.info(`Ingestion started for ${entry.title} — processing in background`);
+        // Poll for completion
+        pollSyncStatus(entry.id, entry.title);
+      } else {
+        toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
+        queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      }
     } catch (err: any) {
       toast.error(`Ingest failed: ${err.message}`);
     } finally {
@@ -149,6 +155,31 @@ export function NpgDatasetRegistry() {
         return next;
       });
     }
+  };
+
+  // Poll registry for background ingest completion
+  const pollSyncStatus = async (entryId: string, title: string) => {
+    const maxPolls = 60; // 2 minutes max
+    for (let i = 0; i < maxPolls; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const { data } = await supabase
+        .from("dno_dataset_registry")
+        .select("last_sync_status, last_sync_rows, last_sync_error")
+        .eq("id", entryId)
+        .single();
+
+      if (!data || data.last_sync_status === "processing") continue;
+
+      if (data.last_sync_status === "success") {
+        toast.success(`✅ ${title}: ${data.last_sync_rows} features ingested`);
+      } else if (data.last_sync_status === "error") {
+        toast.error(`❌ ${title}: ${data.last_sync_error}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      return;
+    }
+    toast.warning(`${title}: Still processing — check back shortly`);
+    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
   };
 
   // ── Link layer ──
