@@ -203,6 +203,14 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
   };
 
   const errorRows = results.filter(r => r.error);
+  const portfolioReady = filtered.filter(r => !r.error && r.lng && r.lat);
+  const portfolioFail = filtered.filter(r => r.error || !r.lng || !r.lat);
+
+  const getPortfolioStatus = (r: ScoredRow) => {
+    if (r.error) return { ready: false, reason: `Error: ${r.error}` };
+    if (!r.lng || !r.lat) return { ready: false, reason: "Missing coordinates" };
+    return { ready: true, reason: "Ready" };
+  };
 
   const SortHeader = ({ label, k }: { label: string; k: SortKey }) => (
     <TableHead className="cursor-pointer select-none hover:bg-muted/50 text-xs" onClick={() => toggleSort(k)}>
