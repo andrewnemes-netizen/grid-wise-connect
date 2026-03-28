@@ -251,6 +251,39 @@ export async function addRegistryLayerToMap(
           20000, 9,
           50000, 13,
         ];
+      } else if (layer.slug === "stats19_accidents") {
+        // Severity-driven colour: Fatal=red, Serious=orange, Slight=yellow
+        circleColor = [
+          "match", ["coalesce", ["get", "severity"], "Slight"],
+          "Fatal", "#DC2626",
+          "Serious", "#EA580C",
+          "Slight", "#EAB308",
+          "#EAB308",
+        ];
+        circleRadius = [
+          "match", ["coalesce", ["get", "severity"], "Slight"],
+          "Fatal", 8,
+          "Serious", 6,
+          "Slight", 4,
+          4,
+        ];
+      } else if (layer.slug === "naptan_transport_nodes") {
+        // Node-type driven colour: bus=blue, rail=purple, tram=teal, ferry=cyan
+        circleColor = [
+          "match", ["coalesce", ["get", "node_type"], "bus"],
+          "bus", "#3B82F6",
+          "rail", "#7C3AED",
+          "tram", "#14B8A6",
+          "ferry", "#06B6D4",
+          "#3B82F6",
+        ];
+        circleRadius = [
+          "match", ["coalesce", ["get", "node_type"], "bus"],
+          "rail", 7,
+          "tram", 6,
+          "ferry", 6,
+          4,
+        ];
       }
 
       map.addLayer({

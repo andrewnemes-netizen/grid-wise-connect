@@ -79,6 +79,24 @@ const DNO_REGISTRY: DnoDef[] = [
       { key: "count_points", label: "Traffic Count Points (AADF)", dataset_id: "count-points", storage_table: "geo_points", geometry_type: "Point", expected_records: 23500 },
     ],
   },
+  {
+    key: "NAPTAN",
+    label: "NaPTAN Transport Nodes",
+    base_url: "https://naptan.api.dft.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "access_nodes", label: "Bus, Rail, Tram & Ferry Stops", dataset_id: "access-nodes", storage_table: "geo_points", geometry_type: "Point", expected_records: 400000 },
+    ],
+  },
+  {
+    key: "STATS19",
+    label: "DfT Road Accidents (STATS19)",
+    base_url: "https://data.dft.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "collisions", label: "Collision Data (Last 5 Years)", dataset_id: "road-casualty-statistics", storage_table: "geo_points", geometry_type: "Point", expected_records: 650000 },
+    ],
+  },
 ];
 
 const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
