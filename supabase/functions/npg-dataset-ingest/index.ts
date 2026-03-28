@@ -7,26 +7,10 @@ const corsHeaders = {
 };
 
 /**
- * NPG Dataset Ingest
+ * NPG Dataset Ingest — Background Processing Edition
  *
- * Ingests a single dataset from the NPG Opendatasoft portal using exports
- * (preferred for full refresh) or paginated records (for incremental/filtered).
- *
- * Supports:
- *   - Export-based full refresh via /exports/geojson or /exports/csv
- *   - Paginated records via /records with select, where, order_by, group_by
- *   - Automatic geometry promotion (LineString→Multi, Polygon→Multi)
- *   - Schema drift detection
- *   - Retry with exponential backoff
- *   - Rate limit handling
- *
- * Body params:
- *   registry_id  — UUID of the dno_dataset_registry row
- *   mode         — "export" (default) or "records"
- *   where        — optional ODS filter expression
- *   select       — optional field selection
- *   order_by     — optional sort
- *   limit        — optional limit for records mode
+ * Uses EdgeRuntime.waitUntil() to perform heavy ingestion in the background,
+ * returning immediately with a status update to avoid WORKER_LIMIT errors.
  */
 
 Deno.serve(async (req) => {
@@ -106,130 +90,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    const storageTable = layerRow.storage_table;
-    const apiKey = Deno.env.get("NPG_API_KEY") || null;
-
-    console.log(`[ingest] Starting ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
-
-    let totalInserted = 0;
-    let totalSkipped = 0;
-    let syncError: string | null = null;
-
-    try {
-      if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
-        // ── Export-based GeoJSON full refresh ──
-        // Check if layer expects non-point geometry — GeoJSON exports often only have centroids
-        const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
-        
-        if (layerNeedsShape) {
-          // Skip GeoJSON export (it only has centroids), go straight to records mode 
-          // which can extract geo_shape fields properly
-          console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
-          const result = await ingestViaRecords(
-            supabase, entry, layerRow, storageTable, apiKey,
-            { where, select: selectFields, order_by }
-          );
-          totalInserted = result.inserted;
-          totalSkipped = result.skipped;
-        } else {
-          try {
-            const result = await ingestViaGeoJsonExport(
-              supabase, entry, layerRow, storageTable, apiKey
-            );
-            totalInserted = result.inserted;
-            totalSkipped = result.skipped;
-          } catch (exportErr) {
-            const errMsg = String(exportErr);
-            if (errMsg.includes("Memory limit") || errMsg.includes("CPU Time")) {
-              console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
-              const result = await ingestViaRecords(
-                supabase, entry, layerRow, storageTable, apiKey,
-                { where, select: selectFields, order_by }
-              );
-              totalInserted = result.inserted;
-              totalSkipped = result.skipped;
-            } else {
-              throw exportErr;
-            }
-          }
-        }
-
-      } else if (mode === "export" && entry.endpoint_export_csv) {
-        // ── Export-based CSV full refresh (tabular datasets) ──
-        const result = await ingestViaCsvExport(
-          supabase, entry, layerRow, storageTable, apiKey
-        );
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
-
-      } else {
-        // ── Paginated records fallback ──
-        const result = await ingestViaRecords(
-          supabase, entry, layerRow, storageTable, apiKey,
-          { where, select: selectFields, order_by }
-        );
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
-      }
-    } catch (err) {
-      syncError = String(err);
-      console.error(`[ingest] Error:`, err);
-    }
-
-    // Update feature count on the layer
-    const { count } = await supabase
-      .from(storageTable)
-      .select("*", { count: "exact", head: true })
-      .eq("layer_id", entry.linked_layer_id);
-
-    await supabase
-      .from("layer_registry")
-      .update({ feature_count: count ?? 0, updated_at: new Date().toISOString() })
-      .eq("id", entry.linked_layer_id);
-
-    // Update registry entry with sync status
+    // Mark as processing immediately
     await supabase
       .from("dno_dataset_registry")
       .update({
-        last_sync_at: new Date().toISOString(),
-        last_sync_status: syncError ? "error" : "success",
-        last_sync_rows: totalInserted,
-        last_sync_error: syncError,
+        last_sync_status: "processing",
+        last_sync_error: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", registry_id);
 
-    // Audit
-    await supabase.from("audit_log").insert({
-      action: "npg_dataset_ingest",
-      user_id: user.id,
-      meta_json: {
-        registry_id,
-        dataset_id: entry.dataset_id,
-        mode,
-        inserted: totalInserted,
-        skipped: totalSkipped,
-        error: syncError,
-      },
-    });
+    const storageTable = layerRow.storage_table;
+    const apiKey = Deno.env.get("NPG_API_KEY") || null;
 
-    if (syncError) {
-      return new Response(JSON.stringify({
-        error: syncError,
-        inserted: totalInserted,
-        skipped: totalSkipped,
-      }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 
+    // Offload heavy work to background via EdgeRuntime.waitUntil
+    EdgeRuntime.waitUntil(
+      performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by })
+    );
+
+    // Return immediately
     return new Response(JSON.stringify({
-      success: true,
+      accepted: true,
       dataset_id: entry.dataset_id,
-      mode,
-      inserted: totalInserted,
-      skipped: totalSkipped,
-      total_in_layer: count,
+      status: "processing",
+      message: "Ingestion started in background. Check sync status for progress.",
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -241,6 +127,98 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// ─── Background Processing ──────────────────────────────────────────────────
+
+async function performIngest(
+  supabase: any, entry: any, layerRow: any, storageTable: string,
+  apiKey: string | null, userId: string, registryId: string,
+  mode: string, opts: { where?: string; select?: string; order_by?: string }
+) {
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let syncError: string | null = null;
+
+  try {
+    const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
+
+    if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
+      if (layerNeedsShape) {
+        // Skip GeoJSON export (centroids only), use records mode for geo_shape
+        console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
+        const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+      } else {
+        try {
+          const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+          totalInserted = result.inserted;
+          totalSkipped = result.skipped;
+        } catch (exportErr) {
+          const errMsg = String(exportErr);
+          console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
+          const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
+          totalInserted = result.inserted;
+          totalSkipped = result.skipped;
+        }
+      }
+    } else if (mode === "export" && entry.endpoint_export_csv) {
+      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+    } else {
+      const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+    }
+  } catch (err) {
+    syncError = String(err);
+    console.error(`[ingest] Error:`, err);
+  }
+
+  // Update feature count on the layer
+  try {
+    const { count } = await supabase
+      .from(storageTable)
+      .select("*", { count: "exact", head: true })
+      .eq("layer_id", entry.linked_layer_id);
+
+    await supabase
+      .from("layer_registry")
+      .update({ feature_count: count ?? 0, updated_at: new Date().toISOString() })
+      .eq("id", entry.linked_layer_id);
+  } catch (e) {
+    console.error("[ingest] Failed to update feature count:", e);
+  }
+
+  // Update registry entry with sync status
+  await supabase
+    .from("dno_dataset_registry")
+    .update({
+      last_sync_at: new Date().toISOString(),
+      last_sync_status: syncError ? "error" : "success",
+      last_sync_rows: totalInserted,
+      last_sync_error: syncError,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", registryId);
+
+  // Audit
+  await supabase.from("audit_log").insert({
+    action: "npg_dataset_ingest",
+    user_id: userId,
+    meta_json: {
+      registry_id: registryId,
+      dataset_id: entry.dataset_id,
+      mode,
+      inserted: totalInserted,
+      skipped: totalSkipped,
+      error: syncError,
+    },
+  });
+
+  console.log(`[ingest] Background done. Dataset: ${entry.dataset_id}, Inserted: ${totalInserted}, Skipped: ${totalSkipped}, Error: ${syncError || "none"}`);
+}
 
 // ─── GeoJSON Export Ingestion ────────────────────────────────────────────────
 async function ingestViaGeoJsonExport(
@@ -260,7 +238,6 @@ async function ingestViaGeoJsonExport(
 
   if (features.length === 0) return { inserted: 0, skipped: 0 };
 
-  // Dynamic batch size based on geometry complexity
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
@@ -351,7 +328,6 @@ async function ingestViaRecords(
   let totalSkipped = 0;
 
   while (true) {
-    // Build URL with query params
     const params = new URLSearchParams();
     params.set("limit", String(batchSize));
     params.set("offset", String(offset));
@@ -391,10 +367,8 @@ async function ingestViaRecords(
 
     offset += records.length;
 
-    // Opendatasoft caps offset+limit at 10000
     const totalCount = data.total_count || 0;
     if (records.length < batchSize || offset >= totalCount) break;
-    // Clamp to API limit
     if (offset + batchSize > 10000) {
       console.warn(`[ingest] Hit 10k record API cap at offset ${offset}`);
       break;
@@ -408,7 +382,6 @@ async function ingestViaRecords(
 
 // ─── Mapping Helpers ─────────────────────────────────────────────────────────
 
-/** Map a GeoJSON Feature to the batch insert format */
 function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom = feature.geometry;
   if (!geom || !geom.type || !geom.coordinates) return null;
@@ -439,20 +412,17 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
   };
 }
 
-/** Map an ODS record (from /records endpoint) to batch insert format */
 function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
-  const prefersPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
+  const prefersPolygon = ["geo_polygons", "geo_constraints", "geo_feeders", "geo_cables"].includes(storageTable);
 
   if (prefersPolygon) {
-    // For polygon/constraint tables, try geo_shape first (contains actual polygons)
     if (rec.geo_shape) {
       const shape = rec.geo_shape;
       geom = shape.geometry || shape;
       if (!geom?.type || !geom?.coordinates) geom = null;
     }
-    // Fallback to geo_point_2d
     if (!geom && rec.geo_point_2d) {
       const gp = rec.geo_point_2d;
       if (typeof gp === "string") {
@@ -463,7 +433,6 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
       }
     }
   } else {
-    // For point/line tables, try geo_point_2d first (faster)
     if (rec.geo_point_2d) {
       const gp = rec.geo_point_2d;
       if (typeof gp === "string") {
@@ -473,7 +442,6 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
         geom = { type: "Point", coordinates: [gp.lon, gp.lat] };
       }
     }
-    // Fallback to geo_shape
     if (!geom && rec.geo_shape) {
       const shape = rec.geo_shape;
       geom = shape.geometry || shape;
@@ -481,7 +449,6 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
     }
   }
 
-  // Try named geometry field from registry
   if (!geom && entry.geometry_field && rec[entry.geometry_field]) {
     const field = rec[entry.geometry_field];
     if (field.lat != null && field.lon != null) {
@@ -498,7 +465,6 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
   geom = promoteGeometry(geom, storageTable);
   if (!geom) return null;
 
-  // Build attrs from all non-geometry fields
   const attrs: Record<string, any> = {};
   const skipKeys = new Set(["geo_point_2d", "geo_shape", entry.geometry_field]);
   for (const [key, val] of Object.entries(rec)) {
@@ -528,11 +494,9 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
   };
 }
 
-/** Map a CSV row to batch insert format */
 function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
-  // Try lat/lon or geo_point_2d columns
   if (row.geo_point_2d) {
     const parts = String(row.geo_point_2d).split(",").map((s: string) => Number(s.trim()));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -591,7 +555,6 @@ function promoteGeometry(geom: any, storageTable: string): any | null {
     geom = { type: "MultiPolygon", coordinates: [geom.coordinates] };
   }
 
-  // Validate family match
   if (target !== "Geometry") {
     const geomFamily = geom.type.replace("Multi", "");
     const targetFamily = target.replace("Multi", "");
@@ -610,7 +573,6 @@ function parseNum(v: any): number | null {
 }
 
 async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 3): Promise<Response> {
-  // Always use query param auth for export URLs (ODS export endpoints often reject header auth)
   let effectiveUrl = url;
   if (apiKey && !url.includes("apikey=")) {
     const separator = url.includes("?") ? "&" : "?";
@@ -645,17 +607,16 @@ async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 
   throw new Error(`Failed to fetch ${url} after ${maxRetries} retries`);
 }
 
-/** Returns optimal batch size based on geometry complexity of the target table */
 function getBatchSize(storageTable: string): number {
   switch (storageTable) {
     case "geo_polygons":
     case "geo_constraints":
-      return 50;  // Complex geometries - prevent statement timeout
+      return 50;
     case "geo_feeders":
     case "geo_cables":
-      return 200; // Line geometries - moderate complexity
+      return 200;
     default:
-      return 500; // Points and substations - simple geometries
+      return 500;
   }
 }
 
@@ -663,7 +624,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/** Minimal CSV parser — handles quoted fields */
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split("\n");
   if (lines.length < 2) return [];
