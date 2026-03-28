@@ -23,6 +23,8 @@ interface SiteInput {
   postcode: string;
   proposed_kw: number;
   site_type?: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface ScoredRow {
@@ -259,7 +261,10 @@ Deno.serve(async (req) => {
     for (let i = 0; i < sites.length; i += BATCH_SIZE) {
       const batch = sites.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.allSettled(batch.map(async (site): Promise<ScoredRow> => {
-        const geo = await geocodePostcode(site.postcode);
+        // Use provided lat/lng if available, otherwise geocode the postcode
+        const geo = (site.lat && site.lng)
+          ? { lng: site.lng, lat: site.lat }
+          : await geocodePostcode(site.postcode);
         if (!geo) {
           return {
             site_name: site.site_name, postcode: site.postcode, proposed_kw: site.proposed_kw,
