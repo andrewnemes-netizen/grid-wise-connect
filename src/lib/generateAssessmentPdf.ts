@@ -137,6 +137,8 @@ interface PdfInput {
   bestPoc?: string | null;
   /** Nearest substations array */
   nearestSubstations?: SubstationInfo[];
+  /** Map screenshot (base64 data URL) showing infrastructure around the site */
+  locationMapScreenshot?: string | null;
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -247,6 +249,111 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
   }
 
   // ── HEADER BAR ──
+  // ── LOCATION MAP PAGE (after cover, before content) ──
+  if (input.locationMapScreenshot) {
+    addHeaderBar();
+    sectionTitle("Location & Infrastructure Overview");
+
+    try {
+      const imgW = contentW;
+      const imgH = imgW * 0.65; // ~landscape ratio
+      checkPage(imgH + 50);
+      doc.addImage(input.locationMapScreenshot, "PNG", margin, y, imgW, imgH);
+
+      // North arrow (top-right of map)
+      const naX = margin + imgW - 8;
+      const naY = y + 4;
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(naX - 4, naY - 3, 8, 12, 1, 1, "F");
+      doc.setDrawColor(BRAND.grey);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(naX - 4, naY - 3, 8, 12, 1, 1, "S");
+      doc.setFillColor(BRAND.black);
+      doc.triangle(naX, naY, naX - 2.5, naY + 5, naX + 2.5, naY + 5, "F");
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.black);
+      doc.text("N", naX, naY + 8, { align: "center" });
+
+      // Scale bar (bottom-left of map)
+      const sbX = margin + 6;
+      const sbY = y + imgH - 6;
+      const mapSpanM = 800; // ~800m span for pin-centred view
+      const scaleM = 200;
+      const barW = (scaleM / mapSpanM) * imgW;
+      const clampedBarW = Math.min(Math.max(barW, 12), 40);
+
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "F");
+      doc.setDrawColor(BRAND.grey);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "S");
+      doc.setDrawColor(BRAND.black);
+      doc.setLineWidth(0.6);
+      doc.line(sbX, sbY, sbX + clampedBarW, sbY);
+      doc.line(sbX, sbY - 1.5, sbX, sbY + 0.5);
+      doc.line(sbX + clampedBarW, sbY - 1.5, sbX + clampedBarW, sbY + 0.5);
+      doc.setFontSize(5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.black);
+      doc.text("200 m", sbX + clampedBarW / 2, sbY - 1.5, { align: "center" });
+
+      y += imgH + 6;
+    } catch (e) {
+      console.warn("Failed to add location map to PDF:", e);
+    }
+
+    // Legend for location map
+    const locationLegend = [
+      { label: "Site Location", color: "#e74c3c", type: "circle" as const },
+      { label: "Connection Lines", color: "#9b59b6", type: "line" as const },
+      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
+      { label: "EHV Feeders", color: "#8b5cf6", type: "line" as const },
+      { label: "Substations", color: "#3b82f6", type: "circle" as const },
+      { label: "NDP Projects", color: "#f59e0b", type: "circle" as const },
+      { label: "Constraints", color: "#dc2626", type: "line" as const },
+    ];
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.grey);
+    doc.text("MAP KEY", margin + 2, y);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.black);
+    // Render legend in 2 columns
+    const colW2 = contentW / 2;
+    locationLegend.forEach((item, i) => {
+      const col = i < 4 ? 0 : 1;
+      const row = i < 4 ? i : i - 4;
+      const lx = margin + col * colW2;
+      const ly = y + row * 4.5;
+      if (item.type === "circle") {
+        doc.setFillColor(item.color);
+        doc.circle(lx + 4, ly - 1, 1.8, "F");
+      } else {
+        doc.setDrawColor(item.color);
+        doc.setLineWidth(1);
+        doc.line(lx + 1, ly - 1, lx + 7, ly - 1);
+      }
+      doc.setFontSize(7);
+      doc.setTextColor(BRAND.black);
+      doc.text(item.label, lx + 10, ly);
+    });
+    y += Math.ceil(locationLegend.length / 2) * 4.5 + 4;
+
+    if (input.siteName) {
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(BRAND.grey);
+      doc.text(`Infrastructure surrounding ${input.siteName}. All visible network layers shown at time of assessment.`, margin, y);
+      y += 6;
+    }
+
+    addPage();
+  }
+
   const addHeaderBar = () => {
     doc.setFillColor(BRAND.darkGreen);
     doc.rect(0, 0, pageW, 28, "F");

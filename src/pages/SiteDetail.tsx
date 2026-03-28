@@ -79,6 +79,7 @@ const SiteDetail = () => {
   const railStations = raw.nearby_rail_stations || 0;
   const safetyIncidents = raw.safety_incidents || raw.safetyIncidents || 0;
   const aiNarrative = raw.ai_safety_narrative || raw.aiSafetyNarrative || null;
+  const locationMapScreenshot = raw.map_screenshot || raw.mapScreenshot || null;
   const masterScore = raw.master_score || raw.masterScore || null;
   const masterVerdict = raw.master_verdict || raw.masterVerdict || null;
   const gridViabilityIndex = raw.grid_viability_index || raw.gridViabilityIndex || null;
@@ -168,6 +169,7 @@ const SiteDetail = () => {
         nearestSubstations,
         unitRates: unitRates || undefined,
         skipSave: false,
+        locationMapScreenshot,
       });
       toast({ title: "PDF exported" });
     } catch (e: any) {
