@@ -3,6 +3,7 @@ import {
   X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2,
   Search, ClipboardCheck, FolderOpen, Download, Activity, Gauge, TrendingUp,
   PoundSterling, ChevronDown, ChevronUp, Shield, Truck, Cable, FileText, BatteryCharging,
+  TrafficCone, Bus, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
