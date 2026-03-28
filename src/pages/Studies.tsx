@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import JSZip from "jszip";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { useUnitRates } from "@/hooks/useUnitRates";
 
 type Study = {
   id: string;
