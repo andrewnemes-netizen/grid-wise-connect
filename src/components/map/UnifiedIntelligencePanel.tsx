@@ -188,23 +188,31 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
-  // Derived scores from safety engine
+  // Derived scores — use safety engine data first, fall back to score-site enrichment
   const trafficScore = useMemo(() => {
-    if (!safetyResult) return null;
-    const aadf = safetyResult.traffic_summary.max_aadf;
+    const safetyAadf = safetyResult?.traffic_summary?.max_aadf ?? 0;
+    const scoreAadf = result?.traffic_aadf ?? 0;
+    const aadf = Math.max(safetyAadf, scoreAadf);
     if (aadf > 10000) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
     if (aadf > 3000) return { label: "MEDIUM", score: 60, color: "text-amber-700", bg: "bg-amber-100" };
-    return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
-  }, [safetyResult]);
+    if (aadf > 0) return { label: "LOW", score: 25, color: "text-red-700", bg: "bg-red-100" };
+    return { label: "NO DATA", score: 25, color: "text-muted-foreground", bg: "bg-muted" };
+  }, [safetyResult, result]);
 
   const accessibilityScore = useMemo(() => {
-    if (!safetyResult) return null;
-    const { bus_stops, rail_stations, total_nodes } = safetyResult.transport_summary;
+    const safetyBus = safetyResult?.transport_summary?.bus_stops ?? 0;
+    const safetyRail = safetyResult?.transport_summary?.rail_stations ?? 0;
+    const scoreBus = result?.nearby_bus_stops ?? 0;
+    const scoreRail = result?.nearby_rail_stations ?? 0;
+    const bus_stops = Math.max(safetyBus, scoreBus);
+    const rail_stations = Math.max(safetyRail, scoreRail);
+    const total_nodes = bus_stops + rail_stations;
     const boosted = total_nodes + (rail_stations * 3); // rail boost
     if (boosted > 5) return { label: "HIGH", score: 90, color: "text-emerald-700", bg: "bg-emerald-100" };
     if (boosted >= 2) return { label: "MEDIUM", score: 55, color: "text-amber-700", bg: "bg-amber-100" };
-    return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
-  }, [safetyResult]);
+    if (total_nodes > 0) return { label: "LOW", score: 20, color: "text-red-700", bg: "bg-red-100" };
+    return { label: "NO DATA", score: 20, color: "text-muted-foreground", bg: "bg-muted" };
+  }, [safetyResult, result]);
 
   const safetyScore = useMemo(() => {
     if (!safetyResult) return null;
