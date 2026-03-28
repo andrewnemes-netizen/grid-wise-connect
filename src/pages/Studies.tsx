@@ -100,6 +100,7 @@ function StudyCard({ s, onDelete, navigate, showSharedBadge, selectable, selecte
 export default function Studies() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { data: unitRates } = useUnitRates();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -131,6 +132,7 @@ export default function Studies() {
           reasons: [],
           nextSteps: [],
           skipSave: true,
+          unitRates,
         });
         const pdfBlob = doc.output("blob");
         zip.file(`${s.study_name.replace(/\s+/g, "-")}.pdf`, pdfBlob);
