@@ -98,8 +98,9 @@ export function NpgDatasetRegistry() {
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const crawlerFn = dnoConfig[selectedDno].crawler;
       const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/npg-catalog-crawler`,
+        `https://${projectId}.supabase.co/functions/v1/${crawlerFn}`,
         {
           method: "POST",
           headers: {
@@ -112,8 +113,8 @@ export function NpgDatasetRegistry() {
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
-      toast.success(`Discovered ${result.total_discovered} datasets, upserted ${result.inserted}`);
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      toast.success(`Discovered ${result.total_discovered} ${selectedDno} datasets, upserted ${result.inserted}`);
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
     } catch (err: any) {
       toast.error(`Crawl failed: ${err.message}`);
     } finally {
