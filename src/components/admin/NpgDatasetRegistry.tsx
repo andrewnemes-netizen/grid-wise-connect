@@ -151,7 +151,7 @@ export function NpgDatasetRegistry() {
         pollSyncStatus(entry.id, entry.title);
       } else {
         toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
-        queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+        queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
       }
     } catch (err: any) {
       toast.error(`Ingest failed: ${err.message}`);
@@ -182,11 +182,11 @@ export function NpgDatasetRegistry() {
       } else if (data.last_sync_status === "error") {
         toast.error(`❌ ${title}: ${data.last_sync_error}`);
       }
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
       return;
     }
     toast.warning(`${title}: Still processing — check back shortly`);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // ── Link layer ──
@@ -200,7 +200,7 @@ export function NpgDatasetRegistry() {
       toast.error(`Failed to link: ${error.message}`);
     } else {
       toast.success("Layer linked");
-      queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
     }
   };
 
@@ -210,7 +210,7 @@ export function NpgDatasetRegistry() {
       .from("dno_dataset_registry")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", entryId);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // Active+linked datasets for "Sync All"
@@ -241,7 +241,7 @@ export function NpgDatasetRegistry() {
     }
     toast.success(`Sync All complete: ${successCount} started, ${failCount} failed`);
     setSyncAllRunning(false);
-    queryClient.invalidateQueries({ queryKey: ["npg-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
   // Filtering
