@@ -256,9 +256,13 @@ export function LayerTogglePanel({
     fetchDnos();
   }, [registryLayers]);
 
-  // Network tree
+  // Gas operator codes
+  const GAS_OPERATORS = new Set(["CADENT", "NGN", "SGN", "WWU"]);
+
+  // Network tree (exclude gas operators)
   const networkTree = useMemo(() => {
-    const filtered = selectedDno ? registryLayers.filter((l) => l.dno === selectedDno) : registryLayers;
+    const filtered = (selectedDno ? registryLayers.filter((l) => l.dno === selectedDno) : registryLayers)
+      .filter((l) => !GAS_OPERATORS.has(l.dno));
     const dnoMap = new Map<string, Map<string, RegistryLayer[]>>();
     filtered.forEach((layer) => {
       if (!dnoMap.has(layer.dno)) dnoMap.set(layer.dno, new Map());
@@ -268,6 +272,19 @@ export function LayerTogglePanel({
     });
     return dnoMap;
   }, [registryLayers, selectedDno]);
+
+  // Gas tree
+  const gasTree = useMemo(() => {
+    const gasLayers = registryLayers.filter((l) => GAS_OPERATORS.has(l.dno));
+    const dnoMap = new Map<string, Map<string, RegistryLayer[]>>();
+    gasLayers.forEach((layer) => {
+      if (!dnoMap.has(layer.dno)) dnoMap.set(layer.dno, new Map());
+      const catMap = dnoMap.get(layer.dno)!;
+      if (!catMap.has(layer.category)) catMap.set(layer.category, []);
+      catMap.get(layer.category)!.push(layer);
+    });
+    return dnoMap;
+  }, [registryLayers]);
 
   // Planning tree by category
   const planningTree = useMemo(() => {
