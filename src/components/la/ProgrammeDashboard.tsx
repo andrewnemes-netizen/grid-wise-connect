@@ -363,8 +363,20 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((r, i) => (
-                  <TableRow key={i} className={r.error ? "bg-destructive/5" : ""}>
+                {filtered.map((r, i) => {
+                  const status = getPortfolioStatus(r);
+                  return (
+                  <TableRow key={i} className={r.error ? "bg-destructive/5" : !status.ready ? "bg-muted/30" : ""}>
+                    <TableCell>
+                      <span title={status.reason} className="flex items-center gap-1">
+                        {status.ready
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          : <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                        <span className={`text-[10px] ${status.ready ? "text-emerald-700" : "text-destructive"}`}>
+                          {status.ready ? "Ready" : "Fail"}
+                        </span>
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`text-[10px] ${r.phase === 1 ? "border-emerald-300 text-emerald-700" : r.phase === 2 ? "border-amber-300 text-amber-700" : "border-red-300 text-red-700"}`}>
                         P{r.phase}
