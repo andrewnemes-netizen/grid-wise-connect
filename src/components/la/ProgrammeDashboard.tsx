@@ -89,14 +89,6 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     });
   }, []);
 
-  const selectAllReady = useCallback(() => {
-    const readyIndices = new Set<number>();
-    filtered.forEach((r, i) => {
-      if (!r.error && r.lng && r.lat) readyIndices.add(i);
-    });
-    setSelected(readyIndices);
-  }, [filtered]);
-
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
   const filtered = useMemo(() => {
@@ -112,6 +104,14 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     });
     return list;
   }, [results, filterPhase, filterBand, sortKey, sortDir]);
+
+  const selectAllReady = useCallback(() => {
+    const readyIndices = new Set<number>();
+    filtered.forEach((r, i) => {
+      if (!r.error && r.lng && r.lat) readyIndices.add(i);
+    });
+    setSelected(readyIndices);
+  }, [filtered]);
 
   const toggleSort = (k: SortKey) => {
     if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
