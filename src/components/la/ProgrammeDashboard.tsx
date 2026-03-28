@@ -256,10 +256,18 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex gap-4 text-xs">
+            <div className="flex gap-4 text-xs flex-wrap">
               <span><strong>{summary.total}</strong> sites scored</span>
               <span><strong>{summary.total_kw.toLocaleString()}</strong> kW total</span>
               <span><strong>£{summary.total_estimate.toLocaleString()}</strong> estimated</span>
+              <span className="text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> <strong>{portfolioReady.length}</strong> portfolio ready
+              </span>
+              {portfolioFail.length > 0 && (
+                <span className="text-destructive flex items-center gap-1">
+                  <XCircle className="h-3 w-3" /> <strong>{portfolioFail.length}</strong> not saveable
+                </span>
+              )}
               {summary.errors > 0 && (
                 <span className="text-destructive flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" /> {summary.errors} errors
