@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -92,54 +91,44 @@ const SiteDetail = () => {
   const reinforcementProb = raw.reinforcement_probability ?? site.reinforcement_probability ?? null;
   const costBand = raw.cost_band || site.cost_band || null;
   const nearestSubstations = raw.nearest_substations || raw.nearestSubstations || [];
-  const distances = useMemo(() => {
-    const source = raw.distances || site.connection_options || raw.connection_options;
-    if (!source || typeof source !== "object") return null;
-    const primary = Number((source as any).primary_m);
-    const feeder = Number((source as any).feeder_m);
-    const capacity = Number((source as any).capacity_segment_m);
-    if (![primary, feeder, capacity].every((v) => Number.isFinite(v))) return null;
-    return {
-      primary_m: primary,
-      feeder_m: feeder,
-      capacity_segment_m: capacity,
-    };
-  }, [raw.distances, raw.connection_options, site.connection_options]);
+  const constraints = raw.constraints || null;
+
+  const distanceSource = raw.distances || site.connection_options || raw.connection_options;
+  const distances = distanceSource && typeof distanceSource === "object"
+    ? {
+        primary_m: Number((distanceSource as any).primary_m),
+        feeder_m: Number((distanceSource as any).feeder_m),
+        capacity_segment_m: Number((distanceSource as any).capacity_segment_m),
+      }
+    : null;
+  const hasValidDistances = !!distances &&
+    [distances.primary_m, distances.feeder_m, distances.capacity_segment_m].every((v) => Number.isFinite(v));
 
   const persistedEstimate = raw.cost_estimate || raw.costEstimate || null;
   const fallbackTotalEstimate = Number(raw.total_estimate ?? raw.totalEstimate);
 
-  const costEstimate = useMemo(() => {
-    if (persistedEstimate?.total_estimate != null) return persistedEstimate;
-    if (Number.isFinite(fallbackTotalEstimate)) {
-      return {
-        total_estimate: fallbackTotalEstimate,
-        confidence: raw.cost_confidence || raw.confidence || null,
-      };
-    }
-    if (!distances || !site.proposed_kw || site.proposed_kw <= 0) return null;
-    return estimateConnectionCost({
-      proposed_kw: site.proposed_kw,
-      distances,
-      constraints,
-      nearest_headroom_kw: nearestSubstations?.[0]?.transformer_headroom_kw ?? undefined,
-    }, unitRates);
-  }, [
-    persistedEstimate,
-    fallbackTotalEstimate,
-    raw.cost_confidence,
-    raw.confidence,
-    distances,
-    site.proposed_kw,
-    constraints,
-    nearestSubstations,
-    unitRates,
-  ]);
+  let costEstimate: any = null;
+  if (persistedEstimate?.total_estimate != null) {
+    costEstimate = persistedEstimate;
+  } else if (Number.isFinite(fallbackTotalEstimate)) {
+    costEstimate = {
+      total_estimate: fallbackTotalEstimate,
+      confidence: raw.cost_confidence || raw.confidence || null,
+    };
+  } else if (hasValidDistances && site.proposed_kw && site.proposed_kw > 0) {
+    costEstimate = estimateConnectionCost(
+      {
+        proposed_kw: site.proposed_kw,
+        distances,
+        constraints,
+        nearest_headroom_kw: nearestSubstations?.[0]?.transformer_headroom_kw ?? undefined,
+      },
+      unitRates
+    );
+  }
 
   const totalEstimate = typeof costEstimate?.total_estimate === "number" ? costEstimate.total_estimate : null;
   const costConfidence = costEstimate?.confidence || null;
-  const constraints = raw.constraints || null;
-  const connectionOptions = (site.connection_options || raw.connection_options) as any;
 
   const trafficLabel = trafficAadf > 25000 ? "HIGH" : trafficAadf > 8000 ? "MEDIUM" : trafficAadf > 0 ? "LOW" : "NO DATA";
   const accessibilityLabel = (busStops + railStations) > 0 ? `${busStops} bus, ${railStations} rail` : "NO DATA";
@@ -155,7 +144,7 @@ const SiteDetail = () => {
         score: site.score || "AMBER",
         reasons,
         nextSteps,
-        distances: distances || undefined,
+        distances: hasValidDistances ? distances : undefined,
         constraints,
         masterScore,
         masterVerdict,
