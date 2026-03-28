@@ -1,34 +1,68 @@
 
 
-## Fix NaPTAN Statement Timeout in Score-Site
+## Restructure Cost Model: Materials + Labour (SOR-Based)
 
-### Problem
-The `nearby_geo_points_by_slug` RPC times out when querying NaPTAN data (337k records). The spatial query uses `ST_DWithin(gp.geom::geography, ...)` but the existing GiST index is on `geom` (geometry type), so the geography cast forces a sequential scan across all 337k rows.
+### The Correction
 
-**Evidence**: Edge function logs show `canceling statement due to statement timeout` for every NaPTAN query.
+All ICP SOR line items are **material only**. Labour is charged separately as day rates. The current system lumps material + labour into single unit prices, which overstates costs and doesn't match how ICP pricing actually works.
 
-### Fix
+### Key Change
 
-**1. Add a geography-cast spatial index on geo_points**
+Split every cost line into **material cost** (from SOR) and **labour cost** (from day rates). The BOM and cost estimate will show both separately.
 
-A single migration to create a GiST index on `geom::geography`. This allows `ST_DWithin` with geography to use the index directly.
+**Labour rates from SOR:**
+- LV Joint Team (Day 1): **£1,620/day**
+- Used for: jointing, terminations, cable pulling, testing
 
-```sql
-CREATE INDEX idx_geo_points_geom_geography 
-ON public.geo_points USING gist ((geom::geography));
-```
+### What Changes
 
-This one index fixes ALL spatial queries that cast to geography on this table (NaPTAN, DfT traffic, STATS19).
+**`src/lib/connectionCosts.ts`**
 
-**2. No code changes needed**
+1. **Add labour day rate constants:**
+   - `LV_JOINT_TEAM_DAY = 1620`
+   - Labour allocation rules per activity (e.g. 1 joint = 0.5 day, 1 termination = 0.25 day, cable pull per 100m = 0.5 day)
 
-The existing `nearby_geo_points_by_slug` function and `score-site` edge function code are correct — they just need the index to perform.
+2. **Update material-only costs from SOR** — strip labour from current unit rates:
+   - `jointing_lv_each`: change from £1,800 (blended) → SOR material-only price (e.g. ~£366 for 185mm joint kit, ~£182 for pot end)
+   - `termination_each`: material-only cost
+   - Joint bay: surface-aware material costs (£850 soft / £1,330 footway / £2,360 carriageway)
+   - Cable joint kit: £366.23 (185mm waveform kit)
 
-### Expected Result
-- NaPTAN queries drop from timeout (>8s) to <100ms
-- All four pillars (Traffic, Accessibility, Grid, Safety) return real data
-- The site intelligence panel shows bus/rail counts for Leeds
+3. **Add labour line items to breakdown and BOM:**
+   - Calculate total labour days based on scope (joints × 0.5 day + terminations × 0.25 day + cable pull days + testing)
+   - Add "LV Joint Team" as a separate line: quantity = days, unit_cost = £1,620/day
+
+4. **Add service cable vs mains extension logic** (from previous approved plan):
+   - Service cable: 35mm² concentric CNE, always used
+   - Mains extension: 185mm² 4c XLPE when distance > 25m
+   - Joint bay + cable joint added when mains extension triggers
+
+5. **Update `CostLineItem` and `BomItem`** — add optional `cost_type: "material" | "labour"` field for clear separation in the UI and PDF
+
+6. **Update `UnitRates` interface and defaults** — add new fields for SOR material rates and labour day rate
+
+**`src/components/admin/UnitRatesSettings.tsx`**
+- Add the new SOR material rates and labour day rate to the admin settings panel
+
+**`src/hooks/useUnitRates.ts`**
+- Map new database fields
+
+**Database migration**
+- Add new columns to `unit_rates` table for SOR material rates and labour day rate
+
+### Result
+
+For a 55kW site at 13m:
+- **Material**: 35mm² CNE service cable × 13m, joint kit, cutout, feeder pillar — all at SOR prices
+- **Labour**: LV Joint Team × estimated days (e.g. 1.5 days = £2,430)
+- **Total**: material subtotal + labour subtotal + fees/contingency
+- BOM clearly separates material lines from labour lines
 
 ### Files to Change
-- Database migration only (add geography index)
+| File | Change |
+|------|--------|
+| `src/lib/connectionCosts.ts` | Split material/labour, add SOR rates, service cable logic, labour day calculation |
+| `src/components/admin/UnitRatesSettings.tsx` | Add SOR material + labour rate fields |
+| `src/hooks/useUnitRates.ts` | Map new fields |
+| Database migration | Add columns for SOR rates + labour day rate |
 
