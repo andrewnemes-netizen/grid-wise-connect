@@ -13,10 +13,17 @@ export interface PdfSections {
   siteDetails?: boolean;
   streetView?: boolean;
   routeMap?: boolean;
+  scoreBreakdown?: boolean;
+  aiSafetyNarrative?: boolean;
+  evDeployment?: boolean;
+  icpStrategy?: boolean;
+  commercialViability?: boolean;
   electricalValidation?: boolean;
   costBreakdown?: boolean;
   bom?: boolean;
   designElements?: boolean;
+  nearestSubstations?: boolean;
+  constraintsDetected?: boolean;
   keyFindings?: boolean;
   nextSteps?: boolean;
 }
@@ -27,13 +34,31 @@ const DEFAULT_SECTIONS: PdfSections = {
   siteDetails: true,
   streetView: true,
   routeMap: true,
+  scoreBreakdown: true,
+  aiSafetyNarrative: true,
+  evDeployment: true,
+  icpStrategy: true,
+  commercialViability: true,
   electricalValidation: true,
   costBreakdown: true,
   bom: true,
   designElements: true,
+  nearestSubstations: true,
+  constraintsDetected: true,
   keyFindings: true,
   nextSteps: true,
 };
+
+interface SubstationInfo {
+  site_name: string;
+  site_id: string;
+  utilisation_pct: number | null;
+  firm_capacity_kw: number | null;
+  max_demand_kw: number | null;
+  transformer_headroom_kw: number | null;
+  headroom_band: string | null;
+  utilisation_band: string | null;
+}
 
 interface PdfInput {
   siteName?: string;
@@ -49,29 +74,69 @@ interface PdfInput {
   constraints?: {
     capacity_flag?: string;
     ndp_intersect?: boolean;
+    ndp_within_1000m?: boolean;
     wayleave_intersect?: boolean;
     min_footway_m?: number | null;
     min_carriageway_m?: number | null;
   };
   mapScreenshot?: string;
-  /** Electrical validation result (Phase 4.1) */
   electricalResult?: ElectricalValidationResult | null;
-  /** Snapshot ID for traceability */
   snapshotId?: string | null;
-  /** Design elements summary */
   designElements?: { type: string; count: number }[];
-  /** Sections to include */
   sections?: PdfSections;
-  /** Skip auto-save (for batch export) */
   skipSave?: boolean;
-  /** Unit rates from database (uses defaults if not provided) */
   unitRates?: UnitRates;
-  /** Voltage override (Auto/LV/HV/EHV) */
   voltageOverride?: import("./connectionCosts").VoltageOverride;
-  /** Nearest headroom for reinforcement calc */
   nearestHeadroomKw?: number;
-  /** Street View captures (data URLs with heading info) */
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
+
+  // ── New intelligence data ──
+  /** Master combined score 0–100 */
+  masterScore?: number | null;
+  /** INSTALL / REVIEW / AVOID */
+  masterVerdict?: string | null;
+  /** Traffic AADF value */
+  trafficAadf?: number;
+  /** Traffic demand label (HIGH/MEDIUM/LOW/NO DATA) */
+  trafficLabel?: string;
+  /** Number of nearby bus stops */
+  nearbyBusStops?: number;
+  /** Number of nearby rail stations */
+  nearbyRailStations?: number;
+  /** Accessibility label */
+  accessibilityLabel?: string;
+  /** Grid viability index 0–100 */
+  gridViabilityIndex?: number;
+  /** Safety incident count */
+  safetyIncidents?: number;
+  /** Safety risk label */
+  safetyLabel?: string;
+  /** AI-generated safety narrative */
+  aiSafetyNarrative?: string | null;
+  /** Deployment class e.g. Fast Deploy */
+  deploymentClass?: string | null;
+  /** Grid readiness e.g. Strong */
+  gridReadiness?: string | null;
+  /** Deployment friction e.g. Low */
+  deploymentFriction?: string | null;
+  /** Recommended scale e.g. Rapid (50–150kW) */
+  recommendedScale?: string | null;
+  /** Recommended voltage e.g. LV */
+  recommendedVoltage?: string | null;
+  /** Feeder constraint risk e.g. Low */
+  feederConstraintRisk?: string | null;
+  /** Reinforcement probability 0–100 */
+  reinforcementProbability?: number;
+  /** Cost band e.g. £ / ££ / £££ */
+  costBand?: string | null;
+  /** Cable length estimate (m) */
+  cableLengthEst?: number | null;
+  /** Civils complexity e.g. Low */
+  civilsComplexity?: string | null;
+  /** Best POC substation name */
+  bestPoc?: string | null;
+  /** Nearest substations array */
+  nearestSubstations?: SubstationInfo[];
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
@@ -84,6 +149,7 @@ const BRAND = {
   darkGreen: "#1f3a17",
   white: "#ffffff",
   black: "#1a2b14",
+  blue: "#2563eb",
 };
 
 function scoreColor(score: string): string {
@@ -112,6 +178,29 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.setDrawColor(color);
     doc.setLineWidth(0.3);
     doc.line(margin, yPos, pageW - margin, yPos);
+  };
+
+  const sectionTitle = (title: string) => {
+    checkPage(16);
+    doc.setTextColor(BRAND.black);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, margin, y);
+    y += 6;
+    drawLine(y);
+    y += 4;
+  };
+
+  const metricRow = (label: string, value: string, labelWidth = 60) => {
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.grey);
+    doc.setFontSize(8);
+    doc.text(label, margin + 2, y);
+    doc.setTextColor(BRAND.black);
+    doc.setFont("helvetica", "bold");
+    doc.text(value, margin + labelWidth, y);
+    doc.setFont("helvetica", "normal");
+    y += 4.5;
   };
 
   const refId = input.snapshotId
@@ -158,63 +247,150 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
   }
 
   // ── HEADER BAR ──
-  doc.setFillColor(BRAND.darkGreen);
-  doc.rect(0, 0, pageW, 28, "F");
+  const addHeaderBar = () => {
+    doc.setFillColor(BRAND.darkGreen);
+    doc.rect(0, 0, pageW, 28, "F");
+    doc.setTextColor(BRAND.white);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("ECOPOWER ENERGY", margin, 12);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Connection Feasibility Report", margin, 18);
+    doc.setFontSize(8);
+    doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
+    doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
+    y = 36;
+  };
 
-  doc.setTextColor(BRAND.white);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("ECOPOWER ENERGY", margin, 12);
+  addHeaderBar();
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("Connection Feasibility Report", margin, 18);
+  // ── MASTER VERDICT BANNER ──
+  if (input.masterScore != null && input.masterVerdict) {
+    const verdictColor = input.masterVerdict === "INSTALL" ? BRAND.green : input.masterVerdict === "REVIEW" ? BRAND.amber : BRAND.red;
+    doc.setFillColor(verdictColor);
+    doc.roundedRect(margin, y, contentW, 22, 3, 3, "F");
 
-  doc.setFontSize(8);
-  doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
-  doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
+    doc.setTextColor(BRAND.white);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${input.masterVerdict}`, margin + 8, y + 10);
+    doc.setFontSize(28);
+    doc.text(`${input.masterScore}`, pageW - margin - 8, y + 10, { align: "right" });
 
-  y = 36;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const verdictDesc = input.masterVerdict === "INSTALL" ? "Recommended for Installation"
+      : input.masterVerdict === "REVIEW" ? "Requires Further Review"
+      : "Not Recommended";
+    doc.text(verdictDesc, margin + 8, y + 18);
+    doc.text("Combined Site Score (0–100)", pageW - margin - 8, y + 18, { align: "right" });
 
-  // ── SCORE BANNER ──
-  const sc = scoreColor(input.score);
-  doc.setFillColor(sc);
-  doc.roundedRect(margin, y, contentW, 18, 3, 3, "F");
+    y += 28;
+  } else {
+    // Fallback to original score banner
+    const sc = scoreColor(input.score);
+    doc.setFillColor(sc);
+    doc.roundedRect(margin, y, contentW, 18, 3, 3, "F");
+    doc.setTextColor(BRAND.white);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(input.score, margin + 8, y + 8);
+    doc.setFontSize(10);
+    doc.text(scoreLabel(input.score), margin + 8, y + 14);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const statusDesc =
+      input.score === "GREEN" ? "Good connectivity — straightforward connection likely" :
+      input.score === "AMBER" ? "Connection possible but may require reinforcement" :
+      "Significant constraints — specialist review recommended";
+    doc.text(statusDesc, pageW - margin - 4, y + 11, { align: "right" });
+    y += 26;
+  }
 
-  doc.setTextColor(BRAND.white);
-  doc.setFontSize(16);
-  doc.setFont("helvetica", "bold");
-  doc.text(input.score, margin + 8, y + 8);
-  doc.setFontSize(10);
-  doc.text(scoreLabel(input.score), margin + 8, y + 14);
+  // ── SCORE BREAKDOWN (4 Pillars) ──
+  if (sec.scoreBreakdown) {
+    checkPage(45);
+    sectionTitle("Score Breakdown");
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  const statusDesc =
-    input.score === "GREEN" ? "Good connectivity — straightforward connection likely" :
-    input.score === "AMBER" ? "Connection possible but may require reinforcement" :
-    "Significant constraints — specialist review recommended";
-  doc.text(statusDesc, pageW - margin - 4, y + 11, { align: "right" });
+    const pillars = [
+      {
+        icon: "🚦",
+        label: "Traffic Demand",
+        value: input.trafficAadf != null ? `${input.trafficAadf.toLocaleString()} AADF` : "N/A",
+        badge: input.trafficLabel || "NO DATA",
+      },
+      {
+        icon: "🚶",
+        label: "Accessibility",
+        value: `${input.nearbyBusStops ?? 0} bus, ${input.nearbyRailStations ?? 0} rail`,
+        badge: input.accessibilityLabel || "NO DATA",
+      },
+      {
+        icon: "⚡",
+        label: "Grid Feasibility",
+        value: input.gridViabilityIndex != null ? `${input.gridViabilityIndex}/100` : "N/A",
+        badge: input.score || "N/A",
+      },
+      {
+        icon: "🛑",
+        label: "Safety",
+        value: `${input.safetyIncidents ?? 0} incidents`,
+        badge: input.safetyLabel || "N/A",
+      },
+    ];
 
-  y += 26;
+    const pillarW = contentW / 2;
+    const startY = y;
+
+    pillars.forEach((p, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const px = margin + col * pillarW;
+      const py = startY + row * 16;
+
+      // Pillar box
+      doc.setFillColor("#f9fafb");
+      doc.roundedRect(px, py, pillarW - 2, 14, 2, 2, "F");
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.black);
+      doc.text(`${p.icon} ${p.label}`, px + 3, py + 5);
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.grey);
+      doc.text(p.value, px + 3, py + 10);
+
+      // Badge
+      const badgeColor = p.badge === "HIGH" || p.badge === "GREEN" || p.badge === "LOW RISK" ? BRAND.green
+        : p.badge === "MEDIUM" || p.badge === "AMBER" || p.badge === "MODERATE" ? BRAND.amber
+        : p.badge === "LOW" || p.badge === "RED" || p.badge === "HIGH RISK" ? BRAND.red
+        : BRAND.grey;
+      doc.setFillColor(badgeColor);
+      const badgeWidth = doc.getTextWidth(p.badge) + 4;
+      doc.roundedRect(px + pillarW - badgeWidth - 5, py + 3, badgeWidth + 2, 5, 1, 1, "F");
+      doc.setTextColor(BRAND.white);
+      doc.setFontSize(6);
+      doc.setFont("helvetica", "bold");
+      doc.text(p.badge, px + pillarW - 4, py + 6.5, { align: "right" });
+    });
+
+    y = startY + 34;
+  }
 
   // ── ROUTE MAP SCREENSHOT ──
   if (sec.routeMap && input.mapScreenshot) {
     checkPage(90);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Route Map", margin, y);
-    y += 6;
-    drawLine(y);
-    y += 3;
+    sectionTitle("Route Map");
 
     try {
       const imgW = contentW;
       const imgH = imgW * 0.6;
       doc.addImage(input.mapScreenshot, "PNG", margin, y, imgW, imgH);
 
-      // ── North Arrow (top-right of map image) ──
+      // North Arrow
       const naX = margin + imgW - 8;
       const naY = y + 6;
       doc.setFillColor(BRAND.white);
@@ -222,7 +398,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setDrawColor(BRAND.grey);
       doc.setLineWidth(0.3);
       doc.circle(naX, naY, 5, "S");
-      // Arrow pointing up
       doc.setFillColor(BRAND.black);
       doc.triangle(naX, naY - 4, naX - 1.8, naY + 0.5, naX + 1.8, naY + 0.5, "F");
       doc.setFillColor(BRAND.grey);
@@ -232,48 +407,42 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setTextColor(BRAND.black);
       doc.text("N", naX, naY - 5.5, { align: "center" });
 
-      // ── Scale Bar (bottom-left of map image) ──
+      // Scale Bar
       const sbX = margin + 4;
       const sbY = y + imgH - 5;
-      // Pick a round scale distance based on primary distance
       const totalDistM = input.distances?.primary_m ?? 500;
       let scaleM = 100;
       if (totalDistM > 2000) scaleM = 500;
       else if (totalDistM > 800) scaleM = 200;
       else if (totalDistM > 300) scaleM = 100;
       else scaleM = 50;
-      // Approximate bar width: assume map covers ~3x primary distance across imgW
       const mapSpanM = Math.max(totalDistM * 2.5, scaleM * 3);
       const barW = (scaleM / mapSpanM) * imgW;
       const clampedBarW = Math.min(Math.max(barW, 12), 40);
 
-      // Background
       doc.setFillColor(255, 255, 255);
       doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "F");
       doc.setDrawColor(BRAND.grey);
       doc.setLineWidth(0.2);
       doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "S");
 
-      // Bar
       doc.setDrawColor(BRAND.black);
       doc.setLineWidth(0.6);
       doc.line(sbX, sbY, sbX + clampedBarW, sbY);
-      // End ticks
       doc.line(sbX, sbY - 1.5, sbX, sbY + 0.5);
       doc.line(sbX + clampedBarW, sbY - 1.5, sbX + clampedBarW, sbY + 0.5);
-      // Label
-      const scaleLabel = scaleM >= 1000 ? `${scaleM / 1000} km` : `${scaleM} m`;
+      const scaleLabelText = scaleM >= 1000 ? `${scaleM / 1000} km` : `${scaleM} m`;
       doc.setFontSize(5);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(BRAND.black);
-      doc.text(scaleLabel, sbX + clampedBarW / 2, sbY - 1.5, { align: "center" });
+      doc.text(scaleLabelText, sbX + clampedBarW / 2, sbY - 1.5, { align: "center" });
 
       y += imgH + 4;
     } catch (e) {
       console.warn("Failed to add map screenshot to PDF:", e);
     }
 
-    // ── MAP LEGEND / KEY ──
+    // Map Legend
     checkPage(40);
     doc.setTextColor(BRAND.black);
     doc.setFontSize(9);
@@ -281,14 +450,12 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.text("Map Key", margin, y);
     y += 4;
 
-    // Route symbols (match actual map markers)
     const routeSymbols: { label: string; color: string; type: "filled-circle" | "dashed-line" }[] = [
       { label: "Point of Connection (Source)", color: "#3498db", type: "filled-circle" },
       { label: "New Supply Point", color: "#e74c3c", type: "filled-circle" },
       { label: "Proposed Cable Route", color: "#2ecc71", type: "dashed-line" },
     ];
 
-    // Network layers legend
     const networkLegend: { label: string; color: string; type: "line" | "circle" }[] = [
       { label: "HV Underground Cables", color: "#e74c3c", type: "line" },
       { label: "EHV Feeders", color: "#8b5cf6", type: "line" },
@@ -297,7 +464,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       { label: "Primary Substations", color: "#3b82f6", type: "circle" },
     ];
 
-    // Equipment symbols legend
     const equipmentLegend: { label: string; color: string; symbol: string }[] = [
       { label: "Transformer", color: "#e74c3c", symbol: "T" },
       { label: "Ring Main Unit", color: "#3498db", symbol: "R" },
@@ -310,7 +476,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     const colW = contentW / 2;
 
-    // ── Left column: Route Symbols + Network Layers ──
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(BRAND.grey);
@@ -321,14 +486,11 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.setTextColor(BRAND.black);
     routeSymbols.forEach((item) => {
       if (item.type === "filled-circle") {
-        // White stroke ring
         doc.setFillColor("#ffffff");
         doc.circle(margin + 6, y - 1.2, 2.4, "F");
-        // Coloured fill
         doc.setFillColor(item.color);
         doc.circle(margin + 6, y - 1.2, 1.8, "F");
       } else {
-        // Dashed green line
         doc.setDrawColor(item.color);
         doc.setLineWidth(1.2);
         (doc as any).setLineDashPattern([1.5, 1], 0);
@@ -341,7 +503,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       y += 4;
     });
 
-    // Sub-section: Network Layers
     y += 1;
     doc.setFontSize(7);
     doc.setFont("helvetica", "bold");
@@ -366,7 +527,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       y += 4;
     });
 
-    // ── Right column: Equipment symbols ──
     const rightStartY = y - ((routeSymbols.length * 4) + 5 + (networkLegend.length * 4) + 4);
     let rightY = rightStartY;
     doc.setFontSize(7);
@@ -383,7 +543,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(BRAND.white);
       doc.text(item.symbol, margin + colW + 6, rightY - 0.4, { align: "center" });
-
       doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(BRAND.black);
@@ -396,36 +555,22 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
   // ── SITE DETAILS ──
   if (sec.siteDetails) {
-  doc.setTextColor(BRAND.black);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Site Details", margin, y);
-  y += 6;
-  drawLine(y);
-  y += 4;
+    checkPage(30);
+    sectionTitle("Site Details");
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+    const details: [string, string][] = [];
+    if (input.lat && input.lng) details.push(["Location", `${input.lat.toFixed(5)}, ${input.lng.toFixed(5)}`]);
+    if (input.siteName) details.push(["Site Name", input.siteName]);
+    if (input.postcode) details.push(["Postcode", input.postcode]);
+    if (input.proposedKw > 0) details.push(["Proposed kW", `${input.proposedKw} kW`]);
+    if (input.snapshotId) details.push(["Snapshot ID", input.snapshotId.slice(0, 8)]);
 
-  const details: [string, string][] = [];
-  if (input.siteName) details.push(["Site Name", input.siteName]);
-  if (input.postcode) details.push(["Postcode", input.postcode]);
-  if (input.proposedKw > 0) details.push(["Proposed Load", `${input.proposedKw} kW`]);
-  if (input.lat && input.lng) details.push(["Coordinates", `${input.lat.toFixed(5)}, ${input.lng.toFixed(5)}`]);
-  if (input.snapshotId) details.push(["Snapshot ID", input.snapshotId.slice(0, 8)]);
+    details.forEach(([label, value]) => {
+      metricRow(label, value);
+    });
 
-  details.forEach(([label, value]) => {
-    doc.setTextColor(BRAND.grey);
-    doc.text(label, margin, y);
-    doc.setTextColor(BRAND.black);
-    doc.setFont("helvetica", "bold");
-    doc.text(value, margin + 50, y);
-    doc.setFont("helvetica", "normal");
-    y += 5;
-  });
-
-  y += 4;
-  } // end siteDetails
+    y += 4;
+  }
 
   // ── STREET VIEW CAPTURES ──
   if (sec.streetView && input.streetViewCaptures && input.streetViewCaptures.length > 0) {
@@ -445,7 +590,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
       try {
         const imgW = contentW;
-        const imgH = imgW * (400 / 640); // maintain 640:400 aspect ratio
+        const imgH = imgW * (400 / 640);
         doc.addImage(capture.dataUrl, "JPEG", margin, y, imgW, imgH);
         y += imgH + 6;
       } catch (e) {
@@ -458,19 +603,107 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     });
   }
 
+  // ── AI SAFETY ASSESSMENT ──
+  if (sec.aiSafetyNarrative && input.aiSafetyNarrative) {
+    checkPage(40);
+    sectionTitle("AI Safety Assessment");
+
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.black);
+
+    // Parse markdown-like bold markers and render
+    const narrativeText = input.aiSafetyNarrative.replace(/\*\*/g, ""); // strip bold markers for PDF
+    const lines = doc.splitTextToSize(narrativeText, contentW - 4);
+    lines.forEach((line: string) => {
+      checkPage(4);
+      doc.text(line, margin + 2, y);
+      y += 3.5;
+    });
+
+    y += 4;
+  }
+
+  // ── EV DEPLOYMENT ──
+  if (sec.evDeployment) {
+    const hasData = input.recommendedScale || input.gridReadiness || input.deploymentFriction || input.deploymentClass;
+    if (hasData) {
+      checkPage(35);
+      // Grid viability badge
+      const gridBadge = input.score || "N/A";
+      doc.setTextColor(BRAND.black);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("EV Deployment", margin, y);
+
+      // Badge next to title
+      const gbColor = scoreColor(gridBadge);
+      doc.setFillColor(gbColor);
+      const gbLabel = `Grid: ${gridBadge}`;
+      if (input.gridViabilityIndex != null) {
+        const fullLabel = `${gbLabel}  ${input.gridViabilityIndex}`;
+        const gbW = doc.getTextWidth(fullLabel) + 8;
+        doc.roundedRect(margin + 55, y - 4, gbW, 6, 1, 1, "F");
+        doc.setTextColor(BRAND.white);
+        doc.setFontSize(7);
+        doc.text(fullLabel, margin + 59, y, {});
+      }
+
+      y += 6;
+      drawLine(y);
+      y += 4;
+
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.grey);
+      doc.text("Grid Viability Index", margin + 2, y);
+      y += 5;
+
+      if (input.recommendedScale) metricRow("Recommended Scale", input.recommendedScale);
+      if (input.gridReadiness) metricRow("Grid Readiness", input.gridReadiness);
+      if (input.deploymentFriction) metricRow("Deployment Friction", input.deploymentFriction);
+      if (input.deploymentClass) metricRow("Deployment Class", input.deploymentClass);
+
+      y += 4;
+    }
+  }
+
+  // ── ICP CONNECTION STRATEGY ──
+  if (sec.icpStrategy) {
+    const hasData = input.bestPoc || input.recommendedVoltage || input.feederConstraintRisk;
+    if (hasData) {
+      checkPage(30);
+      sectionTitle("ICP Connection Strategy");
+
+      if (input.bestPoc) metricRow("Best POC", input.bestPoc);
+      if (input.recommendedVoltage) metricRow("Recommended Voltage", input.recommendedVoltage);
+      if (input.feederConstraintRisk) metricRow("Feeder Constraint Risk", input.feederConstraintRisk);
+      if (input.reinforcementProbability != null) metricRow("Reinforcement Probability", `${input.reinforcementProbability}%`);
+
+      y += 4;
+    }
+  }
+
+  // ── COMMERCIAL VIABILITY ──
+  if (sec.commercialViability) {
+    const hasData = input.costBand || input.cableLengthEst || input.civilsComplexity;
+    if (hasData) {
+      checkPage(25);
+      sectionTitle("Commercial Viability");
+
+      if (input.costBand) metricRow("Cost Band", input.costBand);
+      if (input.cableLengthEst != null) metricRow("Cable Length Est.", `${input.cableLengthEst}m`);
+      if (input.civilsComplexity) metricRow("Civils Complexity", input.civilsComplexity);
+
+      y += 4;
+    }
+  }
 
   // ── CONNECTION PROXIMITY ──
   if (input.distances || input.distanceBands) {
     checkPage(30);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Connection Proximity", margin, y);
-    y += 6;
-    drawLine(y);
-    y += 4;
+    sectionTitle("Connection Distances");
 
-    doc.setFontSize(9);
     const proximity: [string, string][] = [];
     if (input.distances) {
       proximity.push(
@@ -487,14 +720,23 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     }
 
     proximity.forEach(([label, value]) => {
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(BRAND.grey);
-      doc.text(label, margin, y);
-      doc.setTextColor(BRAND.black);
-      doc.setFont("helvetica", "bold");
-      doc.text(value, margin + 50, y);
-      y += 5;
+      metricRow(label, value, 50);
     });
+
+    y += 4;
+  }
+
+  // ── CONSTRAINTS DETECTED ──
+  if (sec.constraintsDetected && input.constraints) {
+    checkPage(30);
+    sectionTitle("Constraints Detected");
+
+    metricRow("NDP Intersect", input.constraints.ndp_intersect ? "Yes" : "No", 50);
+    if (input.constraints.ndp_within_1000m != null) {
+      metricRow("NDP within 1km", input.constraints.ndp_within_1000m ? "Yes" : "No", 50);
+    }
+    metricRow("Wayleave", input.constraints.wayleave_intersect ? "Yes" : "No", 50);
+    metricRow("Capacity", input.constraints.capacity_flag || "unknown", 50);
 
     y += 4;
   }
@@ -508,7 +750,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.setFont("helvetica", "bold");
     doc.text("Electrical Validation", margin, y);
 
-    // Pass/Fail badge
     const passColor = er.overall_pass ? BRAND.green : BRAND.red;
     const passLabel = er.overall_pass ? "PASS" : "FAIL";
     doc.setFillColor(passColor);
@@ -547,7 +788,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       y += 4.5;
     });
 
-    // Flags
     if (er.flags.length > 0) {
       y += 2;
       doc.setFontSize(7);
@@ -585,13 +825,14 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     }, input.unitRates);
 
     checkPage(50);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Budget Estimate", margin, y);
-    y += 6;
-    drawLine(y);
-    y += 6;
+    sectionTitle("Budget Estimate");
+
+    // Voltage badge
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(BRAND.grey);
+    doc.text(`Using: ${estimate.voltage_level}`, margin + 2, y);
+    y += 5;
 
     // Total box
     doc.setFillColor(BRAND.greenLight);
@@ -612,7 +853,30 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     y += 22;
 
-    // Cost breakdown table header
+    // Breakdown summary by category
+    const categories = ["Cable", "Excavation", "Equipment"];
+    let subtotal = 0;
+    categories.forEach(cat => {
+      const catTotal = estimate!.breakdown.filter(b => b.category.toLowerCase() === cat.toLowerCase()).reduce((s, b) => s + b.total, 0);
+      subtotal += catTotal;
+      if (catTotal > 0) {
+        metricRow(cat, formatGBP(catTotal), 50);
+      }
+    });
+    metricRow("Subtotal", formatGBP(subtotal), 50);
+    const feesTotal = estimate.total_estimate - subtotal;
+    metricRow("Fees + Contingency", formatGBP(feesTotal), 50);
+
+    y += 3;
+
+    // Detailed cost breakdown
+    checkPage(10);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(BRAND.black);
+    doc.text("Detailed Cost Breakdown", margin, y);
+    y += 5;
+
     doc.setFillColor("#f3f4f6");
     doc.rect(margin, y, contentW, 6, "F");
     doc.setFontSize(7);
@@ -667,13 +931,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
   // ── BILL OF MATERIALS ──
   if (sec.bom && bom.length > 0) {
     checkPage(30);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Bill of Materials", margin, y);
-    y += 6;
-    drawLine(y);
-    y += 4;
+    sectionTitle("Bill of Materials");
 
     doc.setFillColor("#f3f4f6");
     doc.rect(margin, y, contentW, 6, "F");
@@ -722,16 +980,39 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y += 8;
   }
 
+  // ── NEAREST SUBSTATIONS ──
+  if (sec.nearestSubstations && input.nearestSubstations && input.nearestSubstations.length > 0) {
+    checkPage(20 + input.nearestSubstations.length * 14);
+    sectionTitle("Nearest Substations");
+
+    input.nearestSubstations.forEach((sub) => {
+      checkPage(14);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.black);
+      doc.text(sub.site_name, margin + 2, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(BRAND.grey);
+      doc.text(sub.site_id, margin + 2, y + 4);
+
+      const demandStr = `${sub.max_demand_kw ?? "?"} / ${sub.firm_capacity_kw ?? "?"} kW`;
+      doc.setTextColor(BRAND.black);
+      doc.setFontSize(7);
+      doc.text(`Demand / Capacity: ${demandStr}`, margin + 4, y + 8);
+      if (sub.transformer_headroom_kw != null) {
+        doc.text(`Headroom: ${sub.transformer_headroom_kw.toLocaleString()} kW`, margin + 90, y + 8);
+      }
+
+      y += 12;
+    });
+
+    y += 4;
+  }
+
   // ── DESIGN ELEMENTS SUMMARY ──
   if (sec.designElements && input.designElements && input.designElements.length > 0) {
     checkPage(20);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Design Elements", margin, y);
-    y += 6;
-    drawLine(y);
-    y += 4;
+    sectionTitle("Design Elements");
 
     doc.setFontSize(8);
     input.designElements.forEach(({ type, count }) => {
@@ -748,53 +1029,51 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
   // ── KEY FINDINGS ──
   if (sec.keyFindings) {
-  checkPage(20 + input.reasons.length * 5);
-  doc.setTextColor(BRAND.black);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Key Findings", margin, y);
-  y += 6;
-  drawLine(y);
-  y += 4;
+    checkPage(20 + input.reasons.length * 5);
+    sectionTitle("Assessment Reasons");
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  input.reasons.forEach((r) => {
-    checkPage(6);
-    doc.setTextColor(BRAND.green);
-    doc.text("→", margin + 2, y);
-    doc.setTextColor(BRAND.black);
-    const lines = doc.splitTextToSize(r, contentW - 10);
-    doc.text(lines, margin + 8, y);
-    y += lines.length * 4 + 1;
-  });
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    input.reasons.forEach((r) => {
+      checkPage(6);
+      doc.setTextColor(BRAND.green);
+      doc.text("→", margin + 2, y);
+      doc.setTextColor(BRAND.black);
+      const lines = doc.splitTextToSize(r, contentW - 10);
+      doc.text(lines, margin + 8, y);
+      y += lines.length * 4 + 1;
+    });
 
-  y += 4;
-  } // end keyFindings
+    y += 4;
+  }
 
   // ── NEXT STEPS ──
   if (sec.nextSteps) {
-  checkPage(20 + input.nextSteps.length * 5);
-  doc.setTextColor(BRAND.black);
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Recommended Next Steps", margin, y);
-  y += 6;
-  drawLine(y);
-  y += 4;
+    checkPage(20 + input.nextSteps.length * 5);
+    sectionTitle("Recommended Next Steps");
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  input.nextSteps.forEach((s, i) => {
-    checkPage(6);
-    doc.setTextColor(BRAND.green);
-    doc.text(`${i + 1}.`, margin + 2, y);
-    doc.setTextColor(BRAND.black);
-    const lines = doc.splitTextToSize(s, contentW - 10);
-    doc.text(lines, margin + 8, y);
-    y += lines.length * 4 + 1;
-  });
-  } // end nextSteps
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    input.nextSteps.forEach((s, i) => {
+      checkPage(6);
+      doc.setTextColor(BRAND.green);
+      doc.text(`${i + 1}.`, margin + 2, y);
+      doc.setTextColor(BRAND.black);
+      const lines = doc.splitTextToSize(s, contentW - 10);
+      doc.text(lines, margin + 8, y);
+      y += lines.length * 4 + 1;
+    });
+  }
+
+  // ── DISCLAIMER ──
+  checkPage(10);
+  y += 4;
+  doc.setFontSize(6);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(BRAND.grey);
+  const disclaimer = "Budget estimates use UK industry-standard unit rates. Actual costs may vary based on site-specific conditions, DNO quotation, and market rates.";
+  const disclaimerLines = doc.splitTextToSize(disclaimer, contentW);
+  doc.text(disclaimerLines, margin, y);
 
   // ── FOOTER ──
   const totalPages = doc.getNumberOfPages();
@@ -819,14 +1098,13 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.text(footerLeft, margin, 293);
   }
 
-  // ── SAVE (blob-based to avoid mobile page refresh) ──
+  // ── SAVE ──
   if (!input.skipSave) {
     const fileName = input.siteName
       ? `EPE-Assessment-${input.siteName.replace(/\s+/g, "-")}.pdf`
       : `EPE-Assessment-${input.postcode?.replace(/\s+/g, "") || "report"}.pdf`;
     const pdfBlob = doc.output("blob");
     const blobUrl = URL.createObjectURL(pdfBlob);
-    // Use an invisible iframe for download to avoid any page navigation/refresh
     try {
       const a = document.createElement("a");
       a.href = blobUrl;
@@ -835,13 +1113,11 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       a.style.display = "none";
       document.body.appendChild(a);
       a.click();
-      // Delay cleanup so the download starts
       setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(blobUrl);
       }, 500);
     } catch {
-      // Fallback: open in new tab
       window.open(blobUrl, "_blank");
       setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
     }
@@ -851,7 +1127,6 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
 /**
  * Export a complete assessment as a structured JSON file.
- * Includes all data needed for audit trail and ICP submission.
  */
 export function exportAssessmentJson(input: {
   siteName?: string;
