@@ -289,6 +289,23 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
     if (!lng || !lat || !result || !user) return;
     setSaving(true);
     try {
+      const enrichedRawData = {
+        ...result,
+        // Persist computed intelligence so SiteDetail can display it
+        master_score: masterScore?.score ?? null,
+        master_verdict: masterScore?.verdict ?? null,
+        grid_viability_index: viabilityIndex,
+        deployment_class: deployClass,
+        grid_readiness: gridReady,
+        deployment_friction: friction,
+        recommended_scale: rawMetrics ? getRecommendedScale(rawMetrics) : null,
+        recommended_voltage: rawMetrics ? getRecommendedVoltage(rawMetrics) : null,
+        best_poc: result.nearest_substations?.[0]?.site_name || null,
+        feeder_constraint_risk: feederRisk,
+        cost_band: costBand,
+        safety_incidents: safetyResult?.total_collisions ?? 0,
+        ai_safety_narrative: safetyResult?.ai_narrative ?? null,
+      };
       const { error } = await supabase.from("sites").insert({
         site_name: siteName || "Unnamed Site",
         postcode,
@@ -304,7 +321,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         deployment_class: deployClass,
         cost_band: costBand,
         reinforcement_probability: reinforceProb,
-        raw_score_data: result,
+        raw_score_data: enrichedRawData,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });
