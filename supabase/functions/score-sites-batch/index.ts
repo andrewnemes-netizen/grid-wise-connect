@@ -204,12 +204,12 @@ async function queryNearbyPoints(supabase: any, slug: string, lng: number, lat: 
       p_limit: limit,
     });
     if (error) {
-      console.error(`nearby query error for layer ${layerId}:`, error.message);
+      console.error(`nearby query error for ${slug}:`, error.message);
       return [];
     }
     return data || [];
   } catch (e) {
-    console.error(`nearby query exception for layer ${layerId}:`, e);
+    console.error(`nearby query exception for ${slug}:`, e);
     return [];
   }
 }
@@ -288,9 +288,9 @@ Deno.serve(async (req) => {
             }
             return substations;
           })(),
-          dftLayerId ? queryNearbyPoints(supabase, dftLayerId, geo.lng, geo.lat, 2000, 20) : Promise.resolve([]),
-          naptanLayerId ? queryNearbyPoints(supabase, naptanLayerId, geo.lng, geo.lat, 500, 50) : Promise.resolve([]),
-          stats19LayerId ? queryNearbyPoints(supabase, stats19LayerId, geo.lng, geo.lat, 200, 50) : Promise.resolve([]),
+          queryNearbyPoints(supabase, DFT_SLUG, geo.lng, geo.lat, 2000, 20),
+          queryNearbyPoints(supabase, NAPTAN_SLUG, geo.lng, geo.lat, 500, 50),
+          queryNearbyPoints(supabase, STATS19_SLUG, geo.lng, geo.lat, 200, 50),
         ]);
 
         const scoreData = scoreResult.status === "fulfilled" ? (scoreResult.value as any)?.data : null;
