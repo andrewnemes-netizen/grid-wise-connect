@@ -298,12 +298,12 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         deployment_class: deployClass,
         grid_readiness: gridReady,
         deployment_friction: friction,
-        recommended_scale: rawMetrics ? getRecommendedScale(rawMetrics) : null,
-        recommended_voltage: rawMetrics ? getRecommendedVoltage(rawMetrics) : null,
+        recommended_scale: getRecommendedScale(pkw),
+        recommended_voltage: getRecommendedVoltage(pkw),
         best_poc: result.nearest_substations?.[0]?.site_name || null,
         feeder_constraint_risk: feederRisk,
         cost_band: costBand,
-        safety_incidents: safetyResult?.total_collisions ?? 0,
+        safety_incidents: safetyResult?.accident_summary?.total ?? 0,
         ai_safety_narrative: safetyResult?.ai_narrative ?? null,
       };
       const { error } = await supabase.from("sites").insert({
