@@ -288,6 +288,59 @@ const MapView = () => {
     return captureScreenshot(connect.connectEndpoints);
   }, [connect.connectEndpoints, captureScreenshot]);
 
+  // Screenshot handler for UnifiedIntelligencePanel (pin-drop centred)
+  const handlePinScreenshot = useCallback(async (): Promise<string | null> => {
+    if (!map || !pin.pinLocation) return null;
+    const { lng, lat } = pin.pinLocation;
+    // Buffer ~300m around pin so nearby infrastructure is visible
+    const BUFFER = 0.004;
+    const bounds = new maplibregl.LngLatBounds(
+      [lng - BUFFER, lat - BUFFER],
+      [lng + BUFFER, lat + BUFFER]
+    );
+    map.fitBounds(bounds, { padding: 40, duration: 0 });
+
+    // Add temporary pin marker as GeoJSON so it renders on canvas
+    const srcId = "pin-screenshot-src";
+    const layerId = "pin-screenshot-fill";
+    const strokeId = "pin-screenshot-stroke";
+    try {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getLayer(strokeId)) map.removeLayer(strokeId);
+      if (map.getSource(srcId)) map.removeSource(srcId);
+    } catch {}
+
+    map.addSource(srcId, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lng, lat] } }],
+      },
+    });
+    map.addLayer({ id: strokeId, type: "circle", source: srcId, paint: { "circle-radius": 12, "circle-color": "#ffffff" } });
+    map.addLayer({ id: layerId, type: "circle", source: srcId, paint: { "circle-radius": 9, "circle-color": "#e74c3c" } });
+
+    return new Promise((resolve) => {
+      const capture = () => {
+        try {
+          resolve(map.getCanvas().toDataURL("image/png"));
+        } catch {
+          resolve(null);
+        } finally {
+          try {
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getLayer(strokeId)) map.removeLayer(strokeId);
+            if (map.getSource(srcId)) map.removeSource(srcId);
+          } catch {}
+        }
+      };
+      setTimeout(() => {
+        if (map.areTilesLoaded()) capture();
+        else map.once("idle", capture);
+      }, 600);
+    });
+  }, [map, pin.pinLocation]);
+
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
@@ -444,6 +497,7 @@ const MapView = () => {
               lat={pin.pinLocation.lat}
               onClose={() => { pin.closeSiteCheck(); clearConnectionLines(); }}
               onConnectionLines={handleConnectionLines}
+              onCaptureMapScreenshot={handlePinScreenshot}
             />
           )}
 
