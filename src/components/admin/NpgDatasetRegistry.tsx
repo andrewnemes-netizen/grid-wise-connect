@@ -387,6 +387,52 @@ export function NpgDatasetRegistry() {
         </CardContent>
       </Card>
 
+      {/* Auto-Link Results */}
+      {autoLinkResult && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Layers className="h-4 w-4 text-primary" />
+              Auto-Link Summary — {autoLinkResult.dno}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+              <div><span className="text-muted-foreground">Layers Created:</span> <strong>{autoLinkResult.layers_created}</strong></div>
+              <div><span className="text-muted-foreground">Layers Reused:</span> <strong>{autoLinkResult.layers_reused}</strong></div>
+              <div><span className="text-muted-foreground">Datasets Linked:</span> <strong>{autoLinkResult.datasets_linked}</strong></div>
+              <div><span className="text-muted-foreground">Skipped:</span> <strong>{autoLinkResult.datasets_skipped}</strong></div>
+              <div>
+                <span className="text-muted-foreground">Unmatched:</span>{' '}
+                <strong className={autoLinkResult.unmatched?.length > 0 ? "text-amber-600" : ""}>
+                  {autoLinkResult.unmatched?.length || 0}
+                </strong>
+              </div>
+            </div>
+            {autoLinkResult.unmatched?.length > 0 && (
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 text-xs gap-1">
+                    <AlertTriangle className="h-3 w-3 text-amber-600" />
+                    Show unmatched datasets
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                    {autoLinkResult.unmatched.map((u: any, i: number) => (
+                      <div key={i} className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3 shrink-0" />
+                        <span className="font-mono">{u.dataset_id}</span>
+                        <span>— {u.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Dataset Table */}
       {isLoading ? (
         <Card>
