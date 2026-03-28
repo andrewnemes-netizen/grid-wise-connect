@@ -16,6 +16,8 @@ const RATE_FIELDS: { key: keyof UnitRates; label: string; unit: string; group: s
   { key: "cable_hv_per_m", label: "HV cable", unit: "£/m", group: "Cable" },
   { key: "cable_ehv_per_m", label: "EHV cable", unit: "£/m", group: "Cable" },
   { key: "duct_per_m", label: "HDPE duct", unit: "£/m", group: "Cable" },
+  { key: "service_cable_35mm_per_m", label: "35mm² CNE service cable", unit: "£/m", group: "Cable" },
+  { key: "mains_extension_threshold_m", label: "Mains extension threshold", unit: "m", group: "Cable" },
   { key: "excavation_footway_per_m", label: "Footway", unit: "£/m", group: "Excavation" },
   { key: "excavation_carriageway_per_m", label: "Carriageway", unit: "£/m", group: "Excavation" },
   { key: "excavation_verge_per_m", label: "Verge", unit: "£/m", group: "Excavation" },
@@ -24,6 +26,11 @@ const RATE_FIELDS: { key: keyof UnitRates; label: string; unit: string; group: s
   { key: "termination_each", label: "Cable termination", unit: "£/ea", group: "Equipment" },
   { key: "switchgear_ring_main", label: "Ring main unit", unit: "£", group: "Equipment" },
   { key: "switchgear_circuit_breaker", label: "Circuit breaker", unit: "£", group: "Equipment" },
+  { key: "cable_joint_kit_185mm", label: "185mm waveform joint kit", unit: "£/ea", group: "SOR Joint Kits" },
+  { key: "cable_joint_kit_pot_end", label: "Pot end (95mm)", unit: "£/ea", group: "SOR Joint Kits" },
+  { key: "joint_bay_soft", label: "Joint bay (unmade/soft)", unit: "£/ea", group: "SOR Joint Bays" },
+  { key: "joint_bay_footway", label: "Joint bay (footway)", unit: "£/ea", group: "SOR Joint Bays" },
+  { key: "joint_bay_carriageway", label: "Joint bay (carriageway)", unit: "£/ea", group: "SOR Joint Bays" },
   { key: "transformer_500kva", label: "500kVA transformer", unit: "£", group: "Transformer" },
   { key: "transformer_1000kva", label: "1000kVA transformer", unit: "£", group: "Transformer" },
   { key: "transformer_1500kva", label: "1500kVA transformer", unit: "£", group: "Transformer" },
@@ -34,6 +41,7 @@ const RATE_FIELDS: { key: keyof UnitRates; label: string; unit: string; group: s
   { key: "earthing_lot", label: "Earth electrode & bonding", unit: "£/lot", group: "Civils & Earthing" },
   { key: "transformer_plinth_each", label: "Transformer plinth", unit: "£/ea", group: "Civils & Earthing" },
   { key: "cable_marker_tape_per_m", label: "Cable marker tape", unit: "£/m", group: "Civils & Earthing" },
+  { key: "lv_joint_team_day", label: "LV Joint Team (Day 1)", unit: "£/day", group: "Labour" },
   { key: "design_fee_pct", label: "Design fee", unit: "%", group: "Fees" },
   { key: "project_management_pct", label: "Project management", unit: "%", group: "Fees" },
   { key: "contingency_pct", label: "Contingency", unit: "%", group: "Fees" },
@@ -104,7 +112,7 @@ export function UnitRatesSettings() {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Unit Rates</CardTitle>
-        <CardDescription>Customise the rates used in connection cost estimates. Changes apply to all new assessments.</CardDescription>
+        <CardDescription>Customise the rates used in connection cost estimates. SOR line items are material-only; labour is charged separately as day rates.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {Object.entries(groups).map(([group, fields]) => (
@@ -116,7 +124,7 @@ export function UnitRatesSettings() {
                   <Label className="text-xs text-muted-foreground">{f.label} <span className="text-[10px]">({f.unit})</span></Label>
                   <Input
                     type="number"
-                    step={f.unit === "%" ? "0.01" : "1"}
+                    step={f.unit === "%" ? "0.01" : f.unit === "£/m" ? "0.50" : "1"}
                     value={rates[f.key]}
                     onChange={(e) => handleChange(f.key, e.target.value)}
                     className="h-8 text-sm"
