@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
     const dnoApiKeyMap: Record<string, string> = {
       NPG: "NPG_API_KEY",
       ENWL: "ENWL_API_KEY",
+      SPEN: "SPEN_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";
     const apiKey = Deno.env.get(apiKeyEnvName) || null;
