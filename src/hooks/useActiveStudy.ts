@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Json } from "@/integrations/supabase/types";
 import { estimateConnectionCost, generateBom } from "@/lib/connectionCosts";
 import type { VoltageOverride } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
 
 export interface ActiveStudy {
   id: string;
@@ -28,6 +29,7 @@ export function useActiveStudy() {
   const studyId = searchParams.get("study");
   const [study, setStudy] = useState<ActiveStudy | null>(null);
   const [loading, setLoading] = useState(false);
+  const { data: unitRates } = useUnitRates();
 
   useEffect(() => {
     if (!studyId) {
@@ -105,8 +107,8 @@ export function useActiveStudy() {
         const routeLen = computeRouteLength(routeGeoJson);
         const distances = { primary_m: routeLen, feeder_m: routeLen, capacity_segment_m: routeLen };
         const vOverride = (voltageLevel || study.voltage_level || "Auto") as VoltageOverride;
-        const costEst = estimateConnectionCost({ proposed_kw: kw, distances, voltage_override: vOverride });
-        const bomItems = generateBom({ proposed_kw: kw, distances, voltage_override: vOverride });
+        const costEst = estimateConnectionCost({ proposed_kw: kw, distances, voltage_override: vOverride }, unitRates);
+        const bomItems = generateBom({ proposed_kw: kw, distances, voltage_override: vOverride }, unitRates);
         await supabase
           .from("studies")
           .update({
@@ -120,7 +122,7 @@ export function useActiveStudy() {
         toast.success("Cost estimate saved to study");
       }
     },
-    [study]
+    [study, unitRates]
   );
 
   const runRulesEngine = useCallback(
