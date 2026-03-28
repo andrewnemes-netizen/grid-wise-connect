@@ -367,7 +367,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                 <TableHead className="text-xs">Status</TableHead>
+                 <TableHead className="text-xs w-8"></TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
                   <SortHeader label="Phase" k="phase" />
                   <SortHeader label="Name" k="site_name" />
                   <TableHead className="text-xs">Postcode</TableHead>
