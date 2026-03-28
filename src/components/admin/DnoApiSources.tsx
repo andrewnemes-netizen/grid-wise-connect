@@ -70,6 +70,15 @@ const DNO_REGISTRY: DnoDef[] = [
     status: "blocked",
     datasets: [],
   },
+  {
+    key: "DFT",
+    label: "DfT Road Traffic",
+    base_url: "https://roadtraffic.dft.gov.uk",
+    status: "live",
+    datasets: [
+      { key: "count_points", label: "Traffic Count Points (AADF)", dataset_id: "count-points", storage_table: "geo_points", geometry_type: "Point", expected_records: 23500 },
+    ],
+  },
 ];
 
 const STATUS_BADGES: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -106,9 +115,10 @@ export function DnoApiSources() {
 
   const handleSync = async (dno: DnoDef, ds: DatasetDef) => {
     const syncKey = getSyncKey(dno.key, ds.key);
+    const isDft = dno.key === "DFT";
     const layerId = selectedLayer[syncKey];
 
-    if (!layerId) {
+    if (!isDft && !layerId) {
       toast.error("Select a target layer first");
       return;
     }
@@ -130,20 +140,21 @@ export function DnoApiSources() {
       }));
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const isDft = dno.key === "DFT";
+      const functionName = isDft ? "dft-traffic-proxy" : "dno-open-data-ingest";
+      const body = isDft
+        ? { action: "ingest" }
+        : { dno: dno.key, dataset_key: ds.key, layer_id: layerId, batch_size: 100 };
+
       const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/dno-open-data-ingest`,
+        `https://${projectId}.supabase.co/functions/v1/${functionName}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({
-            dno: dno.key,
-            dataset_key: ds.key,
-            layer_id: layerId,
-            batch_size: 100,
-          }),
+          body: JSON.stringify(body),
         }
       );
 
@@ -269,7 +280,7 @@ export function DnoApiSources() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={state?.syncing || dno.status !== "live" || !selectedLayer[syncKey]}
+                                disabled={state?.syncing || dno.status !== "live" || (!selectedLayer[syncKey] && dno.key !== "DFT")}
                                 onClick={() => handleSync(dno, ds)}
                               >
                                 {state?.syncing ? (
