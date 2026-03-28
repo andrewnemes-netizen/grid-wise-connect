@@ -1,38 +1,52 @@
 
 
-## Add Gas Network Registry & Map Layer Tab
+## Fix: Cadent (and future public-portal) Ingestion 401 Errors
 
-### Overview
-Create a parallel Gas Distribution Network (GDN) registry system alongside the existing DNO (electricity) registry, starting with Cadent as the first source. This includes a new admin tab, a new map layer tab, and the Cadent crawler edge function.
+### Root Cause
 
-### Changes
+In `supabase/functions/npg-dataset-ingest/index.ts`, lines 127-134:
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `supabase/functions/cadent-catalog-crawler/index.ts` | Create Opendatasoft v2.1 crawler for `cadentgas.opendatasoft.com`. No API key needed (public). Clone UKPN crawler pattern, set `DNO_KEY = "CADENT"`. Map `geo_shape` fields to `geo_cables`, `geo_point_2d` to `geo_points`. |
-| 2 | `supabase/config.toml` | Add `[functions.cadent-catalog-crawler]` with `verify_jwt = false`. |
-| 3 | `src/components/admin/GasDatasetRegistry.tsx` | New component — clone of `NpgDatasetRegistry.tsx` but for gas networks. Initial `gdnConfig` map with `CADENT: { label: "Cadent Gas", crawler: "cadent-catalog-crawler", portalUrl: "cadentgas.opendatasoft.com" }`. Same crawl/ingest/auto-link/sync-all UI. Uses same `dno_dataset_registry` table (the `dno` column will store `CADENT`, `NGN`, `SGN`, `WWU` etc). |
-| 4 | `src/pages/Admin.tsx` | Add new "Gas Registry" tab (with a `Flame` icon) between "DNO Registry" and "External APIs". Import and render `GasDatasetRegistry`. |
-| 5 | `src/components/map/LayerTogglePanel.tsx` | Add a 5th tab called "Gas" (with `Flame` icon) in the tabs grid (change `grid-cols-4` to `grid-cols-5`). Filter `registryLayers` where `dno` matches gas operators (`CADENT`, `NGN`, `SGN`, `WWU`) and render them in the same DNO→Category tree structure as the Network tab. Remove gas operators from the Network tab filter so they don't appear in both. |
-| 6 | Migration | Add Cadent matching rules to `auto_create_dno_layers` RPC: `gas.*pipe\|gpi` → "Cadent Gas Pipes" (`geo_cables`, LineString), `network.*zone\|boundary` → "Cadent Network Zones" (`geo_polygons`, Polygon), `pressure` → "Cadent Pressure Data" (`geo_points`, Point). |
+```typescript
+const dnoApiKeyMap: Record<string, string> = {
+  NPG: "NPG_API_KEY",
+  ENWL: "ENWL_API_KEY",
+  SPEN: "SPEN_API_KEY",
+  NGED: "NGED_API_KEY",
+};
+const apiKeyEnvName = dnoApiKeyMap[entry.dno] || "NPG_API_KEY";  // ← CADENT falls through to NPG_API_KEY
+const apiKey = Deno.env.get(apiKeyEnvName) || null;
+```
 
-### Gas GDN Operators (Future-Ready)
-The `gdnConfig` in the Gas Registry will be extensible for:
-- **CADENT** — Opendatasoft API (building now)
-- **NGN** — Northern Gas Networks (future, pending API verification)
-- **SGN** — Scotia Gas Networks (future, login required)
-- **WWU** — Wales & West Utilities (future, request-based)
+When `dno = "CADENT"`, it defaults to `NPG_API_KEY`. That NPG key is then appended to Cadent's URLs (line 862-864 in `fetchWithRetry`), and Cadent's public API rejects it with **401: API key is not valid**.
 
-### How It Works
-- Gas datasets use the **same `dno_dataset_registry` table** — the `dno` column stores `CADENT`, `NGN`, etc.
-- Gas layers use the **same `layer_registry` + `geo_*` storage tables** — they just have `dno = "CADENT"` etc.
-- The map layer panel separates gas from electricity by checking the `dno` value against a known gas operator list.
-- The admin console has a dedicated "Gas Registry" tab so gas and electricity discovery are managed independently.
+### Fix
 
-### After Implementation
-1. Go to **Admin → Gas Registry → Cadent Gas**
-2. Click **Discover All Datasets** to crawl the Cadent portal
-3. Click **Auto-Link Layers** to create GIS layer entries
-4. Click **Sync All Active** to ingest gas pipe data
-5. On the map, click the **Gas** tab in the Layers panel to toggle gas layers
+One change in `npg-dataset-ingest/index.ts`:
+
+| Line | Change |
+|------|--------|
+| 127-134 | Add `UKPN` to the map. For DNOs **not** in the map (like `CADENT`), set `apiKey = null` instead of falling back to `NPG_API_KEY`. This allows public portals to work without authentication. |
+
+Updated code:
+```typescript
+const dnoApiKeyMap: Record<string, string> = {
+  NPG: "NPG_API_KEY",
+  ENWL: "ENWL_API_KEY",
+  SPEN: "SPEN_API_KEY",
+  NGED: "NGED_API_KEY",
+  UKPN: "UKPN_API_KEY",
+};
+const apiKeyEnvName = dnoApiKeyMap[entry.dno] || null;
+const apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
+```
+
+This means:
+- **CADENT, NGN, SGN, WWU** (no entry in map) → `apiKey = null` → no key appended → public API works
+- **NPG, ENWL, SPEN, NGED, UKPN** → use their specific API keys as before
+
+### No other changes needed
+The crawler (`cadent-catalog-crawler`) already works — it discovered 413 datasets successfully. Only the ingest function needs this one fix.
+
+### After Fix
+Go to **Admin → Gas Registry → Cadent Gas** and click **Sync All Active** — datasets should ingest without 401 errors.
 
