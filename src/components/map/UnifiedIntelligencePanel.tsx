@@ -138,6 +138,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
+  const [safetyResult, setSafetyResult] = useState<SafetyResult | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
 
   const pkw = Number(proposedKw) || 0;
