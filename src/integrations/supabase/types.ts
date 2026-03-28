@@ -2155,6 +2155,22 @@ export type Database = {
         Args: { p_lat: number; p_lng: number }
         Returns: string
       }
+      nearby_geo_points_by_slug: {
+        Args: {
+          p_lat: number
+          p_limit?: number
+          p_lng: number
+          p_radius_m?: number
+          p_slug: string
+        }
+        Returns: {
+          asset_id: string
+          attrs_json: Json
+          distance_m: number
+          id: string
+          name: string
+        }[]
+      }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
