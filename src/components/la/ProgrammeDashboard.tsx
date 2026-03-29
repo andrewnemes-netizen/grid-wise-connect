@@ -210,6 +210,11 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
           phase: r.phase,
           phase_rationale: r.phase_rationale,
           source: "la_programme_batch",
+          surface_split: r.surface_split,
+          nearby_crossings: r.nearby_crossings ?? 0,
+          nearby_signals: r.nearby_signals ?? 0,
+          route_constraints: r.route_constraints || [],
+          osm_coverage: r.osm_coverage || "none",
         },
       }));
 
