@@ -331,5 +331,5 @@ export function useLayerManager(
     layerMap,
     loadLayer,
   };
-  };
+}
 }
