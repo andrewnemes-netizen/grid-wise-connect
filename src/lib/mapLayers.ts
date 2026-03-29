@@ -6,9 +6,9 @@ import maplibregl from "maplibre-gl";
 // Overpass-backed layers use the edge function instead of the database RPC
 // Max bbox span guards per road type — reject oversized viewports on the client side
 const OVERPASS_MAX_SPAN: Record<string, number> = {
-  osm_major_roads: 0.5,
-  osm_minor_roads: 0.25,
-  osm_footways: 0.2,
+  osm_major_roads: 0.15,
+  osm_minor_roads: 0.08,
+  osm_footways: 0.05,
 };
 
 async function fetchOverpassGeoJSON(
@@ -29,14 +29,26 @@ async function fetchOverpassGeoJSON(
 
   // Convert [west, south, east, north] → [south, west, north, east] for Overpass
   const overpassBbox = [bbox[1], bbox[0], bbox[3], bbox[2]];
-  const { data, error } = await supabase.functions.invoke("overpass-road-fetch", {
+
+  // 10s frontend timeout — guaranteed resolution, no indefinite spinner
+  const timeoutPromise = new Promise<GeoJSON.FeatureCollection>((_, reject) =>
+    setTimeout(() => reject(new Error("Overpass timeout")), 10000)
+  );
+  const fetchPromise = supabase.functions.invoke("overpass-road-fetch", {
     body: { bbox: overpassBbox, road_type: slug, feature_cap: featureLimit ?? 5000 },
   });
-  if (error) {
-    console.error("Overpass fetch error:", error);
+
+  try {
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise.then(() => { throw new Error("timeout"); })]) as any;
+    if (error) {
+      console.error("Overpass fetch error:", error);
+      return { type: "FeatureCollection", features: [] };
+    }
+    return data as GeoJSON.FeatureCollection;
+  } catch (e) {
+    console.warn(`Overpass request for ${slug} timed out or failed — returning empty`);
     return { type: "FeatureCollection", features: [] };
   }
-  return data as GeoJSON.FeatureCollection;
 }
 
 // Cache for fetched GeoJSON keyed by "layerId:bbox"
