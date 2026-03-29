@@ -450,6 +450,29 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                     <TableCell className="text-xs">{r.accident_count ?? 0}</TableCell>
                     <TableCell className="text-xs">{r.grid_readiness}</TableCell>
                     <TableCell className="text-xs">{r.deployment_class}</TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const sp = r.surface_split;
+                        if (!sp) return <span className="text-muted-foreground">—</span>;
+                        const dominant = sp.footway_pct >= sp.carriageway_pct && sp.footway_pct >= sp.verge_pct ? "Footway"
+                          : sp.carriageway_pct >= sp.verge_pct ? "Road" : "Verge";
+                        return (
+                          <Badge variant="outline" className={`text-[10px] ${r.osm_coverage === "cached" ? "border-emerald-300" : "border-muted"}`} title={`F${sp.footway_pct}/C${sp.carriageway_pct}/V${sp.verge_pct}`}>
+                            {dominant}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex gap-0.5 flex-wrap">
+                        {(r.route_constraints || []).map((c, ci) => (
+                          <Badge key={ci} variant="outline" className="text-[9px] border-destructive/50 text-destructive">
+                            {c.replace("_NEARBY", "").replace("SIGNAL_CONTROLLED", "Signals").toLowerCase()}
+                          </Badge>
+                        ))}
+                        {(r.route_constraints || []).length === 0 && <span className="text-muted-foreground">—</span>}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-xs">{r.cost_band}</TableCell>
                     <TableCell className="text-xs">£{r.total_estimate.toLocaleString()}</TableCell>
                     <TableCell className="text-xs max-w-[120px] truncate" title={r.best_poc}>{r.best_poc}</TableCell>
