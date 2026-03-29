@@ -1,58 +1,78 @@
 
+## Fix Plan: OSM Enrichment Logic (not data availability)
 
-## LA Programme: OSM-Enriched Batch Scoring
+### What’s actually broken
+You’re right: this is a logic issue, not missing datasets.
 
-### Problem
-The `score-sites-batch` edge function uses a **hardcoded 60/30/10** surface split (footway/carriageway/verge) for all sites. It also has no awareness of nearby crossings, traffic signals, railways, or water bodies — all of which affect civil engineering costs and route feasibility.
+From code + backend checks:
+1. `score-sites-batch` only looks up **one z14 tile ID** for every OSM layer.
+2. Cache is stored at **mixed zooms per layer**:
+   - major roads: z12
+   - minor roads / rail / water: z13
+   - footways / crossings / signals: z14
+3. Water constraint slug mismatch:
+   - scorer looks for `osm_water_bodies`
+   - cache/layers use `osm_water`
 
-### Approach
-Enrich each site's scoring with nearby OSM data by querying the `osm_tile_cache` for road features, crossings, and signals around each site's coordinates. This replaces the hardcoded split with data-driven surface estimates and adds route constraint flags.
+That combination makes `osm_coverage` frequently return `"none"` even when minor roads/footways are cached.
 
-Full per-site route segmentation (calling `osm-route-segment`) is impractical for batch scoring — each call does 5 Overpass queries, and with 500 sites that would be 2,500 Overpass calls. Instead, we sample cached tile data.
+---
 
-### Changes
+## Implementation steps
 
-**1. Edge Function: `supabase/functions/score-sites-batch/index.ts`**
+1. **Refactor `queryOsmContext` in `supabase/functions/score-sites-batch/index.ts`**
+   - Add a per-layer config map: slug + zoom + classification.
+   - Use correct slugs (`osm_water`, not `osm_water_bodies`).
 
-Add a new function `queryOsmContext(supabase, lng, lat)` that:
-- Computes the z14 tile ID containing the site's coordinates
-- Queries `osm_tile_cache` for `osm_major_roads`, `osm_minor_roads`, `osm_footways`, `osm_crossings`, `osm_traffic_signals` tiles covering that point
-- From cached GeoJSON, finds features within ~200m of the site
-- Derives a **data-driven surface split** from the ratio of nearby footway vs road vs verge lengths
-- Counts nearby crossings and traffic signals
-- Checks for nearby railway/water features (from `osm_railways`, `osm_water_bodies` if cached)
+2. **Use per-layer deterministic tile lookup**
+   - For each configured layer, compute tile ID using that layer’s zoom.
+   - Query cache using all computed `(layer_slug, tile_id)` candidates (single DB query).
 
-Update `estimateTotalCost` to accept the OSM-derived surface split instead of hardcoded 60/30/10.
+3. **Add border-safe neighbor tile scan**
+   - For each layer zoom, include a 3x3 tile ring around site tile (center + neighbors).
+   - This avoids false negatives when a site is near tile boundaries.
 
-Add new fields to `ScoredRow`:
-- `surface_split` — `{ footway_pct, carriageway_pct, verge_pct }` (data-driven or fallback)
-- `nearby_crossings` — count of pedestrian crossings within 200m
-- `nearby_signals` — count of traffic signals within 200m
-- `route_constraints` — array of flags like `RAILWAY_NEARBY`, `WATER_NEARBY`
-- `osm_coverage` — `"cached" | "none"` indicating data source
+4. **Keep proximity filtering, but apply after correct cache retrieval**
+   - Reuse 200m distance check.
+   - Keep split/constraints derivation logic, but on correctly fetched features.
 
-Update phasing logic: sites with `RAILWAY_NEARBY` or `WATER_NEARBY` constraints get a penalty pushing them toward Phase 2/3.
+5. **Fix coverage semantics**
+   - `osm_coverage = "cached"` when relevant cached tiles exist for road/context layers.
+   - Keep fallback split only when no nearby road geometry is detected.
 
-**2. Frontend: `src/components/la/ProgrammeDashboard.tsx`**
+6. **Add targeted debug logging**
+   - Log per-site cache hits by layer + tile count + nearby feature counts.
+   - Makes future regressions obvious in function logs.
 
-Add columns to the results table:
-- "Surface" — shows dominant surface type badge (Footway/Road/Mixed)
-- "Constraints" — shows route constraint badges (railway, water, signals)
-- "OSM" — indicator showing whether OSM data was available
+---
 
-Update CSV export to include the new fields.
+## End-to-end validation plan
 
-**3. Frontend: `src/components/la/CsvIntakePanel.tsx`**
+1. Warm cache by calling `overpass-road-fetch` for:
+   - `osm_minor_roads`
+   - `osm_footways`
+   - `osm_crossings`
+   - `osm_traffic_signals`
+   around Stockton/Yarm area.
 
-No changes needed — the intake format stays the same.
+2. Verify cache rows exist in `osm_tile_cache` for expected slugs and tile IDs.
 
-### Files Changed
-- `supabase/functions/score-sites-batch/index.ts` — add OSM context query, data-driven surface split, new scored fields
-- `src/components/la/ProgrammeDashboard.tsx` — add surface/constraint columns, update export
+3. Run `score-sites-batch` with:
+   - `TS17 0NP`
+   - `Low Ln, Stockton-on-Tees, Yarm TS15 9JT` (or postcode TS15 9JT)
 
-### Expected Outcome
-- Cost estimates use real road surface data where OSM tiles are cached (falls back to 60/30/10 where not)
-- Sites near railway crossings or water bodies are flagged and phased appropriately
-- Dashboard shows richer constraint intelligence per site
-- No additional Overpass API calls — reads from existing `osm_tile_cache`
+4. Pass criteria:
+   - at least one site returns `osm_coverage: "cached"`
+   - surface split is not always fallback-only behavior in urban tiles
+   - crossings/signals reflect cached context when present
 
+5. Regression check:
+   - test a second urban area already cached to confirm same behavior.
+
+---
+
+## Files to change
+- `supabase/functions/score-sites-batch/index.ts` (primary fix only)
+
+## No DB migration needed
+- Schema/table structure is already sufficient (`osm_tile_cache` + existing OSM layer slugs).
