@@ -643,7 +643,7 @@ Deno.serve(async (req) => {
         const dc = getDeploymentClass(headroom, site.proposed_kw, util, constraintCount, ndp);
         const gr = getGridReadiness(headroom, util, site.proposed_kw);
         const rp = getReinforcementProbability(headroom, site.proposed_kw);
-        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom, unitRates);
+        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom, unitRates, osmCtx.split);
         const cb = getCostBand(total);
         const bestPoc = nearestSub?.site_name || "Unknown";
 
@@ -657,6 +657,8 @@ Deno.serve(async (req) => {
           phase: 0, phase_rationale: "",
           traffic_aadf: maxAadf, nearby_bus_stops: busStops, nearby_rail_stations: railStations,
           accident_count: accidentCount, master_score: masterScore,
+          surface_split: osmCtx.split, nearby_crossings: osmCtx.crossings, nearby_signals: osmCtx.signals,
+          route_constraints: osmCtx.constraints, osm_coverage: osmCtx.found ? "cached" : "none",
         };
 
         const phasing = assignPhase(row);
