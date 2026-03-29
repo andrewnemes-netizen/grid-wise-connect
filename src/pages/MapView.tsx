@@ -281,6 +281,7 @@ const MapView = () => {
 
   const clearConnectionLines = useCallback(() => {
     if (!map) return;
+    connectionLinesRef.current = [];
     ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
