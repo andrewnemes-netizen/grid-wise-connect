@@ -495,7 +495,8 @@ async function ingestViaRecords(
     const resp = await fetchWithRetry(url, apiKey);
     if (resp.status === 403) {
       console.warn(`[ingest] 403 Forbidden for ${entry.dataset_id} — marking as skipped`);
-      await supabase.from("dno_dataset_registry").update({
+      const regTable = ["CADENT", "NGN", "SGN", "WWU"].includes(entry.dno) ? "gas_dataset_registry" : "dno_dataset_registry";
+      await supabase.from(regTable).update({
         last_sync_status: "skipped",
         last_sync_error: "403 Forbidden — restricted dataset, elevated portal permissions required",
         last_sync_at: new Date().toISOString(),
