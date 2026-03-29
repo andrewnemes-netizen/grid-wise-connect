@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass, Crosshair } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ export interface LayerVisibility {
 interface LayerTogglePanelProps {
   visibility: LayerVisibility;
   onToggle: (layerId: string, visible: boolean) => void;
+  onGoToCoverage?: (layerId: string) => void;
   heatmapMode?: boolean;
   onHeatmapToggle?: (enabled: boolean) => void;
   registryLayers: RegistryLayer[];
@@ -86,7 +87,7 @@ export function useRegistryLayers() {
     async function fetch() {
       const { data, error } = await supabase
         .from("layer_registry")
-        .select("id, slug, display_name, dno, category, storage_table, geometry_type, style_json, legend_json, feature_count, enabled, visible_by_default, min_zoom, max_zoom")
+        .select("id, slug, display_name, dno, category, storage_table, geometry_type, style_json, legend_json, feature_count, enabled, visible_by_default, min_zoom, max_zoom, bbox")
         .eq("enabled", true)
         .order("dno")
         .order("category")
@@ -111,6 +112,7 @@ function LayerRow({
   visibility,
   loadingLayers,
   onToggle,
+  onGoToCoverage,
   heatmapMode,
   onHeatmapToggle,
 }: {
@@ -119,6 +121,7 @@ function LayerRow({
   visibility: LayerVisibility;
   loadingLayers: Set<string>;
   onToggle: (id: string, v: boolean) => void;
+  onGoToCoverage?: (id: string) => void;
   heatmapMode?: boolean;
   onHeatmapToggle?: (v: boolean) => void;
 }) {
@@ -128,9 +131,10 @@ function LayerRow({
   const isUtilLayer = layer.slug === "npg_hv_substations_utilisation";
 
   const isEmpty = !layer.feature_count || layer.feature_count === 0;
+  const hasCoverageBbox = Array.isArray(layer.bbox) && layer.bbox.length === 4;
 
   return (
-    <div className={`space-y-0.5 pl-4 ${isEmpty ? 'opacity-50' : ''}`}>
+    <div className={`space-y-0.5 pl-4 ${isEmpty ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-2 py-0.5">
         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
           {isLoading ? (
@@ -151,12 +155,30 @@ function LayerRow({
             </span>
           )}
         </div>
-        <Switch
-          id={`layer-${layer.id}`}
-          checked={isVisible}
-          onCheckedChange={(checked) => onToggle(layer.id, checked)}
-          className="scale-75 shrink-0"
-        />
+        <div className="flex items-center gap-1 shrink-0">
+          {onGoToCoverage && hasCoverageBbox && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={() => onGoToCoverage(layer.id)}
+                >
+                  <Crosshair className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Go to coverage area</TooltipContent>
+            </Tooltip>
+          )}
+          <Switch
+            id={`layer-${layer.id}`}
+            checked={isVisible}
+            onCheckedChange={(checked) => onToggle(layer.id, checked)}
+            className="scale-75 shrink-0"
+          />
+        </div>
       </div>
       {isUtilLayer && isVisible && onHeatmapToggle && (
         <div className="flex items-center gap-1.5 pl-5 pb-0.5">
@@ -185,6 +207,7 @@ function CategoryGroup({
   visibility,
   loadingLayers,
   onToggle,
+  onGoToCoverage,
   heatmapMode,
   onHeatmapToggle,
 }: {
@@ -196,6 +219,7 @@ function CategoryGroup({
   visibility: LayerVisibility;
   loadingLayers: Set<string>;
   onToggle: (id: string, v: boolean) => void;
+  onGoToCoverage?: (id: string) => void;
   heatmapMode?: boolean;
   onHeatmapToggle?: (v: boolean) => void;
 }) {
@@ -213,7 +237,17 @@ function CategoryGroup({
       </button>
       {!isCollapsed &&
         layers.map((layer, idx) => (
-          <LayerRow key={layer.id} layer={layer} idx={idx} visibility={visibility} loadingLayers={loadingLayers} onToggle={onToggle} heatmapMode={heatmapMode} onHeatmapToggle={onHeatmapToggle} />
+          <LayerRow
+            key={layer.id}
+            layer={layer}
+            idx={idx}
+            visibility={visibility}
+            loadingLayers={loadingLayers}
+            onToggle={onToggle}
+            onGoToCoverage={onGoToCoverage}
+            heatmapMode={heatmapMode}
+            onHeatmapToggle={onHeatmapToggle}
+          />
         ))}
     </div>
   );
@@ -223,6 +257,7 @@ function CategoryGroup({
 export function LayerTogglePanel({
   visibility,
   onToggle,
+  onGoToCoverage,
   heatmapMode,
   onHeatmapToggle,
   registryLayers,
@@ -398,6 +433,7 @@ export function LayerTogglePanel({
                         visibility={visibility}
                         loadingLayers={loadingLayers}
                         onToggle={onToggle}
+                        onGoToCoverage={onGoToCoverage}
                         heatmapMode={heatmapMode}
                         onHeatmapToggle={onHeatmapToggle}
                       />
@@ -437,6 +473,7 @@ export function LayerTogglePanel({
                           visibility={visibility}
                           loadingLayers={loadingLayers}
                           onToggle={onToggle}
+                          onGoToCoverage={onGoToCoverage}
                         />
                       ))}
                     </div>
