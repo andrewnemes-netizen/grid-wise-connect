@@ -168,27 +168,12 @@ export function useLayerManager(
 
         if (geojson.features.length === 0 && showEmptyToast) {
           const hasAnyData = layer.feature_count && layer.feature_count > 0;
-          const layerBbox = layer.bbox;
-          const canFlyTo = hasAnyData && layerBbox && Array.isArray(layerBbox) && layerBbox.length === 4;
-
-          if (canFlyTo) {
-            // Auto-fly to coverage area and reload
-            map.fitBounds(
-              [[layerBbox[0], layerBbox[1]], [layerBbox[2], layerBbox[3]]],
-              { padding: 40, maxZoom: 14 }
-            );
-            toast({
-              title: layer.display_name,
-              description: "Flying to coverage area…",
-            });
-          } else {
-            toast({
-              title: layer.display_name,
-              description: hasAnyData
-                ? "No data in this viewport — try panning to the layer's coverage area."
-                : "No data available yet. Run Sync in Admin to ingest this dataset.",
-            });
-          }
+          toast({
+            title: layer.display_name,
+            description: hasAnyData
+              ? "No data in this viewport — try panning to the layer's coverage area."
+              : "No data available yet. Run Sync in Admin to ingest this dataset.",
+          });
         }
       } catch (err) {
         console.error(`Failed to load layer ${layerId}:`, err);
@@ -319,6 +304,20 @@ export function useLayerManager(
     setSelectedLayerLabel("");
   }, []);
 
+  const goToLayerCoverage = useCallback(
+    (layerId: string) => {
+      if (!map || !mapLoaded) return;
+      const layer = layerMap.get(layerId);
+      const bbox = layer?.bbox;
+      if (!bbox || !Array.isArray(bbox) || bbox.length !== 4) return;
+      map.fitBounds(
+        [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+        { padding: 48, maxZoom: 13 }
+      );
+    },
+    [map, mapLoaded, layerMap]
+  );
+
   return {
     registryLayers,
     registryLoading,
@@ -328,7 +327,9 @@ export function useLayerManager(
     selectedFeature,
     selectedLayerLabel,
     closeFeatureInfo,
+    goToLayerCoverage,
     layerMap,
     loadLayer,
+  };
   };
 }
