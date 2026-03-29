@@ -90,7 +90,7 @@ const MapView = () => {
   // Extracted hooks
   const {
     registryLayers, visibility, handleLayerToggle, loadingLayers,
-    selectedFeature, selectedLayerLabel, closeFeatureInfo, layerMap,
+    selectedFeature, selectedLayerLabel, closeFeatureInfo, goToLayerCoverage, layerMap,
   } = useLayerManager(map, mapLoaded, heatmapMode, selectedDno);
 
   const connect = useConnectTool(map, layerMap);
@@ -454,6 +454,7 @@ const MapView = () => {
           <LayerTogglePanel
             visibility={visibility}
             onToggle={handleLayerToggle}
+            onGoToCoverage={goToLayerCoverage}
             heatmapMode={heatmapMode}
             onHeatmapToggle={handleHeatmapToggle}
             registryLayers={registryLayers}
