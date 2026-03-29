@@ -1,61 +1,82 @@
 
 
-## Fix: GIS Map Layers Showing "No Data in This Viewport"
+## Overpass API Road Data Integration
 
-### What's Actually Happening
+### Assessment of the ChatGPT Advice
 
-Database audit shows many layers have **0 features ingested** — the data simply isn't there yet:
+The advice is **mostly correct** but needs adjustments for your architecture:
 
-| DNO | Layers with data | Empty layers | Total features |
-|-----|-----------------|-------------|----------------|
-| CADENT | 3 of 7 | 4 | 30,010 |
-| NGED | 2 of 26 | 24 | 34,692 |
-| ENWL | 16 of 21 | 5 | 442,579 |
-| NPG | 16 of 18 | 2 | 961,143 |
-| UKPN | 21 of 23 | 2 | 1,012,374 |
-| SPEN | 13 of 16 | 3 | 61,817 |
+**Good ideas to keep:**
+- POST to `https://overpass-api.de/api/interpreter` with Overpass QL
+- Fallback endpoints for reliability
+- Bbox-based queries matching your existing viewport pattern
+- Road type filtering (major/minor/footway)
+- `(south,west,north,east)` bbox format (different from your `[west,south,east,north]` — needs conversion)
 
-The layers that DO have data (e.g. Cadent Network Zones — 10 polygons, Cadent Gas Pipes Open — 20,000 lines) **work correctly** when the viewport overlaps. The session replay confirms Network Zones rendered and was clickable.
+**Things to ignore or change:**
+- "geo_roads" table — unnecessary. Your architecture already uses `geo_features` with `layer_id` foreign keys. Roads should follow the same pattern.
+- "A* routing engine" — out of scope, not needed for layer display or cost estimation
+- The "10. FINAL LOVABLE PROMPT" section — generic boilerplate, not useful
+- Splitting UK into grid tiles for ingest — overkill for now; live viewport layers are sufficient initially
 
-The "No data in this viewport" toast fires because:
-1. **Empty layers** (0 features globally) — misleading message, should say "No data available"
-2. **Viewport mismatch** — data exists but user is viewing a different region (e.g. Cadent LP Pipes only covers London area lat 51.3–51.7)
+### What to Build
 
-### Two Problems, Two Fixes
+| # | Component | Description |
+|---|-----------|-------------|
+| 1 | Edge function `overpass-road-fetch` | Accepts bbox + road_type, queries Overpass API, converts response to standard GeoJSON, returns it |
+| 2 | Three layer_registry entries | "OSM Major Roads", "OSM Minor Roads", "OSM Footways" with source_type = `overpass` |
+| 3 | Frontend integration | Detect `source_type = 'overpass'` in `fetchLayerGeoJSON` and route to the edge function instead of the database RPC |
 
-**Fix 1: Better empty-layer messaging** — Before fetching, check if the layer has any data at all. If the layer's `record_count` in the registry is 0 or the RPC returns 0 features with no bbox filter, show "No data available yet — run Sync in Admin" instead of the misleading viewport message.
+### Architecture Fit
 
-**Fix 2: Re-run ingestion for empty NGED layers** — NGED has 24 empty layers out of 26. These need to be synced from Admin. This is an operational step, not a code fix. But we can make the UI clearer about which layers need syncing.
+These are **live viewport layers** (not ingested), matching your data strategy for visual-only layers. The edge function acts as a proxy, same pattern as `os-features-proxy` and `planning-vector-tile`.
 
-### Implementation
+```text
+User pans map
+  → useLayerManager detects visible Overpass layer
+  → fetchLayerGeoJSON sees source_type='overpass'
+  → calls overpass-road-fetch edge function with viewport bbox
+  → edge function POSTs to Overpass API
+  → returns GeoJSON → rendered on map
+```
 
-| # | Change | File |
-|---|--------|------|
-| 1 | Store `feature_count` from layer_registry in the `RegistryLayer` type and fetch it with the layer list | `src/components/map/LayerTogglePanel.tsx` |
-| 2 | In `loadLayer`, if layer has 0 known features, show "No data available — sync required" toast instead of "No data in this viewport" | `src/hooks/useLayerManager.ts` |
-| 3 | Dim/badge layers with 0 features in the toggle panel so user knows which layers have data | `src/components/map/LayerTogglePanel.tsx` |
-| 4 | After successful ingest, update `record_count` on the layer_registry entry so the count stays current | `supabase/functions/npg-dataset-ingest/index.ts` |
+### Edge Function: `overpass-road-fetch`
 
-### Technical Detail
+- **Input**: `{ bbox: [south, west, north, east], road_type: "major" | "minor" | "footway" }`
+- **Query builder**: Maps road_type to highway filter (`motorway|trunk|primary`, `secondary|tertiary|residential|unclassified`, `footway|path|cycleway`)
+- **Retry logic**: Primary endpoint → kumi.systems fallback → openstreetmap.ru fallback
+- **Response transform**: Overpass JSON → GeoJSON FeatureCollection (convert `geometry` array of `{lat,lon}` to `[lon,lat]` coordinate arrays)
+- **Timeout**: 25s Overpass timeout, 30s fetch timeout
+- **No auth required**: Public OSM data, but function still validates JWT for consistency
 
-In `useLayerManager.ts` `loadLayer`:
+### Frontend Changes
+
+**`src/lib/mapLayers.ts`** — In `fetchLayerGeoJSON`, add a branch:
 ```typescript
-if (geojson.features.length === 0 && showEmptyToast) {
-  const hasAnyData = layer.record_count && layer.record_count > 0;
-  toast({
-    title: layer.display_name,
-    description: hasAnyData
-      ? "No data in this viewport — try panning to the layer's coverage area."
-      : "No data available yet. Run Sync in Admin to ingest this dataset.",
+if (layer.source_type === 'overpass') {
+  // Call edge function instead of database RPC
+  const { data } = await supabase.functions.invoke('overpass-road-fetch', {
+    body: { bbox: [south, west, north, east], road_type: layer.slug }
   });
+  return data;
 }
 ```
 
-In `LayerTogglePanel.tsx`, layers with `record_count === 0` get a subtle badge or reduced opacity so users can see at a glance which layers are populated.
+**`src/components/map/LayerTogglePanel.tsx`** — Add `source_type` to the `RegistryLayer` interface and query.
 
-### Expected Outcome
-- Layers with data render correctly when viewport overlaps (already working)
-- Empty layers show clear "needs sync" messaging instead of misleading viewport message
-- Layer toggle panel visually indicates which layers have data
-- After running Sync All in Admin for NGED/CADENT, new features populate and layers render
+### Database Changes
+
+Insert 3 rows into `layer_registry` (via insert tool, not migration):
+- `osm_major_roads` — Major Roads (motorway, trunk, primary)
+- `osm_minor_roads` — Minor Roads (secondary, tertiary, residential)  
+- `osm_footways` — Footways & Cycleways
+
+Each with `source_type = 'overpass'`, `geometry_type = 'LineString'`, `dno = 'OSM'`, appropriate `min_zoom` (e.g. 10 for minor, 12 for footways to avoid overloading).
+
+### Performance Safeguards
+
+- Min zoom enforcement: major roads z8+, minor roads z10+, footways z12+
+- Overpass timeout cap: 25 seconds
+- Feature cap inherited from existing line layer limits (3000–5000)
+- Existing bbox overlap/shift logic in `useLayerManager` prevents redundant fetches
 
