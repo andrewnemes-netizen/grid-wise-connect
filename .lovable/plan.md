@@ -1,46 +1,57 @@
 
 
-## Fix Memory & Timeout Errors in Ingest Function
+## Fix Gas Registry Table + Sync Status Tracking
 
-### Problem
-Two functions load entire responses into memory before processing:
-1. **`ingestViaGeoJsonExport`** (line 291): `await resp.json()` — loads full GeoJSON file into memory
-2. **`ingestViaCkanGeoJson`** (line 508): `await resp.json()` — same issue
-3. **`ingestViaCsvExport`** (line 340): `await resp.text()` — loads full CSV into memory
+### Problem 1: Gas Registry Table Missing
+The `gas_dataset_registry` table was never created. The Gas Registry admin tab queries a non-existent table, showing 0 datasets. Cadent's 413 datasets currently live in `dno_dataset_registry`.
 
-For large UKPN/Cadent datasets (10k+ features, complex polygon geometries), this exceeds Edge Function memory limits.
+### Problem 2: Sync Status Never Updated to "synced"
+After successful ingestion, `last_sync_status` is not being set to `"synced"` — it stays null or only gets set on errors. The Layers tab shows real feature counts (Cadent LP: 10,000; ENWL Capacity: 1,808) but the registry shows 0 synced.
 
-### Solution: Streaming + Chunked Processing
+### Solution
 
-| # | File | Change |
-|---|------|--------|
-| 1 | `supabase/functions/npg-dataset-ingest/index.ts` | Replace `ingestViaGeoJsonExport` with a streaming JSON parser that reads the response body as a stream, extracts individual GeoJSON features incrementally, and inserts them in batches without holding the full file in memory. |
-| 2 | Same file | Replace `ingestViaCkanGeoJson` with the same streaming approach. |
-| 3 | Same file | Replace `ingestViaCsvExport` with line-by-line streaming — read the response body as text chunks, split on newlines, parse CSV rows incrementally, and batch-insert. |
-| 4 | Same file | Add a `streamJsonFeatures` helper that uses `response.body.getReader()` to incrementally parse a GeoJSON FeatureCollection, yielding features one at a time via a buffer approach. |
-| 5 | Same file | Add a `streamCsvRows` helper that reads the response body as text stream, accumulates line fragments, and yields parsed CSV rows. |
-| 6 | Same file | Increase the background timeout from 280s to 400s (Edge Functions support up to ~400s for background tasks via `waitUntil`). |
+| # | Change | Detail |
+|---|--------|--------|
+| 1 | **Create `gas_dataset_registry` table** via migration | Identical schema to `dno_dataset_registry`. Add RLS policies for admin access. |
+| 2 | **Migrate Cadent rows** | Move all 413 CADENT rows from `dno_dataset_registry` to `gas_dataset_registry` in the same migration. |
+| 3 | **Update `GasDatasetRegistry.tsx`** | Change query to read from `gas_dataset_registry` instead of `dno_dataset_registry`. |
+| 4 | **Update `npg-dataset-ingest` edge function** | After successful batch insert, set `last_sync_status = 'synced'` and `last_sync_rows` on the registry entry. Currently only errors update the status. |
+| 5 | **Update `cadent-catalog-crawler`** | Write discovered datasets to `gas_dataset_registry` instead of `dno_dataset_registry`. |
+| 6 | **Update `auto_create_dno_layers` RPC** | Support reading from `gas_dataset_registry` when called for gas operators. |
 
-### Technical Detail: Streaming GeoJSON Parser
+### Technical Detail
 
-Since GeoJSON FeatureCollections follow a predictable structure (`{"type":"FeatureCollection","features":[{...},{...}]}`), the streaming parser will:
-1. Read chunks from `response.body.getReader()`
-2. Accumulate text in a buffer
-3. Track brace depth to detect complete Feature objects within the `features` array
-4. When a complete feature is found, parse it and add to a batch buffer
-5. When batch buffer reaches `batchSize`, insert and clear
+**Migration SQL:**
+```sql
+-- Create gas_dataset_registry (same schema as dno_dataset_registry)
+CREATE TABLE public.gas_dataset_registry (LIKE public.dno_dataset_registry INCLUDING ALL);
 
-This avoids holding >1 feature in memory at a time beyond the current batch.
+-- Move Cadent rows
+INSERT INTO public.gas_dataset_registry SELECT * FROM public.dno_dataset_registry WHERE dno = 'CADENT';
+DELETE FROM public.dno_dataset_registry WHERE dno = 'CADENT';
 
-### Streaming CSV Parser
+-- RLS
+ALTER TABLE public.gas_dataset_registry ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins manage gas registry" ON public.gas_dataset_registry
+  FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Authenticated read gas registry" ON public.gas_dataset_registry
+  FOR SELECT TO authenticated USING (true);
+```
 
-1. Read chunks via `response.body.getReader()` + `TextDecoderStream`
-2. Split on `\n`, accumulate partial lines across chunks
-3. First line = headers
-4. Each subsequent complete line → parse → add to batch → insert when full
+**Sync status fix** in `npg-dataset-ingest/index.ts` — after successful feature insertion, add:
+```typescript
+await supabase.from(registryTable).update({
+  last_sync_status: "synced",
+  last_sync_rows: totalInserted,
+  last_sync_at: new Date().toISOString(),
+  last_sync_error: null,
+}).eq("id", entry.id);
+```
+
+Where `registryTable` is determined by whether the operator is a gas GDN or electricity DNO.
 
 ### Expected Outcome
-- Datasets with 10k+ features or large polygon geometries will ingest without memory crashes
-- The 280s timeout is extended to 400s for very large datasets
-- Existing small datasets continue to work identically (streaming is transparent)
+- Gas Registry tab shows 413 Cadent datasets with correct sync status
+- DNO Registry no longer contains Cadent rows
+- After running Sync All Active, successfully ingested datasets show "synced" status with row counts
 
