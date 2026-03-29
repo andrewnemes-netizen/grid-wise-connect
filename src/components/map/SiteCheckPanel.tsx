@@ -21,6 +21,7 @@ interface SiteCheckPanelProps {
   onClose: () => void;
   onSaved?: () => void;
   onConnectionLines?: (lines: ConnectionLine[]) => void;
+  onCaptureMapScreenshot?: () => Promise<string | null>;
 }
 
 export interface ConnectionLine {
@@ -70,7 +71,7 @@ const STEPS = [
   { num: 3, label: "Save to Portfolio", icon: FolderOpen },
 ];
 
-export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }: SiteCheckPanelProps) {
+export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: SiteCheckPanelProps) {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
@@ -335,20 +336,27 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines }
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => generateAssessmentPdf({
-                    siteName: siteName || undefined,
-                    postcode: postcode || undefined,
-                    proposedKw: Number(proposedKw) || 0,
-                    lat: lat ?? undefined,
-                    lng: lng ?? undefined,
-                    score: result.score,
-                    reasons: result.reasons,
-                    nextSteps: result.next_steps,
-                    distances: result.distances,
-                    distanceBands: result.distance_bands,
-                    constraints: result.constraints,
-                    unitRates,
-                  })}
+                  onClick={async () => {
+                    let locationScreenshot: string | null = null;
+                    if (onCaptureMapScreenshot) {
+                      try { locationScreenshot = await onCaptureMapScreenshot(); } catch {}
+                    }
+                    generateAssessmentPdf({
+                      siteName: siteName || undefined,
+                      postcode: postcode || undefined,
+                      proposedKw: Number(proposedKw) || 0,
+                      lat: lat ?? undefined,
+                      lng: lng ?? undefined,
+                      score: result.score,
+                      reasons: result.reasons,
+                      nextSteps: result.next_steps,
+                      distances: result.distances,
+                      distanceBands: result.distance_bands,
+                      constraints: result.constraints,
+                      unitRates,
+                      locationMapScreenshot: locationScreenshot,
+                    });
+                  }}
                 >
                   <Download className="mr-2 h-4 w-4" />Export PDF
                 </Button>
