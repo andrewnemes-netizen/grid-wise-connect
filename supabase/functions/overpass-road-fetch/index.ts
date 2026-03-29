@@ -12,24 +12,37 @@ const OVERPASS_ENDPOINTS = [
   "https://overpass.openstreetmap.ru/api/interpreter",
 ];
 
-const ROAD_FILTERS: Record<string, string> = {
-  osm_major_roads: "motorway|trunk|primary",
-  osm_minor_roads: "secondary|tertiary|residential|unclassified",
-  osm_footways: "footway|path|cycleway",
+const OSM_FILTERS: Record<string, string> = {
+  // Roads
+  osm_major_roads: 'way["highway"~"motorway|trunk|primary"]',
+  osm_minor_roads: 'way["highway"~"secondary|tertiary|residential|unclassified"]',
+  osm_footways: 'way["highway"~"footway|path|cycleway"]',
+  // Constraints
+  osm_water: '(way["natural"="water"];way["waterway"~"river|canal|stream"];relation["natural"="water"];)',
+  osm_railways: 'way["railway"~"rail|light_rail|subway|tram"]',
+  osm_buildings: 'way["building"]',
+  osm_barriers: '(way["barrier"];node["barrier"];)',
 };
 
-// Max bbox span per road type (degrees). Queries larger than this will be clipped to center.
+// Geometry output type per layer
+const POLYGON_LAYERS = new Set(["osm_water", "osm_buildings"]);
+
+// Max bbox span per layer type (degrees)
 const MAX_BBOX_SPAN: Record<string, number> = {
   osm_major_roads: 0.15,
   osm_minor_roads: 0.08,
   osm_footways: 0.05,
+  osm_water: 0.11,
+  osm_railways: 0.11,
+  osm_buildings: 0.05,
+  osm_barriers: 0.05,
 };
 
 function clampBbox(
   bbox: [number, number, number, number],
-  roadType: string
+  layerType: string
 ): [number, number, number, number] {
-  const maxSpan = MAX_BBOX_SPAN[roadType] ?? 0.1;
+  const maxSpan = MAX_BBOX_SPAN[layerType] ?? 0.1;
   let [south, west, north, east] = bbox;
   const latSpan = north - south;
   const lonSpan = east - west;
@@ -49,11 +62,23 @@ function clampBbox(
 
 function buildQuery(
   bbox: [number, number, number, number],
-  roadType: string
+  layerType: string
 ): string {
-  const filter = ROAD_FILTERS[roadType] ?? ROAD_FILTERS["osm_major_roads"];
+  const filter = OSM_FILTERS[layerType];
+  if (!filter) return "";
   const bboxStr = bbox.join(",");
-  return `[out:json][timeout:10];way["highway"~"${filter}"](${bboxStr});out body geom;`;
+
+  // For grouped queries (water, barriers) the filter already includes parentheses
+  if (filter.startsWith("(")) {
+    // Multi-statement filter
+    // Insert bbox into each sub-statement
+    const inner = filter.slice(1, -1); // strip outer parens
+    const parts = inner.split(";").filter(Boolean);
+    const bboxedParts = parts.map((p) => `${p}(${bboxStr})`);
+    return `[out:json][timeout:10];(${bboxedParts.join(";")};);out body geom;`;
+  }
+
+  return `[out:json][timeout:10];${filter}(${bboxStr});out body geom;`;
 }
 
 interface OverpassElement {
@@ -61,37 +86,117 @@ interface OverpassElement {
   id: number;
   tags?: Record<string, string>;
   geometry?: Array<{ lat: number; lon: number }>;
+  lat?: number;
+  lon?: number;
 }
 
 function overpassToGeoJSON(
-  elements: OverpassElement[]
+  elements: OverpassElement[],
+  layerType: string
 ): GeoJSON.FeatureCollection {
   const features: GeoJSON.Feature[] = [];
+  const isPolygon = POLYGON_LAYERS.has(layerType);
+
   for (const el of elements) {
+    // Handle node elements (barriers can be nodes)
+    if (el.type === "node" && el.lat != null && el.lon != null) {
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [el.lon, el.lat] },
+        properties: {
+          osm_id: el.id,
+          ...extractTags(el.tags, layerType),
+        },
+      });
+      continue;
+    }
+
     if (!el.geometry || el.geometry.length < 2) continue;
     const coords = el.geometry.map((p) => [p.lon, p.lat]);
-    features.push({
-      type: "Feature",
-      geometry: { type: "LineString", coordinates: coords },
-      properties: {
-        osm_id: el.id,
-        highway: el.tags?.highway ?? null,
-        name: el.tags?.name ?? null,
-        surface: el.tags?.surface ?? null,
-        lanes: el.tags?.lanes ?? null,
-        maxspeed: el.tags?.maxspeed ?? null,
-        width: el.tags?.width ?? null,
-        oneway: el.tags?.oneway ?? null,
-      },
-    });
+
+    if (isPolygon && coords.length >= 4) {
+      // Close ring if needed
+      const first = coords[0];
+      const last = coords[coords.length - 1];
+      if (first[0] !== last[0] || first[1] !== last[1]) {
+        coords.push([...first]);
+      }
+      features.push({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [coords] },
+        properties: {
+          osm_id: el.id,
+          ...extractTags(el.tags, layerType),
+        },
+      });
+    } else {
+      features.push({
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: {
+          osm_id: el.id,
+          ...extractTags(el.tags, layerType),
+        },
+      });
+    }
   }
   return { type: "FeatureCollection", features };
+}
+
+function extractTags(
+  tags: Record<string, string> | undefined,
+  layerType: string
+): Record<string, unknown> {
+  if (!tags) return {};
+  switch (layerType) {
+    case "osm_major_roads":
+    case "osm_minor_roads":
+    case "osm_footways":
+      return {
+        highway: tags.highway ?? null,
+        name: tags.name ?? null,
+        surface: tags.surface ?? null,
+        lanes: tags.lanes ?? null,
+        maxspeed: tags.maxspeed ?? null,
+        width: tags.width ?? null,
+        oneway: tags.oneway ?? null,
+      };
+    case "osm_water":
+      return {
+        natural: tags.natural ?? null,
+        waterway: tags.waterway ?? null,
+        name: tags.name ?? null,
+      };
+    case "osm_railways":
+      return {
+        railway: tags.railway ?? null,
+        name: tags.name ?? null,
+        electrified: tags.electrified ?? null,
+        gauge: tags.gauge ?? null,
+      };
+    case "osm_buildings":
+      return {
+        building: tags.building ?? null,
+        name: tags.name ?? null,
+        amenity: tags.amenity ?? null,
+        "addr:street": tags["addr:street"] ?? null,
+      };
+    case "osm_barriers":
+      return {
+        barrier: tags.barrier ?? null,
+        access: tags.access ?? null,
+        name: tags.name ?? null,
+      };
+    default:
+      return { name: tags.name ?? null };
+  }
 }
 
 /** Race all endpoints in parallel — first successful response wins */
 async function fetchWithRace(
   query: string,
-  featureCap: number
+  featureCap: number,
+  layerType: string
 ): Promise<GeoJSON.FeatureCollection> {
   const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
     const resp = await fetch(endpoint, {
@@ -106,7 +211,7 @@ async function fetchWithRace(
     }
     const json = await resp.json();
     const elements: OverpassElement[] = json.elements ?? [];
-    return overpassToGeoJSON(elements.slice(0, featureCap));
+    return overpassToGeoJSON(elements.slice(0, featureCap), layerType);
   });
 
   try {
@@ -147,12 +252,12 @@ Deno.serve(async (req: Request) => {
       !Array.isArray(bbox) ||
       bbox.length !== 4 ||
       !road_type ||
-      !ROAD_FILTERS[road_type]
+      !OSM_FILTERS[road_type]
     ) {
       return new Response(
         JSON.stringify({
           error:
-            "Invalid input. Required: bbox [south,west,north,east], road_type (osm_major_roads|osm_minor_roads|osm_footways)",
+            "Invalid input. Required: bbox [south,west,north,east], road_type (osm_major_roads|osm_minor_roads|osm_footways|osm_water|osm_railways|osm_buildings|osm_barriers)",
         }),
         {
           status: 400,
@@ -161,11 +266,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Clamp bbox to prevent oversized queries
     const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
     const query = buildQuery(clampedBbox, road_type);
-    const geojson = await fetchWithRace(query, cap);
+    const geojson = await fetchWithRace(query, cap, road_type);
 
     return new Response(JSON.stringify(geojson), {
       status: 200,
