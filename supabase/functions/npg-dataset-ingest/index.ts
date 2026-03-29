@@ -1013,26 +1013,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.split("\n");
-  if (lines.length < 2) return [];
-
-  const headers = parseCSVLine(lines[0]);
-  const rows: Record<string, string>[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const values = parseCSVLine(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, idx) => {
-      row[h.trim()] = values[idx] || "";
-    });
-    rows.push(row);
-  }
-
-  return rows;
-}
+// parseCSV removed — CSV ingestion now uses streaming
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
