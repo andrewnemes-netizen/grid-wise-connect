@@ -335,16 +335,24 @@ const MapView = () => {
     if (!map || !pin.pinLocation) return { location: null, route: null };
     const { lng, lat } = pin.pinLocation;
 
+    // Save original camera to restore after screenshots
+    const origCenter = map.getCenter();
+    const origZoom = map.getZoom();
+
+    // Helper: validate a coord tuple
+    const isValidCoord = (c: any): c is [number, number] =>
+      Array.isArray(c) && c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number" && isFinite(c[0]) && isFinite(c[1]);
+
     // --- Collect all connection line coords from stored ref ---
     const allLineCoords: [number, number][] = [];
     const endpointFeatures: { coord: [number, number]; role: string; color: string }[] = [];
 
     connectionLinesRef.current.forEach((line) => {
-      if (line.coords.length >= 2) {
-        allLineCoords.push(...line.coords);
+      const validCoords = line.coords.filter(isValidCoord);
+      if (validCoords.length >= 2) {
+        allLineCoords.push(...validCoords);
         const roleLabel = line.id.replace("line-", "");
-        // Remote endpoint (substation/feeder/cable end) is the last coord
-        endpointFeatures.push({ coord: line.coords[line.coords.length - 1], role: roleLabel, color: line.color });
+        endpointFeatures.push({ coord: validCoords[validCoords.length - 1], role: roleLabel, color: line.color });
       }
     });
 
@@ -473,6 +481,8 @@ const MapView = () => {
     }
 
     cleanupAll();
+    // Restore original camera
+    map.jumpTo({ center: origCenter, zoom: origZoom });
     return { location: locationScreenshot, route: routeScreenshot };
   }, [map, pin.pinLocation, registryLayers]);
 

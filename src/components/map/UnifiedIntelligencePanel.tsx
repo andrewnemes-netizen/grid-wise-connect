@@ -91,6 +91,18 @@ interface SafetyResult {
   ai_narrative?: string | null;
 }
 
+/** Parse a coordinate that may be [lng,lat] tuple or GeoJSON Point */
+function parseCoord(val: unknown): [number, number] | null {
+  if (Array.isArray(val) && val.length >= 2 && typeof val[0] === "number" && typeof val[1] === "number") {
+    return [val[0], val[1]];
+  }
+  if (val && typeof val === "object" && "type" in (val as any) && (val as any).type === "Point") {
+    const coords = (val as any).coordinates;
+    if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === "number") return [coords[0], coords[1]];
+  }
+  return null;
+}
+
 const SITE_TYPES = [
   { value: "depot", label: "Depot" },
   { value: "workplace", label: "Workplace" },
@@ -272,12 +284,16 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       if (scoreRes.data.nearest_points && onConnectionLines) {
         const lines: ConnectionLine[] = [];
         const origin: [number, number] = [lng, lat];
-        if (scoreRes.data.nearest_points.primary)
-          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, scoreRes.data.nearest_points.primary], color: "#e74c3c", distance_m: scoreRes.data.distances?.primary_m || 0 });
-        if (scoreRes.data.nearest_points.feeder)
-          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, scoreRes.data.nearest_points.feeder], color: "#9b59b6", distance_m: scoreRes.data.distances?.feeder_m || 0 });
-        if (scoreRes.data.nearest_points.cable)
-          lines.push({ id: "line-cable", label: "Cable", coords: [origin, scoreRes.data.nearest_points.cable], color: "#e67e22", distance_m: scoreRes.data.distances?.capacity_segment_m || 0 });
+        const np = scoreRes.data.nearest_points;
+        const primaryCoord = parseCoord(np.primary);
+        const feederCoord = parseCoord(np.feeder);
+        const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
+        if (primaryCoord)
+          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, primaryCoord], color: "#e74c3c", distance_m: scoreRes.data.distances?.primary_m || 0 });
+        if (feederCoord)
+          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, feederCoord], color: "#9b59b6", distance_m: scoreRes.data.distances?.feeder_m || 0 });
+        if (cableCoord)
+          lines.push({ id: "line-cable", label: "Cable", coords: [origin, cableCoord], color: "#e67e22", distance_m: scoreRes.data.distances?.capacity_segment_m || 0 });
         onConnectionLines(lines);
       }
     } catch (err: any) {
