@@ -18,14 +18,42 @@ const ROAD_FILTERS: Record<string, string> = {
   osm_footways: "footway|path|cycleway",
 };
 
+// Max bbox span per road type (degrees). Queries larger than this will be clipped to center.
+const MAX_BBOX_SPAN: Record<string, number> = {
+  osm_major_roads: 0.5,
+  osm_minor_roads: 0.2,
+  osm_footways: 0.15,
+};
+
+function clampBbox(
+  bbox: [number, number, number, number],
+  roadType: string
+): [number, number, number, number] {
+  const maxSpan = MAX_BBOX_SPAN[roadType] ?? 0.3;
+  let [south, west, north, east] = bbox;
+  const latSpan = north - south;
+  const lonSpan = east - west;
+
+  if (latSpan > maxSpan) {
+    const cLat = (south + north) / 2;
+    south = cLat - maxSpan / 2;
+    north = cLat + maxSpan / 2;
+  }
+  if (lonSpan > maxSpan) {
+    const cLon = (west + east) / 2;
+    west = cLon - maxSpan / 2;
+    east = cLon + maxSpan / 2;
+  }
+  return [south, west, north, east];
+}
+
 function buildQuery(
   bbox: [number, number, number, number],
   roadType: string
 ): string {
   const filter = ROAD_FILTERS[roadType] ?? ROAD_FILTERS["osm_major_roads"];
-  // bbox: [south, west, north, east]
   const bboxStr = bbox.join(",");
-  return `[out:json][timeout:25];way["highway"~"${filter}"](${bboxStr});out body geom;`;
+  return `[out:json][timeout:15];way["highway"~"${filter}"](${bboxStr});out body geom;`;
 }
 
 interface OverpassElement {
@@ -70,16 +98,15 @@ async function fetchWithRetry(
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(18000),
       });
       if (!resp.ok) {
         console.warn(`Overpass ${endpoint} returned ${resp.status}`);
-        await resp.text(); // consume body
+        await resp.text();
         continue;
       }
       const json = await resp.json();
       const elements: OverpassElement[] = json.elements ?? [];
-      // Cap features to prevent oversized responses
       const capped = elements.slice(0, featureCap);
       return overpassToGeoJSON(capped);
     } catch (err) {
@@ -87,7 +114,6 @@ async function fetchWithRetry(
       continue;
     }
   }
-  // All endpoints failed
   return { type: "FeatureCollection", features: [] };
 }
 
@@ -97,7 +123,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Validate auth
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -136,8 +161,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Clamp bbox to prevent oversized queries
+    const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
-    const query = buildQuery(bbox as [number, number, number, number], road_type);
+    const query = buildQuery(clampedBbox, road_type);
     const geojson = await fetchWithRetry(query, cap);
 
     return new Response(JSON.stringify(geojson), {
