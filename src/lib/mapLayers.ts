@@ -562,7 +562,14 @@ export function clearLayerCache(layerId?: string) {
         geojsonCache.delete(key);
       }
     }
+    // Also clear overpass tile cache for this layer
+    for (const key of overpassTileCache.keys()) {
+      if (key.startsWith(layerId)) {
+        overpassTileCache.delete(key);
+      }
+    }
   } else {
     geojsonCache.clear();
+    overpassTileCache.clear();
   }
 }
