@@ -390,8 +390,10 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                   <TableHead className="text-xs">Access</TableHead>
                   <TableHead className="text-xs">Safety</TableHead>
                   <TableHead className="text-xs">Grid</TableHead>
-                  <TableHead className="text-xs">Deploy</TableHead>
-                  <TableHead className="text-xs">Cost</TableHead>
+                   <TableHead className="text-xs">Deploy</TableHead>
+                   <TableHead className="text-xs">Surface</TableHead>
+                   <TableHead className="text-xs">Constraints</TableHead>
+                   <TableHead className="text-xs">Cost</TableHead>
                   <SortHeader label="Est. (£)" k="total_estimate" />
                   <TableHead className="text-xs">Best POC</TableHead>
                   {isInternal && (
