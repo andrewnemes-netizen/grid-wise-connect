@@ -1,82 +1,47 @@
 
 
-## Overpass API Road Data Integration
+## Fix: OSM Road Layers Not Visible in Layer Panel
 
-### Assessment of the ChatGPT Advice
+### Problem
+The three Overpass road layers (`osm_major_roads`, `osm_minor_roads`, `osm_footways`) were inserted into `layer_registry` with `dno = 'OSM'`, but:
+- The **Network tab** filters them out because `'OSM'` is not a recognized DNO, and selecting a DNO filter hides them
+- The **Gas tab** only shows GAS_OPERATORS (CADENT, NGN, SGN, WWU)
+- No other tab renders registry layers
 
-The advice is **mostly correct** but needs adjustments for your architecture:
+The layers exist in the database but have no UI surface.
 
-**Good ideas to keep:**
-- POST to `https://overpass-api.de/api/interpreter` with Overpass QL
-- Fallback endpoints for reliability
-- Bbox-based queries matching your existing viewport pattern
-- Road type filtering (major/minor/footway)
-- `(south,west,north,east)` bbox format (different from your `[west,south,east,north]` — needs conversion)
+### Solution: Add a "Roads" tab to the Layer Toggle Panel
 
-**Things to ignore or change:**
-- "geo_roads" table — unnecessary. Your architecture already uses `geo_features` with `layer_id` foreign keys. Roads should follow the same pattern.
-- "A* routing engine" — out of scope, not needed for layer display or cost estimation
-- The "10. FINAL LOVABLE PROMPT" section — generic boilerplate, not useful
-- Splitting UK into grid tiles for ingest — overkill for now; live viewport layers are sufficient initially
+Add a 6th tab called "Roads" (with a road icon) that shows all registry layers where `dno = 'OSM'` (i.e., the Overpass layers). This keeps them separate from electricity/gas infrastructure.
 
-### What to Build
+### Changes
 
-| # | Component | Description |
-|---|-----------|-------------|
-| 1 | Edge function `overpass-road-fetch` | Accepts bbox + road_type, queries Overpass API, converts response to standard GeoJSON, returns it |
-| 2 | Three layer_registry entries | "OSM Major Roads", "OSM Minor Roads", "OSM Footways" with source_type = `overpass` |
-| 3 | Frontend integration | Detect `source_type = 'overpass'` in `fetchLayerGeoJSON` and route to the edge function instead of the database RPC |
+**File: `src/components/map/LayerTogglePanel.tsx`**
 
-### Architecture Fit
+1. Add `import { Route } from "lucide-react"` (road icon)
+2. Change `grid-cols-5` → `grid-cols-6` on the TabsList
+3. Add a new `TabsTrigger` for `"roads"` tab
+4. Build an `osmTree` memo filtering layers where `dno === 'OSM'`, grouped by category
+5. Add a `TabsContent` for `"roads"` rendering those layers with the existing `CategoryGroup` component
+6. Include OSM road visible count in the tab badge and total visible count
 
-These are **live viewport layers** (not ingested), matching your data strategy for visual-only layers. The edge function acts as a proxy, same pattern as `os-features-proxy` and `planning-vector-tile`.
-
-```text
-User pans map
-  → useLayerManager detects visible Overpass layer
-  → fetchLayerGeoJSON sees source_type='overpass'
-  → calls overpass-road-fetch edge function with viewport bbox
-  → edge function POSTs to Overpass API
-  → returns GeoJSON → rendered on map
+The Overpass layers will show as:
+```
+Roads tab
+  └─ Roads (category)
+     ├─ Major Roads (OSM)     [toggle]
+     ├─ Minor Roads (OSM)     [toggle]  
+     └─ Footways (OSM)        [toggle]
 ```
 
-### Edge Function: `overpass-road-fetch`
+Since these are live viewport layers (`source_type = 'overpass'`), the `feature_count` will be 0 — so the `LayerRow` component should treat Overpass layers as non-empty (skip the "No data" badge) since they fetch on-demand rather than from ingested data.
 
-- **Input**: `{ bbox: [south, west, north, east], road_type: "major" | "minor" | "footway" }`
-- **Query builder**: Maps road_type to highway filter (`motorway|trunk|primary`, `secondary|tertiary|residential|unclassified`, `footway|path|cycleway`)
-- **Retry logic**: Primary endpoint → kumi.systems fallback → openstreetmap.ru fallback
-- **Response transform**: Overpass JSON → GeoJSON FeatureCollection (convert `geometry` array of `{lat,lon}` to `[lon,lat]` coordinate arrays)
-- **Timeout**: 25s Overpass timeout, 30s fetch timeout
-- **No auth required**: Public OSM data, but function still validates JWT for consistency
+**File: `src/components/map/LayerTogglePanel.tsx` — LayerRow**
 
-### Frontend Changes
-
-**`src/lib/mapLayers.ts`** — In `fetchLayerGeoJSON`, add a branch:
+Update the `isEmpty` check on line 134:
 ```typescript
-if (layer.source_type === 'overpass') {
-  // Call edge function instead of database RPC
-  const { data } = await supabase.functions.invoke('overpass-road-fetch', {
-    body: { bbox: [south, west, north, east], road_type: layer.slug }
-  });
-  return data;
-}
+const isEmpty = layer.source_type !== 'overpass' && (!layer.feature_count || layer.feature_count === 0);
 ```
 
-**`src/components/map/LayerTogglePanel.tsx`** — Add `source_type` to the `RegistryLayer` interface and query.
-
-### Database Changes
-
-Insert 3 rows into `layer_registry` (via insert tool, not migration):
-- `osm_major_roads` — Major Roads (motorway, trunk, primary)
-- `osm_minor_roads` — Minor Roads (secondary, tertiary, residential)  
-- `osm_footways` — Footways & Cycleways
-
-Each with `source_type = 'overpass'`, `geometry_type = 'LineString'`, `dno = 'OSM'`, appropriate `min_zoom` (e.g. 10 for minor, 12 for footways to avoid overloading).
-
-### Performance Safeguards
-
-- Min zoom enforcement: major roads z8+, minor roads z10+, footways z12+
-- Overpass timeout cap: 25 seconds
-- Feature cap inherited from existing line layer limits (3000–5000)
-- Existing bbox overlap/shift logic in `useLayerManager` prevents redundant fetches
+This ensures Overpass layers show without the dimmed "No data" badge.
 
