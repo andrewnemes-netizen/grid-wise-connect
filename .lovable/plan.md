@@ -1,54 +1,78 @@
 
 
-## Fix: Overpass Road Layers Hanging Too Long
+## Expand OSM Data: What's Worth Adding vs What's Noise
 
-### Root Cause
+### Current State
+- 3 Overpass layers: major roads, minor roads, footways
+- All live-fetched via `overpass-road-fetch` edge function
+- No other OSM data categories exist
 
-The edge function tries 3 Overpass endpoints **sequentially**, each with an 18-second timeout. When all fail (as logs show — 504s and timeouts), the total wait is **up to 54 seconds**. The UI spinner just hangs the whole time.
+### ChatGPT Assessment: Mostly Hype
+The suggestion to add cafes, shops, POIs, "full digital twin of the street" is overkill. Your platform estimates **electrical grid connection costs**. Only add OSM features that directly impact:
+1. **Route cost** (surface type, road classification → reinstatement costs)
+2. **Route constraints** (water crossings, barriers = no-go zones)
+3. **Compliance checks** (proximity to buildings, environmental features)
 
-### Solution: Parallel racing + shorter timeouts + frontend timeout
+### Recommended Additions (Phase 1 — High Value)
 
-**1. Edge function: race all endpoints in parallel (not sequential)**
+**Add 4 new Overpass layer types to the edge function:**
 
-Instead of trying endpoint A → wait 18s → try B → wait 18s → try C, fire all 3 simultaneously and take whichever responds first. This reduces worst-case from 54s to ~8s.
+| Layer | Overpass Filter | Why It Matters |
+|-------|----------------|----------------|
+| `osm_water` | `natural~"water"` + `waterway~"river\|canal"` | Absolute no-go for cable routes |
+| `osm_railways` | `railway~"rail\|light_rail"` | Expensive crossings, major constraint |
+| `osm_buildings` | `building` (polygon) | Proximity checks, endpoint identification |
+| `osm_barriers` | `barrier~"fence\|wall\|gate\|bollard"` | Route obstructions |
 
-```text
-Current:  A(18s) → B(18s) → C(18s) = 54s worst case
-Proposed: race(A, B, C) with 8s timeout = 8s worst case
+### NOT Recommended (Skip These)
+- Traffic signals / crossings — doesn't affect cable routing cost
+- Land use categories — OS Zoomstack already covers this (greenspace, woodland, sites)
+- POIs (cafes, shops) — zero relevance to grid connections
+- Junctions / roundabouts — already implicit in road geometry
+
+### Technical Changes
+
+**1. Edge function: `supabase/functions/overpass-road-fetch/index.ts`**
+
+Rename to a more general purpose (or keep name, expand filters):
+
+Add new entries to `ROAD_FILTERS` (rename to `OSM_FILTERS`):
+```
+osm_water: way/relation with natural=water OR waterway=river|canal
+osm_railways: way with railway=rail|light_rail
+osm_buildings: way with building=* (polygon output)
+osm_barriers: node/way with barrier=*
 ```
 
-**2. Reduce per-endpoint timeout from 18s to 8s**
+Add corresponding `MAX_BBOX_SPAN` entries (all tight — 0.05° to 0.08°).
 
-Most successful Overpass queries return in 2-5 seconds. If it hasn't responded in 8s, it won't.
+Update `overpassToGeoJSON` to handle polygons (buildings, water) in addition to LineStrings.
 
-**3. Tighten bbox clamps further**
+**2. Database: insert 4 new `layer_registry` rows**
 
-Current max spans are still generating too many results:
-- `osm_major_roads`: 0.5° → **0.15°** (~16km)
-- `osm_minor_roads`: 0.2° → **0.08°** (~8km)  
-- `osm_footways`: 0.15° → **0.05°** (~5km)
+Each with `source_type = 'overpass'`, `dno = 'OSM'`, appropriate `geometry_type`, `min_zoom` (13–14 for buildings/barriers, 11 for water/railways).
 
-Match these on the frontend guard too.
+**3. Frontend: `src/lib/mapLayers.ts`**
 
-**4. Frontend: add 10s timeout wrapper around the edge function call**
+Add the new slugs to `OVERPASS_MAX_SPAN`.
 
-In `fetchOverpassGeoJSON`, wrap the `supabase.functions.invoke` in a `Promise.race` with a 10s timeout. If it exceeds that, return empty collection silently instead of hanging the spinner.
+**4. Layer panel: `src/components/map/LayerTogglePanel.tsx`**
+
+Rename "Roads" tab → "OSM" tab (or keep Roads and add an "Environment" tab). The new layers will auto-appear since they have `dno = 'OSM'`.
+
+**5. Update `buildQuery` in edge function**
+
+Handle polygon queries differently — buildings and water need `out body geom;` with polygon handling, not just LineString.
 
 ### Files Changed
+- `supabase/functions/overpass-road-fetch/index.ts` — expand filters, handle polygons
+- `src/lib/mapLayers.ts` — add new slugs to span guard
+- `src/components/map/LayerTogglePanel.tsx` — possibly rename tab
+- Database migration — insert 4 new `layer_registry` rows
 
-**`supabase/functions/overpass-road-fetch/index.ts`**
-- Replace sequential `fetchWithRetry` loop with `Promise.any()` racing all 3 endpoints
-- Reduce `AbortSignal.timeout` from 18000 to 8000
-- Tighten `MAX_BBOX_SPAN` values
-- Reduce Overpass QL timeout from 15 to 10
-
-**`src/lib/mapLayers.ts`**
-- Tighten `OVERPASS_MAX_SPAN` to match edge function values
-- Add 10s timeout wrapper around `supabase.functions.invoke`
-- On timeout, return empty FeatureCollection + console warning
-
-### Expected Outcome
-- Worst case wait drops from 54s to ~8-10s
-- Successful queries return in 2-5s as normal
-- No more indefinite spinner — guaranteed resolution within 10s
+### What This Gives You
+- Cable route engine can avoid water bodies and railway crossings
+- Building proximity checks for substation siting
+- Barrier detection for route feasibility
+- All live-fetched, no database bloat
 
