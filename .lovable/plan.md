@@ -1,47 +1,41 @@
 
 
-## Fix: OSM Road Layers Not Visible in Layer Panel
+## Fix: Overpass Road Layers Timing Out
 
-### Problem
-The three Overpass road layers (`osm_major_roads`, `osm_minor_roads`, `osm_footways`) were inserted into `layer_registry` with `dno = 'OSM'`, but:
-- The **Network tab** filters them out because `'OSM'` is not a recognized DNO, and selecting a DNO filter hides them
-- The **Gas tab** only shows GAS_OPERATORS (CADENT, NGN, SGN, WWU)
-- No other tab renders registry layers
+### Root Cause
 
-The layers exist in the database but have no UI surface.
+The edge function logs show **100% failure rate** — all three Overpass endpoints return 504 or timeout. The problem is the bbox is too large at zoom level 8. At z8, the UK viewport spans roughly 5° x 3° — Overpass must scan millions of road ways across that area, exceeding its 25-second query limit.
 
-### Solution: Add a "Roads" tab to the Layer Toggle Panel
+### Solution: Constrain bbox size + smarter queries
 
-Add a 6th tab called "Roads" (with a road icon) that shows all registry layers where `dno = 'OSM'` (i.e., the Overpass layers). This keeps them separate from electricity/gas infrastructure.
+**1. Edge function: cap bbox area and use `nwr` with count limit**
 
-### Changes
+In `supabase/functions/overpass-road-fetch/index.ts`:
+- Add a max bbox area check (~0.5° x 0.5° for major roads, ~0.2° x 0.2° for minor/footways)
+- If the viewport bbox exceeds the limit, subdivide or clip to the center portion
+- Reduce the Overpass timeout from 25s to 15s (fail faster, try next endpoint sooner)
+- Reduce the `AbortSignal.timeout` from 30s to 18s to match
 
-**File: `src/components/map/LayerTogglePanel.tsx`**
+**2. Raise min_zoom in registry** (database migration)
 
-1. Add `import { Route } from "lucide-react"` (road icon)
-2. Change `grid-cols-5` → `grid-cols-6` on the TabsList
-3. Add a new `TabsTrigger` for `"roads"` tab
-4. Build an `osmTree` memo filtering layers where `dno === 'OSM'`, grouped by category
-5. Add a `TabsContent` for `"roads"` rendering those layers with the existing `CategoryGroup` component
-6. Include OSM road visible count in the tab badge and total visible count
+Current min_zoom values are too low for live Overpass queries:
+- `osm_major_roads`: 8 → **11** 
+- `osm_minor_roads`: 10 → **13**
+- `osm_footways`: 12 → **14**
 
-The Overpass layers will show as:
-```
-Roads tab
-  └─ Roads (category)
-     ├─ Major Roads (OSM)     [toggle]
-     ├─ Minor Roads (OSM)     [toggle]  
-     └─ Footways (OSM)        [toggle]
-```
+At z11, the viewport covers ~0.15° x 0.1° — a manageable query for Overpass.
 
-Since these are live viewport layers (`source_type = 'overpass'`), the `feature_count` will be 0 — so the `LayerRow` component should treat Overpass layers as non-empty (skip the "No data" badge) since they fetch on-demand rather than from ingested data.
+**3. Frontend: add bbox area guard in `fetchOverpassGeoJSON`**
 
-**File: `src/components/map/LayerTogglePanel.tsx` — LayerRow**
+In `src/lib/mapLayers.ts`, before calling the edge function, check if the bbox spans more than ~0.3° in either dimension. If so, return an empty FeatureCollection and show a "zoom in" toast instead of making a doomed request.
 
-Update the `isEmpty` check on line 134:
-```typescript
-const isEmpty = layer.source_type !== 'overpass' && (!layer.feature_count || layer.feature_count === 0);
-```
+### Files Changed
+- `supabase/functions/overpass-road-fetch/index.ts` — reduce timeouts, add bbox clamp
+- `src/lib/mapLayers.ts` — add bbox area guard in `fetchOverpassGeoJSON`  
+- Database migration — update `min_zoom` for the 3 OSM layers
 
-This ensures Overpass layers show without the dimmed "No data" badge.
+### Expected Outcome
+- Road layers load reliably when zoomed in to city/town level
+- No more 30-second hangs waiting for doomed requests
+- Clear feedback to user if viewport is too wide
 
