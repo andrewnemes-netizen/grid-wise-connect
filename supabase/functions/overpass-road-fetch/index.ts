@@ -20,16 +20,16 @@ const ROAD_FILTERS: Record<string, string> = {
 
 // Max bbox span per road type (degrees). Queries larger than this will be clipped to center.
 const MAX_BBOX_SPAN: Record<string, number> = {
-  osm_major_roads: 0.5,
-  osm_minor_roads: 0.2,
-  osm_footways: 0.15,
+  osm_major_roads: 0.15,
+  osm_minor_roads: 0.08,
+  osm_footways: 0.05,
 };
 
 function clampBbox(
   bbox: [number, number, number, number],
   roadType: string
 ): [number, number, number, number] {
-  const maxSpan = MAX_BBOX_SPAN[roadType] ?? 0.3;
+  const maxSpan = MAX_BBOX_SPAN[roadType] ?? 0.1;
   let [south, west, north, east] = bbox;
   const latSpan = north - south;
   const lonSpan = east - west;
@@ -53,7 +53,7 @@ function buildQuery(
 ): string {
   const filter = ROAD_FILTERS[roadType] ?? ROAD_FILTERS["osm_major_roads"];
   const bboxStr = bbox.join(",");
-  return `[out:json][timeout:15];way["highway"~"${filter}"](${bboxStr});out body geom;`;
+  return `[out:json][timeout:10];way["highway"~"${filter}"](${bboxStr});out body geom;`;
 }
 
 interface OverpassElement {
@@ -88,33 +88,33 @@ function overpassToGeoJSON(
   return { type: "FeatureCollection", features };
 }
 
-async function fetchWithRetry(
+/** Race all endpoints in parallel — first successful response wins */
+async function fetchWithRace(
   query: string,
   featureCap: number
 ): Promise<GeoJSON.FeatureCollection> {
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(18000),
-      });
-      if (!resp.ok) {
-        console.warn(`Overpass ${endpoint} returned ${resp.status}`);
-        await resp.text();
-        continue;
-      }
-      const json = await resp.json();
-      const elements: OverpassElement[] = json.elements ?? [];
-      const capped = elements.slice(0, featureCap);
-      return overpassToGeoJSON(capped);
-    } catch (err) {
-      console.warn(`Overpass ${endpoint} failed:`, err);
-      continue;
+  const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`${endpoint} returned ${resp.status}: ${txt.slice(0, 100)}`);
     }
+    const json = await resp.json();
+    const elements: OverpassElement[] = json.elements ?? [];
+    return overpassToGeoJSON(elements.slice(0, featureCap));
+  });
+
+  try {
+    return await Promise.any(attempts);
+  } catch (err) {
+    console.warn("All Overpass endpoints failed:", err);
+    return { type: "FeatureCollection", features: [] };
   }
-  return { type: "FeatureCollection", features: [] };
 }
 
 Deno.serve(async (req: Request) => {
@@ -165,7 +165,7 @@ Deno.serve(async (req: Request) => {
     const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
     const query = buildQuery(clampedBbox, road_type);
-    const geojson = await fetchWithRetry(query, cap);
+    const geojson = await fetchWithRace(query, cap);
 
     return new Response(JSON.stringify(geojson), {
       status: 200,
