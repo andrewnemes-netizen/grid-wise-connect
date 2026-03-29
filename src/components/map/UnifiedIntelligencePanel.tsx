@@ -158,6 +158,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [safetyResult, setSafetyResult] = useState<SafetyResult | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const pkw = Number(proposedKw) || 0;
 
@@ -698,60 +699,77 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => {
-                    const safetyAadf = safetyResult?.traffic_summary?.max_aadf ?? 0;
-                    const scoreAadf = result.traffic_aadf ?? 0;
-                    const aadf = Math.max(safetyAadf, scoreAadf);
-                    const safetyBus = safetyResult?.transport_summary?.bus_stops ?? 0;
-                    const scoreBus = result.nearby_bus_stops ?? 0;
-                    const safetyRail = safetyResult?.transport_summary?.rail_stations ?? 0;
-                    const scoreRail = result.nearby_rail_stations ?? 0;
-                    const busStops = Math.max(safetyBus, scoreBus);
-                    const railStations = Math.max(safetyRail, scoreRail);
-                    const nearestSub = result.nearest_substations?.[0];
+                  disabled={exportingPdf}
+                  onClick={async () => {
+                    setExportingPdf(true);
+                    try {
+                      // Capture map screenshot before generating PDF
+                      let locationScreenshot: string | null = null;
+                      if (onCaptureMapScreenshot) {
+                        try {
+                          locationScreenshot = await onCaptureMapScreenshot();
+                        } catch (e) {
+                          console.warn("Map screenshot failed:", e);
+                        }
+                      }
 
-                    generateAssessmentPdf({
-                      siteName: siteName || undefined,
-                      postcode: postcode || undefined,
-                      proposedKw: pkw,
-                      lat: lat ?? undefined,
-                      lng: lng ?? undefined,
-                      score: band,
-                      reasons: result.reasons,
-                      nextSteps: result.next_steps,
-                      distances: result.distances,
-                      distanceBands: result.distance_bands,
-                      constraints: result.constraints,
-                      unitRates,
-                      // Intelligence data
-                      masterScore: masterScore?.score ?? null,
-                      masterVerdict: masterScore?.verdict ?? null,
-                      trafficAadf: aadf,
-                      trafficLabel: trafficScore?.label,
-                      nearbyBusStops: busStops,
-                      nearbyRailStations: railStations,
-                      accessibilityLabel: accessibilityScore?.label,
-                      gridViabilityIndex: viabilityIndex,
-                      safetyIncidents: safetyResult?.accident_summary?.total ?? 0,
-                      safetyLabel: safetyScore?.label ?? "N/A",
-                      aiSafetyNarrative: safetyResult?.ai_narrative ?? null,
-                      deploymentClass: deployClass,
-                      gridReadiness: gridReady,
-                      deploymentFriction: friction,
-                      recommendedScale: rawMetrics ? getRecommendedScale(pkw) : null,
-                      recommendedVoltage: rawMetrics ? getRecommendedVoltage(pkw) : null,
-                      feederConstraintRisk: feederRisk,
-                      reinforcementProbability: reinforceProb,
-                      costBand: costBand,
-                      cableLengthEst: result.distances?.capacity_segment_m ?? null,
-                      civilsComplexity: friction,
-                      bestPoc: nearestSub?.site_name ?? null,
-                      nearestSubstations: result.nearest_substations,
-                      nearestHeadroomKw: nearestSub?.transformer_headroom_kw ?? undefined,
-                    });
+                      const safetyAadf = safetyResult?.traffic_summary?.max_aadf ?? 0;
+                      const scoreAadf = result.traffic_aadf ?? 0;
+                      const aadf = Math.max(safetyAadf, scoreAadf);
+                      const safetyBus = safetyResult?.transport_summary?.bus_stops ?? 0;
+                      const scoreBus = result.nearby_bus_stops ?? 0;
+                      const safetyRail = safetyResult?.transport_summary?.rail_stations ?? 0;
+                      const scoreRail = result.nearby_rail_stations ?? 0;
+                      const busStops = Math.max(safetyBus, scoreBus);
+                      const railStations = Math.max(safetyRail, scoreRail);
+                      const nearestSub = result.nearest_substations?.[0];
+
+                      generateAssessmentPdf({
+                        siteName: siteName || undefined,
+                        postcode: postcode || undefined,
+                        proposedKw: pkw,
+                        lat: lat ?? undefined,
+                        lng: lng ?? undefined,
+                        score: band,
+                        reasons: result.reasons,
+                        nextSteps: result.next_steps,
+                        distances: result.distances,
+                        distanceBands: result.distance_bands,
+                        constraints: result.constraints,
+                        unitRates,
+                        locationMapScreenshot: locationScreenshot,
+                        // Intelligence data
+                        masterScore: masterScore?.score ?? null,
+                        masterVerdict: masterScore?.verdict ?? null,
+                        trafficAadf: aadf,
+                        trafficLabel: trafficScore?.label,
+                        nearbyBusStops: busStops,
+                        nearbyRailStations: railStations,
+                        accessibilityLabel: accessibilityScore?.label,
+                        gridViabilityIndex: viabilityIndex,
+                        safetyIncidents: safetyResult?.accident_summary?.total ?? 0,
+                        safetyLabel: safetyScore?.label ?? "N/A",
+                        aiSafetyNarrative: safetyResult?.ai_narrative ?? null,
+                        deploymentClass: deployClass,
+                        gridReadiness: gridReady,
+                        deploymentFriction: friction,
+                        recommendedScale: rawMetrics ? getRecommendedScale(pkw) : null,
+                        recommendedVoltage: rawMetrics ? getRecommendedVoltage(pkw) : null,
+                        feederConstraintRisk: feederRisk,
+                        reinforcementProbability: reinforceProb,
+                        costBand: costBand,
+                        cableLengthEst: result.distances?.capacity_segment_m ?? null,
+                        civilsComplexity: friction,
+                        bestPoc: nearestSub?.site_name ?? null,
+                        nearestSubstations: result.nearest_substations,
+                        nearestHeadroomKw: nearestSub?.transformer_headroom_kw ?? undefined,
+                      });
+                    } finally {
+                      setExportingPdf(false);
+                    }
                   }}
                 >
-                  <Download className="mr-2 h-4 w-4" />Export PDF
+                  {exportingPdf ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Capturing…</> : <><Download className="mr-2 h-4 w-4" />Export PDF</>}
                 </Button>
                 {!saved ? (
                   <Button onClick={handleSave} disabled={saving} className="flex-1">
