@@ -167,7 +167,13 @@ export function useLayerManager(
         clickHandlersRef.current.set(layerId, { click: clickHandler, enter: enterHandler, leave: leaveHandler });
 
         if (geojson.features.length === 0 && showEmptyToast) {
-          toast({ title: layer.display_name, description: "No data in this viewport." });
+          const hasAnyData = layer.feature_count && layer.feature_count > 0;
+          toast({
+            title: layer.display_name,
+            description: hasAnyData
+              ? "No data in this viewport — try panning to the layer's coverage area."
+              : "No data available yet. Run Sync in Admin to ingest this dataset.",
+          });
         }
       } catch (err) {
         console.error(`Failed to load layer ${layerId}:`, err);
