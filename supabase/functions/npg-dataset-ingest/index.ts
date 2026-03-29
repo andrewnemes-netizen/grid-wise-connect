@@ -139,13 +139,13 @@ Deno.serve(async (req) => {
     console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 
     // Offload heavy work to background via EdgeRuntime.waitUntil
-    // Wrap with timeout safety net — mark as error if not done in 280s
+    // Wrap with timeout safety net — mark as error if not done in 400s
     EdgeRuntime.waitUntil(
       Promise.race([
         performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }),
         new Promise<void>(async (_, reject) => {
-          await new Promise(r => setTimeout(r, 280000));
-          reject(new Error("Background ingest timed out after 280s"));
+          await new Promise(r => setTimeout(r, 400000));
+          reject(new Error("Background ingest timed out after 400s"));
         }),
       ]).catch(async (err) => {
         console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
