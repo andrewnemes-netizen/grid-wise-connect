@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
     const spatialTables = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints", "geo_substations", "geo_points"];
     if (!entry.is_geospatial && spatialTables.includes(layerRow.storage_table)) {
       await supabase
-        .from("dno_dataset_registry")
+        .from(registryTable)
         .update({
           last_sync_status: "skipped",
           last_sync_error: "Tabular dataset — no geometry to ingest into spatial layer",
@@ -133,7 +133,7 @@ Deno.serve(async (req) => {
 
     // Mark as processing immediately
     await supabase
-      .from("dno_dataset_registry")
+      .from(registryTable)
       .update({
         last_sync_status: "processing",
         last_sync_error: null,
@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
     // Wrap with timeout safety net — mark as error if not done in 400s
     EdgeRuntime.waitUntil(
       Promise.race([
-        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }),
+        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }, registryTable),
         new Promise<void>(async (_, reject) => {
           await new Promise(r => setTimeout(r, 400000));
           reject(new Error("Background ingest timed out after 400s"));
@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
       ]).catch(async (err) => {
         console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
         await supabase
-          .from("dno_dataset_registry")
+          .from(registryTable)
           .update({
             last_sync_status: "error",
             last_sync_error: String(err),
