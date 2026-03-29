@@ -39,6 +39,11 @@ interface ScoredRow {
   nearby_rail_stations?: number;
   accident_count?: number;
   master_score?: number;
+  surface_split?: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  nearby_crossings?: number;
+  nearby_signals?: number;
+  route_constraints?: string[];
+  osm_coverage?: "cached" | "none";
   error?: string;
 }
 
@@ -124,17 +129,23 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       "Viability Index", "Band", "Grid Readiness", "Deployment Class",
       "Cost Band", "Total Estimate (£)", "Confidence", "Reinforcement %",
       "Best POC", "Traffic AADF", "Bus Stops", "Rail Stations", "Accidents",
+      "Surface", "Crossings", "Signals", "Constraints", "OSM",
       ...(isInternal ? ["Headroom (kW)", "Utilisation %", "Distance Primary (m)", "Distance Feeder (m)", "Distance Capacity (m)"] : []),
       "Error",
     ];
-    const rows = filtered.map(r => [
-      r.site_name, r.postcode, r.proposed_kw, r.site_type, r.phase, r.phase_rationale,
-      r.viability_index, r.band, r.grid_readiness, r.deployment_class,
-      r.cost_band, r.total_estimate, r.confidence, r.reinforcement_probability,
-      r.best_poc, r.traffic_aadf ?? 0, r.nearby_bus_stops ?? 0, r.nearby_rail_stations ?? 0, r.accident_count ?? 0,
-      ...(isInternal ? [r.headroom_kw ?? "", r.utilisation_pct ?? "", r.distance_primary_m, r.distance_feeder_m, r.distance_capacity_m] : []),
-      r.error || "",
-    ]);
+    const rows = filtered.map(r => {
+      const sp = r.surface_split;
+      const surfaceLabel = sp ? `F${sp.footway_pct}/C${sp.carriageway_pct}/V${sp.verge_pct}` : "60/30/10";
+      return [
+        r.site_name, r.postcode, r.proposed_kw, r.site_type, r.phase, r.phase_rationale,
+        r.viability_index, r.band, r.grid_readiness, r.deployment_class,
+        r.cost_band, r.total_estimate, r.confidence, r.reinforcement_probability,
+        r.best_poc, r.traffic_aadf ?? 0, r.nearby_bus_stops ?? 0, r.nearby_rail_stations ?? 0, r.accident_count ?? 0,
+        surfaceLabel, r.nearby_crossings ?? 0, r.nearby_signals ?? 0, (r.route_constraints || []).join(";"), r.osm_coverage || "none",
+        ...(isInternal ? [r.headroom_kw ?? "", r.utilisation_pct ?? "", r.distance_primary_m, r.distance_feeder_m, r.distance_capacity_m] : []),
+        r.error || "",
+      ];
+    });
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -199,6 +210,11 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
           phase: r.phase,
           phase_rationale: r.phase_rationale,
           source: "la_programme_batch",
+          surface_split: r.surface_split,
+          nearby_crossings: r.nearby_crossings ?? 0,
+          nearby_signals: r.nearby_signals ?? 0,
+          route_constraints: r.route_constraints || [],
+          osm_coverage: r.osm_coverage || "none",
         },
       }));
 
@@ -379,8 +395,10 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                   <TableHead className="text-xs">Access</TableHead>
                   <TableHead className="text-xs">Safety</TableHead>
                   <TableHead className="text-xs">Grid</TableHead>
-                  <TableHead className="text-xs">Deploy</TableHead>
-                  <TableHead className="text-xs">Cost</TableHead>
+                   <TableHead className="text-xs">Deploy</TableHead>
+                   <TableHead className="text-xs">Surface</TableHead>
+                   <TableHead className="text-xs">Constraints</TableHead>
+                   <TableHead className="text-xs">Cost</TableHead>
                   <SortHeader label="Est. (£)" k="total_estimate" />
                   <TableHead className="text-xs">Best POC</TableHead>
                   {isInternal && (
@@ -437,6 +455,29 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                     <TableCell className="text-xs">{r.accident_count ?? 0}</TableCell>
                     <TableCell className="text-xs">{r.grid_readiness}</TableCell>
                     <TableCell className="text-xs">{r.deployment_class}</TableCell>
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const sp = r.surface_split;
+                        if (!sp) return <span className="text-muted-foreground">—</span>;
+                        const dominant = sp.footway_pct >= sp.carriageway_pct && sp.footway_pct >= sp.verge_pct ? "Footway"
+                          : sp.carriageway_pct >= sp.verge_pct ? "Road" : "Verge";
+                        return (
+                          <Badge variant="outline" className={`text-[10px] ${r.osm_coverage === "cached" ? "border-emerald-300" : "border-muted"}`} title={`F${sp.footway_pct}/C${sp.carriageway_pct}/V${sp.verge_pct}`}>
+                            {dominant}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex gap-0.5 flex-wrap">
+                        {(r.route_constraints || []).map((c, ci) => (
+                          <Badge key={ci} variant="outline" className="text-[9px] border-destructive/50 text-destructive">
+                            {c.replace("_NEARBY", "").replace("SIGNAL_CONTROLLED", "Signals").toLowerCase()}
+                          </Badge>
+                        ))}
+                        {(r.route_constraints || []).length === 0 && <span className="text-muted-foreground">—</span>}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-xs">{r.cost_band}</TableCell>
                     <TableCell className="text-xs">£{r.total_estimate.toLocaleString()}</TableCell>
                     <TableCell className="text-xs max-w-[120px] truncate" title={r.best_poc}>{r.best_poc}</TableCell>

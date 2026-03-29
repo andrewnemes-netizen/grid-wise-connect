@@ -50,13 +50,114 @@ interface ScoredRow {
   distance_capacity_m: number;
   phase: number;
   phase_rationale: string;
-  // New 4-pillar fields
+  // 4-pillar fields
   traffic_aadf: number;
   nearby_bus_stops: number;
   nearby_rail_stations: number;
   accident_count: number;
   master_score: number;
+  // OSM enrichment fields
+  surface_split: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  nearby_crossings: number;
+  nearby_signals: number;
+  route_constraints: string[];
+  osm_coverage: "cached" | "none";
   error?: string;
+}
+
+// ── OSM tile cache helpers ──
+function lngLatToTile(lng: number, lat: number, zoom: number): string {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return `${zoom}/${x}/${y}`;
+}
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+interface OsmContext {
+  split: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  crossings: number;
+  signals: number;
+  constraints: string[];
+  found: boolean;
+}
+
+async function queryOsmContext(supabase: any, lng: number, lat: number): Promise<OsmContext> {
+  const RADIUS_M = 200;
+  const fallback: OsmContext = { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
+
+  try {
+    const tileId = lngLatToTile(lng, lat, 14);
+    const slugs = ["osm_major_roads", "osm_minor_roads", "osm_footways", "osm_crossings", "osm_traffic_signals", "osm_railways", "osm_water_bodies"];
+
+    const { data: tiles, error } = await supabase
+      .from("osm_tile_cache")
+      .select("layer_slug, geojson")
+      .eq("tile_id", tileId)
+      .in("layer_slug", slugs);
+
+    if (error || !tiles || tiles.length === 0) return fallback;
+
+    let footwayCount = 0, carriagewayCount = 0, crossings = 0, signals = 0;
+    const constraints: string[] = [];
+
+    for (const tile of tiles) {
+      const geojson = tile.geojson as any;
+      if (!geojson?.features) continue;
+
+      for (const f of geojson.features) {
+        // Check proximity — use centroid of first coord for lines/points
+        const coords = f.geometry?.coordinates;
+        if (!coords) continue;
+
+        let fLng: number, fLat: number;
+        if (f.geometry.type === "Point") {
+          [fLng, fLat] = coords;
+        } else if (f.geometry.type === "LineString" && coords.length > 0) {
+          const mid = coords[Math.floor(coords.length / 2)];
+          [fLng, fLat] = mid;
+        } else if (f.geometry.type === "Polygon" && coords[0]?.length > 0) {
+          [fLng, fLat] = coords[0][0];
+        } else continue;
+
+        const dist = haversineM(lat, lng, fLat, fLng);
+        if (dist > RADIUS_M) continue;
+
+        // Classify
+        if (tile.layer_slug === "osm_footways") footwayCount++;
+        else if (tile.layer_slug === "osm_major_roads" || tile.layer_slug === "osm_minor_roads") carriagewayCount++;
+        else if (tile.layer_slug === "osm_crossings") crossings++;
+        else if (tile.layer_slug === "osm_traffic_signals") signals++;
+        else if (tile.layer_slug === "osm_railways") {
+          if (!constraints.includes("RAILWAY_NEARBY")) constraints.push("RAILWAY_NEARBY");
+        } else if (tile.layer_slug === "osm_water_bodies") {
+          if (!constraints.includes("WATER_NEARBY")) constraints.push("WATER_NEARBY");
+        }
+      }
+    }
+
+    if (signals > 2 && !constraints.includes("SIGNAL_CONTROLLED")) constraints.push("SIGNAL_CONTROLLED");
+
+    const totalRoad = footwayCount + carriagewayCount;
+    if (totalRoad === 0) return { ...fallback, crossings, signals, constraints, found: tiles.length > 0 };
+
+    const footPct = Math.round((footwayCount / totalRoad) * 100);
+    const carrPct = Math.round((carriagewayCount / totalRoad) * 100);
+    const vergePct = Math.max(0, 100 - footPct - carrPct);
+
+    return { split: { footway_pct: footPct, carriageway_pct: carrPct, verge_pct: vergePct }, crossings, signals, constraints, found: true };
+  } catch (e) {
+    console.warn("OSM context query failed:", e);
+    return fallback;
+  }
 }
 
 // ── Scoring helpers ──
@@ -167,16 +268,18 @@ function estimateTotalCost(
   distances: { primary_m: number; feeder_m: number; capacity_segment_m: number },
   headroom: number | null,
   r: UnitRatesRow,
+  surfaceSplit?: { footway_pct: number; carriageway_pct: number; verge_pct: number },
 ): { total: number; confidence: string } {
   const vl = proposedKw <= 80 ? "LV" : proposedKw <= 1500 ? "HV" : "EHV";
   const rawDist = vl === "LV" ? distances.capacity_segment_m : vl === "HV" ? distances.feeder_m : distances.primary_m;
   const maxDist = vl === "LV" ? 500 : vl === "HV" ? 3000 : 5000;
   const dist = Math.min(rawDist, maxDist);
 
-  // Surface split: 60% footway, 30% carriageway, 10% verge (same default as main engine)
-  const footwayM = Math.round(dist * 0.6);
-  const carriagewayM = Math.round(dist * 0.3);
-  const vergeM = Math.round(dist * 0.1);
+  // Surface split: use OSM-derived or fallback 60/30/10
+  const sp = surfaceSplit || { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 };
+  const footwayM = Math.round(dist * sp.footway_pct / 100);
+  const carriagewayM = Math.round(dist * sp.carriageway_pct / 100);
+  const vergeM = Math.round(dist * sp.verge_pct / 100);
 
   const threshold = r.mains_extension_threshold_m;
   const needsMainsExtension = vl === "LV" && dist > threshold;
@@ -273,7 +376,10 @@ function estimateTotalCost(
 }
 
 function assignPhase(row: ScoredRow): { phase: number; rationale: string } {
-  if (PHASE_RULES[1](row)) return { phase: 1, rationale: "Quick Win: Green viability, fast deploy, low cost" };
+  // Constraint penalty: railway/water nearby forces at least Phase 2
+  const hasHardConstraint = row.route_constraints.includes("RAILWAY_NEARBY") || row.route_constraints.includes("WATER_NEARBY");
+  if (!hasHardConstraint && PHASE_RULES[1](row)) return { phase: 1, rationale: "Quick Win: Green viability, fast deploy, low cost" };
+  if (hasHardConstraint && PHASE_RULES[1](row)) return { phase: 2, rationale: `Constraint penalty: ${row.route_constraints.join(", ")}` };
   if (PHASE_RULES[2](row)) return { phase: 2, rationale: `Moderate: ${row.band} viability, ${row.deployment_class}` };
   return { phase: 3, rationale: `Strategic: ${row.band} viability, ${row.deployment_class}, ${row.cost_band} cost` };
 }
@@ -432,12 +538,14 @@ Deno.serve(async (req) => {
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Could not geocode postcode",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, nearby_crossings: 0, nearby_signals: 0,
+            route_constraints: [], osm_coverage: "none",
             error: `Invalid postcode: ${site.postcode}`,
           };
         }
 
-        // Run grid scoring + spatial enrichment in parallel
-        const [scoreResult, substationResult, trafficResult, naptanResult, stats19Result] = await Promise.allSettled([
+        // Run grid scoring + spatial enrichment + OSM context in parallel
+        const [scoreResult, substationResult, trafficResult, naptanResult, stats19Result, osmCtxResult] = await Promise.allSettled([
           supabase.rpc("score_site_from_lnglat", { _lng: geo.lng, _lat: geo.lat, _proposed_kw: site.proposed_kw || 0 }),
           (async () => {
             let substations: any[] = [];
@@ -453,6 +561,7 @@ Deno.serve(async (req) => {
           queryNearbyPoints(supabase, DFT_SLUG, geo.lng, geo.lat, 2000, 20),
           queryNearbyPoints(supabase, NAPTAN_SLUG, geo.lng, geo.lat, 500, 50),
           queryNearbyPoints(supabase, STATS19_SLUG, geo.lng, geo.lat, 200, 50),
+          queryOsmContext(supabase, geo.lng, geo.lat),
         ]);
 
         const scoreData = scoreResult.status === "fulfilled" ? (scoreResult.value as any)?.data : null;
@@ -461,6 +570,7 @@ Deno.serve(async (req) => {
         const trafficPoints = trafficResult.status === "fulfilled" ? (trafficResult.value as any[]) : [];
         const naptanPoints = naptanResult.status === "fulfilled" ? (naptanResult.value as any[]) : [];
         const stats19Points = stats19Result.status === "fulfilled" ? (stats19Result.value as any[]) : [];
+        const osmCtx: OsmContext = osmCtxResult.status === "fulfilled" ? (osmCtxResult.value as OsmContext) : { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
 
         if (scoreError && !scoreData) {
           return {
@@ -472,6 +582,8 @@ Deno.serve(async (req) => {
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Scoring failed",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: osmCtx.split, nearby_crossings: osmCtx.crossings, nearby_signals: osmCtx.signals,
+            route_constraints: osmCtx.constraints, osm_coverage: osmCtx.found ? "cached" : "none",
             error: scoreError?.message || String(scoreError),
           };
         }
@@ -533,7 +645,7 @@ Deno.serve(async (req) => {
         const dc = getDeploymentClass(headroom, site.proposed_kw, util, constraintCount, ndp);
         const gr = getGridReadiness(headroom, util, site.proposed_kw);
         const rp = getReinforcementProbability(headroom, site.proposed_kw);
-        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom, unitRates);
+        const { total, confidence } = estimateTotalCost(site.proposed_kw, { primary_m: primaryDist, feeder_m: feederDist, capacity_segment_m: capacityDist }, headroom, unitRates, osmCtx.split);
         const cb = getCostBand(total);
         const bestPoc = nearestSub?.site_name || "Unknown";
 
@@ -547,6 +659,8 @@ Deno.serve(async (req) => {
           phase: 0, phase_rationale: "",
           traffic_aadf: maxAadf, nearby_bus_stops: busStops, nearby_rail_stations: railStations,
           accident_count: accidentCount, master_score: masterScore,
+          surface_split: osmCtx.split, nearby_crossings: osmCtx.crossings, nearby_signals: osmCtx.signals,
+          route_constraints: osmCtx.constraints, osm_coverage: osmCtx.found ? "cached" : "none",
         };
 
         const phasing = assignPhase(row);
@@ -567,6 +681,8 @@ Deno.serve(async (req) => {
             utilisation_pct: null, distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Processing error",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, nearby_crossings: 0, nearby_signals: 0,
+            route_constraints: [], osm_coverage: "none",
             error: String(r.reason),
           });
         }
