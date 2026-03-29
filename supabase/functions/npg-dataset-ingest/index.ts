@@ -202,7 +202,8 @@ Deno.serve(async (req) => {
 async function performIngest(
   supabase: any, entry: any, layerRow: any, storageTable: string,
   apiKey: string | null, userId: string, registryId: string,
-  mode: string, opts: { where?: string; select?: string; order_by?: string }
+  mode: string, opts: { where?: string; select?: string; order_by?: string },
+  registryTable: string = "dno_dataset_registry"
 ) {
   let totalInserted = 0;
   let totalSkipped = 0;
@@ -267,7 +268,7 @@ async function performIngest(
 
   // Update registry entry with sync status
   await supabase
-    .from("dno_dataset_registry")
+    .from(registryTable)
     .update({
       last_sync_at: new Date().toISOString(),
       last_sync_status: syncError ? "error" : "success",
