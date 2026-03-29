@@ -200,7 +200,7 @@ function waitForStyleLoaded(map: maplibregl.Map, timeoutMs = 10000): Promise<boo
     }, 200);
     setTimeout(() => {
       clearInterval(interval);
-      resolve(map.isStyleLoaded());
+      resolve(!!map.isStyleLoaded());
     }, timeoutMs);
   });
 }
