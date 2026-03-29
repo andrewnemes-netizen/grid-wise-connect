@@ -295,7 +295,8 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       let mapScreenshot: string | null = null;
       if (onCaptureMapScreenshot) {
         try {
-          mapScreenshot = await onCaptureMapScreenshot();
+          const shots = await onCaptureMapScreenshot();
+          mapScreenshot = shots.location;
         } catch (e) {
           console.warn("Map screenshot capture failed:", e);
         }
