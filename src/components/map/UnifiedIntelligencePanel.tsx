@@ -41,7 +41,7 @@ interface Props {
   onClose: () => void;
   onSaved?: () => void;
   onConnectionLines?: (lines: ConnectionLine[]) => void;
-  onCaptureMapScreenshot?: () => Promise<string | null>;
+  onCaptureMapScreenshot?: () => Promise<{ location: string | null; route: string | null }>;
 }
 
 interface ScoreResult {
@@ -295,7 +295,8 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       let mapScreenshot: string | null = null;
       if (onCaptureMapScreenshot) {
         try {
-          mapScreenshot = await onCaptureMapScreenshot();
+          const shots = await onCaptureMapScreenshot();
+          mapScreenshot = shots.location;
         } catch (e) {
           console.warn("Map screenshot capture failed:", e);
         }
@@ -703,11 +704,14 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                   onClick={async () => {
                     setExportingPdf(true);
                     try {
-                      // Capture map screenshot before generating PDF
+                      // Capture map screenshots (location overview + route)
                       let locationScreenshot: string | null = null;
+                      let routeScreenshot: string | null = null;
                       if (onCaptureMapScreenshot) {
                         try {
-                          locationScreenshot = await onCaptureMapScreenshot();
+                          const shots = await onCaptureMapScreenshot();
+                          locationScreenshot = shots.location;
+                          routeScreenshot = shots.route;
                         } catch (e) {
                           console.warn("Map screenshot failed:", e);
                         }
@@ -738,6 +742,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                         constraints: result.constraints,
                         unitRates,
                         locationMapScreenshot: locationScreenshot,
+                        mapScreenshot: routeScreenshot,
                         // Intelligence data
                         masterScore: masterScore?.score ?? null,
                         masterVerdict: masterScore?.verdict ?? null,

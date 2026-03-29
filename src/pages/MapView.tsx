@@ -327,16 +327,29 @@ const MapView = () => {
     return captureScreenshot(connect.connectEndpoints);
   }, [connect.connectEndpoints, captureScreenshot]);
 
-  // Screenshot handler for UnifiedIntelligencePanel (pin-drop centred)
-  // Auto-loads infrastructure layers so substations, cables etc. appear in the capture
-  const handlePinScreenshot = useCallback(async (): Promise<string | null> => {
-    if (!map || !pin.pinLocation) return null;
+  // Screenshot handler — returns { location, route } for PDF export
+  const handlePinScreenshot = useCallback(async (): Promise<{ location: string | null; route: string | null }> => {
+    if (!map || !pin.pinLocation) return { location: null, route: null };
     const { lng, lat } = pin.pinLocation;
-    // Buffer ~300m around pin so nearby infrastructure is visible
-    const BUFFER = 0.004;
-    const bbox: [number, number, number, number] = [lng - BUFFER, lat - BUFFER, lng + BUFFER, lat + BUFFER];
-    const bounds = new maplibregl.LngLatBounds([bbox[0], bbox[1]], [bbox[2], bbox[3]]);
-    map.fitBounds(bounds, { padding: 40, duration: 0 });
+
+    // --- Collect all connection line endpoints from existing map sources ---
+    const CONNECTION_SOURCE_IDS = ["line-primary", "line-feeder", "line-cable"];
+    const allLineCoords: [number, number][] = [];
+    const endpointFeatures: { coord: [number, number]; role: string; color: string }[] = [];
+
+    CONNECTION_SOURCE_IDS.forEach((srcId) => {
+      const src = map.getSource(srcId) as maplibregl.GeoJSONSource | undefined;
+      if (!src) return;
+      const data = (src as any)._data;
+      if (!data?.geometry?.coordinates) return;
+      const coords: [number, number][] = data.geometry.coordinates;
+      allLineCoords.push(...coords);
+      if (coords.length >= 2) {
+        const roleLabel = srcId.replace("line-", "");
+        const color = roleLabel === "primary" ? "#3498db" : roleLabel === "feeder" ? "#f39c12" : "#2ecc71";
+        endpointFeatures.push({ coord: coords[coords.length - 1], role: roleLabel, color });
+      }
+    });
 
     // --- Auto-load infrastructure layers ---
     const INFRA_SLUGS = [
@@ -350,18 +363,25 @@ const MapView = () => {
     ];
 
     const tempLayerIds: string[] = [];
-    try {
-      // Find registry entries for infra slugs
-      const infraLayers = registryLayers.filter((l) => INFRA_SLUGS.includes(l.slug));
+    // Compute overview bbox including pin + all connection endpoints
+    const allPts: [number, number][] = [[lng, lat], ...allLineCoords];
+    let minLng = lng, maxLng = lng, minLat = lat, maxLat = lat;
+    allPts.forEach(([pLng, pLat]) => {
+      if (pLng < minLng) minLng = pLng;
+      if (pLng > maxLng) maxLng = pLng;
+      if (pLat < minLat) minLat = pLat;
+      if (pLat > maxLat) maxLat = pLat;
+    });
+    const PAD = 0.002; // ~200m padding
+    const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
-      // Load each layer that isn't already visible on the map
+    try {
+      const infraLayers = registryLayers.filter((l) => INFRA_SLUGS.includes(l.slug));
       const loadPromises = infraLayers.map(async (layer, idx) => {
         const sourceId = `source-${layer.id}`;
-        const alreadyVisible = !!map.getSource(sourceId);
-        if (alreadyVisible) return; // already on map
-
+        if (map.getSource(sourceId)) return;
         try {
-          const geojson = await fetchLayerGeoJSON(layer.id, bbox);
+          const geojson = await fetchLayerGeoJSON(layer.id, overviewBbox);
           if (!geojson.features.length) return;
           addRegistryLayerToMap(map, layer, geojson, idx);
           tempLayerIds.push(layer.id);
@@ -374,58 +394,89 @@ const MapView = () => {
       console.warn("Screenshot: infra layer loading failed:", err);
     }
 
-    // Add temporary pin marker as GeoJSON so it renders on canvas
-    const srcId = "pin-screenshot-src";
-    const layerId = "pin-screenshot-fill";
-    const strokeId = "pin-screenshot-stroke";
-    try {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getLayer(strokeId)) map.removeLayer(strokeId);
-      if (map.getSource(srcId)) map.removeSource(srcId);
-    } catch {}
+    // --- Temporary GeoJSON markers for pin + connection endpoints ---
+    const markerSrcId = "screenshot-ep-src";
+    const markerFillId = "screenshot-ep-fill";
+    const markerStrokeId = "screenshot-ep-stroke";
+    const cleanupMarkers = () => {
+      try {
+        if (map.getLayer(markerFillId)) map.removeLayer(markerFillId);
+        if (map.getLayer(markerStrokeId)) map.removeLayer(markerStrokeId);
+        if (map.getSource(markerSrcId)) map.removeSource(markerSrcId);
+      } catch {}
+    };
+    cleanupMarkers();
 
-    map.addSource(srcId, {
+    const markerFeatures = [
+      { type: "Feature" as const, properties: { role: "site", color: "#e74c3c" }, geometry: { type: "Point" as const, coordinates: [lng, lat] } },
+      ...endpointFeatures.map((ep) => ({
+        type: "Feature" as const,
+        properties: { role: ep.role, color: ep.color },
+        geometry: { type: "Point" as const, coordinates: ep.coord },
+      })),
+    ];
+
+    map.addSource(markerSrcId, {
       type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [lng, lat] } }],
-      },
+      data: { type: "FeatureCollection", features: markerFeatures },
     });
-    map.addLayer({ id: strokeId, type: "circle", source: srcId, paint: { "circle-radius": 12, "circle-color": "#ffffff" } });
-    map.addLayer({ id: layerId, type: "circle", source: srcId, paint: { "circle-radius": 9, "circle-color": "#e74c3c" } });
+    map.addLayer({ id: markerStrokeId, type: "circle", source: markerSrcId, paint: { "circle-radius": 12, "circle-color": "#ffffff" } });
+    map.addLayer({
+      id: markerFillId, type: "circle", source: markerSrcId,
+      paint: { "circle-radius": 9, "circle-color": ["get", "color"] },
+    });
 
-    return new Promise((resolve) => {
-      const capture = () => {
+    const cleanupAll = () => {
+      cleanupMarkers();
+      for (const id of tempLayerIds) {
         try {
-          resolve(map.getCanvas().toDataURL("image/png"));
-        } catch {
-          resolve(null);
-        } finally {
-          // Clean up pin marker
-          try {
-            if (map.getLayer(layerId)) map.removeLayer(layerId);
-            if (map.getLayer(strokeId)) map.removeLayer(strokeId);
-            if (map.getSource(srcId)) map.removeSource(srcId);
-          } catch {}
-          // Clean up temporarily-added infra layers
-          for (const id of tempLayerIds) {
-            try {
-              const mid = `layer-${id}`;
-              if (map.getLayer(mid)) map.removeLayer(mid);
-              if (map.getLayer(`${mid}-outline`)) map.removeLayer(`${mid}-outline`);
-              if (map.getLayer(`${mid}-heat`)) map.removeLayer(`${mid}-heat`);
-              const sid = `source-${id}`;
-              if (map.getSource(sid)) map.removeSource(sid);
-            } catch {}
-          }
-        }
-      };
-      // Wait a bit longer for infra layers to render
-      setTimeout(() => {
-        if (map.areTilesLoaded()) capture();
-        else map.once("idle", capture);
-      }, 800);
-    });
+          const mid = `layer-${id}`;
+          if (map.getLayer(mid)) map.removeLayer(mid);
+          if (map.getLayer(`${mid}-outline`)) map.removeLayer(`${mid}-outline`);
+          if (map.getLayer(`${mid}-heat`)) map.removeLayer(`${mid}-heat`);
+          const sid = `source-${id}`;
+          if (map.getSource(sid)) map.removeSource(sid);
+        } catch {}
+      }
+    };
+
+    // Helper: capture canvas after tiles load
+    const captureCanvas = (): Promise<string | null> =>
+      new Promise((resolve) => {
+        const doCapture = () => {
+          try { resolve(map.getCanvas().toDataURL("image/png")); } catch { resolve(null); }
+        };
+        setTimeout(() => {
+          if (map.areTilesLoaded()) doCapture();
+          else map.once("idle", doCapture);
+        }, 800);
+      });
+
+    // --- Screenshot 1: Location overview (pin + all connection endpoints) ---
+    const overviewBounds = new maplibregl.LngLatBounds(
+      [overviewBbox[0], overviewBbox[1]],
+      [overviewBbox[2], overviewBbox[3]]
+    );
+    map.fitBounds(overviewBounds, { padding: 50, duration: 0 });
+    const locationScreenshot = await captureCanvas();
+
+    // --- Screenshot 2: Route view (tighter bounds on connection lines only) ---
+    let routeScreenshot: string | null = null;
+    if (allLineCoords.length >= 2) {
+      const routeBounds = new maplibregl.LngLatBounds(allLineCoords[0], allLineCoords[0]);
+      allLineCoords.forEach((c) => routeBounds.extend(c));
+      routeBounds.extend([lng, lat]); // include site pin
+      // Add small buffer
+      const ROUTE_PAD_LNG = 0.001;
+      const ROUTE_PAD_LAT = 0.0007;
+      routeBounds.extend([routeBounds.getWest() - ROUTE_PAD_LNG, routeBounds.getSouth() - ROUTE_PAD_LAT]);
+      routeBounds.extend([routeBounds.getEast() + ROUTE_PAD_LNG, routeBounds.getNorth() + ROUTE_PAD_LAT]);
+      map.fitBounds(routeBounds, { padding: 60, duration: 0 });
+      routeScreenshot = await captureCanvas();
+    }
+
+    cleanupAll();
+    return { location: locationScreenshot, route: routeScreenshot };
   }, [map, pin.pinLocation, registryLayers]);
 
   return (
