@@ -334,22 +334,16 @@ const MapView = () => {
     if (!map || !pin.pinLocation) return { location: null, route: null };
     const { lng, lat } = pin.pinLocation;
 
-    // --- Collect all connection line endpoints from existing map sources ---
-    const CONNECTION_SOURCE_IDS = ["line-primary", "line-feeder", "line-cable"];
+    // --- Collect all connection line coords from stored ref ---
     const allLineCoords: [number, number][] = [];
     const endpointFeatures: { coord: [number, number]; role: string; color: string }[] = [];
 
-    CONNECTION_SOURCE_IDS.forEach((srcId) => {
-      const src = map.getSource(srcId) as maplibregl.GeoJSONSource | undefined;
-      if (!src) return;
-      const data = (src as any)._data;
-      if (!data?.geometry?.coordinates) return;
-      const coords: [number, number][] = data.geometry.coordinates;
-      allLineCoords.push(...coords);
-      if (coords.length >= 2) {
-        const roleLabel = srcId.replace("line-", "");
-        const color = roleLabel === "primary" ? "#3498db" : roleLabel === "feeder" ? "#f39c12" : "#2ecc71";
-        endpointFeatures.push({ coord: coords[coords.length - 1], role: roleLabel, color });
+    connectionLinesRef.current.forEach((line) => {
+      if (line.coords.length >= 2) {
+        allLineCoords.push(...line.coords);
+        const roleLabel = line.id.replace("line-", "");
+        // Remote endpoint (substation/feeder/cable end) is the last coord
+        endpointFeatures.push({ coord: line.coords[line.coords.length - 1], role: roleLabel, color: line.color });
       }
     });
 
