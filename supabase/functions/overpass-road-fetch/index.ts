@@ -192,12 +192,17 @@ function extractTags(
   }
 }
 
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Race all endpoints in parallel — first successful response wins */
 async function fetchWithRace(
   query: string,
   featureCap: number,
   layerType: string
-): Promise<GeoJSON.FeatureCollection> {
+): Promise<{ geojson: GeoJSON.FeatureCollection; endpoint: string }> {
   const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
     const resp = await fetch(endpoint, {
       method: "POST",
@@ -211,14 +216,17 @@ async function fetchWithRace(
     }
     const json = await resp.json();
     const elements: OverpassElement[] = json.elements ?? [];
-    return overpassToGeoJSON(elements.slice(0, featureCap), layerType);
+    return {
+      geojson: overpassToGeoJSON(elements.slice(0, featureCap), layerType),
+      endpoint,
+    };
   });
 
   try {
     return await Promise.any(attempts);
   } catch (err) {
     console.warn("All Overpass endpoints failed:", err);
-    return { type: "FeatureCollection", features: [] };
+    return { geojson: { type: "FeatureCollection", features: [] }, endpoint: "none" };
   }
 }
 
@@ -269,7 +277,25 @@ Deno.serve(async (req: Request) => {
     const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
     const query = buildQuery(clampedBbox, road_type);
-    const geojson = await fetchWithRace(query, cap, road_type);
+    const queryHash = await sha256Hex(query);
+    const { geojson, endpoint: usedEndpoint } = await fetchWithRace(query, cap, road_type);
+
+    // Fire-and-forget: log ingestion metadata
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sbAdmin = createClient(supabaseUrl, serviceKey);
+    sbAdmin.from("osm_ingestion_meta").insert({
+      layer_slug: road_type,
+      source_endpoint: usedEndpoint,
+      query_hash: queryHash,
+      query_text: query,
+      bbox: clampedBbox,
+      row_count: geojson.features.length,
+      status: geojson.features.length > 0 ? "success" : "empty",
+      fetched_by: user.id,
+    }).then(({ error: metaErr }) => {
+      if (metaErr) console.warn("Meta insert failed:", metaErr.message);
+    });
 
     return new Response(JSON.stringify(geojson), {
       status: 200,
