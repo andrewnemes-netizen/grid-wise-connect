@@ -28,6 +28,7 @@ export interface RegistryLayer {
   visible_by_default: boolean;
   min_zoom: number;
   max_zoom: number;
+  bbox: [number, number, number, number] | null;
 }
 
 export interface LayerVisibility {
