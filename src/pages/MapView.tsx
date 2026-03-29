@@ -256,6 +256,7 @@ const MapView = () => {
   // Connection lines from SiteCheckPanel
   const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
     if (!map) return;
+    connectionLinesRef.current = lines;
     ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
