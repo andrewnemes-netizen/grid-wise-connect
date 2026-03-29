@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo, createElement } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import {
   useRegistryLayers,
@@ -12,7 +12,6 @@ import {
   clearLayerCache,
 } from "@/lib/mapLayers";
 import { useToast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
 
 function getMapBbox(map: maplibregl.Map): [number, number, number, number] {
   const bounds = map.getBounds();
