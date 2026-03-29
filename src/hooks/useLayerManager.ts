@@ -138,7 +138,7 @@ export function useLayerManager(
       try {
         const layerDno = layer.dno;
         const clipDno = GAS_OPERATORS.has(layerDno) ? null : selectedDnoRef.current;
-        const geojson = await fetchLayerGeoJSON(layerId, bbox, clipDno, cap);
+        const geojson = await fetchLayerGeoJSON(layerId, bbox, clipDno, cap, layer.source_type, layer.slug);
         const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
         const colorIdx = catLayers.findIndex((l) => l.id === layerId);
         const isUtil = layer.slug === "npg_hv_substations_utilisation";
