@@ -59,14 +59,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch the registry entry
-    const { data: entry, error: regErr } = await supabase
+    // Fetch the registry entry — try dno_dataset_registry first, then gas_dataset_registry
+    const GAS_OPERATORS = ["CADENT", "NGN", "SGN", "WWU"];
+    let entry: any = null;
+    let registryTable = "dno_dataset_registry";
+
+    const { data: dnoEntry, error: dnoErr } = await supabase
       .from("dno_dataset_registry")
       .select("*")
       .eq("id", registry_id)
       .single();
 
-    if (regErr || !entry) {
+    if (dnoEntry) {
+      entry = dnoEntry;
+    } else {
+      const { data: gasEntry, error: gasErr } = await supabase
+        .from("gas_dataset_registry")
+        .select("*")
+        .eq("id", registry_id)
+        .single();
+      if (gasEntry) {
+        entry = gasEntry;
+        registryTable = "gas_dataset_registry";
+      }
+    }
+
+    if (!entry) {
       return new Response(JSON.stringify({ error: "Registry entry not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
