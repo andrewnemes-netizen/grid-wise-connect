@@ -538,6 +538,8 @@ Deno.serve(async (req) => {
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Could not geocode postcode",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, nearby_crossings: 0, nearby_signals: 0,
+            route_constraints: [], osm_coverage: "none",
             error: `Invalid postcode: ${site.postcode}`,
           };
         }
@@ -679,6 +681,8 @@ Deno.serve(async (req) => {
             utilisation_pct: null, distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Processing error",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, nearby_crossings: 0, nearby_signals: 0,
+            route_constraints: [], osm_coverage: "none",
             error: String(r.reason),
           });
         }
