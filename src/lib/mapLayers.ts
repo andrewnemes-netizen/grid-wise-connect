@@ -13,11 +13,54 @@ const OVERPASS_MAX_SPAN: Record<string, number> = {
   osm_railways: 0.11,
   osm_buildings: 0.05,
   osm_barriers: 0.05,
+  osm_crossings: 0.05,
+  osm_traffic_signals: 0.05,
 };
+
+// Tile zoom per layer — mirrors edge function for deterministic cache keys
+const TILE_ZOOM: Record<string, number> = {
+  osm_major_roads: 12,
+  osm_minor_roads: 13,
+  osm_footways: 14,
+  osm_water: 13,
+  osm_railways: 13,
+  osm_buildings: 14,
+  osm_barriers: 14,
+  osm_crossings: 14,
+  osm_traffic_signals: 14,
+};
+
+// Tile math helpers
+function lon2tile(lon: number, z: number): number {
+  return Math.floor(((lon + 180) / 360) * (1 << z));
+}
+function lat2tile(lat: number, z: number): number {
+  return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * (1 << z));
+}
+
+/** Generate deterministic tile keys for a bbox at a given zoom */
+function bboxToTileKeys(bbox: [number, number, number, number], zoom: number): string[] {
+  // bbox is [west, south, east, north] (MapLibre format)
+  const [west, south, east, north] = bbox;
+  const minX = lon2tile(west, zoom);
+  const maxX = lon2tile(east, zoom);
+  const minY = lat2tile(north, zoom);
+  const maxY = lat2tile(south, zoom);
+  const keys: string[] = [];
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      keys.push(`${zoom}/${x}/${y}`);
+    }
+  }
+  return keys;
+}
 
 // Concurrency throttle for Overpass requests — prevents 429 rate limiting
 let activeOverpassRequests = 0;
 const OVERPASS_CONCURRENCY = 2;
+
+// Tile-keyed cache for Overpass results
+const overpassTileCache = new Map<string, GeoJSON.FeatureCollection>();
 
 async function fetchOverpassGeoJSON(
   slug: string,
@@ -33,6 +76,28 @@ async function fetchOverpassGeoJSON(
   if (lngSpan > maxSpan || latSpan > maxSpan) {
     console.info(`Overpass skipped for ${slug}: viewport too wide (${lngSpan.toFixed(3)}° x ${latSpan.toFixed(3)}°). Zoom in more.`);
     return { type: "FeatureCollection", features: [] };
+  }
+
+  // Deterministic tile keys for cache
+  const zoom = TILE_ZOOM[slug] ?? 13;
+  const tileKeys = bboxToTileKeys(bbox, zoom);
+
+  // Check which tiles are already cached
+  const cachedResults: GeoJSON.FeatureCollection[] = [];
+  const uncachedKeys: string[] = [];
+  for (const key of tileKeys) {
+    const cacheKey = `${slug}:${key}`;
+    if (overpassTileCache.has(cacheKey)) {
+      cachedResults.push(overpassTileCache.get(cacheKey)!);
+    } else {
+      uncachedKeys.push(key);
+    }
+  }
+
+  // If all tiles cached, merge and return immediately
+  if (uncachedKeys.length === 0 && cachedResults.length > 0) {
+    console.info(`Overpass cache hit for ${slug}: ${tileKeys.length} tiles`);
+    return mergeOverpassResults(cachedResults);
   }
 
   // Throttle: wait for a concurrency slot
@@ -56,15 +121,39 @@ async function fetchOverpassGeoJSON(
     const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
     if (error) {
       console.error("Overpass fetch error:", error);
-      return { type: "FeatureCollection", features: [] };
+      return mergeOverpassResults(cachedResults); // return cached tiles at least
     }
-    return data as GeoJSON.FeatureCollection;
+    const result = data as GeoJSON.FeatureCollection;
+
+    // Cache the result under all tile keys it covers
+    for (const key of tileKeys) {
+      overpassTileCache.set(`${slug}:${key}`, result);
+    }
+
+    return result;
   } catch (e) {
-    console.warn(`Overpass request for ${slug} timed out or failed — returning empty`);
-    return { type: "FeatureCollection", features: [] };
+    console.warn(`Overpass request for ${slug} timed out or failed — returning cached tiles`);
+    return mergeOverpassResults(cachedResults);
   } finally {
     activeOverpassRequests--;
   }
+}
+
+/** Merge multiple Overpass FeatureCollections, deduplicating by osm_id */
+function mergeOverpassResults(collections: GeoJSON.FeatureCollection[]): GeoJSON.FeatureCollection {
+  if (collections.length === 0) return { type: "FeatureCollection", features: [] };
+  if (collections.length === 1) return collections[0];
+  const seen = new Set<number>();
+  const features: GeoJSON.Feature[] = [];
+  for (const fc of collections) {
+    for (const f of fc.features) {
+      const osmId = (f.properties as any)?.osm_id;
+      if (osmId && seen.has(osmId)) continue;
+      if (osmId) seen.add(osmId);
+      features.push(f);
+    }
+  }
+  return { type: "FeatureCollection", features };
 }
 
 // Cache for fetched GeoJSON keyed by "layerId:bbox"
@@ -473,7 +562,14 @@ export function clearLayerCache(layerId?: string) {
         geojsonCache.delete(key);
       }
     }
+    // Also clear overpass tile cache for this layer
+    for (const key of overpassTileCache.keys()) {
+      if (key.startsWith(layerId)) {
+        overpassTileCache.delete(key);
+      }
+    }
   } else {
     geojsonCache.clear();
+    overpassTileCache.clear();
   }
 }
