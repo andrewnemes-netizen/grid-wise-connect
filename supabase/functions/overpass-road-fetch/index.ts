@@ -192,12 +192,17 @@ function extractTags(
   }
 }
 
+async function sha256Hex(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Race all endpoints in parallel — first successful response wins */
 async function fetchWithRace(
   query: string,
   featureCap: number,
   layerType: string
-): Promise<GeoJSON.FeatureCollection> {
+): Promise<{ geojson: GeoJSON.FeatureCollection; endpoint: string }> {
   const attempts = OVERPASS_ENDPOINTS.map(async (endpoint) => {
     const resp = await fetch(endpoint, {
       method: "POST",
@@ -211,14 +216,17 @@ async function fetchWithRace(
     }
     const json = await resp.json();
     const elements: OverpassElement[] = json.elements ?? [];
-    return overpassToGeoJSON(elements.slice(0, featureCap), layerType);
+    return {
+      geojson: overpassToGeoJSON(elements.slice(0, featureCap), layerType),
+      endpoint,
+    };
   });
 
   try {
     return await Promise.any(attempts);
   } catch (err) {
     console.warn("All Overpass endpoints failed:", err);
-    return { type: "FeatureCollection", features: [] };
+    return { geojson: { type: "FeatureCollection", features: [] }, endpoint: "none" };
   }
 }
 
