@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { NetworkVisibilityPanel } from "./NetworkVisibilityPanel";
 import { CostEstimatePanel } from "./CostEstimatePanel";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
+import { fetchAllRoadRoutes } from "@/lib/roadRoute";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
 interface SiteCheckPanelProps {
@@ -112,22 +113,24 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
 
       // Build connection lines if nearest_points are available
       if (res.data.nearest_points && onConnectionLines) {
-        const lines: ConnectionLine[] = [];
         const origin: [number, number] = [lng, lat];
         const np = res.data.nearest_points;
         const primaryCoord = parseCoord(np.primary);
         const feederCoord = parseCoord(np.feeder);
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
+        const lineInputs: { id: string; label: string; origin: [number, number]; destination: [number, number]; color: string; distance_m: number }[] = [];
         if (primaryCoord) {
-          lines.push({ id: "line-primary", label: "Primary Substation", coords: [origin, primaryCoord], color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
+          lineInputs.push({ id: "line-primary", label: "Primary Substation", origin, destination: primaryCoord, color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
         }
         if (feederCoord) {
-          lines.push({ id: "line-feeder", label: "Feeder", coords: [origin, feederCoord], color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
+          lineInputs.push({ id: "line-feeder", label: "Feeder", origin, destination: feederCoord, color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
         }
         if (cableCoord) {
-          lines.push({ id: "line-cable", label: "Cable", coords: [origin, cableCoord], color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
+          lineInputs.push({ id: "line-cable", label: "Cable", origin, destination: cableCoord, color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
         }
-        onConnectionLines(lines);
+        // Fetch road-following routes (falls back to straight lines)
+        const roadLines = await fetchAllRoadRoutes(lineInputs);
+        onConnectionLines(roadLines);
       }
     } catch (err: any) {
       toast({ title: "Scoring failed", description: err.message, variant: "destructive" });
