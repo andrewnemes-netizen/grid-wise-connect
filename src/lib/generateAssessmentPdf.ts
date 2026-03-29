@@ -264,16 +264,17 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y = 36;
   };
 
-  // ── LOCATION MAP PAGE (after cover, before content) ──
-  if (input.locationMapScreenshot) {
+  // ── SINGLE MAP PAGE (site + infrastructure + cable route) ──
+  if (input.locationMapScreenshot || input.mapScreenshot) {
+    const mapImg = input.locationMapScreenshot || input.mapScreenshot;
     addHeaderBar();
-    sectionTitle("Location & Infrastructure Overview");
+    sectionTitle("Site Location & Cable Route");
 
     try {
       const imgW = contentW;
       const imgH = imgW * 0.65;
       checkPage(imgH + 50);
-      doc.addImage(input.locationMapScreenshot, "PNG", margin, y, imgW, imgH);
+      doc.addImage(mapImg!, "PNG", margin, y, imgW, imgH);
 
       // North arrow (top-right of map)
       const naX = margin + imgW - 8;
@@ -315,15 +316,16 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       console.warn("Failed to add location map to PDF:", e);
     }
 
-    // Map legend
-    const locationLegend = [
+    // Combined map legend — infrastructure + route
+    const mapLegend = [
       { label: "Site Location", color: "#e74c3c", type: "circle" as const },
-      { label: "Connection Lines", color: "#9b59b6", type: "line" as const },
-      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
-      { label: "EHV Feeders", color: "#8b5cf6", type: "line" as const },
+      { label: "Point of Connection (POC)", color: "#3498db", type: "circle" as const },
+      { label: "Proposed Cable Route", color: "#2ecc71", type: "line" as const },
+      { label: "Primary Substation", color: "#e74c3c", type: "line" as const },
+      { label: "Feeder", color: "#9b59b6", type: "line" as const },
       { label: "Substations", color: "#3b82f6", type: "circle" as const },
+      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
       { label: "NDP Projects", color: "#f59e0b", type: "circle" as const },
-      { label: "Constraints", color: "#dc2626", type: "line" as const },
     ];
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
@@ -333,7 +335,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.setFont("helvetica", "normal");
     doc.setTextColor(BRAND.black);
     const colW2 = contentW / 2;
-    locationLegend.forEach((item, i) => {
+    mapLegend.forEach((item, i) => {
       const col = i < 4 ? 0 : 1;
       const row = i < 4 ? i : i - 4;
       const lx = margin + col * colW2;
@@ -350,7 +352,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setTextColor(BRAND.black);
       doc.text(item.label, lx + 10, ly);
     });
-    y += Math.ceil(locationLegend.length / 2) * 4.5 + 4;
+    y += Math.ceil(mapLegend.length / 2) * 4.5 + 4;
 
     if (input.siteName) {
       doc.setFontSize(7);
