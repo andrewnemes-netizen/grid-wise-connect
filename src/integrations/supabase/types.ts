@@ -1217,6 +1217,42 @@ export type Database = {
         }
         Relationships: []
       }
+      osm_tile_cache: {
+        Row: {
+          expires_at: string
+          feature_count: number
+          fetched_at: string
+          geojson: Json
+          id: string
+          layer_slug: string
+          query_hash: string
+          source_endpoint: string | null
+          tile_id: string
+        }
+        Insert: {
+          expires_at?: string
+          feature_count?: number
+          fetched_at?: string
+          geojson?: Json
+          id?: string
+          layer_slug: string
+          query_hash: string
+          source_endpoint?: string | null
+          tile_id: string
+        }
+        Update: {
+          expires_at?: string
+          feature_count?: number
+          fetched_at?: string
+          geojson?: Json
+          id?: string
+          layer_slug?: string
+          query_hash?: string
+          source_endpoint?: string | null
+          tile_id?: string
+        }
+        Relationships: []
+      }
       primary_substations_33kv: {
         Row: {
           asset_id: string
