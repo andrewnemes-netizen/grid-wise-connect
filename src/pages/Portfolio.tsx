@@ -323,9 +323,9 @@ const Portfolio = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
               ) : (
                 filtered.map((site: any) => (
                   <TableRow key={site.id} className="cursor-pointer hover:bg-muted/50">
@@ -369,6 +369,35 @@ const Portfolio = () => {
                       })()}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}>{site.reinforcement_probability != null ? `${site.reinforcement_probability}%` : "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {(() => {
+                        const osm = extractOsmFlags(site);
+                        if (osm.constraints.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+                        return (
+                          <TooltipProvider>
+                            <div className="flex gap-0.5">
+                              {osm.constraints.includes("RAILWAY_NEARBY") && (
+                                <Tooltip><TooltipTrigger><Train className="h-3.5 w-3.5 text-red-500" /></TooltipTrigger><TooltipContent>Railway nearby</TooltipContent></Tooltip>
+                              )}
+                              {osm.constraints.includes("WATER_NEARBY") && (
+                                <Tooltip><TooltipTrigger><Droplets className="h-3.5 w-3.5 text-blue-500" /></TooltipTrigger><TooltipContent>Water crossing nearby</TooltipContent></Tooltip>
+                              )}
+                              {osm.constraints.includes("SIGNAL_CONTROLLED") && (
+                                <Tooltip><TooltipTrigger><TrafficCone className="h-3.5 w-3.5 text-amber-500" /></TooltipTrigger><TooltipContent>Signal-controlled junction</TooltipContent></Tooltip>
+                              )}
+                            </div>
+                          </TooltipProvider>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {(() => {
+                        const osm = extractOsmFlags(site);
+                        return osm.osmCoverage === "cached"
+                          ? <Crosshair className="h-3.5 w-3.5 text-emerald-500" />
+                          : <span className="text-muted-foreground text-xs">—</span>;
+                      })()}
+                    </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
                     <TableCell>
