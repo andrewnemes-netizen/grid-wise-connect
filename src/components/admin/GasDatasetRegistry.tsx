@@ -74,11 +74,11 @@ export function GasDatasetRegistry() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("gas_dataset_registry")
-        .select("*")
+        .select("id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at")
         .eq("dno", selectedGdn)
         .order("title");
       if (error) throw error;
-      return data as DatasetEntry[];
+      return (data ?? []) as DatasetEntry[];
     },
     refetchOnMount: "always",
   });
