@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass, Crosshair, Route } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass, Crosshair, Globe } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -397,8 +397,8 @@ export function LayerTogglePanel({
                   Gas
                 </TabsTrigger>
                 <TabsTrigger value="roads" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
-                  <Route className="h-3 w-3" />
-                  Roads
+                  <Globe className="h-3 w-3" />
+                  OSM
                   {osmVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{osmVisibleCount}</Badge>}
                 </TabsTrigger>
                 <TabsTrigger value="osopen" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
@@ -505,9 +505,9 @@ export function LayerTogglePanel({
               <TabsContent value="roads" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
                 {osmTree.size === 0 ? (
                   <div className="py-4 text-center space-y-1.5">
-                    <Route className="h-6 w-6 text-muted-foreground mx-auto" />
-                    <p className="text-[11px] text-muted-foreground">No road layers available.</p>
-                    <p className="text-[10px] text-muted-foreground">OSM road layers are fetched live from Overpass API.</p>
+                    <Globe className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-[11px] text-muted-foreground">No OSM layers available.</p>
+                    <p className="text-[10px] text-muted-foreground">OSM layers are fetched live from Overpass API.</p>
                   </div>
                 ) : (
                   Array.from(osmTree.entries()).map(([category, catLayers]) => (

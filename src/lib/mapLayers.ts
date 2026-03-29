@@ -9,6 +9,10 @@ const OVERPASS_MAX_SPAN: Record<string, number> = {
   osm_major_roads: 0.15,
   osm_minor_roads: 0.08,
   osm_footways: 0.05,
+  osm_water: 0.11,
+  osm_railways: 0.11,
+  osm_buildings: 0.05,
+  osm_barriers: 0.05,
 };
 
 async function fetchOverpassGeoJSON(
