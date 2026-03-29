@@ -542,8 +542,8 @@ Deno.serve(async (req) => {
           };
         }
 
-        // Run grid scoring + spatial enrichment in parallel
-        const [scoreResult, substationResult, trafficResult, naptanResult, stats19Result] = await Promise.allSettled([
+        // Run grid scoring + spatial enrichment + OSM context in parallel
+        const [scoreResult, substationResult, trafficResult, naptanResult, stats19Result, osmCtxResult] = await Promise.allSettled([
           supabase.rpc("score_site_from_lnglat", { _lng: geo.lng, _lat: geo.lat, _proposed_kw: site.proposed_kw || 0 }),
           (async () => {
             let substations: any[] = [];
@@ -559,6 +559,7 @@ Deno.serve(async (req) => {
           queryNearbyPoints(supabase, DFT_SLUG, geo.lng, geo.lat, 2000, 20),
           queryNearbyPoints(supabase, NAPTAN_SLUG, geo.lng, geo.lat, 500, 50),
           queryNearbyPoints(supabase, STATS19_SLUG, geo.lng, geo.lat, 200, 50),
+          queryOsmContext(supabase, geo.lng, geo.lat),
         ]);
 
         const scoreData = scoreResult.status === "fulfilled" ? (scoreResult.value as any)?.data : null;
