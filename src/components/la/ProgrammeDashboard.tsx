@@ -39,6 +39,11 @@ interface ScoredRow {
   nearby_rail_stations?: number;
   accident_count?: number;
   master_score?: number;
+  surface_split?: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  nearby_crossings?: number;
+  nearby_signals?: number;
+  route_constraints?: string[];
+  osm_coverage?: "cached" | "none";
   error?: string;
 }
 
