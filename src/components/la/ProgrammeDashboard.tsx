@@ -129,17 +129,23 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
       "Viability Index", "Band", "Grid Readiness", "Deployment Class",
       "Cost Band", "Total Estimate (£)", "Confidence", "Reinforcement %",
       "Best POC", "Traffic AADF", "Bus Stops", "Rail Stations", "Accidents",
+      "Surface", "Crossings", "Signals", "Constraints", "OSM",
       ...(isInternal ? ["Headroom (kW)", "Utilisation %", "Distance Primary (m)", "Distance Feeder (m)", "Distance Capacity (m)"] : []),
       "Error",
     ];
-    const rows = filtered.map(r => [
-      r.site_name, r.postcode, r.proposed_kw, r.site_type, r.phase, r.phase_rationale,
-      r.viability_index, r.band, r.grid_readiness, r.deployment_class,
-      r.cost_band, r.total_estimate, r.confidence, r.reinforcement_probability,
-      r.best_poc, r.traffic_aadf ?? 0, r.nearby_bus_stops ?? 0, r.nearby_rail_stations ?? 0, r.accident_count ?? 0,
-      ...(isInternal ? [r.headroom_kw ?? "", r.utilisation_pct ?? "", r.distance_primary_m, r.distance_feeder_m, r.distance_capacity_m] : []),
-      r.error || "",
-    ]);
+    const rows = filtered.map(r => {
+      const sp = r.surface_split;
+      const surfaceLabel = sp ? `F${sp.footway_pct}/C${sp.carriageway_pct}/V${sp.verge_pct}` : "60/30/10";
+      return [
+        r.site_name, r.postcode, r.proposed_kw, r.site_type, r.phase, r.phase_rationale,
+        r.viability_index, r.band, r.grid_readiness, r.deployment_class,
+        r.cost_band, r.total_estimate, r.confidence, r.reinforcement_probability,
+        r.best_poc, r.traffic_aadf ?? 0, r.nearby_bus_stops ?? 0, r.nearby_rail_stations ?? 0, r.accident_count ?? 0,
+        surfaceLabel, r.nearby_crossings ?? 0, r.nearby_signals ?? 0, (r.route_constraints || []).join(";"), r.osm_coverage || "none",
+        ...(isInternal ? [r.headroom_kw ?? "", r.utilisation_pct ?? "", r.distance_primary_m, r.distance_feeder_m, r.distance_capacity_m] : []),
+        r.error || "",
+      ];
+    });
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
