@@ -50,13 +50,114 @@ interface ScoredRow {
   distance_capacity_m: number;
   phase: number;
   phase_rationale: string;
-  // New 4-pillar fields
+  // 4-pillar fields
   traffic_aadf: number;
   nearby_bus_stops: number;
   nearby_rail_stations: number;
   accident_count: number;
   master_score: number;
+  // OSM enrichment fields
+  surface_split: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  nearby_crossings: number;
+  nearby_signals: number;
+  route_constraints: string[];
+  osm_coverage: "cached" | "none";
   error?: string;
+}
+
+// ── OSM tile cache helpers ──
+function lngLatToTile(lng: number, lat: number, zoom: number): string {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return `${zoom}/${x}/${y}`;
+}
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+interface OsmContext {
+  split: { footway_pct: number; carriageway_pct: number; verge_pct: number };
+  crossings: number;
+  signals: number;
+  constraints: string[];
+  found: boolean;
+}
+
+async function queryOsmContext(supabase: any, lng: number, lat: number): Promise<OsmContext> {
+  const RADIUS_M = 200;
+  const fallback: OsmContext = { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
+
+  try {
+    const tileId = lngLatToTile(lng, lat, 14);
+    const slugs = ["osm_major_roads", "osm_minor_roads", "osm_footways", "osm_crossings", "osm_traffic_signals", "osm_railways", "osm_water_bodies"];
+
+    const { data: tiles, error } = await supabase
+      .from("osm_tile_cache")
+      .select("layer_slug, geojson")
+      .eq("tile_id", tileId)
+      .in("layer_slug", slugs);
+
+    if (error || !tiles || tiles.length === 0) return fallback;
+
+    let footwayCount = 0, carriagewayCount = 0, crossings = 0, signals = 0;
+    const constraints: string[] = [];
+
+    for (const tile of tiles) {
+      const geojson = tile.geojson as any;
+      if (!geojson?.features) continue;
+
+      for (const f of geojson.features) {
+        // Check proximity — use centroid of first coord for lines/points
+        const coords = f.geometry?.coordinates;
+        if (!coords) continue;
+
+        let fLng: number, fLat: number;
+        if (f.geometry.type === "Point") {
+          [fLng, fLat] = coords;
+        } else if (f.geometry.type === "LineString" && coords.length > 0) {
+          const mid = coords[Math.floor(coords.length / 2)];
+          [fLng, fLat] = mid;
+        } else if (f.geometry.type === "Polygon" && coords[0]?.length > 0) {
+          [fLng, fLat] = coords[0][0];
+        } else continue;
+
+        const dist = haversineM(lat, lng, fLat, fLng);
+        if (dist > RADIUS_M) continue;
+
+        // Classify
+        if (tile.layer_slug === "osm_footways") footwayCount++;
+        else if (tile.layer_slug === "osm_major_roads" || tile.layer_slug === "osm_minor_roads") carriagewayCount++;
+        else if (tile.layer_slug === "osm_crossings") crossings++;
+        else if (tile.layer_slug === "osm_traffic_signals") signals++;
+        else if (tile.layer_slug === "osm_railways") {
+          if (!constraints.includes("RAILWAY_NEARBY")) constraints.push("RAILWAY_NEARBY");
+        } else if (tile.layer_slug === "osm_water_bodies") {
+          if (!constraints.includes("WATER_NEARBY")) constraints.push("WATER_NEARBY");
+        }
+      }
+    }
+
+    if (signals > 2 && !constraints.includes("SIGNAL_CONTROLLED")) constraints.push("SIGNAL_CONTROLLED");
+
+    const totalRoad = footwayCount + carriagewayCount;
+    if (totalRoad === 0) return { ...fallback, crossings, signals, constraints, found: tiles.length > 0 };
+
+    const footPct = Math.round((footwayCount / totalRoad) * 100);
+    const carrPct = Math.round((carriagewayCount / totalRoad) * 100);
+    const vergePct = Math.max(0, 100 - footPct - carrPct);
+
+    return { split: { footway_pct: footPct, carriageway_pct: carrPct, verge_pct: vergePct }, crossings, signals, constraints, found: true };
+  } catch (e) {
+    console.warn("OSM context query failed:", e);
+    return fallback;
+  }
 }
 
 // ── Scoring helpers ──
