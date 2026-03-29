@@ -1,48 +1,57 @@
 
 
-## Fix: Add Map Screenshot to Assessment PDF Export
+## Fix: Map Screenshots Show Route, POC & Feeder in PDF
 
 ### Problem
-The PDF generator already supports two map images (`locationMapScreenshot` for area overview, `mapScreenshot` for route), but **neither SiteCheckPanel nor UnifiedIntelligencePanel captures or passes them**. That's why your exported PDF has no map — the fields are simply `undefined`.
+The current `handlePinScreenshot` in `MapView.tsx`:
+1. Fits bounds to a fixed 300m buffer around the pin — connection lines to substations are outside this view
+2. Only captures one screenshot (`locationMapScreenshot`) — never captures a second `mapScreenshot` for the route view
+3. Does not add POC/feeder endpoint markers as GeoJSON circles (DOM markers don't render on canvas)
 
-### What needs to happen
+The PDF generator already supports both images and renders them with north arrows and scale bars — it just never receives the data.
 
-**1. Capture map canvas before PDF generation**
+### Solution
 
-Both panels need access to the MapLibre map instance to call `map.getCanvas().toDataURL()`. The project already has a `useMapScreenshot` hook in `src/hooks/useMapScreenshot.ts`.
+**File: `src/pages/MapView.tsx`** — Rewrite `handlePinScreenshot` to return both screenshots
 
-- Pass the map ref (or a screenshot callback) into `SiteCheckPanel` and `UnifiedIntelligencePanel` via props
-- Before calling `generateAssessmentPdf`, capture the current map view as a base64 PNG
-- Pass it as `locationMapScreenshot` (area overview with substations/cables visible)
+The function should:
 
-**2. Generate a route map for POC → site**
+1. **Location overview screenshot** — expand bounds to include all connection line endpoints (primary substation, feeder, cable POC) plus the pin, so the full infrastructure context is visible. Add temporary GeoJSON circle markers at each endpoint (blue for substations, green for POC) so they appear on canvas.
 
-For the `mapScreenshot` field (route from POC to feeder pillar location):
-- When connection lines exist (from `nearest_points`), temporarily fit the map bounds to show the route
-- Capture that view as a second screenshot
-- Pass as `mapScreenshot` to the PDF generator
+2. **Route screenshot** — fit bounds tightly to just the connection lines (POC → site), capture a second image focused on the route.
 
-**3. Files to change**
+3. Return both as an object `{ location: string, route: string }`.
 
-| File | Change |
-|------|--------|
-| `src/components/map/SiteCheckPanel.tsx` | Add `mapRef` prop, capture screenshots on Export PDF click, pass `locationMapScreenshot` + `mapScreenshot` |
-| `src/components/map/UnifiedIntelligencePanel.tsx` | Same — add `mapRef` prop, capture + pass screenshots |
-| `src/pages/MapView.tsx` | Pass map ref down to both panels |
+**File: `src/components/map/UnifiedIntelligencePanel.tsx`** — Update the `onCaptureMapScreenshot` type and export click handler
 
-**4. Screenshot flow on "Export PDF" click**
+- Change prop type from `() => Promise<string | null>` to `() => Promise<{ location: string | null; route: string | null }>`
+- Pass `location` as `locationMapScreenshot` and `route` as `mapScreenshot` to `generateAssessmentPdf`
+
+**File: `src/components/map/SiteCheckPanel.tsx`** — Same prop type change and dual-screenshot handling
+
+### Key logic for bounds expansion
 
 ```text
-1. Capture current view → locationMapScreenshot (area overview)
-2. If connection lines exist:
-   a. Fit bounds to show POC + site with padding
-   b. Wait 800ms for tiles to load
-   c. Capture → mapScreenshot (route view)
-   d. Restore original bounds
-3. Call generateAssessmentPdf({ ...existing, locationMapScreenshot, mapScreenshot })
+// Collect all points: pin + connection line endpoints
+const allPoints = [[pin.lng, pin.lat]];
+connectionLineSources.forEach(src => {
+  // read coordinates from existing map sources "line-primary", "line-feeder", "line-cable"
+  allPoints.push(first coord, last coord);
+});
+
+// Fit bounds to all points with padding
+// Capture → locationMapScreenshot
+
+// Then fit bounds to just connection lines (tighter)
+// Capture → mapScreenshot (route view)
 ```
 
-The PDF generator already renders both images with north arrows, scale bars, and legends — no changes needed there.
+### Files to change
+| File | Change |
+|------|--------|
+| `src/pages/MapView.tsx` | Expand `handlePinScreenshot` to read connection line sources from map, fit bounds to include them, add endpoint markers as GeoJSON, capture two screenshots |
+| `src/components/map/UnifiedIntelligencePanel.tsx` | Update prop type, pass both screenshots to PDF generator |
+| `src/components/map/SiteCheckPanel.tsx` | Same prop type update, pass both screenshots |
 
 ### No database changes needed
 
