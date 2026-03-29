@@ -60,7 +60,7 @@ interface ScoreResult {
     min_carriageway_m: number | null;
   };
   capacity_indicator?: string;
-  nearest_points?: { primary?: [number, number]; feeder?: [number, number]; cable?: [number, number] };
+  nearest_points?: { primary?: any; feeder?: any; cable?: any; capacity_segment?: any };
   nearest_substations?: Array<{
     site_name: string;
     site_id: string;

@@ -48,7 +48,7 @@ interface ScoreResult {
     min_carriageway_m: number | null;
   };
   capacity_indicator?: string;
-  nearest_points?: { primary?: [number, number]; feeder?: [number, number]; cable?: [number, number] };
+  nearest_points?: { primary?: any; feeder?: any; cable?: any; capacity_segment?: any };
 }
 
 /** Parse a coordinate that may be [lng,lat] tuple or GeoJSON Point */
