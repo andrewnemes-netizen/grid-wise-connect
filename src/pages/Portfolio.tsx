@@ -314,6 +314,8 @@ const Portfolio = () => {
                 <SortHeader label="Cost Band" k="cost_band" />
                 <TableHead>Est. Cost</TableHead>
                 <SortHeader label="Reinforce %" k="reinforcement_probability" />
+                <TableHead>Constraints</TableHead>
+                <TableHead>OSM</TableHead>
                 <TableHead>Status</TableHead>
                 <SortHeader label="Created" k="created_at" />
                 <TableHead></TableHead>
