@@ -397,40 +397,54 @@ Deno.serve(async (req: Request) => {
       const query = buildQuery(tile.bbox, road_type);
       const queryHash = await sha256Hex(query);
 
-      // Check cache: recent successful fetch within 1 hour
-      const { data: cached } = await sbAdmin
-        .from("osm_ingestion_meta")
-        .select("fetched_at, row_count")
+      // ── P2: Check tile cache in database ──
+      const { data: cachedTile } = await sbAdmin
+        .from("osm_tile_cache")
+        .select("geojson, feature_count, expires_at")
         .eq("layer_slug", road_type)
-        .eq("query_hash", queryHash)
-        .eq("status", "success")
-        .gte("fetched_at", new Date(Date.now() - 3600_000).toISOString())
-        .order("fetched_at", { ascending: false })
-        .limit(1);
+        .eq("tile_id", tile.tileId)
+        .gt("expires_at", new Date().toISOString())
+        .limit(1)
+        .single();
 
-      // If we have a recent cache hit, we still need to fetch (no stored geojson),
-      // but log it differently. For now, always fetch but skip re-logging if cached.
-      const isCached = cached && cached.length > 0;
+      if (cachedTile && cachedTile.geojson) {
+        console.log(`Cache HIT for ${road_type}:${tile.tileId} (${cachedTile.feature_count} features)`);
+        tileResults.push(cachedTile.geojson as unknown as GeoJSON.FeatureCollection);
+        continue;
+      }
 
+      // Cache miss — fetch from Overpass
       const { geojson, endpoint: usedEndpoint } = await fetchWithRace(query, cap, road_type);
       tileResults.push(geojson);
 
-      // Fire-and-forget: log ingestion metadata (skip if recently logged)
-      if (!isCached) {
-        sbAdmin.from("osm_ingestion_meta").insert({
-          layer_slug: road_type,
-          source_endpoint: usedEndpoint,
-          query_hash: queryHash,
-          query_text: query,
-          tile_id: tile.tileId,
-          bbox: tile.bbox,
-          row_count: geojson.features.length,
-          status: geojson.features.length > 0 ? "success" : "empty",
-          fetched_by: user.id,
-        }).then(({ error: metaErr }) => {
-          if (metaErr) console.warn("Meta insert failed:", metaErr.message);
-        });
-      }
+      // Fire-and-forget: store in tile cache (upsert by layer_slug + tile_id)
+      sbAdmin.from("osm_tile_cache").upsert({
+        layer_slug: road_type,
+        tile_id: tile.tileId,
+        query_hash: queryHash,
+        geojson: geojson as any,
+        feature_count: geojson.features.length,
+        fetched_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        source_endpoint: usedEndpoint,
+      }, { onConflict: "layer_slug,tile_id" }).then(({ error: cacheErr }) => {
+        if (cacheErr) console.warn("Tile cache upsert failed:", cacheErr.message);
+      });
+
+      // Fire-and-forget: log ingestion metadata
+      sbAdmin.from("osm_ingestion_meta").insert({
+        layer_slug: road_type,
+        source_endpoint: usedEndpoint,
+        query_hash: queryHash,
+        query_text: query,
+        tile_id: tile.tileId,
+        bbox: tile.bbox,
+        row_count: geojson.features.length,
+        status: geojson.features.length > 0 ? "success" : "empty",
+        fetched_by: user.id,
+      }).then(({ error: metaErr }) => {
+        if (metaErr) console.warn("Meta insert failed:", metaErr.message);
+      });
     }
 
     const merged = mergeFeatureCollections(tileResults);
