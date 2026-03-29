@@ -1172,6 +1172,51 @@ export type Database = {
           },
         ]
       }
+      osm_ingestion_meta: {
+        Row: {
+          bbox: Json
+          error_detail: string | null
+          fetched_at: string
+          fetched_by: string | null
+          id: string
+          layer_slug: string
+          query_hash: string
+          query_text: string | null
+          row_count: number | null
+          source_endpoint: string | null
+          status: string
+          tile_id: string | null
+        }
+        Insert: {
+          bbox: Json
+          error_detail?: string | null
+          fetched_at?: string
+          fetched_by?: string | null
+          id?: string
+          layer_slug: string
+          query_hash: string
+          query_text?: string | null
+          row_count?: number | null
+          source_endpoint?: string | null
+          status?: string
+          tile_id?: string | null
+        }
+        Update: {
+          bbox?: Json
+          error_detail?: string | null
+          fetched_at?: string
+          fetched_by?: string | null
+          id?: string
+          layer_slug?: string
+          query_hash?: string
+          query_text?: string | null
+          row_count?: number | null
+          source_endpoint?: string | null
+          status?: string
+          tile_id?: string | null
+        }
+        Relationships: []
+      }
       primary_substations_33kv: {
         Row: {
           asset_id: string
