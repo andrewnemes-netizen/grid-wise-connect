@@ -1,41 +1,54 @@
 
 
-## Fix: Overpass Road Layers Timing Out
+## Fix: Overpass Road Layers Hanging Too Long
 
 ### Root Cause
 
-The edge function logs show **100% failure rate** — all three Overpass endpoints return 504 or timeout. The problem is the bbox is too large at zoom level 8. At z8, the UK viewport spans roughly 5° x 3° — Overpass must scan millions of road ways across that area, exceeding its 25-second query limit.
+The edge function tries 3 Overpass endpoints **sequentially**, each with an 18-second timeout. When all fail (as logs show — 504s and timeouts), the total wait is **up to 54 seconds**. The UI spinner just hangs the whole time.
 
-### Solution: Constrain bbox size + smarter queries
+### Solution: Parallel racing + shorter timeouts + frontend timeout
 
-**1. Edge function: cap bbox area and use `nwr` with count limit**
+**1. Edge function: race all endpoints in parallel (not sequential)**
 
-In `supabase/functions/overpass-road-fetch/index.ts`:
-- Add a max bbox area check (~0.5° x 0.5° for major roads, ~0.2° x 0.2° for minor/footways)
-- If the viewport bbox exceeds the limit, subdivide or clip to the center portion
-- Reduce the Overpass timeout from 25s to 15s (fail faster, try next endpoint sooner)
-- Reduce the `AbortSignal.timeout` from 30s to 18s to match
+Instead of trying endpoint A → wait 18s → try B → wait 18s → try C, fire all 3 simultaneously and take whichever responds first. This reduces worst-case from 54s to ~8s.
 
-**2. Raise min_zoom in registry** (database migration)
+```text
+Current:  A(18s) → B(18s) → C(18s) = 54s worst case
+Proposed: race(A, B, C) with 8s timeout = 8s worst case
+```
 
-Current min_zoom values are too low for live Overpass queries:
-- `osm_major_roads`: 8 → **11** 
-- `osm_minor_roads`: 10 → **13**
-- `osm_footways`: 12 → **14**
+**2. Reduce per-endpoint timeout from 18s to 8s**
 
-At z11, the viewport covers ~0.15° x 0.1° — a manageable query for Overpass.
+Most successful Overpass queries return in 2-5 seconds. If it hasn't responded in 8s, it won't.
 
-**3. Frontend: add bbox area guard in `fetchOverpassGeoJSON`**
+**3. Tighten bbox clamps further**
 
-In `src/lib/mapLayers.ts`, before calling the edge function, check if the bbox spans more than ~0.3° in either dimension. If so, return an empty FeatureCollection and show a "zoom in" toast instead of making a doomed request.
+Current max spans are still generating too many results:
+- `osm_major_roads`: 0.5° → **0.15°** (~16km)
+- `osm_minor_roads`: 0.2° → **0.08°** (~8km)  
+- `osm_footways`: 0.15° → **0.05°** (~5km)
+
+Match these on the frontend guard too.
+
+**4. Frontend: add 10s timeout wrapper around the edge function call**
+
+In `fetchOverpassGeoJSON`, wrap the `supabase.functions.invoke` in a `Promise.race` with a 10s timeout. If it exceeds that, return empty collection silently instead of hanging the spinner.
 
 ### Files Changed
-- `supabase/functions/overpass-road-fetch/index.ts` — reduce timeouts, add bbox clamp
-- `src/lib/mapLayers.ts` — add bbox area guard in `fetchOverpassGeoJSON`  
-- Database migration — update `min_zoom` for the 3 OSM layers
+
+**`supabase/functions/overpass-road-fetch/index.ts`**
+- Replace sequential `fetchWithRetry` loop with `Promise.any()` racing all 3 endpoints
+- Reduce `AbortSignal.timeout` from 18000 to 8000
+- Tighten `MAX_BBOX_SPAN` values
+- Reduce Overpass QL timeout from 15 to 10
+
+**`src/lib/mapLayers.ts`**
+- Tighten `OVERPASS_MAX_SPAN` to match edge function values
+- Add 10s timeout wrapper around `supabase.functions.invoke`
+- On timeout, return empty FeatureCollection + console warning
 
 ### Expected Outcome
-- Road layers load reliably when zoomed in to city/town level
-- No more 30-second hangs waiting for doomed requests
-- Clear feedback to user if viewport is too wide
+- Worst case wait drops from 54s to ~8-10s
+- Successful queries return in 2-5s as normal
+- No more indefinite spinner — guaranteed resolution within 10s
 
