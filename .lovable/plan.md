@@ -1,63 +1,47 @@
 
 
-## Fix: OSM Road Layers — Two Separate Bugs
+## P0: OSM Ingestion Metadata Table
 
-### Problem 1: "Map style never loaded, skipping layer"
+### Purpose
+Track every Overpass fetch with a deterministic fingerprint (query hash + tile/bbox) so route calculations are reproducible and auditable. This is the provenance layer the validation report flagged as missing.
 
-The `waitForStyleLoaded` function listens for `map.once("load")` and `map.once("style.load")`. But the map fires `load` once during initialization — if layers are toggled after that event already fired, `map.once("load")` never triggers again, and `isStyleLoaded()` returns false during tile loads. After the 10s timeout, layers are silently skipped.
+### Database Migration
 
-**Fix in `src/lib/mapLayers.ts`**: Replace the `waitForStyleLoaded` logic. Instead of listening for the `load` event (which only fires once), poll `isStyleLoaded()` every 200ms with a 10s timeout. This handles the common case where the style IS loaded but the check runs during a transient tile fetch.
+Create table `osm_ingestion_meta`:
 
-```typescript
-function waitForStyleLoaded(map: maplibregl.Map, timeoutMs = 10000): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (map.isStyleLoaded()) { resolve(true); return; }
-    const interval = setInterval(() => {
-      if (map.isStyleLoaded()) { clearInterval(interval); resolve(true); }
-    }, 200);
-    setTimeout(() => { clearInterval(interval); resolve(map.isStyleLoaded()); }, timeoutMs);
-  });
-}
-```
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | default gen_random_uuid() |
+| layer_slug | text NOT NULL | e.g. `osm_major_roads` |
+| source_endpoint | text | which Overpass mirror responded |
+| query_hash | text NOT NULL | SHA-256 of the Overpass QL query |
+| query_text | text | the actual QL for debugging |
+| tile_id | text | optional z/x/y if tile-based fetching is added later |
+| bbox | jsonb NOT NULL | `[south, west, north, east]` |
+| fetched_at | timestamptz | default now() |
+| row_count | integer | features returned |
+| status | text | `success` or `error` |
+| error_detail | text | nullable, for failed fetches |
+| fetched_by | uuid | user who triggered the fetch |
 
-### Problem 2: Overpass API 504s + 429 Rate Limiting
+RLS: admins full access, authenticated users SELECT.
 
-The edge function logs show a flood of simultaneous requests hitting Overpass — 7 layers toggled at once, each firing 3 parallel endpoint attempts = ~21 concurrent HTTP requests to Overpass. This triggers 429 rate limiting AND 504 gateway timeouts.
+Index on `(layer_slug, query_hash)` for dedup lookups.
 
-**Fix 1 — Edge function (`overpass-road-fetch/index.ts`)**: 
-- Increase the Overpass QL timeout from 10 to 15 seconds (short queries get rejected by the server)
-- Add a retry-after check on 429 responses before rejecting
+### Edge Function Update (`overpass-road-fetch/index.ts`)
 
-**Fix 2 — Frontend (`src/lib/mapLayers.ts`)**:
-- Add a simple request queue/throttle so only 2 Overpass requests fire concurrently. Additional requests wait until a slot opens.
-- This prevents rate limiting when multiple OSM layers are toggled at once.
+After a successful Overpass response:
+1. Compute SHA-256 of the query string
+2. INSERT a row into `osm_ingestion_meta` with the layer slug, bbox, endpoint used, feature count, and user ID
+3. This is fire-and-forget (don't block the response)
 
-```typescript
-let activeOverpassRequests = 0;
-const OVERPASS_CONCURRENCY = 2;
+On error, insert a row with `status = 'error'` and the error detail.
 
-async function fetchOverpassGeoJSON(slug, bbox, featureLimit) {
-  // ... existing span guard ...
-  
-  // Throttle: wait for a slot
-  while (activeOverpassRequests >= OVERPASS_CONCURRENCY) {
-    await new Promise(r => setTimeout(r, 500));
-  }
-  activeOverpassRequests++;
-  try {
-    // ... existing fetch logic ...
-  } finally {
-    activeOverpassRequests--;
-  }
-}
-```
+### Frontend — No Changes
+
+This is purely backend metadata. No UI needed for P0. Future phases can add an admin panel to browse ingestion history.
 
 ### Files Changed
-- `src/lib/mapLayers.ts` — fix `waitForStyleLoaded` polling, add Overpass concurrency throttle
-- `supabase/functions/overpass-road-fetch/index.ts` — increase Overpass QL timeout to 15s
-
-### Expected Outcome
-- Layers no longer silently skipped due to "style never loaded"
-- Overpass requests serialized to avoid 429 rate limiting
-- Road data renders when zoomed to z11+ on a city
+- Database migration — create `osm_ingestion_meta` table + RLS + index
+- `supabase/functions/overpass-road-fetch/index.ts` — add metadata INSERT after fetch
 
