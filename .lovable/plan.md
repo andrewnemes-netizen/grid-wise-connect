@@ -1,78 +1,63 @@
 
 
-## Expand OSM Data: What's Worth Adding vs What's Noise
+## Fix: OSM Road Layers — Two Separate Bugs
 
-### Current State
-- 3 Overpass layers: major roads, minor roads, footways
-- All live-fetched via `overpass-road-fetch` edge function
-- No other OSM data categories exist
+### Problem 1: "Map style never loaded, skipping layer"
 
-### ChatGPT Assessment: Mostly Hype
-The suggestion to add cafes, shops, POIs, "full digital twin of the street" is overkill. Your platform estimates **electrical grid connection costs**. Only add OSM features that directly impact:
-1. **Route cost** (surface type, road classification → reinstatement costs)
-2. **Route constraints** (water crossings, barriers = no-go zones)
-3. **Compliance checks** (proximity to buildings, environmental features)
+The `waitForStyleLoaded` function listens for `map.once("load")` and `map.once("style.load")`. But the map fires `load` once during initialization — if layers are toggled after that event already fired, `map.once("load")` never triggers again, and `isStyleLoaded()` returns false during tile loads. After the 10s timeout, layers are silently skipped.
 
-### Recommended Additions (Phase 1 — High Value)
+**Fix in `src/lib/mapLayers.ts`**: Replace the `waitForStyleLoaded` logic. Instead of listening for the `load` event (which only fires once), poll `isStyleLoaded()` every 200ms with a 10s timeout. This handles the common case where the style IS loaded but the check runs during a transient tile fetch.
 
-**Add 4 new Overpass layer types to the edge function:**
-
-| Layer | Overpass Filter | Why It Matters |
-|-------|----------------|----------------|
-| `osm_water` | `natural~"water"` + `waterway~"river\|canal"` | Absolute no-go for cable routes |
-| `osm_railways` | `railway~"rail\|light_rail"` | Expensive crossings, major constraint |
-| `osm_buildings` | `building` (polygon) | Proximity checks, endpoint identification |
-| `osm_barriers` | `barrier~"fence\|wall\|gate\|bollard"` | Route obstructions |
-
-### NOT Recommended (Skip These)
-- Traffic signals / crossings — doesn't affect cable routing cost
-- Land use categories — OS Zoomstack already covers this (greenspace, woodland, sites)
-- POIs (cafes, shops) — zero relevance to grid connections
-- Junctions / roundabouts — already implicit in road geometry
-
-### Technical Changes
-
-**1. Edge function: `supabase/functions/overpass-road-fetch/index.ts`**
-
-Rename to a more general purpose (or keep name, expand filters):
-
-Add new entries to `ROAD_FILTERS` (rename to `OSM_FILTERS`):
-```
-osm_water: way/relation with natural=water OR waterway=river|canal
-osm_railways: way with railway=rail|light_rail
-osm_buildings: way with building=* (polygon output)
-osm_barriers: node/way with barrier=*
+```typescript
+function waitForStyleLoaded(map: maplibregl.Map, timeoutMs = 10000): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (map.isStyleLoaded()) { resolve(true); return; }
+    const interval = setInterval(() => {
+      if (map.isStyleLoaded()) { clearInterval(interval); resolve(true); }
+    }, 200);
+    setTimeout(() => { clearInterval(interval); resolve(map.isStyleLoaded()); }, timeoutMs);
+  });
+}
 ```
 
-Add corresponding `MAX_BBOX_SPAN` entries (all tight — 0.05° to 0.08°).
+### Problem 2: Overpass API 504s + 429 Rate Limiting
 
-Update `overpassToGeoJSON` to handle polygons (buildings, water) in addition to LineStrings.
+The edge function logs show a flood of simultaneous requests hitting Overpass — 7 layers toggled at once, each firing 3 parallel endpoint attempts = ~21 concurrent HTTP requests to Overpass. This triggers 429 rate limiting AND 504 gateway timeouts.
 
-**2. Database: insert 4 new `layer_registry` rows**
+**Fix 1 — Edge function (`overpass-road-fetch/index.ts`)**: 
+- Increase the Overpass QL timeout from 10 to 15 seconds (short queries get rejected by the server)
+- Add a retry-after check on 429 responses before rejecting
 
-Each with `source_type = 'overpass'`, `dno = 'OSM'`, appropriate `geometry_type`, `min_zoom` (13–14 for buildings/barriers, 11 for water/railways).
+**Fix 2 — Frontend (`src/lib/mapLayers.ts`)**:
+- Add a simple request queue/throttle so only 2 Overpass requests fire concurrently. Additional requests wait until a slot opens.
+- This prevents rate limiting when multiple OSM layers are toggled at once.
 
-**3. Frontend: `src/lib/mapLayers.ts`**
+```typescript
+let activeOverpassRequests = 0;
+const OVERPASS_CONCURRENCY = 2;
 
-Add the new slugs to `OVERPASS_MAX_SPAN`.
-
-**4. Layer panel: `src/components/map/LayerTogglePanel.tsx`**
-
-Rename "Roads" tab → "OSM" tab (or keep Roads and add an "Environment" tab). The new layers will auto-appear since they have `dno = 'OSM'`.
-
-**5. Update `buildQuery` in edge function**
-
-Handle polygon queries differently — buildings and water need `out body geom;` with polygon handling, not just LineString.
+async function fetchOverpassGeoJSON(slug, bbox, featureLimit) {
+  // ... existing span guard ...
+  
+  // Throttle: wait for a slot
+  while (activeOverpassRequests >= OVERPASS_CONCURRENCY) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+  activeOverpassRequests++;
+  try {
+    // ... existing fetch logic ...
+  } finally {
+    activeOverpassRequests--;
+  }
+}
+```
 
 ### Files Changed
-- `supabase/functions/overpass-road-fetch/index.ts` — expand filters, handle polygons
-- `src/lib/mapLayers.ts` — add new slugs to span guard
-- `src/components/map/LayerTogglePanel.tsx` — possibly rename tab
-- Database migration — insert 4 new `layer_registry` rows
+- `src/lib/mapLayers.ts` — fix `waitForStyleLoaded` polling, add Overpass concurrency throttle
+- `supabase/functions/overpass-road-fetch/index.ts` — increase Overpass QL timeout to 15s
 
-### What This Gives You
-- Cable route engine can avoid water bodies and railway crossings
-- Building proximity checks for substation siting
-- Barrier detection for route feasibility
-- All live-fetched, no database bloat
+### Expected Outcome
+- Layers no longer silently skipped due to "style never loaded"
+- Overpass requests serialized to avoid 429 rate limiting
+- Road data renders when zoomed to z11+ on a city
 
