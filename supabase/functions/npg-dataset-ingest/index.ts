@@ -583,30 +583,35 @@ async function ingestViaCkanGeoJson(
   const resp = await fetch(url, { headers });
   if (!resp.ok) throw new Error(`GeoJSON fetch failed: HTTP ${resp.status}`);
 
-  const geojson = await resp.json();
-  const features = geojson.features || [];
-  console.log(`[ingest] CKAN GeoJSON: ${features.length} features`);
-  if (features.length === 0) return { inserted: 0, skipped: 0 };
-
+  console.log(`[ingest] CKAN GeoJSON (streaming): ${url}`);
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
+  let batch: any[] = [];
 
-  for (let i = 0; i < features.length; i += batchSize) {
-    const batch = features.slice(i, i + batchSize);
-    const mapped = batch.map((f: any) => mapFeatureToRow(f, entry, layerRow, storageTable)).filter(Boolean);
-    totalSkipped += batch.length - mapped.length;
+  for await (const feature of streamGeoJsonFeatures(resp)) {
+    const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
+    if (mapped) batch.push(mapped); else totalSkipped++;
 
-    if (mapped.length > 0) {
+    if (batch.length >= batchSize) {
       const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable,
-        _features_json: JSON.stringify(mapped),
+        _table_name: storageTable, _features_json: JSON.stringify(batch),
       });
       if (error) throw new Error(`Batch insert error: ${error.message}`);
-      totalInserted += inserted ?? mapped.length;
+      totalInserted += inserted ?? batch.length;
+      batch = [];
     }
   }
 
+  if (batch.length > 0) {
+    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+      _table_name: storageTable, _features_json: JSON.stringify(batch),
+    });
+    if (error) throw new Error(`Batch insert error: ${error.message}`);
+    totalInserted += inserted ?? batch.length;
+  }
+
+  console.log(`[ingest] CKAN GeoJSON streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
