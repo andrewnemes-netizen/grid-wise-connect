@@ -21,7 +21,7 @@ interface SiteCheckPanelProps {
   onClose: () => void;
   onSaved?: () => void;
   onConnectionLines?: (lines: ConnectionLine[]) => void;
-  onCaptureMapScreenshot?: () => Promise<string | null>;
+  onCaptureMapScreenshot?: () => Promise<{ location: string | null; route: string | null }>;
 }
 
 export interface ConnectionLine {
@@ -338,8 +338,13 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                   className="flex-1"
                   onClick={async () => {
                     let locationScreenshot: string | null = null;
+                    let routeScreenshot: string | null = null;
                     if (onCaptureMapScreenshot) {
-                      try { locationScreenshot = await onCaptureMapScreenshot(); } catch {}
+                      try {
+                        const shots = await onCaptureMapScreenshot();
+                        locationScreenshot = shots.location;
+                        routeScreenshot = shots.route;
+                      } catch {}
                     }
                     generateAssessmentPdf({
                       siteName: siteName || undefined,
@@ -355,6 +360,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                       constraints: result.constraints,
                       unitRates,
                       locationMapScreenshot: locationScreenshot,
+                      mapScreenshot: routeScreenshot,
                     });
                   }}
                 >
