@@ -66,12 +66,40 @@ interface ScoredRow {
 }
 
 // ── OSM tile cache helpers ──
-function lngLatToTile(lng: number, lat: number, zoom: number): string {
+
+// Per-layer zoom config matching how overpass-road-fetch caches tiles
+const OSM_LAYER_CONFIG: { slug: string; zoom: number; type: "road" | "context" | "point" }[] = [
+  { slug: "osm_major_roads",      zoom: 12, type: "road" },
+  { slug: "osm_minor_roads",      zoom: 13, type: "road" },
+  { slug: "osm_footways",         zoom: 14, type: "road" },
+  { slug: "osm_crossings",        zoom: 14, type: "point" },
+  { slug: "osm_traffic_signals",  zoom: 14, type: "point" },
+  { slug: "osm_railways",         zoom: 13, type: "context" },
+  { slug: "osm_water",            zoom: 13, type: "context" },
+];
+
+function lngLatToTileXY(lng: number, lat: number, zoom: number): { x: number; y: number } {
   const n = Math.pow(2, zoom);
   const x = Math.floor(((lng + 180) / 360) * n);
   const latRad = (lat * Math.PI) / 180;
   const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+  return { x, y };
+}
+
+function tileIdStr(zoom: number, x: number, y: number): string {
   return `${zoom}/${x}/${y}`;
+}
+
+// Build 3x3 tile ring around a point for a given zoom level
+function neighborTileIds(lng: number, lat: number, zoom: number): string[] {
+  const { x, y } = lngLatToTileXY(lng, lat, zoom);
+  const ids: string[] = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      ids.push(tileIdStr(zoom, x + dx, y + dy));
+    }
+  }
+  return ids;
 }
 
 function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -95,26 +123,52 @@ async function queryOsmContext(supabase: any, lng: number, lat: number): Promise
   const fallback: OsmContext = { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
 
   try {
-    const tileId = lngLatToTile(lng, lat, 14);
-    const slugs = ["osm_major_roads", "osm_minor_roads", "osm_footways", "osm_crossings", "osm_traffic_signals", "osm_railways", "osm_water_bodies"];
+    // Build all (slug, tile_id) pairs across per-layer zoom levels with 3x3 grids
+    const allTileIds: string[] = [];
+    const allSlugs: string[] = [];
+    const slugTileMap = new Map<string, Set<string>>();
 
+    for (const layer of OSM_LAYER_CONFIG) {
+      const tiles = neighborTileIds(lng, lat, layer.zoom);
+      if (!slugTileMap.has(layer.slug)) slugTileMap.set(layer.slug, new Set());
+      for (const t of tiles) {
+        slugTileMap.get(layer.slug)!.add(t);
+        if (!allTileIds.includes(t)) allTileIds.push(t);
+      }
+      if (!allSlugs.includes(layer.slug)) allSlugs.push(layer.slug);
+    }
+
+    // Single query: fetch all matching cache rows
     const { data: tiles, error } = await supabase
       .from("osm_tile_cache")
-      .select("layer_slug, geojson")
-      .eq("tile_id", tileId)
-      .in("layer_slug", slugs);
+      .select("layer_slug, tile_id, geojson")
+      .in("layer_slug", allSlugs)
+      .in("tile_id", allTileIds);
 
-    if (error || !tiles || tiles.length === 0) return fallback;
+    if (error) {
+      console.warn("OSM tile cache query error:", error.message);
+      return fallback;
+    }
+
+    // Filter to only valid (slug, tile_id) pairs
+    const validTiles = (tiles || []).filter((t: any) => {
+      const validSet = slugTileMap.get(t.layer_slug);
+      return validSet && validSet.has(t.tile_id);
+    });
+
+    console.log(`OSM context for [${lng.toFixed(4)}, ${lat.toFixed(4)}]: ${validTiles.length} cache rows from ${allTileIds.length} tile candidates`);
+
+    if (validTiles.length === 0) return fallback;
 
     let footwayCount = 0, carriagewayCount = 0, crossings = 0, signals = 0;
     const constraints: string[] = [];
+    let roadTilesFound = false;
 
-    for (const tile of tiles) {
+    for (const tile of validTiles) {
       const geojson = tile.geojson as any;
       if (!geojson?.features) continue;
 
       for (const f of geojson.features) {
-        // Check proximity — use centroid of first coord for lines/points
         const coords = f.geometry?.coordinates;
         if (!coords) continue;
 
@@ -131,14 +185,13 @@ async function queryOsmContext(supabase: any, lng: number, lat: number): Promise
         const dist = haversineM(lat, lng, fLat, fLng);
         if (dist > RADIUS_M) continue;
 
-        // Classify
-        if (tile.layer_slug === "osm_footways") footwayCount++;
-        else if (tile.layer_slug === "osm_major_roads" || tile.layer_slug === "osm_minor_roads") carriagewayCount++;
+        if (tile.layer_slug === "osm_footways") { footwayCount++; roadTilesFound = true; }
+        else if (tile.layer_slug === "osm_major_roads" || tile.layer_slug === "osm_minor_roads") { carriagewayCount++; roadTilesFound = true; }
         else if (tile.layer_slug === "osm_crossings") crossings++;
         else if (tile.layer_slug === "osm_traffic_signals") signals++;
         else if (tile.layer_slug === "osm_railways") {
           if (!constraints.includes("RAILWAY_NEARBY")) constraints.push("RAILWAY_NEARBY");
-        } else if (tile.layer_slug === "osm_water_bodies") {
+        } else if (tile.layer_slug === "osm_water") {
           if (!constraints.includes("WATER_NEARBY")) constraints.push("WATER_NEARBY");
         }
       }
@@ -146,8 +199,10 @@ async function queryOsmContext(supabase: any, lng: number, lat: number): Promise
 
     if (signals > 2 && !constraints.includes("SIGNAL_CONTROLLED")) constraints.push("SIGNAL_CONTROLLED");
 
+    console.log(`  → footways=${footwayCount}, carriageways=${carriagewayCount}, crossings=${crossings}, signals=${signals}, constraints=[${constraints.join(",")}]`);
+
     const totalRoad = footwayCount + carriagewayCount;
-    if (totalRoad === 0) return { ...fallback, crossings, signals, constraints, found: tiles.length > 0 };
+    if (totalRoad === 0) return { ...fallback, crossings, signals, constraints, found: validTiles.length > 0 };
 
     const footPct = Math.round((footwayCount / totalRoad) * 100);
     const carrPct = Math.round((carriagewayCount / totalRoad) * 100);
