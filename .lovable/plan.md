@@ -1,57 +1,63 @@
 
+## Fix plan: stop registry freezes, make ingestion reliable, and restore gas layers on the map
 
-## Fix Gas Registry Table + Sync Status Tracking
+### What is actually wrong (you’re not doing anything wrong)
+1. **Admin freeze is mostly UI overload + polling storm**
+   - `GasDatasetRegistry` and `NpgDatasetRegistry` still render large full tables at once.
+   - `Sync All` starts many ingests, and each ingest starts its own `pollSyncStatus` loop (up to 60 polls each), causing request floods and tab lockups.
+2. **Some ingests fail from runtime limits**
+   - Logs show `CPU Time exceeded` in `npg-dataset-ingest`, so heavy datasets can stall/fail.
+3. **Gas layers can be hidden by DNO clip logic**
+   - `useLayerManager` passes `selectedDno` clipping to all layer fetches, including gas; if electricity DNO is selected, gas layers can return empty.
 
-### Problem 1: Gas Registry Table Missing
-The `gas_dataset_registry` table was never created. The Gas Registry admin tab queries a non-existent table, showing 0 datasets. Cadent's 413 datasets currently live in `dno_dataset_registry`.
+---
 
-### Problem 2: Sync Status Never Updated to "synced"
-After successful ingestion, `last_sync_status` is not being set to `"synced"` — it stays null or only gets set on errors. The Layers tab shows real feature counts (Cadent LP: 10,000; ENWL Capacity: 1,808) but the registry shows 0 synced.
+### Implementation steps
 
-### Solution
+1. **Registry performance hardening (Gas + DNO)**
+   - Add **server-side pagination** (`count: "exact"` + `.range(...)`) to both registries.
+   - Keep list query lightweight (no heavy JSON fields in table query).
+   - Load `fields_json` only when row details are expanded (on-demand query).
+   - Reduce per-row render weight (avoid full heavy controls for every row where possible).
 
-| # | Change | Detail |
-|---|--------|--------|
-| 1 | **Create `gas_dataset_registry` table** via migration | Identical schema to `dno_dataset_registry`. Add RLS policies for admin access. |
-| 2 | **Migrate Cadent rows** | Move all 413 CADENT rows from `dno_dataset_registry` to `gas_dataset_registry` in the same migration. |
-| 3 | **Update `GasDatasetRegistry.tsx`** | Change query to read from `gas_dataset_registry` instead of `dno_dataset_registry`. |
-| 4 | **Update `npg-dataset-ingest` edge function** | After successful batch insert, set `last_sync_status = 'synced'` and `last_sync_rows` on the registry entry. Currently only errors update the status. |
-| 5 | **Update `cadent-catalog-crawler`** | Write discovered datasets to `gas_dataset_registry` instead of `dno_dataset_registry`. |
-| 6 | **Update `auto_create_dno_layers` RPC** | Support reading from `gas_dataset_registry` when called for gas operators. |
+2. **Fix Sync All request storm**
+   - Add a batch mode to `handleIngest` so `Sync All` does **not** spawn per-row poll loops.
+   - Replace per-dataset polling with **one global progress poll** (refresh every few seconds).
+   - Show progress from registry status counts (`processing/success/error/skipped`) and stop polling when processing reaches 0.
 
-### Technical Detail
+3. **Ingest reliability improvements in edge function**
+   - Add guarded execution budget checks inside long loops and fail gracefully with explicit status/error instead of hanging.
+   - Ensure all abnormal exits always write registry status (`error` with reason) so rows don’t stay “processing”.
+   - Tune batch sizes for heavy geometry paths and keep the existing streaming approach.
 
-**Migration SQL:**
-```sql
--- Create gas_dataset_registry (same schema as dno_dataset_registry)
-CREATE TABLE public.gas_dataset_registry (LIKE public.dno_dataset_registry INCLUDING ALL);
+4. **Fix gas map visibility bug**
+   - In `useLayerManager`, apply `_dno_clip` only to electricity network layers.
+   - For gas operators (`CADENT/NGN/SGN/WWU`), force clip to `null` so gas features load regardless of selected electricity DNO filter.
 
--- Move Cadent rows
-INSERT INTO public.gas_dataset_registry SELECT * FROM public.dno_dataset_registry WHERE dno = 'CADENT';
-DELETE FROM public.dno_dataset_registry WHERE dno = 'CADENT';
+5. **End-to-end validation**
+   - Admin → Gas Registry: page responsive, no freeze, paginated list works.
+   - Run Sync All Active: limited network traffic, stable UI, statuses progress correctly.
+   - Map → Gas tab: Cadent layers render even when a Network DNO filter is selected.
+   - Repeat quick regression on DNO Registry to confirm same stability gains.
 
--- RLS
-ALTER TABLE public.gas_dataset_registry ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Admins manage gas registry" ON public.gas_dataset_registry
-  FOR ALL TO authenticated USING (public.has_role(auth.uid(), 'admin'));
-CREATE POLICY "Authenticated read gas registry" ON public.gas_dataset_registry
-  FOR SELECT TO authenticated USING (true);
-```
+---
 
-**Sync status fix** in `npg-dataset-ingest/index.ts` — after successful feature insertion, add:
-```typescript
-await supabase.from(registryTable).update({
-  last_sync_status: "synced",
-  last_sync_rows: totalInserted,
-  last_sync_at: new Date().toISOString(),
-  last_sync_error: null,
-}).eq("id", entry.id);
-```
+### Files to update
+- `src/components/admin/GasDatasetRegistry.tsx`
+- `src/components/admin/NpgDatasetRegistry.tsx`
+- `src/hooks/useLayerManager.ts`
+- `supabase/functions/npg-dataset-ingest/index.ts`
 
-Where `registryTable` is determined by whether the operator is a gas GDN or electricity DNO.
+---
 
-### Expected Outcome
-- Gas Registry tab shows 413 Cadent datasets with correct sync status
-- DNO Registry no longer contains Cadent rows
-- After running Sync All Active, successfully ingested datasets show "synced" status with row counts
-
+### Technical detail (concise)
+- Introduce query state: `page`, `pageSize`, `totalCount`, `isPollingBatch`.
+- Use registry queries like:
+  - table list: selected columns + filters + `.range(from, to)`
+  - detail query: `fields_json` fetched only for expanded row id
+- Batch sync poll:
+  - single timer queries aggregate status (or refresh current page) every 3–5s
+  - stop condition: no `processing` rows
+- Map clip rule:
+  - `const isGas = GAS_OPERATORS.has(layer.dno);`
+  - `fetchLayerGeoJSON(layerId, bbox, isGas ? null : selectedDno, cap)`
