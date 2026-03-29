@@ -59,14 +59,32 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch the registry entry
-    const { data: entry, error: regErr } = await supabase
+    // Fetch the registry entry — try dno_dataset_registry first, then gas_dataset_registry
+    const GAS_OPERATORS = ["CADENT", "NGN", "SGN", "WWU"];
+    let entry: any = null;
+    let registryTable = "dno_dataset_registry";
+
+    const { data: dnoEntry, error: dnoErr } = await supabase
       .from("dno_dataset_registry")
       .select("*")
       .eq("id", registry_id)
       .single();
 
-    if (regErr || !entry) {
+    if (dnoEntry) {
+      entry = dnoEntry;
+    } else {
+      const { data: gasEntry, error: gasErr } = await supabase
+        .from("gas_dataset_registry")
+        .select("*")
+        .eq("id", registry_id)
+        .single();
+      if (gasEntry) {
+        entry = gasEntry;
+        registryTable = "gas_dataset_registry";
+      }
+    }
+
+    if (!entry) {
       return new Response(JSON.stringify({ error: "Registry entry not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -95,7 +113,7 @@ Deno.serve(async (req) => {
     const spatialTables = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints", "geo_substations", "geo_points"];
     if (!entry.is_geospatial && spatialTables.includes(layerRow.storage_table)) {
       await supabase
-        .from("dno_dataset_registry")
+        .from(registryTable)
         .update({
           last_sync_status: "skipped",
           last_sync_error: "Tabular dataset — no geometry to ingest into spatial layer",
@@ -115,7 +133,7 @@ Deno.serve(async (req) => {
 
     // Mark as processing immediately
     await supabase
-      .from("dno_dataset_registry")
+      .from(registryTable)
       .update({
         last_sync_status: "processing",
         last_sync_error: null,
@@ -142,7 +160,7 @@ Deno.serve(async (req) => {
     // Wrap with timeout safety net — mark as error if not done in 400s
     EdgeRuntime.waitUntil(
       Promise.race([
-        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }),
+        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }, registryTable),
         new Promise<void>(async (_, reject) => {
           await new Promise(r => setTimeout(r, 400000));
           reject(new Error("Background ingest timed out after 400s"));
@@ -150,7 +168,7 @@ Deno.serve(async (req) => {
       ]).catch(async (err) => {
         console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
         await supabase
-          .from("dno_dataset_registry")
+          .from(registryTable)
           .update({
             last_sync_status: "error",
             last_sync_error: String(err),
@@ -184,7 +202,8 @@ Deno.serve(async (req) => {
 async function performIngest(
   supabase: any, entry: any, layerRow: any, storageTable: string,
   apiKey: string | null, userId: string, registryId: string,
-  mode: string, opts: { where?: string; select?: string; order_by?: string }
+  mode: string, opts: { where?: string; select?: string; order_by?: string },
+  registryTable: string = "dno_dataset_registry"
 ) {
   let totalInserted = 0;
   let totalSkipped = 0;
@@ -249,7 +268,7 @@ async function performIngest(
 
   // Update registry entry with sync status
   await supabase
-    .from("dno_dataset_registry")
+    .from(registryTable)
     .update({
       last_sync_at: new Date().toISOString(),
       last_sync_status: syncError ? "error" : "success",
@@ -476,7 +495,8 @@ async function ingestViaRecords(
     const resp = await fetchWithRetry(url, apiKey);
     if (resp.status === 403) {
       console.warn(`[ingest] 403 Forbidden for ${entry.dataset_id} — marking as skipped`);
-      await supabase.from("dno_dataset_registry").update({
+      const regTable = ["CADENT", "NGN", "SGN", "WWU"].includes(entry.dno) ? "gas_dataset_registry" : "dno_dataset_registry";
+      await supabase.from(regTable).update({
         last_sync_status: "skipped",
         last_sync_error: "403 Forbidden — restricted dataset, elevated portal permissions required",
         last_sync_at: new Date().toISOString(),
