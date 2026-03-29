@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -16,22 +16,63 @@ const CompleteProfile = ({ onComplete }: { onComplete: () => void }) => {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const loadExistingProfile = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name, company, phone")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!data) return;
+      if (data.full_name?.trim()) setFullName(data.full_name);
+      if (data.company?.trim()) setCompany(data.company);
+      if (data.phone?.trim()) setPhone(data.phone);
+    };
+
+    loadExistingProfile();
+  }, [user]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    const payload = {
+      full_name: fullName.trim(),
+      company: company.trim(),
+      phone: phone.trim(),
+    };
+
     setLoading(true);
 
-    const { error } = await supabase
+    const { data: updatedRow, error: updateError } = await supabase
       .from("profiles")
-      .update({ full_name: fullName, company, phone })
-      .eq("user_id", user.id);
+      .update(payload)
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) {
+      setLoading(false);
+      toast({ title: "Error", description: updateError.message, variant: "destructive" });
+      return;
+    }
+
+    if (!updatedRow) {
+      const { error: insertError } = await supabase
+        .from("profiles")
+        .insert({ user_id: user.id, ...payload });
+
+      if (insertError) {
+        setLoading(false);
+        toast({ title: "Error", description: insertError.message, variant: "destructive" });
+        return;
+      }
+    }
 
     setLoading(false);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      onComplete();
-    }
+    onComplete();
   };
 
   return (
