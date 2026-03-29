@@ -4,15 +4,16 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X } from "lucide-react";
+import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair } from "lucide-react";
 import { format } from "date-fns";
-import { PortfolioAnalytics } from "@/components/portfolio/PortfolioAnalytics";
+import { PortfolioAnalytics, extractOsmFlags } from "@/components/portfolio/PortfolioAnalytics";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
@@ -147,12 +148,17 @@ const Portfolio = () => {
   };
 
   const exportCsv = () => {
-    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Status", "Created"];
-    const rows = filtered.map((s: any) => [
-      s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
-      s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
-      s.cost_band || "", getSiteEstimatedCost(s, unitRates) ?? "", s.reinforcement_probability ?? "", s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
-    ]);
+    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Constraints", "OSM Coverage", "Status", "Created"];
+    const rows = filtered.map((s: any) => {
+      const osm = extractOsmFlags(s);
+      return [
+        s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
+        s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
+        s.cost_band || "", getSiteEstimatedCost(s, unitRates) ?? "", s.reinforcement_probability ?? "",
+        osm.constraints.join("; ") || "None", osm.osmCoverage,
+        s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
+      ];
+    });
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -313,6 +319,8 @@ const Portfolio = () => {
                 <SortHeader label="Cost Band" k="cost_band" />
                 <TableHead>Est. Cost</TableHead>
                 <SortHeader label="Reinforce %" k="reinforcement_probability" />
+                <TableHead>Constraints</TableHead>
+                <TableHead>OSM</TableHead>
                 <TableHead>Status</TableHead>
                 <SortHeader label="Created" k="created_at" />
                 <TableHead></TableHead>
@@ -320,9 +328,9 @@ const Portfolio = () => {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
               ) : (
                 filtered.map((site: any) => (
                   <TableRow key={site.id} className="cursor-pointer hover:bg-muted/50">
@@ -366,6 +374,35 @@ const Portfolio = () => {
                       })()}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}>{site.reinforcement_probability != null ? `${site.reinforcement_probability}%` : "—"}</TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {(() => {
+                        const osm = extractOsmFlags(site);
+                        if (osm.constraints.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
+                        return (
+                          <TooltipProvider>
+                            <div className="flex gap-0.5">
+                              {osm.constraints.includes("RAILWAY_NEARBY") && (
+                                <Tooltip><TooltipTrigger><Train className="h-3.5 w-3.5 text-red-500" /></TooltipTrigger><TooltipContent>Railway nearby</TooltipContent></Tooltip>
+                              )}
+                              {osm.constraints.includes("WATER_NEARBY") && (
+                                <Tooltip><TooltipTrigger><Droplets className="h-3.5 w-3.5 text-blue-500" /></TooltipTrigger><TooltipContent>Water crossing nearby</TooltipContent></Tooltip>
+                              )}
+                              {osm.constraints.includes("SIGNAL_CONTROLLED") && (
+                                <Tooltip><TooltipTrigger><TrafficCone className="h-3.5 w-3.5 text-amber-500" /></TooltipTrigger><TooltipContent>Signal-controlled junction</TooltipContent></Tooltip>
+                              )}
+                            </div>
+                          </TooltipProvider>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell onClick={() => navigate(`/site/${site.id}`)}>
+                      {(() => {
+                        const osm = extractOsmFlags(site);
+                        return osm.osmCoverage === "cached"
+                          ? <Crosshair className="h-3.5 w-3.5 text-emerald-500" />
+                          : <span className="text-muted-foreground text-xs">—</span>;
+                      })()}
+                    </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
                     <TableCell>
