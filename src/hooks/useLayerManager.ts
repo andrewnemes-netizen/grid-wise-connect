@@ -168,25 +168,27 @@ export function useLayerManager(
 
         if (geojson.features.length === 0 && showEmptyToast) {
           const hasAnyData = layer.feature_count && layer.feature_count > 0;
-          const layerBbox = layer.bbox as [number, number, number, number] | null;
+          const layerBbox = layer.bbox;
           const canFlyTo = hasAnyData && layerBbox && Array.isArray(layerBbox) && layerBbox.length === 4;
-          toast({
-            title: layer.display_name,
-            description: hasAnyData
-              ? "No data in this viewport — try the button to fly to coverage area."
-              : "No data available yet. Run Sync in Admin to ingest this dataset.",
-            action: canFlyTo
-              ? createElement(ToastAction, {
-                  altText: "Go to coverage area",
-                  onClick: () => {
-                    map.fitBounds(
-                      [[layerBbox[0], layerBbox[1]], [layerBbox[2], layerBbox[3]]],
-                      { padding: 40, maxZoom: 14 }
-                    );
-                  },
-                }, "Go to area")
-              : undefined,
-          });
+
+          if (canFlyTo) {
+            // Auto-fly to coverage area and reload
+            map.fitBounds(
+              [[layerBbox[0], layerBbox[1]], [layerBbox[2], layerBbox[3]]],
+              { padding: 40, maxZoom: 14 }
+            );
+            toast({
+              title: layer.display_name,
+              description: "Flying to coverage area…",
+            });
+          } else {
+            toast({
+              title: layer.display_name,
+              description: hasAnyData
+                ? "No data in this viewport — try panning to the layer's coverage area."
+                : "No data available yet. Run Sync in Admin to ingest this dataset.",
+            });
+          }
         }
       } catch (err) {
         console.error(`Failed to load layer ${layerId}:`, err);
