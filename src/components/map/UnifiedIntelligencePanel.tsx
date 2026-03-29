@@ -760,8 +760,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                         distanceBands: result.distance_bands,
                         constraints: result.constraints,
                         unitRates,
-                        locationMapScreenshot: locationScreenshot,
-                        mapScreenshot: routeScreenshot,
+                        locationMapScreenshot: locationScreenshot || routeScreenshot,
                         // Intelligence data
                         masterScore: masterScore?.score ?? null,
                         masterVerdict: masterScore?.verdict ?? null,

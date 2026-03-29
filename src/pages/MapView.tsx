@@ -457,7 +457,7 @@ const MapView = () => {
         }, 800);
       });
 
-    // --- Screenshot 1: Location overview (pin + all connection endpoints) ---
+    // --- Single screenshot: everything (pin + infrastructure + connection lines) ---
     const overviewBounds = new maplibregl.LngLatBounds(
       [overviewBbox[0], overviewBbox[1]],
       [overviewBbox[2], overviewBbox[3]]
@@ -465,25 +465,10 @@ const MapView = () => {
     map.fitBounds(overviewBounds, { padding: 50, duration: 0 });
     const locationScreenshot = await captureCanvas();
 
-    // --- Screenshot 2: Route view (tighter bounds on connection lines only) ---
-    let routeScreenshot: string | null = null;
-    if (allLineCoords.length >= 2) {
-      const routeBounds = new maplibregl.LngLatBounds(allLineCoords[0], allLineCoords[0]);
-      allLineCoords.forEach((c) => routeBounds.extend(c));
-      routeBounds.extend([lng, lat]); // include site pin
-      // Add small buffer
-      const ROUTE_PAD_LNG = 0.001;
-      const ROUTE_PAD_LAT = 0.0007;
-      routeBounds.extend([routeBounds.getWest() - ROUTE_PAD_LNG, routeBounds.getSouth() - ROUTE_PAD_LAT]);
-      routeBounds.extend([routeBounds.getEast() + ROUTE_PAD_LNG, routeBounds.getNorth() + ROUTE_PAD_LAT]);
-      map.fitBounds(routeBounds, { padding: 60, duration: 0 });
-      routeScreenshot = await captureCanvas();
-    }
-
     cleanupAll();
     // Restore original camera
     map.jumpTo({ center: origCenter, zoom: origZoom });
-    return { location: locationScreenshot, route: routeScreenshot };
+    return { location: locationScreenshot, route: null };
   }, [map, pin.pinLocation, registryLayers]);
 
   return (

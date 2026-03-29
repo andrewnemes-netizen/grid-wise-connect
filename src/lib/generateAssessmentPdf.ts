@@ -264,16 +264,17 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y = 36;
   };
 
-  // ── LOCATION MAP PAGE (after cover, before content) ──
-  if (input.locationMapScreenshot) {
+  // ── SINGLE MAP PAGE (site + infrastructure + cable route) ──
+  if (input.locationMapScreenshot || input.mapScreenshot) {
+    const mapImg = input.locationMapScreenshot || input.mapScreenshot;
     addHeaderBar();
-    sectionTitle("Location & Infrastructure Overview");
+    sectionTitle("Site Location & Cable Route");
 
     try {
       const imgW = contentW;
       const imgH = imgW * 0.65;
       checkPage(imgH + 50);
-      doc.addImage(input.locationMapScreenshot, "PNG", margin, y, imgW, imgH);
+      doc.addImage(mapImg!, "PNG", margin, y, imgW, imgH);
 
       // North arrow (top-right of map)
       const naX = margin + imgW - 8;
@@ -315,15 +316,16 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       console.warn("Failed to add location map to PDF:", e);
     }
 
-    // Map legend
-    const locationLegend = [
+    // Combined map legend — infrastructure + route
+    const mapLegend = [
       { label: "Site Location", color: "#e74c3c", type: "circle" as const },
-      { label: "Connection Lines", color: "#9b59b6", type: "line" as const },
-      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
-      { label: "EHV Feeders", color: "#8b5cf6", type: "line" as const },
+      { label: "Point of Connection (POC)", color: "#3498db", type: "circle" as const },
+      { label: "Proposed Cable Route", color: "#2ecc71", type: "line" as const },
+      { label: "Primary Substation", color: "#e74c3c", type: "line" as const },
+      { label: "Feeder", color: "#9b59b6", type: "line" as const },
       { label: "Substations", color: "#3b82f6", type: "circle" as const },
+      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
       { label: "NDP Projects", color: "#f59e0b", type: "circle" as const },
-      { label: "Constraints", color: "#dc2626", type: "line" as const },
     ];
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
@@ -333,7 +335,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.setFont("helvetica", "normal");
     doc.setTextColor(BRAND.black);
     const colW2 = contentW / 2;
-    locationLegend.forEach((item, i) => {
+    mapLegend.forEach((item, i) => {
       const col = i < 4 ? 0 : 1;
       const row = i < 4 ? i : i - 4;
       const lx = margin + col * colW2;
@@ -350,7 +352,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setTextColor(BRAND.black);
       doc.text(item.label, lx + 10, ly);
     });
-    y += Math.ceil(locationLegend.length / 2) * 4.5 + 4;
+    y += Math.ceil(mapLegend.length / 2) * 4.5 + 4;
 
     if (input.siteName) {
       doc.setFontSize(7);
@@ -479,178 +481,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y = startY + 34;
   }
 
-  // ── ROUTE MAP SCREENSHOT ──
-  if (sec.routeMap && input.mapScreenshot) {
-    checkPage(90);
-    sectionTitle("Route Map");
 
-    try {
-      const imgW = contentW;
-      const imgH = imgW * 0.6;
-      doc.addImage(input.mapScreenshot, "PNG", margin, y, imgW, imgH);
-
-      // North Arrow
-      const naX = margin + imgW - 8;
-      const naY = y + 6;
-      doc.setFillColor(BRAND.white);
-      doc.circle(naX, naY, 5, "F");
-      doc.setDrawColor(BRAND.grey);
-      doc.setLineWidth(0.3);
-      doc.circle(naX, naY, 5, "S");
-      doc.setFillColor(BRAND.black);
-      doc.triangle(naX, naY - 4, naX - 1.8, naY + 0.5, naX + 1.8, naY + 0.5, "F");
-      doc.setFillColor(BRAND.grey);
-      doc.triangle(naX, naY + 4, naX - 1.8, naY + 0.5, naX + 1.8, naY + 0.5, "F");
-      doc.setFontSize(5);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(BRAND.black);
-      doc.text("N", naX, naY - 5.5, { align: "center" });
-
-      // Scale Bar
-      const sbX = margin + 4;
-      const sbY = y + imgH - 5;
-      const totalDistM = input.distances?.primary_m ?? 500;
-      let scaleM = 100;
-      if (totalDistM > 2000) scaleM = 500;
-      else if (totalDistM > 800) scaleM = 200;
-      else if (totalDistM > 300) scaleM = 100;
-      else scaleM = 50;
-      const mapSpanM = Math.max(totalDistM * 2.5, scaleM * 3);
-      const barW = (scaleM / mapSpanM) * imgW;
-      const clampedBarW = Math.min(Math.max(barW, 12), 40);
-
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "F");
-      doc.setDrawColor(BRAND.grey);
-      doc.setLineWidth(0.2);
-      doc.roundedRect(sbX - 2, sbY - 4, clampedBarW + 8, 7, 1, 1, "S");
-
-      doc.setDrawColor(BRAND.black);
-      doc.setLineWidth(0.6);
-      doc.line(sbX, sbY, sbX + clampedBarW, sbY);
-      doc.line(sbX, sbY - 1.5, sbX, sbY + 0.5);
-      doc.line(sbX + clampedBarW, sbY - 1.5, sbX + clampedBarW, sbY + 0.5);
-      const scaleLabelText = scaleM >= 1000 ? `${scaleM / 1000} km` : `${scaleM} m`;
-      doc.setFontSize(5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(BRAND.black);
-      doc.text(scaleLabelText, sbX + clampedBarW / 2, sbY - 1.5, { align: "center" });
-
-      y += imgH + 4;
-    } catch (e) {
-      console.warn("Failed to add map screenshot to PDF:", e);
-    }
-
-    // Map Legend
-    checkPage(40);
-    doc.setTextColor(BRAND.black);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Map Key", margin, y);
-    y += 4;
-
-    const routeSymbols: { label: string; color: string; type: "filled-circle" | "dashed-line" }[] = [
-      { label: "Point of Connection (Source)", color: "#3498db", type: "filled-circle" },
-      { label: "New Supply Point", color: "#e74c3c", type: "filled-circle" },
-      { label: "Proposed Cable Route", color: "#2ecc71", type: "dashed-line" },
-    ];
-
-    const networkLegend: { label: string; color: string; type: "line" | "circle" }[] = [
-      { label: "HV Underground Cables", color: "#e74c3c", type: "line" },
-      { label: "EHV Feeders", color: "#8b5cf6", type: "line" },
-      { label: "HV Feeders (33kV)", color: "#f59e0b", type: "line" },
-      { label: "HV Feeders (66kV)", color: "#06b6d4", type: "line" },
-      { label: "Primary Substations", color: "#3b82f6", type: "circle" },
-    ];
-
-    const equipmentLegend: { label: string; color: string; symbol: string }[] = [
-      { label: "Transformer", color: "#e74c3c", symbol: "T" },
-      { label: "Ring Main Unit", color: "#3498db", symbol: "R" },
-      { label: "Feeder Pillar", color: "#2ecc71", symbol: "F" },
-      { label: "Cutout", color: "#f39c12", symbol: "C" },
-      { label: "Joint", color: "#9b59b6", symbol: "J" },
-      { label: "Pole", color: "#1abc9c", symbol: "P" },
-      { label: "EV Charger", color: "#00b894", symbol: "E" },
-    ];
-
-    const colW = contentW / 2;
-
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(BRAND.grey);
-    doc.text("ROUTE SYMBOLS", margin + 2, y);
-    y += 4;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(BRAND.black);
-    routeSymbols.forEach((item) => {
-      if (item.type === "filled-circle") {
-        doc.setFillColor("#ffffff");
-        doc.circle(margin + 6, y - 1.2, 2.4, "F");
-        doc.setFillColor(item.color);
-        doc.circle(margin + 6, y - 1.2, 1.8, "F");
-      } else {
-        doc.setDrawColor(item.color);
-        doc.setLineWidth(1.2);
-        (doc as any).setLineDashPattern([1.5, 1], 0);
-        doc.line(margin + 2, y - 1, margin + 10, y - 1);
-        (doc as any).setLineDashPattern([], 0);
-      }
-      doc.setFontSize(7);
-      doc.setTextColor(BRAND.black);
-      doc.text(item.label, margin + 13, y);
-      y += 4;
-    });
-
-    y += 1;
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(BRAND.grey);
-    doc.text("NETWORK LAYERS", margin + 2, y);
-    y += 4;
-
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(BRAND.black);
-    networkLegend.forEach((item) => {
-      if (item.type === "line") {
-        doc.setDrawColor(item.color);
-        doc.setLineWidth(1.2);
-        doc.line(margin + 2, y - 1, margin + 10, y - 1);
-      } else {
-        doc.setFillColor(item.color);
-        doc.circle(margin + 6, y - 1.2, 1.8, "F");
-      }
-      doc.setFontSize(7);
-      doc.setTextColor(BRAND.black);
-      doc.text(item.label, margin + 13, y);
-      y += 4;
-    });
-
-    const rightStartY = y - ((routeSymbols.length * 4) + 5 + (networkLegend.length * 4) + 4);
-    let rightY = rightStartY;
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(BRAND.grey);
-    doc.text("DESIGN EQUIPMENT", margin + colW + 2, rightY);
-    rightY += 4;
-
-    doc.setFont("helvetica", "normal");
-    equipmentLegend.forEach((item) => {
-      doc.setFillColor(item.color);
-      doc.circle(margin + colW + 6, rightY - 1.2, 2.2, "F");
-      doc.setFontSize(5);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(BRAND.white);
-      doc.text(item.symbol, margin + colW + 6, rightY - 0.4, { align: "center" });
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(BRAND.black);
-      doc.text(item.label, margin + colW + 13, rightY);
-      rightY += 4;
-    });
-
-    y = Math.max(y, rightY) + 4;
-  }
 
   // ── SITE DETAILS ──
   if (sec.siteDetails) {

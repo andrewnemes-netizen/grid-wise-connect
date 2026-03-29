@@ -378,8 +378,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                       distanceBands: result.distance_bands,
                       constraints: result.constraints,
                       unitRates,
-                      locationMapScreenshot: locationScreenshot,
-                      mapScreenshot: routeScreenshot,
+                      locationMapScreenshot: locationScreenshot || routeScreenshot,
                     });
                   }}
                 >
