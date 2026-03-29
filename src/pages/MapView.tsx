@@ -84,6 +84,7 @@ const MapView = () => {
   const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [gridwiseLocation, setGridwiseLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+  const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
   activeToolRef.current = activeTool;
 
