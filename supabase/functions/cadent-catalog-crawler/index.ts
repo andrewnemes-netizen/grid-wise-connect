@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
       try {
         const entry = processDataset(ds);
         const { error: upsertErr } = await supabase
-          .from("dno_dataset_registry")
+          .from("gas_dataset_registry")
           .upsert(entry, { onConflict: "dno,dataset_id" });
 
         if (upsertErr) {

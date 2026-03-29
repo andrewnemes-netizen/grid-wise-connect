@@ -73,7 +73,7 @@ export function GasDatasetRegistry() {
     queryKey: ["gdn-dataset-registry", selectedGdn],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("dno_dataset_registry")
+        .from("gas_dataset_registry")
         .select("*")
         .eq("dno", selectedGdn)
         .order("title");
@@ -175,7 +175,7 @@ export function GasDatasetRegistry() {
     for (let i = 0; i < maxPolls; i++) {
       await new Promise(r => setTimeout(r, 2000));
       const { data } = await supabase
-        .from("dno_dataset_registry")
+        .from("gas_dataset_registry")
         .select("last_sync_status, last_sync_rows, last_sync_error")
         .eq("id", entryId)
         .single();
@@ -196,7 +196,7 @@ export function GasDatasetRegistry() {
 
   const handleLinkLayer = async (entryId: string, layerId: string) => {
     const { error } = await supabase
-      .from("dno_dataset_registry")
+      .from("gas_dataset_registry")
       .update({ linked_layer_id: layerId, updated_at: new Date().toISOString() })
       .eq("id", entryId);
 
@@ -210,7 +210,7 @@ export function GasDatasetRegistry() {
 
   const handleToggleActive = async (entryId: string, active: boolean) => {
     await supabase
-      .from("dno_dataset_registry")
+      .from("gas_dataset_registry")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", entryId);
     queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
