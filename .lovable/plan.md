@@ -1,47 +1,66 @@
 
 
-## P0: OSM Ingestion Metadata Table
+## P1: Close OSM Tag Gaps + Deterministic Tile-Based Caching
 
-### Purpose
-Track every Overpass fetch with a deterministic fingerprint (query hash + tile/bbox) so route calculations are reproducible and auditable. This is the provenance layer the validation report flagged as missing.
+### Part 1: Expand Tag Extraction (Edge Function)
 
-### Database Migration
+**File: `supabase/functions/overpass-road-fetch/index.ts`**
 
-Create table `osm_ingestion_meta`:
+The `extractTags` function already captures `surface`, `width`, `lanes`, `maxspeed`, `oneway` for road layers. Add these missing tags critical for SROH alignment and civils costing:
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | default gen_random_uuid() |
-| layer_slug | text NOT NULL | e.g. `osm_major_roads` |
-| source_endpoint | text | which Overpass mirror responded |
-| query_hash | text NOT NULL | SHA-256 of the Overpass QL query |
-| query_text | text | the actual QL for debugging |
-| tile_id | text | optional z/x/y if tile-based fetching is added later |
-| bbox | jsonb NOT NULL | `[south, west, north, east]` |
-| fetched_at | timestamptz | default now() |
-| row_count | integer | features returned |
-| status | text | `success` or `error` |
-| error_detail | text | nullable, for failed fetches |
-| fetched_by | uuid | user who triggered the fetch |
+**Road layers** (`osm_major_roads`, `osm_minor_roads`, `osm_footways`):
+- `lit` — street lighting presence (affects night works cost)
+- `foot` / `bicycle` — access restrictions for footways
+- `junction` — roundabout detection for route segmentation
+- `sidewalk` — pavement presence (affects excavation type)
+- `crossing` — pedestrian crossing type on the way itself
 
-RLS: admins full access, authenticated users SELECT.
+**New layer: `osm_crossings`** — Point features:
+- Filter: `node["highway"="crossing"]` 
+- Tags: `crossing`, `crossing:markings`, `traffic_signals`, `tactile_paving`
+- These are critical for route costing (TM requirements at crossings)
 
-Index on `(layer_slug, query_hash)` for dedup lookups.
+**New layer: `osm_traffic_signals`** — Point features:
+- Filter: `node["highway"="traffic_signals"]`
+- Tags: `traffic_signals`, `traffic_signals:direction`
+- Needed for TM cost estimation (signal-controlled junctions)
 
-### Edge Function Update (`overpass-road-fetch/index.ts`)
+Add both to `OSM_FILTERS`, `MAX_BBOX_SPAN` (0.05 each), and `extractTags`.
 
-After a successful Overpass response:
-1. Compute SHA-256 of the query string
-2. INSERT a row into `osm_ingestion_meta` with the layer slug, bbox, endpoint used, feature count, and user ID
-3. This is fire-and-forget (don't block the response)
+### Part 2: Deterministic Tile-Based Bbox Snapping
 
-On error, insert a row with `status = 'error'` and the error detail.
+Instead of using raw viewport coordinates (which produce different query hashes for every pan), snap the bbox to XYZ tile boundaries. This makes queries deterministic and cacheable.
 
-### Frontend — No Changes
+**Edge function changes:**
+- Add a `bboxToTiles(bbox, zoom)` function that converts a bbox into one or more tile coordinates at a fixed zoom level per layer type
+- Use z12 for major roads, z13 for minor roads, z14 for footways/crossings/signals
+- The query is built per-tile, so the same tile always produces the same query hash
+- Check `osm_ingestion_meta` for a recent (< 1 hour) successful fetch with matching `query_hash` — if found, return a `304`-style "use cache" hint
 
-This is purely backend metadata. No UI needed for P0. Future phases can add an admin panel to browse ingestion history.
+**Frontend changes (`src/lib/mapLayers.ts`):**
+- Add a `bboxToTileKeys(bbox, zoom)` function mirroring the edge function logic
+- Cache Overpass results keyed by `${slug}:${tileKey}` instead of raw bbox
+- When the viewport spans multiple tiles, merge results from cached + freshly fetched tiles
+- This eliminates redundant fetches when panning slightly
+
+### Part 3: Database Migration
+
+Insert 2 new `layer_registry` rows:
+
+| slug | display_name | category | geometry_type | source_type | min_zoom | dno |
+|------|-------------|----------|--------------|-------------|----------|-----|
+| osm_crossings | Pedestrian Crossings | OSM | Point | overpass | 14 | OSM |
+| osm_traffic_signals | Traffic Signals | OSM | Point | overpass | 14 | OSM |
 
 ### Files Changed
-- Database migration — create `osm_ingestion_meta` table + RLS + index
-- `supabase/functions/overpass-road-fetch/index.ts` — add metadata INSERT after fetch
+
+- `supabase/functions/overpass-road-fetch/index.ts` — add filters, tags, tile snapping, cache check
+- `src/lib/mapLayers.ts` — add tile-based cache keys, new slugs to span guard, tile merge logic
+- Database migration — insert 2 new layer_registry rows
+
+### Expected Outcome
+- Road features carry full tag set needed for SROH reinstatement mapping and TM costing
+- Crossings and traffic signals visible as point layers at z14+
+- Identical viewport positions produce identical queries — enabling true cache hits and reproducible route analysis
+- `osm_ingestion_meta` dedup works because same tile = same query_hash
 
