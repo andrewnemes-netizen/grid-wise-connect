@@ -276,7 +276,7 @@ async function buildRouteSegments(
       verge_pct: verge,
     };
   } else {
-    surfaceSplit = { footway_pct: 0.6, carriageway_pct: 0.3, verge_pct: 0.1 };
+    surfaceSplit = { footway_pct: 0.35, carriageway_pct: 0.15, verge_pct: 0.5 };
   }
 
   const segments: RawRouteSegment[] = ([

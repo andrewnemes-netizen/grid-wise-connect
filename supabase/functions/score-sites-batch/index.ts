@@ -120,7 +120,7 @@ interface OsmContext {
 
 async function queryOsmContext(supabase: any, lng: number, lat: number): Promise<OsmContext> {
   const RADIUS_M = 200;
-  const fallback: OsmContext = { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
+  const fallback: OsmContext = { split: { footway_pct: 35, carriageway_pct: 15, verge_pct: 50 }, crossings: 0, signals: 0, constraints: [], found: false };
 
   try {
     // Build all (slug, tile_id) pairs across per-layer zoom levels with 3x3 grids

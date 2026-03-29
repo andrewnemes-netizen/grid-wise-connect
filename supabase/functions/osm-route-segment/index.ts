@@ -172,16 +172,22 @@ function segmentRouteAgainstOsm(
     const segLength = haversineM(a, b);
     const midpoint: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 
-    // Find nearest OSM way to this segment's midpoint
-    let bestDist = Infinity;
+    // Find best OSM way using cost-weighted scoring
+    // Prefer cheaper surfaces: verge (0 penalty) > footway (+15m) > carriageway (+30m)
+    let bestScore = Infinity;
     let bestWay: OsmWay | null = null;
+    let bestDist = Infinity;
     for (const way of osmWays) {
       if (!way.geometry || way.geometry.length < 2) continue;
+      const surfType = classifyHighway(way.tags?.highway);
+      const costPenalty = surfType === "CARRIAGEWAY" ? 30 : surfType === "FOOTWAY" ? 15 : 0;
       for (let j = 0; j < way.geometry.length - 1; j++) {
         const wa: [number, number] = [way.geometry[j].lon, way.geometry[j].lat];
         const wb: [number, number] = [way.geometry[j + 1].lon, way.geometry[j + 1].lat];
         const d = pointToSegmentDistM(midpoint, wa, wb);
-        if (d < bestDist) {
+        const effectiveScore = d + costPenalty;
+        if (effectiveScore < bestScore) {
+          bestScore = effectiveScore;
           bestDist = d;
           bestWay = way;
         }
