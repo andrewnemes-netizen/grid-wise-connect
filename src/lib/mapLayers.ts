@@ -3,6 +3,25 @@ import type { RegistryLayer } from "@/components/map/LayerTogglePanel";
 import { getLayerColor } from "@/components/map/LayerTogglePanel";
 import maplibregl from "maplibre-gl";
 
+// Overpass-backed layers use the edge function instead of the database RPC
+async function fetchOverpassGeoJSON(
+  slug: string,
+  bbox?: [number, number, number, number],
+  featureLimit?: number
+): Promise<GeoJSON.FeatureCollection> {
+  if (!bbox) return { type: "FeatureCollection", features: [] };
+  // Convert [west, south, east, north] → [south, west, north, east] for Overpass
+  const overpassBbox = [bbox[1], bbox[0], bbox[3], bbox[2]];
+  const { data, error } = await supabase.functions.invoke("overpass-road-fetch", {
+    body: { bbox: overpassBbox, road_type: slug, feature_cap: featureLimit ?? 5000 },
+  });
+  if (error) {
+    console.error("Overpass fetch error:", error);
+    return { type: "FeatureCollection", features: [] };
+  }
+  return data as GeoJSON.FeatureCollection;
+}
+
 // Cache for fetched GeoJSON keyed by "layerId:bbox"
 const geojsonCache = new Map<string, GeoJSON.FeatureCollection>();
 
@@ -14,8 +33,14 @@ export async function fetchLayerGeoJSON(
   layerId: string,
   bbox?: [number, number, number, number],
   dnoClip?: string | null,
-  featureLimit?: number
+  featureLimit?: number,
+  sourceType?: string,
+  slug?: string
 ): Promise<GeoJSON.FeatureCollection> {
+  // Route overpass layers to the edge function
+  if (sourceType === "overpass" && slug) {
+    return fetchOverpassGeoJSON(slug, bbox, featureLimit);
+  }
   // Ensure a minimum bbox size so close-zoom queries still capture nearby points
   let bufferedBbox = bbox;
   if (bbox) {
