@@ -324,14 +324,55 @@ export async function addRegistryLayerToMap(
         },
       });
     } else if (renderType === "line") {
+      let lineColor: any = color;
+      let lineWidth: any = 2.5;
+      let lineOpacity = 0.85;
+
+      if (layer.slug === "osm_major_roads") {
+        lineColor = [
+          "match", ["coalesce", ["get", "highway"], "primary"],
+          "motorway", "#DC2626",
+          "trunk", "#EA580C",
+          "primary", "#F59E0B",
+          "#E74C3C",
+        ];
+        lineWidth = [
+          "match", ["coalesce", ["get", "highway"], "primary"],
+          "motorway", 4,
+          "trunk", 3.5,
+          "primary", 3,
+          3,
+        ];
+      } else if (layer.slug === "osm_minor_roads") {
+        lineColor = [
+          "match", ["coalesce", ["get", "highway"], "residential"],
+          "secondary", "#3B82F6",
+          "tertiary", "#6366F1",
+          "residential", "#8B5CF6",
+          "unclassified", "#A78BFA",
+          "#3498DB",
+        ];
+        lineWidth = 2;
+      } else if (layer.slug === "osm_footways") {
+        lineColor = [
+          "match", ["coalesce", ["get", "highway"], "footway"],
+          "footway", "#10B981",
+          "path", "#34D399",
+          "cycleway", "#06B6D4",
+          "#2ECC71",
+        ];
+        lineWidth = 1.5;
+        lineOpacity = 0.7;
+      }
+
       map.addLayer({
         id: layerMapId,
         type: "line",
         source: sourceId,
         paint: {
-          "line-color": color,
-          "line-width": 2.5,
-          "line-opacity": 0.85,
+          "line-color": lineColor,
+          "line-width": lineWidth,
+          "line-opacity": lineOpacity,
         },
       });
     } else if (renderType === "fill") {
