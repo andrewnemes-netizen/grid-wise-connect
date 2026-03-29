@@ -13,7 +13,47 @@ const OVERPASS_MAX_SPAN: Record<string, number> = {
   osm_railways: 0.11,
   osm_buildings: 0.05,
   osm_barriers: 0.05,
+  osm_crossings: 0.05,
+  osm_traffic_signals: 0.05,
 };
+
+// Tile zoom per layer — mirrors edge function for deterministic cache keys
+const TILE_ZOOM: Record<string, number> = {
+  osm_major_roads: 12,
+  osm_minor_roads: 13,
+  osm_footways: 14,
+  osm_water: 13,
+  osm_railways: 13,
+  osm_buildings: 14,
+  osm_barriers: 14,
+  osm_crossings: 14,
+  osm_traffic_signals: 14,
+};
+
+// Tile math helpers
+function lon2tile(lon: number, z: number): number {
+  return Math.floor(((lon + 180) / 360) * (1 << z));
+}
+function lat2tile(lat: number, z: number): number {
+  return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * (1 << z));
+}
+
+/** Generate deterministic tile keys for a bbox at a given zoom */
+function bboxToTileKeys(bbox: [number, number, number, number], zoom: number): string[] {
+  // bbox is [west, south, east, north] (MapLibre format)
+  const [west, south, east, north] = bbox;
+  const minX = lon2tile(west, zoom);
+  const maxX = lon2tile(east, zoom);
+  const minY = lat2tile(north, zoom);
+  const maxY = lat2tile(south, zoom);
+  const keys: string[] = [];
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      keys.push(`${zoom}/${x}/${y}`);
+    }
+  }
+  return keys;
+}
 
 // Concurrency throttle for Overpass requests — prevents 429 rate limiting
 let activeOverpassRequests = 0;

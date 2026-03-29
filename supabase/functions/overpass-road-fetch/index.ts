@@ -22,10 +22,14 @@ const OSM_FILTERS: Record<string, string> = {
   osm_railways: 'way["railway"~"rail|light_rail|subway|tram"]',
   osm_buildings: 'way["building"]',
   osm_barriers: '(way["barrier"];node["barrier"];)',
+  // Point layers
+  osm_crossings: 'node["highway"="crossing"]',
+  osm_traffic_signals: 'node["highway"="traffic_signals"]',
 };
 
 // Geometry output type per layer
 const POLYGON_LAYERS = new Set(["osm_water", "osm_buildings"]);
+const POINT_ONLY_LAYERS = new Set(["osm_crossings", "osm_traffic_signals"]);
 
 // Max bbox span per layer type (degrees)
 const MAX_BBOX_SPAN: Record<string, number> = {
@@ -36,7 +40,69 @@ const MAX_BBOX_SPAN: Record<string, number> = {
   osm_railways: 0.11,
   osm_buildings: 0.05,
   osm_barriers: 0.05,
+  osm_crossings: 0.05,
+  osm_traffic_signals: 0.05,
 };
+
+// Tile zoom per layer for deterministic snapping
+const TILE_ZOOM: Record<string, number> = {
+  osm_major_roads: 12,
+  osm_minor_roads: 13,
+  osm_footways: 14,
+  osm_water: 13,
+  osm_railways: 13,
+  osm_buildings: 14,
+  osm_barriers: 14,
+  osm_crossings: 14,
+  osm_traffic_signals: 14,
+};
+
+// ── Tile math helpers ──────────────────────────────────────────────
+function lat2tile(lat: number, z: number): number {
+  return Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * (1 << z));
+}
+function lon2tile(lon: number, z: number): number {
+  return Math.floor(((lon + 180) / 360) * (1 << z));
+}
+function tile2lat(y: number, z: number): number {
+  const n = Math.PI - 2 * Math.PI * y / (1 << z);
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+function tile2lon(x: number, z: number): number {
+  return x / (1 << z) * 360 - 180;
+}
+
+interface TileBbox {
+  tileId: string;
+  bbox: [number, number, number, number]; // [south, west, north, east]
+}
+
+/** Snap a bbox to XYZ tile boundaries at the given zoom level */
+function bboxToTiles(
+  bbox: [number, number, number, number], // [south, west, north, east]
+  zoom: number
+): TileBbox[] {
+  const [south, west, north, east] = bbox;
+  const minX = lon2tile(west, zoom);
+  const maxX = lon2tile(east, zoom);
+  const minY = lat2tile(north, zoom); // note: y is inverted
+  const maxY = lat2tile(south, zoom);
+
+  const tiles: TileBbox[] = [];
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const tileNorth = tile2lat(y, zoom);
+      const tileSouth = tile2lat(y + 1, zoom);
+      const tileWest = tile2lon(x, zoom);
+      const tileEast = tile2lon(x + 1, zoom);
+      tiles.push({
+        tileId: `${zoom}/${x}/${y}`,
+        bbox: [tileSouth, tileWest, tileNorth, tileEast],
+      });
+    }
+  }
+  return tiles;
+}
 
 function clampBbox(
   bbox: [number, number, number, number],
@@ -70,12 +136,15 @@ function buildQuery(
 
   // For grouped queries (water, barriers) the filter already includes parentheses
   if (filter.startsWith("(")) {
-    // Multi-statement filter
-    // Insert bbox into each sub-statement
-    const inner = filter.slice(1, -1); // strip outer parens
+    const inner = filter.slice(1, -1);
     const parts = inner.split(";").filter(Boolean);
     const bboxedParts = parts.map((p) => `${p}(${bboxStr})`);
-  return `[out:json][timeout:15];(${bboxedParts.join(";")};);out body geom;`;
+    return `[out:json][timeout:15];(${bboxedParts.join(";")};);out body geom;`;
+  }
+
+  // Point-only layers use "out body;" (no geom needed for nodes)
+  if (POINT_ONLY_LAYERS.has(layerType)) {
+    return `[out:json][timeout:15];${filter}(${bboxStr});out body;`;
   }
 
   return `[out:json][timeout:15];${filter}(${bboxStr});out body geom;`;
@@ -98,7 +167,7 @@ function overpassToGeoJSON(
   const isPolygon = POLYGON_LAYERS.has(layerType);
 
   for (const el of elements) {
-    // Handle node elements (barriers can be nodes)
+    // Handle node elements
     if (el.type === "node" && el.lat != null && el.lon != null) {
       features.push({
         type: "Feature",
@@ -115,7 +184,6 @@ function overpassToGeoJSON(
     const coords = el.geometry.map((p) => [p.lon, p.lat]);
 
     if (isPolygon && coords.length >= 4) {
-      // Close ring if needed
       const first = coords[0];
       const last = coords[coords.length - 1];
       if (first[0] !== last[0] || first[1] !== last[1]) {
@@ -160,6 +228,13 @@ function extractTags(
         maxspeed: tags.maxspeed ?? null,
         width: tags.width ?? null,
         oneway: tags.oneway ?? null,
+        // P1 additions for SROH / civils costing
+        lit: tags.lit ?? null,
+        foot: tags.foot ?? null,
+        bicycle: tags.bicycle ?? null,
+        junction: tags.junction ?? null,
+        sidewalk: tags.sidewalk ?? null,
+        crossing: tags.crossing ?? null,
       };
     case "osm_water":
       return {
@@ -185,6 +260,19 @@ function extractTags(
       return {
         barrier: tags.barrier ?? null,
         access: tags.access ?? null,
+        name: tags.name ?? null,
+      };
+    case "osm_crossings":
+      return {
+        crossing: tags.crossing ?? null,
+        "crossing:markings": tags["crossing:markings"] ?? null,
+        traffic_signals: tags.traffic_signals ?? null,
+        tactile_paving: tags.tactile_paving ?? null,
+      };
+    case "osm_traffic_signals":
+      return {
+        traffic_signals: tags.traffic_signals ?? null,
+        "traffic_signals:direction": tags["traffic_signals:direction"] ?? null,
         name: tags.name ?? null,
       };
     default:
@@ -230,6 +318,21 @@ async function fetchWithRace(
   }
 }
 
+/** Merge multiple FeatureCollections, deduplicating by osm_id */
+function mergeFeatureCollections(collections: GeoJSON.FeatureCollection[]): GeoJSON.FeatureCollection {
+  const seen = new Set<number>();
+  const features: GeoJSON.Feature[] = [];
+  for (const fc of collections) {
+    for (const f of fc.features) {
+      const osmId = (f.properties as any)?.osm_id;
+      if (osmId && seen.has(osmId)) continue;
+      if (osmId) seen.add(osmId);
+      features.push(f);
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -265,7 +368,8 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           error:
-            "Invalid input. Required: bbox [south,west,north,east], road_type (osm_major_roads|osm_minor_roads|osm_footways|osm_water|osm_railways|osm_buildings|osm_barriers)",
+            "Invalid input. Required: bbox [south,west,north,east], road_type (one of: " +
+            Object.keys(OSM_FILTERS).join(", ") + ")",
         }),
         {
           status: 400,
@@ -276,28 +380,62 @@ Deno.serve(async (req: Request) => {
 
     const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
-    const query = buildQuery(clampedBbox, road_type);
-    const queryHash = await sha256Hex(query);
-    const { geojson, endpoint: usedEndpoint } = await fetchWithRace(query, cap, road_type);
 
-    // Fire-and-forget: log ingestion metadata
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    // Deterministic tile-based snapping
+    const zoom = TILE_ZOOM[road_type] ?? 13;
+    const tiles = bboxToTiles(clampedBbox, zoom);
+
+    // Limit to 4 tiles max to prevent huge queries
+    const tilesToFetch = tiles.slice(0, 4);
+
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sbAdmin = createClient(supabaseUrl, serviceKey);
-    sbAdmin.from("osm_ingestion_meta").insert({
-      layer_slug: road_type,
-      source_endpoint: usedEndpoint,
-      query_hash: queryHash,
-      query_text: query,
-      bbox: clampedBbox,
-      row_count: geojson.features.length,
-      status: geojson.features.length > 0 ? "success" : "empty",
-      fetched_by: user.id,
-    }).then(({ error: metaErr }) => {
-      if (metaErr) console.warn("Meta insert failed:", metaErr.message);
-    });
 
-    return new Response(JSON.stringify(geojson), {
+    const tileResults: GeoJSON.FeatureCollection[] = [];
+
+    for (const tile of tilesToFetch) {
+      const query = buildQuery(tile.bbox, road_type);
+      const queryHash = await sha256Hex(query);
+
+      // Check cache: recent successful fetch within 1 hour
+      const { data: cached } = await sbAdmin
+        .from("osm_ingestion_meta")
+        .select("fetched_at, row_count")
+        .eq("layer_slug", road_type)
+        .eq("query_hash", queryHash)
+        .eq("status", "success")
+        .gte("fetched_at", new Date(Date.now() - 3600_000).toISOString())
+        .order("fetched_at", { ascending: false })
+        .limit(1);
+
+      // If we have a recent cache hit, we still need to fetch (no stored geojson),
+      // but log it differently. For now, always fetch but skip re-logging if cached.
+      const isCached = cached && cached.length > 0;
+
+      const { geojson, endpoint: usedEndpoint } = await fetchWithRace(query, cap, road_type);
+      tileResults.push(geojson);
+
+      // Fire-and-forget: log ingestion metadata (skip if recently logged)
+      if (!isCached) {
+        sbAdmin.from("osm_ingestion_meta").insert({
+          layer_slug: road_type,
+          source_endpoint: usedEndpoint,
+          query_hash: queryHash,
+          query_text: query,
+          tile_id: tile.tileId,
+          bbox: tile.bbox,
+          row_count: geojson.features.length,
+          status: geojson.features.length > 0 ? "success" : "empty",
+          fetched_by: user.id,
+        }).then(({ error: metaErr }) => {
+          if (metaErr) console.warn("Meta insert failed:", metaErr.message);
+        });
+      }
+    }
+
+    const merged = mergeFeatureCollections(tileResults);
+
+    return new Response(JSON.stringify(merged), {
       status: 200,
       headers: {
         ...corsHeaders,
