@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import { toast } from "sonner";
 import {
   RefreshCw, CheckCircle, XCircle, Loader2, Database, Globe, Search,
   Download, MapPin, FileSpreadsheet, Clock, AlertTriangle, Radar,
-  ChevronDown, ChevronUp, Eye, Layers, Info, Flame
+  ChevronDown, ChevronUp, Eye, Layers, Info, Flame,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
@@ -48,6 +49,9 @@ interface DatasetEntry {
 
 type GdnKey = "CADENT" | "NGN" | "SGN" | "WWU";
 
+const LIGHT_COLUMNS = "id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at";
+const PAGE_SIZE = 50;
+
 const gdnConfig: Record<GdnKey, { label: string; crawler: string | null; portalUrl: string; available: boolean }> = {
   CADENT: { label: "Cadent Gas", crawler: "cadent-catalog-crawler", portalUrl: "cadentgas.opendatasoft.com", available: true },
   NGN: { label: "Northern Gas Networks", crawler: null, portalUrl: "northerngasopendataportal.co.uk", available: false },
@@ -66,19 +70,65 @@ export function GasDatasetRegistry() {
   const [selectedGdn, setSelectedGdn] = useState<GdnKey>("CADENT");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const currentConfig = gdnConfig[selectedGdn];
 
-  const { data: datasets = [], isLoading } = useQuery({
-    queryKey: ["gdn-dataset-registry", selectedGdn],
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [selectedGdn, search, filterGeo]);
+
+  // Cleanup batch poll on unmount
+  useEffect(() => () => { if (batchPollRef.current) clearInterval(batchPollRef.current); }, []);
+
+  // Server-side paginated query with lightweight columns
+  const { data: queryResult, isLoading } = useQuery({
+    queryKey: ["gdn-dataset-registry", selectedGdn, page, search, filterGeo],
+    queryFn: async () => {
+      let query = supabase
+        .from("gas_dataset_registry")
+        .select(LIGHT_COLUMNS, { count: "exact" })
+        .eq("dno", selectedGdn)
+        .order("title");
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,dataset_id.ilike.%${search}%`);
+      }
+      if (filterGeo === "geo") query = query.eq("is_geospatial", true);
+      if (filterGeo === "tabular") query = query.eq("is_geospatial", false);
+
+      const from = page * PAGE_SIZE;
+      query = query.range(from, from + PAGE_SIZE - 1);
+
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return { datasets: (data ?? []) as DatasetEntry[], totalCount: count ?? 0 };
+    },
+    refetchOnMount: "always",
+  });
+
+  const datasets = queryResult?.datasets ?? [];
+  const totalCount = queryResult?.totalCount ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Stats query (lightweight aggregate - counts only)
+  const { data: stats } = useQuery({
+    queryKey: ["gdn-stats", selectedGdn],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("gas_dataset_registry")
-        .select("id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at")
-        .eq("dno", selectedGdn)
-        .order("title");
+        .select("is_geospatial,active,last_sync_status,last_sync_rows", { count: "exact" })
+        .eq("dno", selectedGdn);
       if (error) throw error;
-      return (data ?? []) as DatasetEntry[];
+      const all = data ?? [];
+      return {
+        total: all.length,
+        geo: all.filter(d => d.is_geospatial).length,
+        active: all.filter(d => d.active).length,
+        synced: all.filter(d => d.last_sync_status === "success").length,
+        failed: all.filter(d => d.last_sync_status === "error").length,
+        totalRows: all.reduce((s, d) => s + (d.last_sync_rows || 0), 0),
+      };
     },
     refetchOnMount: "always",
   });
@@ -94,6 +144,23 @@ export function GasDatasetRegistry() {
       return data;
     },
   });
+
+  // Count active+linked for Sync All (separate lightweight query)
+  const { data: activeLinkedCount = 0 } = useQuery({
+    queryKey: ["gdn-active-linked-count", selectedGdn],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("gas_dataset_registry")
+        .select("id", { count: "exact", head: true })
+        .eq("dno", selectedGdn)
+        .eq("active", true)
+        .not("linked_layer_id", "is", null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  const unlinkdGeoCount = (stats?.geo ?? 0) - datasets.filter(d => d.is_geospatial && d.linked_layer_id).length;
 
   const handleCrawl = async () => {
     if (!currentConfig.crawler) {
@@ -122,7 +189,7 @@ export function GasDatasetRegistry() {
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
       toast.success(`Discovered ${result.total_discovered} ${currentConfig.label} datasets, upserted ${result.inserted}`);
-      queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
+      invalidateAll();
     } catch (err: any) {
       toast.error(`Crawl failed: ${err.message}`);
     } finally {
@@ -130,7 +197,14 @@ export function GasDatasetRegistry() {
     }
   };
 
-  const handleIngest = async (entry: DatasetEntry, mode: "export" | "records" = "export") => {
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["gdn-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["gdn-active-linked-count"] });
+  }, [queryClient]);
+
+  // Fire-and-forget ingest — no per-row polling
+  const handleIngest = async (entry: DatasetEntry) => {
     setSyncingIds(prev => new Set(prev).add(entry.id));
     try {
       await supabase.auth.refreshSession();
@@ -146,21 +220,14 @@ export function GasDatasetRegistry() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ registry_id: entry.id, mode }),
+          body: JSON.stringify({ registry_id: entry.id, mode: "export" }),
         }
       );
       const result = await resp.json();
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
-
-      if (result.accepted) {
-        toast.info(`Ingestion started for ${entry.title} — processing in background`);
-        pollSyncStatus(entry.id, entry.title);
-      } else {
-        toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
-        queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
-      }
+      // No per-row polling — batch poll handles status updates
     } catch (err: any) {
-      toast.error(`Ingest failed: ${err.message}`);
+      toast.error(`Ingest failed for ${entry.title}: ${err.message}`);
     } finally {
       setSyncingIds(prev => {
         const next = new Set(prev);
@@ -168,30 +235,6 @@ export function GasDatasetRegistry() {
         return next;
       });
     }
-  };
-
-  const pollSyncStatus = async (entryId: string, title: string) => {
-    const maxPolls = 60;
-    for (let i = 0; i < maxPolls; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const { data } = await supabase
-        .from("gas_dataset_registry")
-        .select("last_sync_status, last_sync_rows, last_sync_error")
-        .eq("id", entryId)
-        .single();
-
-      if (!data || data.last_sync_status === "processing") continue;
-
-      if (data.last_sync_status === "success") {
-        toast.success(`✅ ${title}: ${data.last_sync_rows} features ingested`);
-      } else if (data.last_sync_status === "error") {
-        toast.error(`❌ ${title}: ${data.last_sync_error}`);
-      }
-      queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
-      return;
-    }
-    toast.warning(`${title}: Still processing — check back shortly`);
-    queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
   };
 
   const handleLinkLayer = async (entryId: string, layerId: string) => {
@@ -204,7 +247,7 @@ export function GasDatasetRegistry() {
       toast.error(`Failed to link: ${error.message}`);
     } else {
       toast.success("Layer linked");
-      queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
+      invalidateAll();
     }
   };
 
@@ -213,11 +256,8 @@ export function GasDatasetRegistry() {
       .from("gas_dataset_registry")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", entryId);
-    queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
+    invalidateAll();
   };
-
-  const activeLinkedDatasets = datasets.filter(d => d.active && d.linked_layer_id);
-  const unlinkdGeoCount = datasets.filter(d => d.is_geospatial && !d.linked_layer_id).length;
 
   const handleAutoLink = async () => {
     setAutoLinking(true);
@@ -241,7 +281,7 @@ export function GasDatasetRegistry() {
         `${result.layers_created} layers created, ${result.layers_reused} reused, ${result.datasets_linked} datasets linked` +
         (unmatchedCount > 0 ? ` — ${unmatchedCount} unmatched` : '')
       );
-      queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
+      invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
     } catch (err: any) {
       toast.error(`Auto-link failed: ${err.message}`);
@@ -250,59 +290,97 @@ export function GasDatasetRegistry() {
     }
   };
 
+  // Batch Sync All — fire all ingests, then start a single global poll
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
-    const syncable = activeLinkedDatasets.filter(ds => {
-      if (!ds.is_geospatial) return false;
-      if (!ds.endpoint_export_csv && !ds.endpoint_export_geojson && !(ds as any).endpoint_records) return false;
-      return true;
-    });
-    const skippedCount = activeLinkedDatasets.length - syncable.length;
-    if (skippedCount > 0) {
-      toast.info(`Skipping ${skippedCount} dataset(s) — no geometry or no API endpoint`);
-    }
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-    let successCount = 0;
-    let failCount = 0;
-    for (const ds of syncable) {
-      try {
-        await handleIngest(ds, "export");
-        successCount++;
-        await new Promise(r => setTimeout(r, 2000));
-      } catch {
-        failCount++;
+      // Get all active+linked+geospatial datasets with endpoints
+      const { data: syncable } = await supabase
+        .from("gas_dataset_registry")
+        .select("id,title,is_geospatial,endpoint_export_csv,endpoint_export_geojson,endpoint_records")
+        .eq("dno", selectedGdn)
+        .eq("active", true)
+        .not("linked_layer_id", "is", null)
+        .eq("is_geospatial", true);
+
+      const toSync = (syncable ?? []).filter(ds =>
+        ds.endpoint_export_csv || ds.endpoint_export_geojson || (ds as any).endpoint_records
+      );
+
+      if (toSync.length === 0) {
+        toast.info("No syncable datasets found");
+        setSyncAllRunning(false);
+        return;
       }
+
+      toast.info(`Starting ingestion for ${toSync.length} datasets…`);
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      // Fire all ingests sequentially with small delay (no per-row poll)
+      for (const ds of toSync) {
+        try {
+          await fetch(
+            `https://${projectId}.supabase.co/functions/v1/npg-dataset-ingest`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ registry_id: ds.id, mode: "export" }),
+            }
+          );
+        } catch { /* fire and forget */ }
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      // Start a single global batch poll
+      startBatchPoll();
+    } catch (err: any) {
+      toast.error(`Sync All failed: ${err.message}`);
+      setSyncAllRunning(false);
     }
-    toast.success(`Sync All complete: ${successCount} started, ${failCount} failed`);
-    setSyncAllRunning(false);
-    queryClient.invalidateQueries({ queryKey: ["gdn-dataset-registry", selectedGdn] });
   };
 
-  const filtered = datasets.filter(ds => {
-    if (search && !ds.title.toLowerCase().includes(search.toLowerCase()) &&
-      !ds.dataset_id.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterGeo === "geo" && !ds.is_geospatial) return false;
-    if (filterGeo === "tabular" && ds.is_geospatial) return false;
-    return true;
-  });
+  const startBatchPoll = () => {
+    if (batchPollRef.current) clearInterval(batchPollRef.current);
+    let pollCount = 0;
+    batchPollRef.current = setInterval(async () => {
+      pollCount++;
+      // Refresh the current page data
+      invalidateAll();
 
-  const totalDatasets = datasets.length;
-  const geoDatasets = datasets.filter(d => d.is_geospatial).length;
-  const activeDatasets = datasets.filter(d => d.active).length;
-  const syncedDatasets = datasets.filter(d => d.last_sync_status === "success").length;
-  const failedDatasets = datasets.filter(d => d.last_sync_status === "error").length;
-  const totalRows = datasets.reduce((sum, d) => sum + (d.last_sync_rows || 0), 0);
+      // Check if any are still processing
+      const { count } = await supabase
+        .from("gas_dataset_registry")
+        .select("id", { count: "exact", head: true })
+        .eq("dno", selectedGdn)
+        .eq("last_sync_status", "processing");
+
+      if ((count ?? 0) === 0 || pollCount > 120) {
+        if (batchPollRef.current) clearInterval(batchPollRef.current);
+        batchPollRef.current = null;
+        setSyncAllRunning(false);
+        toast.success("Sync All complete — check statuses for results");
+        invalidateAll();
+      }
+    }, 5000);
+  };
 
   return (
     <div className="space-y-4">
       {/* Summary Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <StatCard icon={<Database className="h-4 w-4" />} label="Total Datasets" value={totalDatasets} />
-        <StatCard icon={<MapPin className="h-4 w-4" />} label="Geospatial" value={geoDatasets} />
-        <StatCard icon={<Radar className="h-4 w-4" />} label="Active" value={activeDatasets} />
-        <StatCard icon={<CheckCircle className="h-4 w-4" />} label="Synced" value={syncedDatasets} />
-        <StatCard icon={<AlertTriangle className="h-4 w-4" />} label="Failed" value={failedDatasets} variant="destructive" />
-        <StatCard icon={<FileSpreadsheet className="h-4 w-4" />} label="Total Rows" value={totalRows.toLocaleString()} />
+        <StatCard icon={<Database className="h-4 w-4" />} label="Total Datasets" value={stats?.total ?? 0} />
+        <StatCard icon={<MapPin className="h-4 w-4" />} label="Geospatial" value={stats?.geo ?? 0} />
+        <StatCard icon={<Radar className="h-4 w-4" />} label="Active" value={stats?.active ?? 0} />
+        <StatCard icon={<CheckCircle className="h-4 w-4" />} label="Synced" value={stats?.synced ?? 0} />
+        <StatCard icon={<AlertTriangle className="h-4 w-4" />} label="Failed" value={stats?.failed ?? 0} variant="destructive" />
+        <StatCard icon={<FileSpreadsheet className="h-4 w-4" />} label="Total Rows" value={(stats?.totalRows ?? 0).toLocaleString()} />
       </div>
 
       {/* Controls */}
@@ -342,21 +420,21 @@ export function GasDatasetRegistry() {
               </Button>
               <Button
                 onClick={handleAutoLink}
-                disabled={autoLinking || unlinkdGeoCount === 0}
+                disabled={autoLinking}
                 size="sm"
                 variant="secondary"
               >
                 {autoLinking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Layers className="h-4 w-4 mr-1" />}
-                {autoLinking ? "Linking…" : `Auto-Create & Link Layers${unlinkdGeoCount > 0 ? ` (${unlinkdGeoCount})` : ''}`}
+                {autoLinking ? "Linking…" : "Auto-Create & Link Layers"}
               </Button>
               <Button
                 onClick={handleSyncAll}
-                disabled={syncAllRunning || activeLinkedDatasets.length === 0}
+                disabled={syncAllRunning || activeLinkedCount === 0}
                 size="sm"
                 variant="outline"
               >
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedDatasets.length})`}
+                {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
             </div>
           </div>
@@ -383,7 +461,7 @@ export function GasDatasetRegistry() {
               </SelectContent>
             </Select>
             <span className="text-xs text-muted-foreground">
-              {filtered.length} of {totalDatasets} datasets
+              {datasets.length} of {totalCount} datasets
             </span>
           </div>
         </CardContent>
@@ -449,10 +527,9 @@ export function GasDatasetRegistry() {
             <Flame className="h-8 w-8 mx-auto mb-2 opacity-50 text-orange-400" />
             <p className="text-sm font-medium">{currentConfig.label}</p>
             <p className="text-xs mt-1">Crawler not yet built. Portal: {currentConfig.portalUrl}</p>
-            <p className="text-xs mt-0.5 text-muted-foreground">API endpoints need verification before ingestion can be enabled.</p>
           </CardContent>
         </Card>
-      ) : totalDatasets === 0 ? (
+      ) : totalCount === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Flame className="h-8 w-8 mx-auto mb-2 opacity-50 text-orange-400" />
@@ -477,7 +554,7 @@ export function GasDatasetRegistry() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(ds => {
+                {datasets.map(ds => {
                   const isSyncing = syncingIds.has(ds.id);
                   const isExpanded = expandedId === ds.id;
 
@@ -589,7 +666,7 @@ export function GasDatasetRegistry() {
                                 variant="outline"
                                 className="h-7 text-[10px]"
                                 disabled={isSyncing || !ds.linked_layer_id}
-                                onClick={() => handleIngest(ds, "export")}
+                                onClick={() => handleIngest(ds)}
                               >
                                 {isSyncing ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
                                 {isSyncing ? "Syncing…" : "Ingest"}
@@ -600,7 +677,7 @@ export function GasDatasetRegistry() {
                         <CollapsibleContent asChild>
                           <TableRow className="bg-muted/30">
                             <TableCell colSpan={8} className="p-3">
-                              <DatasetDetail ds={ds} onIngest={handleIngest} isSyncing={isSyncing} />
+                              <DatasetDetail ds={ds} onIngest={(d) => handleIngest(d)} isSyncing={isSyncing} />
                             </TableCell>
                           </TableRow>
                         </CollapsibleContent>
@@ -610,6 +687,31 @@ export function GasDatasetRegistry() {
                 })}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t">
+                <span className="text-xs text-muted-foreground">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-xs"
+                    disabled={page === 0}
+                    onClick={() => setPage(p => p - 1)}
+                  >
+                    <ChevronLeft className="h-3 w-3 mr-1" /> Previous
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-xs"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -685,8 +787,22 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
   return <span className="text-[10px] text-muted-foreground">{ds.last_sync_status}</span>;
 }
 
-function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest: (ds: DatasetEntry, mode: "export" | "records") => void; isSyncing: boolean }) {
-  const fields = Array.isArray(ds.fields_json) ? ds.fields_json : [];
+function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest: (ds: DatasetEntry) => void; isSyncing: boolean }) {
+  // Fetch fields_json on demand only when expanded
+  const { data: detailData } = useQuery({
+    queryKey: ["gdn-dataset-detail", ds.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("gas_dataset_registry")
+        .select("fields_json")
+        .eq("id", ds.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const fields = Array.isArray(detailData?.fields_json) ? detailData.fields_json : [];
 
   return (
     <div className="space-y-3">
@@ -731,18 +847,10 @@ function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest
         <Button
           size="sm" variant="outline" className="h-7 text-xs"
           disabled={isSyncing || !ds.linked_layer_id}
-          onClick={() => onIngest(ds, "export")}
+          onClick={() => onIngest(ds)}
         >
           <Download className="h-3 w-3 mr-1" />
-          Full Export Ingest
-        </Button>
-        <Button
-          size="sm" variant="outline" className="h-7 text-xs"
-          disabled={isSyncing || !ds.linked_layer_id}
-          onClick={() => onIngest(ds, "records")}
-        >
-          <RefreshCw className="h-3 w-3 mr-1" />
-          Records (Paginated)
+          Ingest
         </Button>
       </div>
     </div>

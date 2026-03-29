@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,9 +11,9 @@ import { toast } from "sonner";
 import {
   RefreshCw, CheckCircle, XCircle, Loader2, Database, Globe, Search,
   Download, MapPin, FileSpreadsheet, Clock, AlertTriangle, Radar,
-  ChevronDown, ChevronUp, Eye, Layers, Info
+  ChevronDown, ChevronUp, Eye, Layers, Info,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
@@ -41,11 +41,14 @@ interface DatasetEntry {
   last_sync_rows: number;
   last_sync_error: string | null;
   schema_hash: string | null;
-  fields_json: any[];
+  fields_json?: any[];
   refresh_strategy: string;
   updated_at_source: string | null;
   created_at: string;
 }
+
+const LIGHT_COLUMNS = "id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at";
+const PAGE_SIZE = 50;
 
 export function NpgDatasetRegistry() {
   const queryClient = useQueryClient();
@@ -58,6 +61,8 @@ export function NpgDatasetRegistry() {
   const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN">("NPG");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
     NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
@@ -67,17 +72,60 @@ export function NpgDatasetRegistry() {
     UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com" },
   };
 
-  // Fetch all datasets from registry for selected DNO
-  const { data: datasets = [], isLoading } = useQuery({
-    queryKey: ["dno-dataset-registry", selectedDno],
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [selectedDno, search, filterGeo]);
+
+  // Cleanup batch poll on unmount
+  useEffect(() => () => { if (batchPollRef.current) clearInterval(batchPollRef.current); }, []);
+
+  // Server-side paginated query with lightweight columns
+  const { data: queryResult, isLoading } = useQuery({
+    queryKey: ["dno-dataset-registry", selectedDno, page, search, filterGeo],
+    queryFn: async () => {
+      let query = supabase
+        .from("dno_dataset_registry")
+        .select(LIGHT_COLUMNS, { count: "exact" })
+        .eq("dno", selectedDno)
+        .order("title");
+
+      if (search) {
+        query = query.or(`title.ilike.%${search}%,dataset_id.ilike.%${search}%`);
+      }
+      if (filterGeo === "geo") query = query.eq("is_geospatial", true);
+      if (filterGeo === "tabular") query = query.eq("is_geospatial", false);
+
+      const from = page * PAGE_SIZE;
+      query = query.range(from, from + PAGE_SIZE - 1);
+
+      const { data, error, count } = await query;
+      if (error) throw error;
+      return { datasets: (data ?? []) as DatasetEntry[], totalCount: count ?? 0 };
+    },
+    refetchOnMount: "always",
+  });
+
+  const datasets = queryResult?.datasets ?? [];
+  const totalCount = queryResult?.totalCount ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Stats query (lightweight)
+  const { data: stats } = useQuery({
+    queryKey: ["dno-stats", selectedDno],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("dno_dataset_registry")
-        .select("*")
-        .eq("dno", selectedDno)
-        .order("title");
+        .select("is_geospatial,active,last_sync_status,last_sync_rows", { count: "exact" })
+        .eq("dno", selectedDno);
       if (error) throw error;
-      return data as DatasetEntry[];
+      const all = data ?? [];
+      return {
+        total: all.length,
+        geo: all.filter(d => d.is_geospatial).length,
+        active: all.filter(d => d.active).length,
+        synced: all.filter(d => d.last_sync_status === "success").length,
+        failed: all.filter(d => d.last_sync_status === "error").length,
+        totalRows: all.reduce((s, d) => s + (d.last_sync_rows || 0), 0),
+      };
     },
     refetchOnMount: "always",
   });
@@ -95,7 +143,29 @@ export function NpgDatasetRegistry() {
     },
   });
 
-  // ── Crawl catalog ──
+  // Count active+linked for Sync All
+  const { data: activeLinkedCount = 0 } = useQuery({
+    queryKey: ["dno-active-linked-count", selectedDno],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("dno_dataset_registry")
+        .select("id", { count: "exact", head: true })
+        .eq("dno", selectedDno)
+        .eq("active", true)
+        .not("linked_layer_id", "is", null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+
+  const unlinkdGeoCount = (stats?.geo ?? 0) - datasets.filter(d => d.is_geospatial && d.linked_layer_id).length;
+
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-stats"] });
+    queryClient.invalidateQueries({ queryKey: ["dno-active-linked-count"] });
+  }, [queryClient]);
+
   const handleCrawl = async () => {
     setCrawling(true);
     try {
@@ -120,7 +190,7 @@ export function NpgDatasetRegistry() {
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
       toast.success(`Discovered ${result.total_discovered} ${selectedDno} datasets, upserted ${result.inserted}`);
-      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+      invalidateAll();
     } catch (err: any) {
       toast.error(`Crawl failed: ${err.message}`);
     } finally {
@@ -128,7 +198,7 @@ export function NpgDatasetRegistry() {
     }
   };
 
-  // ── Ingest a single dataset ──
+  // Fire-and-forget ingest — no per-row polling
   const handleIngest = async (entry: DatasetEntry, mode: "export" | "records" = "export") => {
     setSyncingIds(prev => new Set(prev).add(entry.id));
     try {
@@ -152,12 +222,10 @@ export function NpgDatasetRegistry() {
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
       if (result.accepted) {
-        toast.info(`Ingestion started for ${entry.title} — processing in background`);
-        // Poll for completion
-        pollSyncStatus(entry.id, entry.title);
+        toast.info(`Ingestion started for ${entry.title}`);
       } else {
         toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
-        queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+        invalidateAll();
       }
     } catch (err: any) {
       toast.error(`Ingest failed: ${err.message}`);
@@ -170,32 +238,6 @@ export function NpgDatasetRegistry() {
     }
   };
 
-  // Poll registry for background ingest completion
-  const pollSyncStatus = async (entryId: string, title: string) => {
-    const maxPolls = 60; // 2 minutes max
-    for (let i = 0; i < maxPolls; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const { data } = await supabase
-        .from("dno_dataset_registry")
-        .select("last_sync_status, last_sync_rows, last_sync_error")
-        .eq("id", entryId)
-        .single();
-
-      if (!data || data.last_sync_status === "processing") continue;
-
-      if (data.last_sync_status === "success") {
-        toast.success(`✅ ${title}: ${data.last_sync_rows} features ingested`);
-      } else if (data.last_sync_status === "error") {
-        toast.error(`❌ ${title}: ${data.last_sync_error}`);
-      }
-      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
-      return;
-    }
-    toast.warning(`${title}: Still processing — check back shortly`);
-    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
-  };
-
-  // ── Link layer ──
   const handleLinkLayer = async (entryId: string, layerId: string) => {
     const { error } = await supabase
       .from("dno_dataset_registry")
@@ -206,24 +248,18 @@ export function NpgDatasetRegistry() {
       toast.error(`Failed to link: ${error.message}`);
     } else {
       toast.success("Layer linked");
-      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+      invalidateAll();
     }
   };
 
-  // ── Toggle active ──
   const handleToggleActive = async (entryId: string, active: boolean) => {
     await supabase
       .from("dno_dataset_registry")
       .update({ active, updated_at: new Date().toISOString() })
       .eq("id", entryId);
-    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+    invalidateAll();
   };
 
-  // Active+linked datasets for "Sync All"
-  const activeLinkedDatasets = datasets.filter(d => d.active && d.linked_layer_id);
-  const unlinkdGeoCount = datasets.filter(d => d.is_geospatial && !d.linked_layer_id).length;
-
-  // ── Auto-Create & Link Layers ──
   const handleAutoLink = async () => {
     setAutoLinking(true);
     setAutoLinkResult(null);
@@ -246,7 +282,7 @@ export function NpgDatasetRegistry() {
         `${result.layers_created} layers created, ${result.layers_reused} reused, ${result.datasets_linked} datasets linked` +
         (unmatchedCount > 0 ? ` — ${unmatchedCount} unmatched` : '')
       );
-      queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
+      invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
     } catch (err: any) {
       toast.error(`Auto-link failed: ${err.message}`);
@@ -255,67 +291,92 @@ export function NpgDatasetRegistry() {
     }
   };
 
-  // ── Sync All Active ──
+  // Batch Sync All — fire all ingests, then start a single global poll
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
-    // Filter out non-geospatial datasets linked to spatial layers
-    // Skip tabular datasets AND datasets with no usable endpoints
-    const syncable = activeLinkedDatasets.filter(ds => {
-      if (!ds.is_geospatial) return false;
-      // Skip datasets with no data endpoints (PDF/portal-only)
-      if (!ds.endpoint_export_csv && !ds.endpoint_export_geojson && !(ds as any).endpoint_records) return false;
-      return true;
-    });
-    const skippedCount = activeLinkedDatasets.length - syncable.length;
-    if (skippedCount > 0) {
-      toast.info(`Skipping ${skippedCount} dataset(s) — no geometry or no API endpoint`);
-    }
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-    let successCount = 0;
-    let failCount = 0;
-    // Sequential processing with delay to avoid overwhelming the database
-    for (const ds of syncable) {
-      try {
-        await handleIngest(ds, "export");
-        successCount++;
-        // Wait 2s between datasets to avoid 502s from concurrent load
-        await new Promise(r => setTimeout(r, 2000));
-      } catch {
-        failCount++;
+      const { data: syncable } = await supabase
+        .from("dno_dataset_registry")
+        .select("id,title,is_geospatial,endpoint_export_csv,endpoint_export_geojson,endpoint_records")
+        .eq("dno", selectedDno)
+        .eq("active", true)
+        .not("linked_layer_id", "is", null)
+        .eq("is_geospatial", true);
+
+      const toSync = (syncable ?? []).filter(ds =>
+        ds.endpoint_export_csv || ds.endpoint_export_geojson || (ds as any).endpoint_records
+      );
+
+      if (toSync.length === 0) {
+        toast.info("No syncable datasets found");
+        setSyncAllRunning(false);
+        return;
       }
+
+      toast.info(`Starting ingestion for ${toSync.length} datasets…`);
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      for (const ds of toSync) {
+        try {
+          await fetch(
+            `https://${projectId}.supabase.co/functions/v1/npg-dataset-ingest`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ registry_id: ds.id, mode: "export" }),
+            }
+          );
+        } catch { /* fire and forget */ }
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      startBatchPoll();
+    } catch (err: any) {
+      toast.error(`Sync All failed: ${err.message}`);
+      setSyncAllRunning(false);
     }
-    toast.success(`Sync All complete: ${successCount} started, ${failCount} failed`);
-    setSyncAllRunning(false);
-    queryClient.invalidateQueries({ queryKey: ["dno-dataset-registry", selectedDno] });
   };
 
-  // Filtering
-  const filtered = datasets.filter(ds => {
-    if (search && !ds.title.toLowerCase().includes(search.toLowerCase()) &&
-      !ds.dataset_id.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterGeo === "geo" && !ds.is_geospatial) return false;
-    if (filterGeo === "tabular" && ds.is_geospatial) return false;
-    return true;
-  });
+  const startBatchPoll = () => {
+    if (batchPollRef.current) clearInterval(batchPollRef.current);
+    let pollCount = 0;
+    batchPollRef.current = setInterval(async () => {
+      pollCount++;
+      invalidateAll();
 
-  // Stats
-  const totalDatasets = datasets.length;
-  const geoDatasets = datasets.filter(d => d.is_geospatial).length;
-  const activeDatasets = datasets.filter(d => d.active).length;
-  const syncedDatasets = datasets.filter(d => d.last_sync_status === "success").length;
-  const failedDatasets = datasets.filter(d => d.last_sync_status === "error").length;
-  const totalRows = datasets.reduce((sum, d) => sum + (d.last_sync_rows || 0), 0);
+      const { count } = await supabase
+        .from("dno_dataset_registry")
+        .select("id", { count: "exact", head: true })
+        .eq("dno", selectedDno)
+        .eq("last_sync_status", "processing");
+
+      if ((count ?? 0) === 0 || pollCount > 120) {
+        if (batchPollRef.current) clearInterval(batchPollRef.current);
+        batchPollRef.current = null;
+        setSyncAllRunning(false);
+        toast.success("Sync All complete — check statuses for results");
+        invalidateAll();
+      }
+    }, 5000);
+  };
 
   return (
     <div className="space-y-4">
       {/* Summary Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        <StatCard icon={<Database className="h-4 w-4" />} label="Total Datasets" value={totalDatasets} />
-        <StatCard icon={<MapPin className="h-4 w-4" />} label="Geospatial" value={geoDatasets} />
-        <StatCard icon={<Radar className="h-4 w-4" />} label="Active" value={activeDatasets} />
-        <StatCard icon={<CheckCircle className="h-4 w-4" />} label="Synced" value={syncedDatasets} />
-        <StatCard icon={<AlertTriangle className="h-4 w-4" />} label="Failed" value={failedDatasets} variant="destructive" />
-        <StatCard icon={<FileSpreadsheet className="h-4 w-4" />} label="Total Rows" value={totalRows.toLocaleString()} />
+        <StatCard icon={<Database className="h-4 w-4" />} label="Total Datasets" value={stats?.total ?? 0} />
+        <StatCard icon={<MapPin className="h-4 w-4" />} label="Geospatial" value={stats?.geo ?? 0} />
+        <StatCard icon={<Radar className="h-4 w-4" />} label="Active" value={stats?.active ?? 0} />
+        <StatCard icon={<CheckCircle className="h-4 w-4" />} label="Synced" value={stats?.synced ?? 0} />
+        <StatCard icon={<AlertTriangle className="h-4 w-4" />} label="Failed" value={stats?.failed ?? 0} variant="destructive" />
+        <StatCard icon={<FileSpreadsheet className="h-4 w-4" />} label="Total Rows" value={(stats?.totalRows ?? 0).toLocaleString()} />
       </div>
 
       {/* Controls */}
@@ -350,21 +411,21 @@ export function NpgDatasetRegistry() {
               </Button>
               <Button
                 onClick={handleAutoLink}
-                disabled={autoLinking || unlinkdGeoCount === 0}
+                disabled={autoLinking}
                 size="sm"
                 variant="secondary"
               >
                 {autoLinking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Layers className="h-4 w-4 mr-1" />}
-                {autoLinking ? "Linking…" : `Auto-Create & Link Layers${unlinkdGeoCount > 0 ? ` (${unlinkdGeoCount})` : ''}`}
+                {autoLinking ? "Linking…" : "Auto-Create & Link Layers"}
               </Button>
               <Button
                 onClick={handleSyncAll}
-                disabled={syncAllRunning || activeLinkedDatasets.length === 0}
+                disabled={syncAllRunning || activeLinkedCount === 0}
                 size="sm"
                 variant="outline"
               >
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedDatasets.length})`}
+                {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
             </div>
           </div>
@@ -391,7 +452,7 @@ export function NpgDatasetRegistry() {
               </SelectContent>
             </Select>
             <span className="text-xs text-muted-foreground">
-              {filtered.length} of {totalDatasets} datasets
+              {datasets.length} of {totalCount} datasets
             </span>
           </div>
         </CardContent>
@@ -451,7 +512,7 @@ export function NpgDatasetRegistry() {
             Loading registry…
           </CardContent>
         </Card>
-      ) : totalDatasets === 0 ? (
+      ) : totalCount === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Globe className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -476,7 +537,7 @@ export function NpgDatasetRegistry() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(ds => {
+                {datasets.map(ds => {
                   const isSyncing = syncingIds.has(ds.id);
                   const isExpanded = expandedId === ds.id;
 
@@ -579,7 +640,7 @@ export function NpgDatasetRegistry() {
                                         </Badge>
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xs text-xs">
-                                        Dataset suggests <strong>{ds.storage_table}</strong> but layer uses <strong>{linkedLayer?.storage_table}</strong>. Ingest uses the layer's table.
+                                        Dataset suggests <strong>{ds.storage_table}</strong> but layer uses <strong>{linkedLayer?.storage_table}</strong>.
                                       </TooltipContent>
                                     </Tooltip>
                                   )}
@@ -635,6 +696,31 @@ export function NpgDatasetRegistry() {
                 })}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t">
+                <span className="text-xs text-muted-foreground">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-xs"
+                    disabled={page === 0}
+                    onClick={() => setPage(p => p - 1)}
+                  >
+                    <ChevronLeft className="h-3 w-3 mr-1" /> Previous
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-xs"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage(p => p + 1)}
+                  >
+                    Next <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -662,7 +748,6 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
   if (!ds.last_sync_at || ds.last_sync_status === "never") {
     return <span className="text-[10px] text-muted-foreground">Never</span>;
   }
-
   if (ds.last_sync_status === "processing") {
     return (
       <span className="text-[10px] text-primary flex items-center gap-0.5">
@@ -671,7 +756,6 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
       </span>
     );
   }
-
   if (ds.last_sync_status === "success") {
     return (
       <div className="text-[10px]">
@@ -685,7 +769,6 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
       </div>
     );
   }
-
   if (ds.last_sync_status === "skipped") {
     return (
       <Tooltip>
@@ -699,7 +782,6 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
       </Tooltip>
     );
   }
-
   if (ds.last_sync_status === "error") {
     return (
       <Tooltip>
@@ -713,19 +795,31 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
       </Tooltip>
     );
   }
-
   return <span className="text-[10px] text-muted-foreground">{ds.last_sync_status}</span>;
 }
 
 function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest: (ds: DatasetEntry, mode: "export" | "records") => void; isSyncing: boolean }) {
-  const fields = Array.isArray(ds.fields_json) ? ds.fields_json : [];
+  // Fetch fields_json on demand only when expanded
+  const { data: detailData } = useQuery({
+    queryKey: ["dno-dataset-detail", ds.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dno_dataset_registry")
+        .select("fields_json")
+        .eq("id", ds.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const fields = Array.isArray(detailData?.fields_json) ? detailData.fields_json : [];
 
   return (
     <div className="space-y-3">
       {ds.description && (
         <p className="text-xs text-muted-foreground">{ds.description}</p>
       )}
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <div>
           <span className="text-muted-foreground">Schema Hash:</span>
@@ -744,8 +838,6 @@ function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest
           <span className="ml-1 font-mono">{ds.storage_table || "—"}</span>
         </div>
       </div>
-
-      {/* Fields */}
       {fields.length > 0 && (
         <div>
           <span className="text-xs font-medium mb-1 block">Fields ({fields.length})</span>
@@ -762,8 +854,6 @@ function DatasetDetail({ ds, onIngest, isSyncing }: { ds: DatasetEntry; onIngest
           </div>
         </div>
       )}
-
-      {/* Ingest controls */}
       <div className="flex gap-2">
         <Button
           size="sm" variant="outline" className="h-7 text-xs"

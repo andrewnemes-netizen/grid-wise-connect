@@ -43,6 +43,8 @@ function bboxDimensionShifted(
   return cxShift > aW * threshold || cyShift > aH * threshold;
 }
 
+const GAS_OPERATORS = new Set(["CADENT", "NGN", "SGN", "WWU"]);
+
 export function useLayerManager(
   map: maplibregl.Map | null,
   mapLoaded: boolean,
