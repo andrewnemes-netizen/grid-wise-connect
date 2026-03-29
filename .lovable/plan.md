@@ -1,78 +1,58 @@
 
-## Fix Plan: OSM Enrichment Logic (not data availability)
 
-### What’s actually broken
-You’re right: this is a logic issue, not missing datasets.
+## Next Steps + Cost-Optimised Route Preference
 
-From code + backend checks:
-1. `score-sites-batch` only looks up **one z14 tile ID** for every OSM layer.
-2. Cache is stored at **mixed zooms per layer**:
-   - major roads: z12
-   - minor roads / rail / water: z13
-   - footways / crossings / signals: z14
-3. Water constraint slug mismatch:
-   - scorer looks for `osm_water_bodies`
-   - cache/layers use `osm_water`
+### Completed so far
+- P0: OSM ingestion metadata table
+- P1: Tag gap closure + deterministic tile caching
+- P2: Tile-based GeoJSON caching
+- P3: Route segmentation engine (OSM-backed)
+- LA Programme batch scoring with OSM enrichment (fixed lookup logic)
 
-That combination makes `osm_coverage` frequently return `"none"` even when minor roads/footways are cached.
+### What's next: two items
 
 ---
 
-## Implementation steps
+### 1. Surface Cost Preference in Route Engine
 
-1. **Refactor `queryOsmContext` in `supabase/functions/score-sites-batch/index.ts`**
-   - Add a per-layer config map: slug + zoom + classification.
-   - Use correct slugs (`osm_water`, not `osm_water_bodies`).
+**Problem**: The route segmentation engine classifies segments by proximity to nearest OSM way but does not consider cost when multiple paths exist. The cost hierarchy is clear from your unit rates:
 
-2. **Use per-layer deterministic tile lookup**
-   - For each configured layer, compute tile ID using that layer’s zoom.
-   - Query cache using all computed `(layer_slug, tile_id)` candidates (single DB query).
+| Surface | Excavation £/m | Preference |
+|---------|---------------|------------|
+| Verge | £65 | 1st (cheapest) |
+| Footway | £120 | 2nd |
+| Carriageway | £210 | 3rd (avoid) |
 
-3. **Add border-safe neighbor tile scan**
-   - For each layer zoom, include a 3x3 tile ring around site tile (center + neighbors).
-   - This avoids false negatives when a site is near tile boundaries.
+**Changes**:
 
-4. **Keep proximity filtering, but apply after correct cache retrieval**
-   - Reuse 200m distance check.
-   - Keep split/constraints derivation logic, but on correctly fetched features.
+**`supabase/functions/osm-route-segment/index.ts`** — Update the nearest-way selection logic in `segmentRouteAgainstOsm`. When multiple OSM ways are within the buffer radius of a route segment midpoint, rank them by surface cost preference (verge > footway > carriageway) rather than pure nearest distance. Specifically:
+- Collect all candidate ways within buffer distance
+- Apply a cost-weighted score: `effective_distance = actual_distance_m + cost_penalty` where carriageway gets a +30m penalty and footway gets a +15m penalty (so a verge 40m away beats a carriageway 20m away)
+- This preserves geometric accuracy while biasing toward cheaper surfaces
 
-5. **Fix coverage semantics**
-   - `osm_coverage = "cached"` when relevant cached tiles exist for road/context layers.
-   - Keep fallback split only when no nearby road geometry is detected.
+**`src/lib/gridwise/routeEngine.ts`** — In the fallback estimated split (no OSM data), flip the default from `{ footway: 0.6, carriageway: 0.3, verge: 0.1 }` to `{ verge: 0.5, footway: 0.35, carriageway: 0.15 }` reflecting the design preference to route through verge/footway first.
 
-6. **Add targeted debug logging**
-   - Log per-site cache hits by layer + tile count + nearby feature counts.
-   - Makes future regressions obvious in function logs.
+**`supabase/functions/score-sites-batch/index.ts`** — Same fallback flip in the batch scorer's default surface split.
 
 ---
 
-## End-to-end validation plan
+### 2. P4: Portfolio Site Intelligence (from validation report)
 
-1. Warm cache by calling `overpass-road-fetch` for:
-   - `osm_minor_roads`
-   - `osm_footways`
-   - `osm_crossings`
-   - `osm_traffic_signals`
-   around Stockton/Yarm area.
+Enrich portfolio sites with OSM constraint data, grid proximity, and route feasibility flags for risk assessment. This uses the same `osm_tile_cache` infrastructure built in P1-P3.
 
-2. Verify cache rows exist in `osm_tile_cache` for expected slugs and tile IDs.
-
-3. Run `score-sites-batch` with:
-   - `TS17 0NP`
-   - `Low Ln, Stockton-on-Tees, Yarm TS15 9JT` (or postcode TS15 9JT)
-
-4. Pass criteria:
-   - at least one site returns `osm_coverage: "cached"`
-   - surface split is not always fallback-only behavior in urban tiles
-   - crossings/signals reflect cached context when present
-
-5. Regression check:
-   - test a second urban area already cached to confirm same behavior.
+**Changes**:
+- Add an edge function or extend `score-sites-batch` to accept portfolio site coordinates and return enrichment data (nearby crossings, signals, railways, water, surface context)
+- Update `src/components/portfolio/PortfolioAnalytics.tsx` to display constraint flags and OSM coverage per site
+- Add a "Re-score with OSM" action on the Portfolio page
 
 ---
 
-## Files to change
-- `supabase/functions/score-sites-batch/index.ts` (primary fix only)
+### Recommendation
 
-## No DB migration needed
-- Schema/table structure is already sufficient (`osm_tile_cache` + existing OSM layer slugs).
+Implement item 1 first (surface cost preference) — it's a targeted logic fix across 3 files that immediately improves cost accuracy. Then move to P4 portfolio intelligence.
+
+### Files to change (item 1)
+- `supabase/functions/osm-route-segment/index.ts` — cost-weighted way selection
+- `src/lib/gridwise/routeEngine.ts` — flip fallback split
+- `supabase/functions/score-sites-batch/index.ts` — flip fallback split
+
