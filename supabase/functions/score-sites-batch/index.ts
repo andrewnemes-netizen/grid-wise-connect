@@ -268,16 +268,18 @@ function estimateTotalCost(
   distances: { primary_m: number; feeder_m: number; capacity_segment_m: number },
   headroom: number | null,
   r: UnitRatesRow,
+  surfaceSplit?: { footway_pct: number; carriageway_pct: number; verge_pct: number },
 ): { total: number; confidence: string } {
   const vl = proposedKw <= 80 ? "LV" : proposedKw <= 1500 ? "HV" : "EHV";
   const rawDist = vl === "LV" ? distances.capacity_segment_m : vl === "HV" ? distances.feeder_m : distances.primary_m;
   const maxDist = vl === "LV" ? 500 : vl === "HV" ? 3000 : 5000;
   const dist = Math.min(rawDist, maxDist);
 
-  // Surface split: 60% footway, 30% carriageway, 10% verge (same default as main engine)
-  const footwayM = Math.round(dist * 0.6);
-  const carriagewayM = Math.round(dist * 0.3);
-  const vergeM = Math.round(dist * 0.1);
+  // Surface split: use OSM-derived or fallback 60/30/10
+  const sp = surfaceSplit || { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 };
+  const footwayM = Math.round(dist * sp.footway_pct / 100);
+  const carriagewayM = Math.round(dist * sp.carriageway_pct / 100);
+  const vergeM = Math.round(dist * sp.verge_pct / 100);
 
   const threshold = r.mains_extension_threshold_m;
   const needsMainsExtension = vl === "LV" && dist > threshold;
@@ -374,7 +376,10 @@ function estimateTotalCost(
 }
 
 function assignPhase(row: ScoredRow): { phase: number; rationale: string } {
-  if (PHASE_RULES[1](row)) return { phase: 1, rationale: "Quick Win: Green viability, fast deploy, low cost" };
+  // Constraint penalty: railway/water nearby forces at least Phase 2
+  const hasHardConstraint = row.route_constraints.includes("RAILWAY_NEARBY") || row.route_constraints.includes("WATER_NEARBY");
+  if (!hasHardConstraint && PHASE_RULES[1](row)) return { phase: 1, rationale: "Quick Win: Green viability, fast deploy, low cost" };
+  if (hasHardConstraint && PHASE_RULES[1](row)) return { phase: 2, rationale: `Constraint penalty: ${row.route_constraints.join(", ")}` };
   if (PHASE_RULES[2](row)) return { phase: 2, rationale: `Moderate: ${row.band} viability, ${row.deployment_class}` };
   return { phase: 3, rationale: `Strategic: ${row.band} viability, ${row.deployment_class}, ${row.cost_band} cost` };
 }
