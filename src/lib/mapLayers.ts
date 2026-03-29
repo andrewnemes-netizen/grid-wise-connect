@@ -15,6 +15,10 @@ const OVERPASS_MAX_SPAN: Record<string, number> = {
   osm_barriers: 0.05,
 };
 
+// Concurrency throttle for Overpass requests — prevents 429 rate limiting
+let activeOverpassRequests = 0;
+const OVERPASS_CONCURRENCY = 2;
+
 async function fetchOverpassGeoJSON(
   slug: string,
   bbox?: [number, number, number, number],
@@ -31,19 +35,25 @@ async function fetchOverpassGeoJSON(
     return { type: "FeatureCollection", features: [] };
   }
 
-  // Convert [west, south, east, north] → [south, west, north, east] for Overpass
-  const overpassBbox = [bbox[1], bbox[0], bbox[3], bbox[2]];
-
-  // 10s frontend timeout — guaranteed resolution, no indefinite spinner
-  const timeoutPromise = new Promise<GeoJSON.FeatureCollection>((_, reject) =>
-    setTimeout(() => reject(new Error("Overpass timeout")), 10000)
-  );
-  const fetchPromise = supabase.functions.invoke("overpass-road-fetch", {
-    body: { bbox: overpassBbox, road_type: slug, feature_cap: featureLimit ?? 5000 },
-  });
+  // Throttle: wait for a concurrency slot
+  while (activeOverpassRequests >= OVERPASS_CONCURRENCY) {
+    await new Promise(r => setTimeout(r, 500));
+  }
+  activeOverpassRequests++;
 
   try {
-    const { data, error } = await Promise.race([fetchPromise, timeoutPromise.then(() => { throw new Error("timeout"); })]) as any;
+    // Convert [west, south, east, north] → [south, west, north, east] for Overpass
+    const overpassBbox = [bbox[1], bbox[0], bbox[3], bbox[2]];
+
+    // 10s frontend timeout — guaranteed resolution, no indefinite spinner
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Overpass timeout")), 10000)
+    );
+    const fetchPromise = supabase.functions.invoke("overpass-road-fetch", {
+      body: { bbox: overpassBbox, road_type: slug, feature_cap: featureLimit ?? 5000 },
+    });
+
+    const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as any;
     if (error) {
       console.error("Overpass fetch error:", error);
       return { type: "FeatureCollection", features: [] };
@@ -52,6 +62,8 @@ async function fetchOverpassGeoJSON(
   } catch (e) {
     console.warn(`Overpass request for ${slug} timed out or failed — returning empty`);
     return { type: "FeatureCollection", features: [] };
+  } finally {
+    activeOverpassRequests--;
   }
 }
 
@@ -178,21 +190,17 @@ function waitForStyleLoaded(map: maplibregl.Map, timeoutMs = 10000): Promise<boo
       resolve(true);
       return;
     }
-    let resolved = false;
-    const onLoad = () => {
-      if (!resolved) {
-        resolved = true;
+    // Poll isStyleLoaded() every 200ms — map.once("load") only fires once
+    // during initialization and won't re-fire when layers are toggled later
+    const interval = setInterval(() => {
+      if (map.isStyleLoaded()) {
+        clearInterval(interval);
         resolve(true);
       }
-    };
-    map.once("load", onLoad);
-    // Also listen for style.load as a fallback
-    map.once("style.load" as any, onLoad);
+    }, 200);
     setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve(!!map.isStyleLoaded());
-      }
+      clearInterval(interval);
+      resolve(map.isStyleLoaded());
     }, timeoutMs);
   });
 }

@@ -75,10 +75,10 @@ function buildQuery(
     const inner = filter.slice(1, -1); // strip outer parens
     const parts = inner.split(";").filter(Boolean);
     const bboxedParts = parts.map((p) => `${p}(${bboxStr})`);
-    return `[out:json][timeout:10];(${bboxedParts.join(";")};);out body geom;`;
+  return `[out:json][timeout:15];(${bboxedParts.join(";")};);out body geom;`;
   }
 
-  return `[out:json][timeout:10];${filter}(${bboxStr});out body geom;`;
+  return `[out:json][timeout:15];${filter}(${bboxStr});out body geom;`;
 }
 
 interface OverpassElement {
