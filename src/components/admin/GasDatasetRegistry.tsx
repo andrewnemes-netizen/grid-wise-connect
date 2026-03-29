@@ -40,7 +40,7 @@ interface DatasetEntry {
   last_sync_rows: number;
   last_sync_error: string | null;
   schema_hash: string | null;
-  fields_json: any[];
+  fields_json?: any[];
   refresh_strategy: string;
   updated_at_source: string | null;
   created_at: string;
