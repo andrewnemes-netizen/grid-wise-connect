@@ -1,58 +1,48 @@
 
 
-## Next Steps + Cost-Optimised Route Preference
+## Fix: Add Map Screenshot to Assessment PDF Export
 
-### Completed so far
-- P0: OSM ingestion metadata table
-- P1: Tag gap closure + deterministic tile caching
-- P2: Tile-based GeoJSON caching
-- P3: Route segmentation engine (OSM-backed)
-- LA Programme batch scoring with OSM enrichment (fixed lookup logic)
+### Problem
+The PDF generator already supports two map images (`locationMapScreenshot` for area overview, `mapScreenshot` for route), but **neither SiteCheckPanel nor UnifiedIntelligencePanel captures or passes them**. That's why your exported PDF has no map — the fields are simply `undefined`.
 
-### What's next: two items
+### What needs to happen
 
----
+**1. Capture map canvas before PDF generation**
 
-### 1. Surface Cost Preference in Route Engine
+Both panels need access to the MapLibre map instance to call `map.getCanvas().toDataURL()`. The project already has a `useMapScreenshot` hook in `src/hooks/useMapScreenshot.ts`.
 
-**Problem**: The route segmentation engine classifies segments by proximity to nearest OSM way but does not consider cost when multiple paths exist. The cost hierarchy is clear from your unit rates:
+- Pass the map ref (or a screenshot callback) into `SiteCheckPanel` and `UnifiedIntelligencePanel` via props
+- Before calling `generateAssessmentPdf`, capture the current map view as a base64 PNG
+- Pass it as `locationMapScreenshot` (area overview with substations/cables visible)
 
-| Surface | Excavation £/m | Preference |
-|---------|---------------|------------|
-| Verge | £65 | 1st (cheapest) |
-| Footway | £120 | 2nd |
-| Carriageway | £210 | 3rd (avoid) |
+**2. Generate a route map for POC → site**
 
-**Changes**:
+For the `mapScreenshot` field (route from POC to feeder pillar location):
+- When connection lines exist (from `nearest_points`), temporarily fit the map bounds to show the route
+- Capture that view as a second screenshot
+- Pass as `mapScreenshot` to the PDF generator
 
-**`supabase/functions/osm-route-segment/index.ts`** — Update the nearest-way selection logic in `segmentRouteAgainstOsm`. When multiple OSM ways are within the buffer radius of a route segment midpoint, rank them by surface cost preference (verge > footway > carriageway) rather than pure nearest distance. Specifically:
-- Collect all candidate ways within buffer distance
-- Apply a cost-weighted score: `effective_distance = actual_distance_m + cost_penalty` where carriageway gets a +30m penalty and footway gets a +15m penalty (so a verge 40m away beats a carriageway 20m away)
-- This preserves geometric accuracy while biasing toward cheaper surfaces
+**3. Files to change**
 
-**`src/lib/gridwise/routeEngine.ts`** — In the fallback estimated split (no OSM data), flip the default from `{ footway: 0.6, carriageway: 0.3, verge: 0.1 }` to `{ verge: 0.5, footway: 0.35, carriageway: 0.15 }` reflecting the design preference to route through verge/footway first.
+| File | Change |
+|------|--------|
+| `src/components/map/SiteCheckPanel.tsx` | Add `mapRef` prop, capture screenshots on Export PDF click, pass `locationMapScreenshot` + `mapScreenshot` |
+| `src/components/map/UnifiedIntelligencePanel.tsx` | Same — add `mapRef` prop, capture + pass screenshots |
+| `src/pages/MapView.tsx` | Pass map ref down to both panels |
 
-**`supabase/functions/score-sites-batch/index.ts`** — Same fallback flip in the batch scorer's default surface split.
+**4. Screenshot flow on "Export PDF" click**
 
----
+```text
+1. Capture current view → locationMapScreenshot (area overview)
+2. If connection lines exist:
+   a. Fit bounds to show POC + site with padding
+   b. Wait 800ms for tiles to load
+   c. Capture → mapScreenshot (route view)
+   d. Restore original bounds
+3. Call generateAssessmentPdf({ ...existing, locationMapScreenshot, mapScreenshot })
+```
 
-### 2. P4: Portfolio Site Intelligence (from validation report)
+The PDF generator already renders both images with north arrows, scale bars, and legends — no changes needed there.
 
-Enrich portfolio sites with OSM constraint data, grid proximity, and route feasibility flags for risk assessment. This uses the same `osm_tile_cache` infrastructure built in P1-P3.
-
-**Changes**:
-- Add an edge function or extend `score-sites-batch` to accept portfolio site coordinates and return enrichment data (nearby crossings, signals, railways, water, surface context)
-- Update `src/components/portfolio/PortfolioAnalytics.tsx` to display constraint flags and OSM coverage per site
-- Add a "Re-score with OSM" action on the Portfolio page
-
----
-
-### Recommendation
-
-Implement item 1 first (surface cost preference) — it's a targeted logic fix across 3 files that immediately improves cost accuracy. Then move to P4 portfolio intelligence.
-
-### Files to change (item 1)
-- `supabase/functions/osm-route-segment/index.ts` — cost-weighted way selection
-- `src/lib/gridwise/routeEngine.ts` — flip fallback split
-- `supabase/functions/score-sites-batch/index.ts` — flip fallback split
+### No database changes needed
 
