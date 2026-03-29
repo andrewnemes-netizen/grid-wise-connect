@@ -126,8 +126,10 @@ function LayerRow({
   const isLoading = loadingLayers.has(layer.id);
   const isUtilLayer = layer.slug === "npg_hv_substations_utilisation";
 
+  const isEmpty = !layer.feature_count || layer.feature_count === 0;
+
   return (
-    <div className="space-y-0.5 pl-4">
+    <div className={`space-y-0.5 pl-4 ${isEmpty ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between gap-2 py-0.5">
         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
           {isLoading ? (
@@ -138,7 +140,11 @@ function LayerRow({
           <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
             {layer.display_name}
           </Label>
-          {layer.feature_count > 0 && (
+          {isEmpty ? (
+            <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0 text-muted-foreground border-dashed">
+              No data
+            </Badge>
+          ) : (
             <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
               {layer.feature_count > 999 ? `${(layer.feature_count / 1000).toFixed(1)}k` : layer.feature_count}
             </span>
