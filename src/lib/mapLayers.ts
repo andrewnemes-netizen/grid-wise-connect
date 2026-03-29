@@ -4,12 +4,29 @@ import { getLayerColor } from "@/components/map/LayerTogglePanel";
 import maplibregl from "maplibre-gl";
 
 // Overpass-backed layers use the edge function instead of the database RPC
+// Max bbox span guards per road type — reject oversized viewports on the client side
+const OVERPASS_MAX_SPAN: Record<string, number> = {
+  osm_major_roads: 0.5,
+  osm_minor_roads: 0.25,
+  osm_footways: 0.2,
+};
+
 async function fetchOverpassGeoJSON(
   slug: string,
   bbox?: [number, number, number, number],
   featureLimit?: number
 ): Promise<GeoJSON.FeatureCollection> {
   if (!bbox) return { type: "FeatureCollection", features: [] };
+
+  // Guard: if viewport is too wide, skip the request entirely
+  const maxSpan = OVERPASS_MAX_SPAN[slug] ?? 0.3;
+  const lngSpan = Math.abs(bbox[2] - bbox[0]);
+  const latSpan = Math.abs(bbox[3] - bbox[1]);
+  if (lngSpan > maxSpan || latSpan > maxSpan) {
+    console.info(`Overpass skipped for ${slug}: viewport too wide (${lngSpan.toFixed(3)}° x ${latSpan.toFixed(3)}°). Zoom in more.`);
+    return { type: "FeatureCollection", features: [] };
+  }
+
   // Convert [west, south, east, north] → [south, west, north, east] for Overpass
   const overpassBbox = [bbox[1], bbox[0], bbox[3], bbox[2]];
   const { data, error } = await supabase.functions.invoke("overpass-road-fetch", {
