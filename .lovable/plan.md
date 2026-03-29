@@ -1,63 +1,61 @@
 
-## Fix plan: stop registry freezes, make ingestion reliable, and restore gas layers on the map
 
-### What is actually wrong (you’re not doing anything wrong)
-1. **Admin freeze is mostly UI overload + polling storm**
-   - `GasDatasetRegistry` and `NpgDatasetRegistry` still render large full tables at once.
-   - `Sync All` starts many ingests, and each ingest starts its own `pollSyncStatus` loop (up to 60 polls each), causing request floods and tab lockups.
-2. **Some ingests fail from runtime limits**
-   - Logs show `CPU Time exceeded` in `npg-dataset-ingest`, so heavy datasets can stall/fail.
-3. **Gas layers can be hidden by DNO clip logic**
-   - `useLayerManager` passes `selectedDno` clipping to all layer fetches, including gas; if electricity DNO is selected, gas layers can return empty.
+## Fix: GIS Map Layers Showing "No Data in This Viewport"
 
----
+### What's Actually Happening
 
-### Implementation steps
+Database audit shows many layers have **0 features ingested** — the data simply isn't there yet:
 
-1. **Registry performance hardening (Gas + DNO)**
-   - Add **server-side pagination** (`count: "exact"` + `.range(...)`) to both registries.
-   - Keep list query lightweight (no heavy JSON fields in table query).
-   - Load `fields_json` only when row details are expanded (on-demand query).
-   - Reduce per-row render weight (avoid full heavy controls for every row where possible).
+| DNO | Layers with data | Empty layers | Total features |
+|-----|-----------------|-------------|----------------|
+| CADENT | 3 of 7 | 4 | 30,010 |
+| NGED | 2 of 26 | 24 | 34,692 |
+| ENWL | 16 of 21 | 5 | 442,579 |
+| NPG | 16 of 18 | 2 | 961,143 |
+| UKPN | 21 of 23 | 2 | 1,012,374 |
+| SPEN | 13 of 16 | 3 | 61,817 |
 
-2. **Fix Sync All request storm**
-   - Add a batch mode to `handleIngest` so `Sync All` does **not** spawn per-row poll loops.
-   - Replace per-dataset polling with **one global progress poll** (refresh every few seconds).
-   - Show progress from registry status counts (`processing/success/error/skipped`) and stop polling when processing reaches 0.
+The layers that DO have data (e.g. Cadent Network Zones — 10 polygons, Cadent Gas Pipes Open — 20,000 lines) **work correctly** when the viewport overlaps. The session replay confirms Network Zones rendered and was clickable.
 
-3. **Ingest reliability improvements in edge function**
-   - Add guarded execution budget checks inside long loops and fail gracefully with explicit status/error instead of hanging.
-   - Ensure all abnormal exits always write registry status (`error` with reason) so rows don’t stay “processing”.
-   - Tune batch sizes for heavy geometry paths and keep the existing streaming approach.
+The "No data in this viewport" toast fires because:
+1. **Empty layers** (0 features globally) — misleading message, should say "No data available"
+2. **Viewport mismatch** — data exists but user is viewing a different region (e.g. Cadent LP Pipes only covers London area lat 51.3–51.7)
 
-4. **Fix gas map visibility bug**
-   - In `useLayerManager`, apply `_dno_clip` only to electricity network layers.
-   - For gas operators (`CADENT/NGN/SGN/WWU`), force clip to `null` so gas features load regardless of selected electricity DNO filter.
+### Two Problems, Two Fixes
 
-5. **End-to-end validation**
-   - Admin → Gas Registry: page responsive, no freeze, paginated list works.
-   - Run Sync All Active: limited network traffic, stable UI, statuses progress correctly.
-   - Map → Gas tab: Cadent layers render even when a Network DNO filter is selected.
-   - Repeat quick regression on DNO Registry to confirm same stability gains.
+**Fix 1: Better empty-layer messaging** — Before fetching, check if the layer has any data at all. If the layer's `record_count` in the registry is 0 or the RPC returns 0 features with no bbox filter, show "No data available yet — run Sync in Admin" instead of the misleading viewport message.
 
----
+**Fix 2: Re-run ingestion for empty NGED layers** — NGED has 24 empty layers out of 26. These need to be synced from Admin. This is an operational step, not a code fix. But we can make the UI clearer about which layers need syncing.
 
-### Files to update
-- `src/components/admin/GasDatasetRegistry.tsx`
-- `src/components/admin/NpgDatasetRegistry.tsx`
-- `src/hooks/useLayerManager.ts`
-- `supabase/functions/npg-dataset-ingest/index.ts`
+### Implementation
 
----
+| # | Change | File |
+|---|--------|------|
+| 1 | Store `feature_count` from layer_registry in the `RegistryLayer` type and fetch it with the layer list | `src/components/map/LayerTogglePanel.tsx` |
+| 2 | In `loadLayer`, if layer has 0 known features, show "No data available — sync required" toast instead of "No data in this viewport" | `src/hooks/useLayerManager.ts` |
+| 3 | Dim/badge layers with 0 features in the toggle panel so user knows which layers have data | `src/components/map/LayerTogglePanel.tsx` |
+| 4 | After successful ingest, update `record_count` on the layer_registry entry so the count stays current | `supabase/functions/npg-dataset-ingest/index.ts` |
 
-### Technical detail (concise)
-- Introduce query state: `page`, `pageSize`, `totalCount`, `isPollingBatch`.
-- Use registry queries like:
-  - table list: selected columns + filters + `.range(from, to)`
-  - detail query: `fields_json` fetched only for expanded row id
-- Batch sync poll:
-  - single timer queries aggregate status (or refresh current page) every 3–5s
-  - stop condition: no `processing` rows
-- Map clip rule:
-  - `const isGas = GAS_OPERATORS.has(layer.dno);`
-  - `fetchLayerGeoJSON(layerId, bbox, isGas ? null : selectedDno, cap)`
+### Technical Detail
+
+In `useLayerManager.ts` `loadLayer`:
+```typescript
+if (geojson.features.length === 0 && showEmptyToast) {
+  const hasAnyData = layer.record_count && layer.record_count > 0;
+  toast({
+    title: layer.display_name,
+    description: hasAnyData
+      ? "No data in this viewport — try panning to the layer's coverage area."
+      : "No data available yet. Run Sync in Admin to ingest this dataset.",
+  });
+}
+```
+
+In `LayerTogglePanel.tsx`, layers with `record_count === 0` get a subtle badge or reduced opacity so users can see at a glance which layers are populated.
+
+### Expected Outcome
+- Layers with data render correctly when viewport overlaps (already working)
+- Empty layers show clear "needs sync" messaging instead of misleading viewport message
+- Layer toggle panel visually indicates which layers have data
+- After running Sync All in Admin for NGED/CADENT, new features populate and layers render
+
