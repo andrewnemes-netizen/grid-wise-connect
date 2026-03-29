@@ -29,6 +29,7 @@ export interface RegistryLayer {
   min_zoom: number;
   max_zoom: number;
   bbox: [number, number, number, number] | null;
+  source_type: string;
 }
 
 export interface LayerVisibility {
@@ -87,7 +88,7 @@ export function useRegistryLayers() {
     async function fetch() {
       const { data, error } = await supabase
         .from("layer_registry")
-        .select("id, slug, display_name, dno, category, storage_table, geometry_type, style_json, legend_json, feature_count, enabled, visible_by_default, min_zoom, max_zoom, bbox")
+        .select("id, slug, display_name, dno, category, storage_table, geometry_type, style_json, legend_json, feature_count, enabled, visible_by_default, min_zoom, max_zoom, bbox, source_type")
         .eq("enabled", true)
         .order("dno")
         .order("category")

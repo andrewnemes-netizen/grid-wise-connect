@@ -138,7 +138,7 @@ export function useLayerManager(
       try {
         const layerDno = layer.dno;
         const clipDno = GAS_OPERATORS.has(layerDno) ? null : selectedDnoRef.current;
-        const geojson = await fetchLayerGeoJSON(layerId, bbox, clipDno, cap);
+        const geojson = await fetchLayerGeoJSON(layerId, bbox, clipDno, cap, layer.source_type, layer.slug);
         const catLayers = registryLayers.filter((l) => l.category === layer.category && l.dno === layer.dno);
         const colorIdx = catLayers.findIndex((l) => l.id === layerId);
         const isUtil = layer.slug === "npg_hv_substations_utilisation";
@@ -167,13 +167,20 @@ export function useLayerManager(
         clickHandlersRef.current.set(layerId, { click: clickHandler, enter: enterHandler, leave: leaveHandler });
 
         if (geojson.features.length === 0 && showEmptyToast) {
-          const hasAnyData = layer.feature_count && layer.feature_count > 0;
-          toast({
-            title: layer.display_name,
-            description: hasAnyData
-              ? "No data in this viewport — try panning to the layer's coverage area."
-              : "No data available yet. Run Sync in Admin to ingest this dataset.",
-          });
+          if (layer.source_type === "overpass") {
+            toast({
+              title: layer.display_name,
+              description: "No road data in this viewport — zoom in or pan to a populated area.",
+            });
+          } else {
+            const hasAnyData = layer.feature_count && layer.feature_count > 0;
+            toast({
+              title: layer.display_name,
+              description: hasAnyData
+                ? "No data in this viewport — try panning to the layer's coverage area."
+                : "No data available yet. Run Sync in Admin to ingest this dataset.",
+            });
+          }
         }
       } catch (err) {
         console.error(`Failed to load layer ${layerId}:`, err);

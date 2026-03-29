@@ -1044,6 +1044,7 @@ export type Database = {
           min_zoom: number | null
           slug: string
           source_date: string | null
+          source_type: string
           storage_table: string
           style_json: Json
           subcategory: string | null
@@ -1067,6 +1068,7 @@ export type Database = {
           min_zoom?: number | null
           slug: string
           source_date?: string | null
+          source_type?: string
           storage_table: string
           style_json?: Json
           subcategory?: string | null
@@ -1090,6 +1092,7 @@ export type Database = {
           min_zoom?: number | null
           slug?: string
           source_date?: string | null
+          source_type?: string
           storage_table?: string
           style_json?: Json
           subcategory?: string | null
