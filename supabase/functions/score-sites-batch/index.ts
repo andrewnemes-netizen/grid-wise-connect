@@ -568,6 +568,7 @@ Deno.serve(async (req) => {
         const trafficPoints = trafficResult.status === "fulfilled" ? (trafficResult.value as any[]) : [];
         const naptanPoints = naptanResult.status === "fulfilled" ? (naptanResult.value as any[]) : [];
         const stats19Points = stats19Result.status === "fulfilled" ? (stats19Result.value as any[]) : [];
+        const osmCtx: OsmContext = osmCtxResult.status === "fulfilled" ? (osmCtxResult.value as OsmContext) : { split: { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 }, crossings: 0, signals: 0, constraints: [], found: false };
 
         if (scoreError && !scoreData) {
           return {
@@ -579,6 +580,8 @@ Deno.serve(async (req) => {
             distance_primary_m: 0, distance_feeder_m: 0, distance_capacity_m: 0,
             phase: 3, phase_rationale: "Scoring failed",
             traffic_aadf: 0, nearby_bus_stops: 0, nearby_rail_stations: 0, accident_count: 0, master_score: 0,
+            surface_split: osmCtx.split, nearby_crossings: osmCtx.crossings, nearby_signals: osmCtx.signals,
+            route_constraints: osmCtx.constraints, osm_coverage: osmCtx.found ? "cached" : "none",
             error: scoreError?.message || String(scoreError),
           };
         }
