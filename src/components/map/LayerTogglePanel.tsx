@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass, Crosshair } from "lucide-react";
+import { Layers, ChevronDown, ChevronRight, Flame, Loader2, TreePine, Zap, Landmark, Compass, Crosshair, Route } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +131,7 @@ function LayerRow({
   const isLoading = loadingLayers.has(layer.id);
   const isUtilLayer = layer.slug === "npg_hv_substations_utilisation";
 
-  const isEmpty = !layer.feature_count || layer.feature_count === 0;
+  const isEmpty = layer.source_type !== 'overpass' && (!layer.feature_count || layer.feature_count === 0);
   const hasCoverageBbox = Array.isArray(layer.bbox) && layer.bbox.length === 4;
 
   return (
@@ -302,10 +302,10 @@ export function LayerTogglePanel({
   // Gas operator codes
   const GAS_OPERATORS = new Set(["CADENT", "NGN", "SGN", "WWU"]);
 
-  // Network tree (exclude gas operators)
+  // Network tree (exclude gas operators and OSM)
   const networkTree = useMemo(() => {
     const filtered = (selectedDno ? registryLayers.filter((l) => l.dno === selectedDno) : registryLayers)
-      .filter((l) => !GAS_OPERATORS.has(l.dno));
+      .filter((l) => !GAS_OPERATORS.has(l.dno) && l.dno !== 'OSM');
     const dnoMap = new Map<string, Map<string, RegistryLayer[]>>();
     filtered.forEach((layer) => {
       if (!dnoMap.has(layer.dno)) dnoMap.set(layer.dno, new Map());
@@ -329,6 +329,20 @@ export function LayerTogglePanel({
     return dnoMap;
   }, [registryLayers]);
 
+  // OSM Roads tree
+  const osmTree = useMemo(() => {
+    const osmLayers = registryLayers.filter((l) => l.dno === 'OSM');
+    const catMap = new Map<string, RegistryLayer[]>();
+    osmLayers.forEach((layer) => {
+      const cat = layer.category || 'Roads';
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      catMap.get(cat)!.push(layer);
+    });
+    return catMap;
+  }, [registryLayers]);
+
+  const osmVisibleCount = registryLayers.filter((l) => l.dno === 'OSM' && visibility[l.id]).length;
+
   // Planning tree by category
   const planningTree = useMemo(() => {
     const catMap = new Map<string, PlanningDataset[]>();
@@ -350,7 +364,7 @@ export function LayerTogglePanel({
 
   const lrVisibleCount = Object.values(lrVisibility).filter(Boolean).length;
   const osVisibleCount = Object.values(osVisibility).filter(Boolean).length;
-  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount + osVisibleCount;
+  const visibleCount = Object.values(visibility).filter(Boolean).length + Object.values(planningVisibility).filter(Boolean).length + lrVisibleCount + osVisibleCount + osmVisibleCount;
   const networkVisibleCount = Object.values(visibility).filter(Boolean).length;
   const planningVisibleCount = Object.values(planningVisibility).filter(Boolean).length;
 
@@ -372,7 +386,7 @@ export function LayerTogglePanel({
         {expanded && (
           <div className="border-t">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-5">
+              <TabsList className="w-full h-8 rounded-none border-b bg-muted/50 grid grid-cols-6">
                 <TabsTrigger value="network" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Zap className="h-3 w-3" />
                   Network
@@ -381,6 +395,11 @@ export function LayerTogglePanel({
                 <TabsTrigger value="gas" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Flame className="h-3 w-3" />
                   Gas
+                </TabsTrigger>
+                <TabsTrigger value="roads" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
+                  <Route className="h-3 w-3" />
+                  Roads
+                  {osmVisibleCount > 0 && <Badge variant="secondary" className="text-[9px] h-3.5 px-1 ml-0.5">{osmVisibleCount}</Badge>}
                 </TabsTrigger>
                 <TabsTrigger value="osopen" className="text-[10px] h-7 gap-0.5 data-[state=active]:bg-background px-1">
                   <Compass className="h-3 w-3" />
