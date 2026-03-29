@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.cadent-catalog-crawler]
 verify_jwt = false
+
+[functions.overpass-road-fetch]
+verify_jwt = false
