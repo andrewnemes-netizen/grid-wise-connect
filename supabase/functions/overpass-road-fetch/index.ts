@@ -277,7 +277,25 @@ Deno.serve(async (req: Request) => {
     const clampedBbox = clampBbox(bbox as [number, number, number, number], road_type);
     const cap = Math.min(feature_cap ?? 5000, 10000);
     const query = buildQuery(clampedBbox, road_type);
-    const geojson = await fetchWithRace(query, cap, road_type);
+    const queryHash = await sha256Hex(query);
+    const { geojson, endpoint: usedEndpoint } = await fetchWithRace(query, cap, road_type);
+
+    // Fire-and-forget: log ingestion metadata
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sbAdmin = createClient(supabaseUrl, serviceKey);
+    sbAdmin.from("osm_ingestion_meta").insert({
+      layer_slug: road_type,
+      source_endpoint: usedEndpoint,
+      query_hash: queryHash,
+      query_text: query,
+      bbox: clampedBbox,
+      row_count: geojson.features.length,
+      status: geojson.features.length > 0 ? "success" : "empty",
+      fetched_by: user.id,
+    }).then(({ error: metaErr }) => {
+      if (metaErr) console.warn("Meta insert failed:", metaErr.message);
+    });
 
     return new Response(JSON.stringify(geojson), {
       status: 200,
