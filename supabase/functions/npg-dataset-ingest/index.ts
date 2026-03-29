@@ -276,99 +276,177 @@ async function performIngest(
   console.log(`[ingest] Background done. Dataset: ${entry.dataset_id}, Inserted: ${totalInserted}, Skipped: ${totalSkipped}, Error: ${syncError || "none"}`);
 }
 
-// ─── GeoJSON Export Ingestion ────────────────────────────────────────────────
+// ─── Streaming GeoJSON Feature Extractor ────────────────────────────────────
+async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let inFeatures = false;
+  let depth = 0;
+  let featureStart = -1;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    if (!inFeatures) {
+      const idx = buffer.indexOf('"features"');
+      if (idx === -1) {
+        if (buffer.length > 1000) buffer = buffer.slice(-200);
+        continue;
+      }
+      const bracketIdx = buffer.indexOf("[", idx);
+      if (bracketIdx === -1) continue;
+      inFeatures = true;
+      buffer = buffer.slice(bracketIdx + 1);
+      depth = 0;
+      featureStart = -1;
+    }
+
+    let i = 0;
+    while (i < buffer.length) {
+      const ch = buffer[i];
+      if (ch === "{") {
+        if (depth === 0) featureStart = i;
+        depth++;
+      } else if (ch === "}") {
+        depth--;
+        if (depth === 0 && featureStart !== -1) {
+          const featureStr = buffer.slice(featureStart, i + 1);
+          try { yield JSON.parse(featureStr); } catch { /* skip malformed */ }
+          featureStart = -1;
+        }
+      } else if (ch === "]" && depth === 0) {
+        return;
+      }
+      i++;
+    }
+
+    if (featureStart !== -1) {
+      buffer = buffer.slice(featureStart);
+      featureStart = 0;
+    } else {
+      buffer = "";
+    }
+  }
+}
+
+// ─── GeoJSON Export Ingestion (Streaming) ───────────────────────────────────
 async function ingestViaGeoJsonExport(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
   const url = entry.endpoint_export_geojson;
-  console.log(`[ingest] Fetching GeoJSON export: ${url}`);
+  console.log(`[ingest] Fetching GeoJSON export (streaming): ${url}`);
 
   const resp = await fetchWithRetry(url, apiKey);
-  if (!resp.ok) {
-    throw new Error(`GeoJSON export failed: HTTP ${resp.status}`);
-  }
-
-  const geojson = await resp.json();
-  const features = geojson.features || [];
-  console.log(`[ingest] GeoJSON export contains ${features.length} features`);
-
-  if (features.length === 0) return { inserted: 0, skipped: 0 };
+  if (!resp.ok) throw new Error(`GeoJSON export failed: HTTP ${resp.status}`);
 
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
+  let batch: any[] = [];
+  let featureCount = 0;
 
-  for (let i = 0; i < features.length; i += batchSize) {
-    const batch = features.slice(i, i + batchSize);
-    const mapped = batch.map((f: any) =>
-      mapFeatureToRow(f, entry, layerRow, storageTable)
-    ).filter(Boolean);
-
-    totalSkipped += batch.length - mapped.length;
-
-    if (mapped.length > 0) {
-      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable,
-        _features_json: JSON.stringify(mapped),
-      });
-
-      if (error) {
-        console.error(`[ingest] Batch RPC error at ${i}:`, error);
-        throw new Error(`Batch insert error: ${error.message}`);
-      }
-      totalInserted += inserted ?? mapped.length;
+  for await (const feature of streamGeoJsonFeatures(resp)) {
+    featureCount++;
+    const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
+    if (mapped) {
+      batch.push(mapped);
+    } else {
+      totalSkipped++;
     }
 
-    console.log(`[ingest] Batch ${Math.floor(i / batchSize) + 1}: ${mapped.length} features inserted`);
+    if (batch.length >= batchSize) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable, _features_json: JSON.stringify(batch),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? batch.length;
+      console.log(`[ingest] Streamed batch: ${totalInserted} inserted so far`);
+      batch = [];
+    }
   }
 
+  if (batch.length > 0) {
+    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+      _table_name: storageTable, _features_json: JSON.stringify(batch),
+    });
+    if (error) throw new Error(`Batch insert error: ${error.message}`);
+    totalInserted += inserted ?? batch.length;
+  }
+
+  console.log(`[ingest] GeoJSON streaming done: ${featureCount} features, ${totalInserted} inserted, ${totalSkipped} skipped`);
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
-// ─── CSV Export Ingestion ────────────────────────────────────────────────────
+// ─── CSV Export Ingestion (Streaming) ───────────────────────────────────────
 async function ingestViaCsvExport(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
   const url = entry.endpoint_export_csv;
-  console.log(`[ingest] Fetching CSV export: ${url}`);
+  console.log(`[ingest] Fetching CSV export (streaming): ${url}`);
 
   const resp = await fetchWithRetry(url, apiKey);
-  if (!resp.ok) {
-    throw new Error(`CSV export failed: HTTP ${resp.status}`);
-  }
+  if (!resp.ok) throw new Error(`CSV export failed: HTTP ${resp.status}`);
 
-  const text = await resp.text();
-  const rows = parseCSV(text);
-  console.log(`[ingest] CSV export contains ${rows.length} rows`);
-
-  if (rows.length === 0) return { inserted: 0, skipped: 0 };
-
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let headers: string[] | null = null;
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
+  let batch: any[] = [];
 
-  for (let i = 0; i < rows.length; i += batchSize) {
-    const batch = rows.slice(i, i + batchSize);
-    const mapped = batch.map((row: any) =>
-      mapCsvRowToFeature(row, entry, layerRow, storageTable)
-    ).filter(Boolean);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
 
-    totalSkipped += batch.length - mapped.length;
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
 
-    if (mapped.length > 0) {
-      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable,
-        _features_json: JSON.stringify(mapped),
-      });
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (!headers) { headers = parseCSVLine(trimmed); continue; }
 
-      if (error) {
-        console.error(`[ingest] CSV batch error at ${i}:`, error);
-        throw new Error(`Batch insert error: ${error.message}`);
+      const values = parseCSVLine(trimmed);
+      const row: Record<string, string> = {};
+      headers.forEach((h, idx) => { row[h.trim()] = values[idx] || ""; });
+
+      const mapped = mapCsvRowToFeature(row, entry, layerRow, storageTable);
+      if (mapped) batch.push(mapped); else totalSkipped++;
+
+      if (batch.length >= batchSize) {
+        const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+          _table_name: storageTable, _features_json: JSON.stringify(batch),
+        });
+        if (error) throw new Error(`Batch insert error: ${error.message}`);
+        totalInserted += inserted ?? batch.length;
+        batch = [];
       }
-      totalInserted += inserted ?? mapped.length;
     }
   }
 
+  if (buffer.trim() && headers) {
+    const values = parseCSVLine(buffer.trim());
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => { row[h.trim()] = values[idx] || ""; });
+    const mapped = mapCsvRowToFeature(row, entry, layerRow, storageTable);
+    if (mapped) batch.push(mapped); else totalSkipped++;
+  }
+
+  if (batch.length > 0) {
+    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+      _table_name: storageTable, _features_json: JSON.stringify(batch),
+    });
+    if (error) throw new Error(`Batch insert error: ${error.message}`);
+    totalInserted += inserted ?? batch.length;
+  }
+
+  console.log(`[ingest] CSV streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
