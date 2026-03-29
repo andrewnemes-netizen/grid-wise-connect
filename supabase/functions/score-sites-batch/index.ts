@@ -330,8 +330,8 @@ function estimateTotalCost(
   const maxDist = vl === "LV" ? 500 : vl === "HV" ? 3000 : 5000;
   const dist = Math.min(rawDist, maxDist);
 
-  // Surface split: use OSM-derived or fallback 60/30/10
-  const sp = surfaceSplit || { footway_pct: 60, carriageway_pct: 30, verge_pct: 10 };
+  // Surface split: use OSM-derived or fallback verge-first (50/35/15)
+  const sp = surfaceSplit || { footway_pct: 35, carriageway_pct: 15, verge_pct: 50 };
   const footwayM = Math.round(dist * sp.footway_pct / 100);
   const carriagewayM = Math.round(dist * sp.carriageway_pct / 100);
   const vergeM = Math.round(dist * sp.verge_pct / 100);
