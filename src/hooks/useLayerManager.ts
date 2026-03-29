@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo, createElement } from "react";
 import maplibregl from "maplibre-gl";
 import {
   useRegistryLayers,
@@ -12,6 +12,7 @@ import {
   clearLayerCache,
 } from "@/lib/mapLayers";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 function getMapBbox(map: maplibregl.Map): [number, number, number, number] {
   const bounds = map.getBounds();
@@ -168,11 +169,24 @@ export function useLayerManager(
 
         if (geojson.features.length === 0 && showEmptyToast) {
           const hasAnyData = layer.feature_count && layer.feature_count > 0;
+          const layerBbox = layer.bbox as [number, number, number, number] | null;
+          const canFlyTo = hasAnyData && layerBbox && Array.isArray(layerBbox) && layerBbox.length === 4;
           toast({
             title: layer.display_name,
             description: hasAnyData
-              ? "No data in this viewport — try panning to the layer's coverage area."
+              ? "No data in this viewport — try the button to fly to coverage area."
               : "No data available yet. Run Sync in Admin to ingest this dataset.",
+            action: canFlyTo
+              ? createElement(ToastAction, {
+                  altText: "Go to coverage area",
+                  onClick: () => {
+                    map.fitBounds(
+                      [[layerBbox[0], layerBbox[1]], [layerBbox[2], layerBbox[3]]],
+                      { padding: 40, maxZoom: 14 }
+                    );
+                  },
+                }, "Go to area")
+              : undefined,
           });
         }
       } catch (err) {
