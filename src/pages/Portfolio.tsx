@@ -148,12 +148,17 @@ const Portfolio = () => {
   };
 
   const exportCsv = () => {
-    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Status", "Created"];
-    const rows = filtered.map((s: any) => [
-      s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
-      s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
-      s.cost_band || "", getSiteEstimatedCost(s, unitRates) ?? "", s.reinforcement_probability ?? "", s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
-    ]);
+    const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Constraints", "OSM Coverage", "Status", "Created"];
+    const rows = filtered.map((s: any) => {
+      const osm = extractOsmFlags(s);
+      return [
+        s.site_name, s.postcode || "", s.site_type || "", s.proposed_kw || "", s.score || "",
+        s.viability_index ?? "", s.grid_readiness || "", s.deployment_class || "",
+        s.cost_band || "", getSiteEstimatedCost(s, unitRates) ?? "", s.reinforcement_probability ?? "",
+        osm.constraints.join("; ") || "None", osm.osmCoverage,
+        s.status, format(new Date(s.created_at), "yyyy-MM-dd"),
+      ];
+    });
     const csv = [headers, ...rows].map(r => r.map((c: any) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
