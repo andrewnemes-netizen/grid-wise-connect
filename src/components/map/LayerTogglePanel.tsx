@@ -501,6 +501,31 @@ export function LayerTogglePanel({
                 )}
               </TabsContent>
 
+              {/* Roads Tab */}
+              <TabsContent value="roads" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
+                {osmTree.size === 0 ? (
+                  <div className="py-4 text-center space-y-1.5">
+                    <Route className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-[11px] text-muted-foreground">No road layers available.</p>
+                    <p className="text-[10px] text-muted-foreground">OSM road layers are fetched live from Overpass API.</p>
+                  </div>
+                ) : (
+                  Array.from(osmTree.entries()).map(([category, catLayers]) => (
+                    <CategoryGroup
+                      key={`osm:${category}`}
+                      groupKey={`osm:${category}`}
+                      category={category}
+                      layers={catLayers}
+                      collapsedGroups={collapsedGroups}
+                      toggleGroup={toggleGroup}
+                      visibility={visibility}
+                      loadingLayers={loadingLayers}
+                      onToggle={onToggle}
+                    />
+                  ))
+                )}
+              </TabsContent>
+
               {/* Planning Tab */}
               <TabsContent value="planning" className="mt-0 px-2 py-2 space-y-1 max-h-[55vh] overflow-y-auto">
                 {planningDatasets.length === 0 ? (
