@@ -370,24 +370,6 @@ const MapView = () => {
     const PAD = 0.002; // ~200m padding
     const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
-    try {
-      const infraLayers = registryLayers.filter((l) => INFRA_SLUGS.includes(l.slug));
-      const loadPromises = infraLayers.map(async (layer, idx) => {
-        const sourceId = `source-${layer.id}`;
-        if (map.getSource(sourceId)) return;
-        try {
-          const geojson = await fetchLayerGeoJSON(layer.id, overviewBbox);
-          if (!geojson.features.length) return;
-          addRegistryLayerToMap(map, layer, geojson, idx);
-          tempLayerIds.push(layer.id);
-        } catch (err) {
-          console.warn(`Screenshot: failed to load ${layer.slug}:`, err);
-        }
-      });
-      await Promise.all(loadPromises);
-    } catch (err) {
-      console.warn("Screenshot: infra layer loading failed:", err);
-    }
 
     // --- Temporary GeoJSON markers for pin + connection endpoints ---
     const markerSrcId = "screenshot-ep-src";
