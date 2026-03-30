@@ -115,22 +115,24 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
       if (res.data.nearest_points && onConnectionLines) {
         const origin: [number, number] = [lng, lat];
         const np = res.data.nearest_points;
-        const primaryCoord = parseCoord(np.primary);
-        const feederCoord = parseCoord(np.feeder);
+        // Pick the POC: nearest cable segment, or feeder, or primary — whichever is closest
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
-        const lineInputs: { id: string; label: string; origin: [number, number]; destination: [number, number]; color: string; distance_m: number }[] = [];
-        if (primaryCoord) {
-          lineInputs.push({ id: "line-primary", label: "Primary Substation", origin, destination: primaryCoord, color: "#e74c3c", distance_m: res.data.distances?.primary_m || 0 });
+        const feederCoord = parseCoord(np.feeder);
+        const primaryCoord = parseCoord(np.primary);
+        const pocCoord = cableCoord || feederCoord || primaryCoord;
+        const pocDistance = cableCoord
+          ? (res.data.distances?.capacity_segment_m || 0)
+          : feederCoord
+            ? (res.data.distances?.feeder_m || 0)
+            : (res.data.distances?.primary_m || 0);
+
+        if (pocCoord) {
+          const lineInputs = [
+            { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
+          ];
+          const roadLines = await fetchAllRoadRoutes(lineInputs);
+          onConnectionLines(roadLines);
         }
-        if (feederCoord) {
-          lineInputs.push({ id: "line-feeder", label: "Feeder", origin, destination: feederCoord, color: "#9b59b6", distance_m: res.data.distances?.feeder_m || 0 });
-        }
-        if (cableCoord) {
-          lineInputs.push({ id: "line-cable", label: "Cable", origin, destination: cableCoord, color: "#e67e22", distance_m: res.data.distances?.capacity_segment_m || 0 });
-        }
-        // Fetch road-following routes (falls back to straight lines)
-        const roadLines = await fetchAllRoadRoutes(lineInputs);
-        onConnectionLines(roadLines);
       }
     } catch (err: any) {
       toast({ title: "Scoring failed", description: err.message, variant: "destructive" });

@@ -257,7 +257,7 @@ const MapView = () => {
   const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
     if (!map) return;
     connectionLinesRef.current = lines;
-    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+    ["line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
     });
@@ -282,7 +282,7 @@ const MapView = () => {
   const clearConnectionLines = useCallback(() => {
     if (!map) return;
     connectionLinesRef.current = [];
-    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+    ["line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
     });
@@ -413,10 +413,10 @@ const MapView = () => {
     cleanupMarkers();
 
     const markerFeatures = [
-      { type: "Feature" as const, properties: { role: "site", color: "#e74c3c" }, geometry: { type: "Point" as const, coordinates: [lng, lat] } },
+      { type: "Feature" as const, properties: { role: "feeder-pillar", color: "#e74c3c" }, geometry: { type: "Point" as const, coordinates: [lng, lat] } },
       ...endpointFeatures.map((ep) => ({
         type: "Feature" as const,
-        properties: { role: ep.role, color: ep.color },
+        properties: { role: "poc", color: "#3498db" },
         geometry: { type: "Point" as const, coordinates: ep.coord },
       })),
     ];
