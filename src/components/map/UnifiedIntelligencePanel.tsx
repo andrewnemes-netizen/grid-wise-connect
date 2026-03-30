@@ -285,19 +285,24 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       if (scoreRes.data.nearest_points && onConnectionLines) {
         const np = scoreRes.data.nearest_points;
         const origin: [number, number] = [lng, lat];
-        const primaryCoord = parseCoord(np.primary);
-        const feederCoord = parseCoord(np.feeder);
+        // Pick the POC: nearest cable segment, or feeder, or primary — whichever is closest
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
-        const lineInputs: { id: string; label: string; origin: [number, number]; destination: [number, number]; color: string; distance_m: number }[] = [];
-        if (primaryCoord)
-          lineInputs.push({ id: "line-primary", label: "Primary Substation", origin, destination: primaryCoord, color: "#e74c3c", distance_m: scoreRes.data.distances?.primary_m || 0 });
-        if (feederCoord)
-          lineInputs.push({ id: "line-feeder", label: "Feeder", origin, destination: feederCoord, color: "#9b59b6", distance_m: scoreRes.data.distances?.feeder_m || 0 });
-        if (cableCoord)
-          lineInputs.push({ id: "line-cable", label: "Cable", origin, destination: cableCoord, color: "#e67e22", distance_m: scoreRes.data.distances?.capacity_segment_m || 0 });
-        // Fetch road-following routes (falls back to straight lines)
-        const roadLines = await fetchAllRoadRoutes(lineInputs);
-        onConnectionLines(roadLines);
+        const feederCoord = parseCoord(np.feeder);
+        const primaryCoord = parseCoord(np.primary);
+        const pocCoord = cableCoord || feederCoord || primaryCoord;
+        const pocDistance = cableCoord
+          ? (scoreRes.data.distances?.capacity_segment_m || 0)
+          : feederCoord
+            ? (scoreRes.data.distances?.feeder_m || 0)
+            : (scoreRes.data.distances?.primary_m || 0);
+
+        if (pocCoord) {
+          const lineInputs = [
+            { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
+          ];
+          const roadLines = await fetchAllRoadRoutes(lineInputs);
+          onConnectionLines(roadLines);
+        }
       }
     } catch (err: any) {
       toast({ title: "Assessment failed", description: err.message, variant: "destructive" });

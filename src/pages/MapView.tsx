@@ -257,7 +257,7 @@ const MapView = () => {
   const handleConnectionLines = useCallback((lines: ConnectionLine[]) => {
     if (!map) return;
     connectionLinesRef.current = lines;
-    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+    ["line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
     });
@@ -282,7 +282,7 @@ const MapView = () => {
   const clearConnectionLines = useCallback(() => {
     if (!map) return;
     connectionLinesRef.current = [];
-    ["line-primary", "line-feeder", "line-cable"].forEach((id) => {
+    ["line-cable"].forEach((id) => {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
     });
@@ -356,17 +356,7 @@ const MapView = () => {
       }
     });
 
-    // --- Auto-load infrastructure layers ---
-    const INFRA_SLUGS = [
-      "npg_hv_substations_utilisation",
-      "npg_hv_underground_cables",
-      "npg_ehv_underground_cables",
-      "npg_ehv_feeders",
-      "npg_hv_feeders_33kv",
-      "npg_hv_feeders_66kv",
-      "npg_ndp_projects",
-    ];
-
+    // No extra infrastructure layers needed — just show the route + markers
     const tempLayerIds: string[] = [];
     // Compute overview bbox including pin + all connection endpoints
     const allPts: [number, number][] = [[lng, lat], ...allLineCoords];
@@ -380,24 +370,6 @@ const MapView = () => {
     const PAD = 0.002; // ~200m padding
     const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
-    try {
-      const infraLayers = registryLayers.filter((l) => INFRA_SLUGS.includes(l.slug));
-      const loadPromises = infraLayers.map(async (layer, idx) => {
-        const sourceId = `source-${layer.id}`;
-        if (map.getSource(sourceId)) return;
-        try {
-          const geojson = await fetchLayerGeoJSON(layer.id, overviewBbox);
-          if (!geojson.features.length) return;
-          addRegistryLayerToMap(map, layer, geojson, idx);
-          tempLayerIds.push(layer.id);
-        } catch (err) {
-          console.warn(`Screenshot: failed to load ${layer.slug}:`, err);
-        }
-      });
-      await Promise.all(loadPromises);
-    } catch (err) {
-      console.warn("Screenshot: infra layer loading failed:", err);
-    }
 
     // --- Temporary GeoJSON markers for pin + connection endpoints ---
     const markerSrcId = "screenshot-ep-src";
@@ -413,10 +385,10 @@ const MapView = () => {
     cleanupMarkers();
 
     const markerFeatures = [
-      { type: "Feature" as const, properties: { role: "site", color: "#e74c3c" }, geometry: { type: "Point" as const, coordinates: [lng, lat] } },
+      { type: "Feature" as const, properties: { role: "feeder-pillar", color: "#e74c3c" }, geometry: { type: "Point" as const, coordinates: [lng, lat] } },
       ...endpointFeatures.map((ep) => ({
         type: "Feature" as const,
-        properties: { role: ep.role, color: ep.color },
+        properties: { role: "poc", color: "#3498db" },
         geometry: { type: "Point" as const, coordinates: ep.coord },
       })),
     ];
@@ -469,7 +441,7 @@ const MapView = () => {
     // Restore original camera
     map.jumpTo({ center: origCenter, zoom: origZoom });
     return { location: locationScreenshot, route: null };
-  }, [map, pin.pinLocation, registryLayers]);
+  }, [map, pin.pinLocation]);
 
   return (
     <div className="relative h-full w-full">

@@ -318,14 +318,9 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
 
     // Combined map legend — infrastructure + route
     const mapLegend = [
-      { label: "Site Location", color: "#e74c3c", type: "circle" as const },
+      { label: "Feeder Pillar Location", color: "#e74c3c", type: "circle" as const },
       { label: "Point of Connection (POC)", color: "#3498db", type: "circle" as const },
       { label: "Proposed Cable Route", color: "#2ecc71", type: "line" as const },
-      { label: "Primary Substation", color: "#e74c3c", type: "line" as const },
-      { label: "Feeder", color: "#9b59b6", type: "line" as const },
-      { label: "Substations", color: "#3b82f6", type: "circle" as const },
-      { label: "HV Underground Cables", color: "#e74c3c", type: "line" as const },
-      { label: "NDP Projects", color: "#f59e0b", type: "circle" as const },
     ];
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
