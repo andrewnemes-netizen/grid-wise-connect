@@ -356,17 +356,7 @@ const MapView = () => {
       }
     });
 
-    // --- Auto-load infrastructure layers ---
-    const INFRA_SLUGS = [
-      "npg_hv_substations_utilisation",
-      "npg_hv_underground_cables",
-      "npg_ehv_underground_cables",
-      "npg_ehv_feeders",
-      "npg_hv_feeders_33kv",
-      "npg_hv_feeders_66kv",
-      "npg_ndp_projects",
-    ];
-
+    // No extra infrastructure layers needed — just show the route + markers
     const tempLayerIds: string[] = [];
     // Compute overview bbox including pin + all connection endpoints
     const allPts: [number, number][] = [[lng, lat], ...allLineCoords];
