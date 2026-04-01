@@ -267,7 +267,8 @@ function calculateLabourDays(
   days += 0.5;
   // Mains extension adds joint bay prep: 0.5 day
   if (hasMaInsExtension) days += 0.5;
-  return Math.round(days * 2) / 2; // round to nearest 0.5
+  // Cap LV work at minimum 1 day
+  return Math.max(1, Math.round(days * 2) / 2); // round to nearest 0.5, min 1
 }
 
 /**
