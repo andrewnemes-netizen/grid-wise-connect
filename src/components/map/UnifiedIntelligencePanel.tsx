@@ -286,27 +286,68 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         setSafetyResult(safetyRes.data);
       }
 
-      if (scoreRes.data.nearest_points && onConnectionLines) {
+      // ── Find actual cable POC using spatial RPC ──
+      const origin: [number, number] = [lng, lat];
+      let pocCoord: [number, number] | null = null;
+      let pocDistance = 0;
+
+      const isLv = pkw <= 100;
+      if (isLv) {
+        try {
+          const lvMatch = await findNearestLvMain(lng, lat);
+          if (lvMatch) {
+            pocCoord = [lvMatch.snapLon, lvMatch.snapLat];
+            pocDistance = lvMatch.snapDistanceM ?? lvMatch.distanceM;
+            setCablePoc({
+              name: lvMatch.sourceSiteName || lvMatch.feederName || lvMatch.conductingSectionType || "LV Cable",
+              snapLon: lvMatch.snapLon,
+              snapLat: lvMatch.snapLat,
+              distanceM: pocDistance,
+              type: "LV",
+            });
+          }
+        } catch (e) {
+          console.warn("LV cable search for route failed:", e);
+        }
+      } else {
+        try {
+          const hvMatch = await findNearestHvAsset(lng, lat, pkw);
+          if (hvMatch) {
+            pocCoord = [hvMatch.snapLon, hvMatch.snapLat];
+            pocDistance = hvMatch.snapDistanceM;
+            setCablePoc({
+              name: hvMatch.name || `${hvMatch.voltageKv}kV ${hvMatch.assetType}`,
+              snapLon: hvMatch.snapLon,
+              snapLat: hvMatch.snapLat,
+              distanceM: pocDistance,
+              type: `${hvMatch.voltageKv}kV`,
+            });
+          }
+        } catch (e) {
+          console.warn("HV asset search for route failed:", e);
+        }
+      }
+
+      // Fallback to score-site nearest_points if cable search didn't find anything
+      if (!pocCoord && scoreRes.data.nearest_points) {
         const np = scoreRes.data.nearest_points;
-        const origin: [number, number] = [lng, lat];
-        // Pick the POC: nearest cable segment, or feeder, or primary — whichever is closest
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
         const feederCoord = parseCoord(np.feeder);
         const primaryCoord = parseCoord(np.primary);
-        const pocCoord = cableCoord || feederCoord || primaryCoord;
-        const pocDistance = cableCoord
+        pocCoord = cableCoord || feederCoord || primaryCoord;
+        pocDistance = cableCoord
           ? (scoreRes.data.distances?.capacity_segment_m || 0)
           : feederCoord
             ? (scoreRes.data.distances?.feeder_m || 0)
             : (scoreRes.data.distances?.primary_m || 0);
+      }
 
-        if (pocCoord) {
-          const lineInputs = [
-            { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
-          ];
-          const roadLines = await fetchAllRoadRoutes(lineInputs);
-          onConnectionLines(roadLines);
-        }
+      if (pocCoord && onConnectionLines) {
+        const lineInputs = [
+          { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
+        ];
+        const roadLines = await fetchAllRoadRoutes(lineInputs);
+        onConnectionLines(roadLines);
       }
     } catch (err: any) {
       toast({ title: "Assessment failed", description: err.message, variant: "destructive" });
