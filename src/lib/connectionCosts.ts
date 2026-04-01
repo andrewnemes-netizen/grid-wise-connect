@@ -590,11 +590,18 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   }
 
   // Pot end / standard joints
+  const includeFeederPillar = input.includeFeederPillar !== false;
   if (voltageLevel === "LV") {
-    items.push({ category: "Jointing", item: "Pot end (service cable)", quantity: 1, unit: "ea", unit_cost: rates.cable_joint_kit_pot_end, total_cost: rates.cable_joint_kit_pot_end, cost_type: "material" });
+    // Pot end only when mains extension is required
+    if (needsMainsExtension) {
+      items.push({ category: "Jointing", item: "Pot end (service cable)", quantity: 1, unit: "ea", unit_cost: rates.cable_joint_kit_pot_end, total_cost: rates.cable_joint_kit_pot_end, cost_type: "material" });
+    }
   } else {
     const joints = Math.max(2, Math.ceil(cableDistance / 250));
     items.push({ category: "Jointing", item: `${voltageLevel} straight joint`, quantity: joints, unit: "ea", unit_cost: rates.jointing_each, total_cost: joints * rates.jointing_each, cost_type: "material" });
+    // Joint bay required for each joint (HV/EHV)
+    const jb = getJointBayCost(split, rates);
+    items.push({ category: "Jointing", item: `Joint bay (${jb.surface})`, quantity: joints, unit: "ea", unit_cost: jb.cost, total_cost: joints * jb.cost, cost_type: "material" });
   }
 
   // Terminations
@@ -605,10 +612,12 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     items.push({ category: "Switchgear", item: "Ring main unit (RMU)", quantity: 1, unit: "ea", unit_cost: rates.switchgear_ring_main, total_cost: rates.switchgear_ring_main, cost_type: "material" });
   }
 
-  // LV endpoint
+  // LV endpoint — feeder pillar conditional, no whole current meter
   if (voltageLevel === "LV") {
+    if (includeFeederPillar) {
+      items.push({ category: "LV Endpoint", item: "LV feeder pillar", quantity: 1, unit: "ea", unit_cost: rates.feeder_pillar_each, total_cost: rates.feeder_pillar_each, cost_type: "material" });
+    }
     items.push(
-      { category: "LV Endpoint", item: "LV feeder pillar", quantity: 1, unit: "ea", unit_cost: rates.feeder_pillar_each, total_cost: rates.feeder_pillar_each, cost_type: "material" },
       { category: "LV Endpoint", item: "100A 3-phase cutout", quantity: 1, unit: "ea", unit_cost: rates.cutout_100a_3ph, total_cost: rates.cutout_100a_3ph, cost_type: "material" },
     );
   }
@@ -625,10 +634,8 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     }
   }
 
-  // Metering
-  if (voltageLevel === "LV") {
-    items.push({ category: "Metering", item: "Whole current meter", quantity: 1, unit: "ea", unit_cost: rates.metering_wc, total_cost: rates.metering_wc, cost_type: "material" });
-  } else {
+  // Metering — CT metering for HV/EHV only; no whole current meter for LV
+  if (voltageLevel !== "LV") {
     items.push({ category: "Metering", item: "CT metering panel", quantity: 1, unit: "ea", unit_cost: rates.metering_ct, total_cost: rates.metering_ct, cost_type: "material" });
   }
 
@@ -640,7 +647,7 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: rates.cable_marker_tape_per_m, total_cost: cableDistance * rates.cable_marker_tape_per_m, cost_type: "material" });
 
   // --- LABOUR ---
-  const totalJoints = (voltageLevel === "LV" ? 1 : Math.max(2, Math.ceil(cableDistance / 250))) + (needsMainsExtension ? 1 : 0);
+  const totalJoints = (voltageLevel === "LV" ? (needsMainsExtension ? 1 : 0) : Math.max(2, Math.ceil(cableDistance / 250))) + (needsMainsExtension ? 1 : 0);
   const labourDays = calculateLabourDays(cableDistance, totalJoints, 2, needsMainsExtension);
   items.push({
     category: "Labour", item: `LV Joint Team (Day rate)`,
