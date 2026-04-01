@@ -108,15 +108,11 @@ const SiteDetail = () => {
   const persistedEstimate = raw.cost_estimate || raw.costEstimate || null;
   const fallbackTotalEstimate = Number(raw.total_estimate ?? raw.totalEstimate);
 
+  // Priority: 1) Re-calculate from shared engine (ensures consistency with map pin flow)
+  //           2) Persisted full cost estimate (from map save)
+  //           3) Fallback batch total (legacy)
   let costEstimate: any = null;
-  if (persistedEstimate?.total_estimate != null) {
-    costEstimate = persistedEstimate;
-  } else if (Number.isFinite(fallbackTotalEstimate)) {
-    costEstimate = {
-      total_estimate: fallbackTotalEstimate,
-      confidence: raw.cost_confidence || raw.confidence || null,
-    };
-  } else if (hasValidDistances && site.proposed_kw && site.proposed_kw > 0) {
+  if (hasValidDistances && site.proposed_kw && site.proposed_kw > 0) {
     costEstimate = estimateConnectionCost(
       {
         proposed_kw: site.proposed_kw,
@@ -126,6 +122,13 @@ const SiteDetail = () => {
       },
       unitRates
     );
+  } else if (persistedEstimate?.total_estimate != null) {
+    costEstimate = persistedEstimate;
+  } else if (Number.isFinite(fallbackTotalEstimate)) {
+    costEstimate = {
+      total_estimate: fallbackTotalEstimate,
+      confidence: raw.cost_confidence || raw.confidence || null,
+    };
   }
 
   const totalEstimate = typeof costEstimate?.total_estimate === "number" ? costEstimate.total_estimate : null;
