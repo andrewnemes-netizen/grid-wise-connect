@@ -149,7 +149,7 @@ export function scoreCableCandidate(params: {
   else if ((params.ductedKva ?? 0) >= 130) score += 75;
   if (params.isServiceLike) score -= 500;
   if (params.isUnknown) score -= 1000;
-  score -= params.distanceM * 2;
+  score -= (params.snapDistanceM ?? params.distanceM) * 5;
   return score;
 }
 
