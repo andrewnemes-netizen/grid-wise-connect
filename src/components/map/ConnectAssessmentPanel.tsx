@@ -475,6 +475,7 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
           )}
 
 
+          <div className="space-y-1">
             <Label className="text-xs">Proposed Load (kW)</Label>
             <Input
               type="number"
