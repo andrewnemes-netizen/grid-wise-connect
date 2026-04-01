@@ -192,17 +192,18 @@ export function NpgDatasetRegistry() {
         .lt("last_sync_at", staleCutoffIso),
     ]);
 
-    if (staleRowsResult.error || nullTimeRowsResult.error) {
+    if (staleProcessingResult.error || nullTimeResult.error || stalePartialResult.error) {
       if (!silent) {
-        toast.error(`Failed to resolve stuck datasets: ${staleRowsResult.error?.message || nullTimeRowsResult.error?.message}`);
+        toast.error(`Failed to resolve stuck datasets: ${staleProcessingResult.error?.message || nullTimeResult.error?.message || stalePartialResult.error?.message}`);
       }
       return;
     }
 
     const staleIds = Array.from(
       new Set([
-        ...(staleRowsResult.data ?? []).map(r => r.id),
-        ...(nullTimeRowsResult.data ?? []).map(r => r.id),
+        ...(staleProcessingResult.data ?? []).map(r => r.id),
+        ...(nullTimeResult.data ?? []).map(r => r.id),
+        ...(stalePartialResult.data ?? []).map(r => r.id),
       ])
     );
 
