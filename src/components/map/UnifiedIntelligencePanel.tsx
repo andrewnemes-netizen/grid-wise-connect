@@ -484,7 +484,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [panelExpanded, setPanelExpanded] = useState(true);
 
   return (
-    <div className={`absolute top-0 right-0 z-20 border-l bg-background shadow-xl flex flex-col transition-all duration-200 ${panelExpanded ? "h-full w-[420px]" : "h-auto w-[420px] rounded-bl-lg"}`}>
+    <div className={`absolute top-14 right-0 z-20 border-l bg-background shadow-xl flex flex-col transition-all duration-200 ${panelExpanded ? "h-[calc(100%-3.5rem)] w-[420px]" : "h-auto w-[420px] rounded-bl-lg"}`}>
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 cursor-pointer select-none"
