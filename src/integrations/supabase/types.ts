@@ -2354,6 +2354,29 @@ export type Database = {
               source_site_name: string
             }[]
           }
+      find_nearest_hv_asset: {
+        Args: {
+          p_lat: number
+          p_lon: number
+          p_max_voltage_kv?: number
+          p_min_voltage_kv?: number
+          p_search_m?: number
+        }
+        Returns: {
+          asset_id: string
+          asset_type: string
+          attrs_json: Json
+          capacity_flag: string
+          capacity_value: number
+          distance_m: number
+          name: string
+          snap_distance_m: number
+          snap_lat: number
+          snap_lon: number
+          source_table: string
+          voltage_kv: number
+        }[]
+      }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }

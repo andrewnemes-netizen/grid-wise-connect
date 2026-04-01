@@ -25,23 +25,27 @@ export async function runFeasibilityEngine(
   dnoLookupResult?: string
 ): Promise<FeasibilityDecision> {
   // Build engine context from asset search results
-  // Prefer LV cable data when available for LV connections
-  const lvCable = assets.nearest_cable_segment;
-  const hasLvCable = lvCable && lvCable.ev_compatible;
+  // Prefer cable data when available (LV or HV)
+  const cableAsset = assets.nearest_cable_segment;
+  const hasCable = !!cableAsset;
 
   const context: EngineContext = {
     dnoLookupResult,
-    networkHeadroomKva: hasLvCable && lvCable.ducted_kva
-      ? lvCable.ducted_kva
-      : assets.nearest_substation?.headroom_kw
-        ? assets.nearest_substation.headroom_kw / 0.95
-        : null,
+    networkHeadroomKva: hasCable && cableAsset.ducted_kva
+      ? cableAsset.ducted_kva
+      : hasCable && cableAsset.capacity_kw
+        ? cableAsset.capacity_kw
+        : assets.nearest_substation?.headroom_kw
+          ? assets.nearest_substation.headroom_kw / 0.95
+          : null,
     transformerLoadingPct: assets.nearest_substation?.utilisation_pct ?? null,
-    transformerCapacityKva: hasLvCable && lvCable.direct_kva
-      ? lvCable.direct_kva
-      : assets.nearest_substation?.capacity_kw
-        ? assets.nearest_substation.capacity_kw / 0.95
-        : null,
+    transformerCapacityKva: hasCable && cableAsset.direct_kva
+      ? cableAsset.direct_kva
+      : hasCable && cableAsset.capacity_kw
+        ? cableAsset.capacity_kw
+        : assets.nearest_substation?.capacity_kw
+          ? assets.nearest_substation.capacity_kw / 0.95
+          : null,
     siteHasMetallicServices: false,
     cableCandidates: [],
   };
