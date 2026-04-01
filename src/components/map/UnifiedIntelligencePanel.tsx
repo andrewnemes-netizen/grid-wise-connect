@@ -236,8 +236,9 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       distances: effectiveDistances,
       constraints: result.constraints,
       nearest_headroom_kw: nearestSub?.transformer_headroom_kw ?? undefined,
+      includeFeederPillar,
     }, unitRates);
-  }, [effectiveDistances, pkw, result, unitRates]);
+  }, [effectiveDistances, pkw, result, unitRates, includeFeederPillar]);
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
