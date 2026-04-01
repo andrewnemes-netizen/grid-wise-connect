@@ -1,80 +1,61 @@
 
 
-## Fix: POC Snapping to Off-Street Cables
+## Gaps Found
 
-### Problem
-The current `find_nearest_compatible_lv_main` RPC picks the nearest compatible cable by straight-line distance within a 100m radius, but it does not verify the cable is actually on a road/street near the feeder pillar. This means it can snap to a cable running behind buildings, through a school grounds, or across a park — producing a false POC that has no viable trench route.
+### 1. Cost Engine: LA Programme uses separate inline logic
+The `score-sites-batch` edge function (lines 370-430) has a hardcoded cost calculator that does NOT reflect the recent changes made to `src/lib/connectionCosts.ts`:
+- Still includes WC meter cost (should be removed for LV)
+- Does not conditionally exclude pot ends
+- Does not include excavation joint bays per joint
+- LV joint team has no 1-day minimum floor
+- No feeder pillar toggle support
 
-Your screenshot shows exactly this: the POC is near Hovingham Primary School where there is no street-level cable, while the feeder pillar is on a road further away.
+### 2. PDF Export with Map Screenshot: Not implemented
+The LA Programme dashboard only exports CSV. There is no PDF report generation or map screenshot capture for programme sites or portfolio entries.
 
-### Root Cause
-The RPC uses `ST_DWithin` on the cable geometry centroid/nearest-point but has no road-corridor gate. A cable 30m away through a building scores higher than a cable 60m away along the actual street.
+---
 
-### Solution
-Add a road-corridor validation step to the RPC. After finding the snap point on each candidate cable, verify that the snap point is close to the feeder pillar along the road network — or more practically, verify the snap point itself is near a road.
+## Plan
 
-Two-part fix:
+### Step 1 — Align batch cost engine with shared logic
+**File:** `supabase/functions/score-sites-batch/index.ts`
 
-**1. Tighten snap-point proximity filter**
-Add a secondary `ST_DWithin` check on the **snap point** (not the cable geometry) to ensure the snapped connection point is within a tight radius (15m) of the feeder pillar. This prevents cables that run parallel but far away from being selected just because one end is within 100m.
+Update the inline `computeCost` function to match the rules now in `connectionCosts.ts`:
+- Remove WC meter from LV estimates
+- Only include pot ends when mains extension is triggered
+- Add excavation joint bay cost (quantity = joint count)
+- Set LV joint team minimum to 1 day (not 0.5)
+- Default feeder pillar to included (no toggle needed in batch — batch always includes it)
 
-**2. Prefer cables whose geometry runs along road frontage**
-Cross-reference candidate cables against OSM road geometries (if available in `geo_features`) or apply a heuristic: only accept cables where the snap point is within 15-20m of the feeder pillar point. If no cable passes this tight gate, progressively widen to 30m, then 50m, with a distance penalty.
+### Step 2 — Add PDF export to Programme Dashboard
+**Files:** `src/components/la/ProgrammeDashboard.tsx`, new helper or extend `generateAssessmentPdf.ts`
 
-### Implementation
+Add an "Export PDF" button that generates a programme summary report containing:
+- Summary stats (total sites, phases, total kW, total estimate)
+- Phase breakdown table
+- Per-site table with key metrics
+- No map screenshot per site (batch context — too many sites)
 
-**Database migration: Update `find_nearest_compatible_lv_main` RPC**
+### Step 3 — Add map screenshot to Portfolio site PDF
+**File:** `src/components/portfolio/PortfolioAnalytics.tsx` (or wherever individual portfolio site export lives)
 
-Replace the `nearby` CTE to add a snap-point proximity filter:
+When a user exports a single portfolio site, use the existing `generateAssessmentPdf` flow which already captures map screenshots. Verify the `includeFeederPillar` flag propagates from the portfolio context.
 
-```sql
-nearby AS (
-  SELECT
-    c.id AS cable_id,
-    c.asset_id,
-    ... (same field extraction) ...
-    c.geom AS cable_geom,
-    ST_Distance(
-      ST_Transform(c.geom, 27700),
-      ST_Transform(fp.geom, 27700)
-    ) AS distance_m,
-    ST_ClosestPoint(c.geom, fp.geom) AS snap_pt,
-    -- Distance from snap point to feeder pillar (must be small)
-    ST_Distance(
-      ST_Transform(ST_ClosestPoint(c.geom, fp.geom), 27700),
-      ST_Transform(fp.geom, 27700)
-    ) AS snap_distance_m
-  FROM geo_cables c
-  CROSS JOIN fp
-  WHERE ST_DWithin(
-    ST_Transform(c.geom, 27700),
-    ST_Transform(fp.geom, 27700),
-    p_search_m
-  )
-  AND UPPER(...) LIKE 'LV%'
-)
+---
+
+### Technical detail
+
+**Batch cost function changes** (edge function):
+```
+// Remove: equipment += r.whole_current_meter_each (for LV)
+// Add: equipment += jointCount * r.excavation_joint_bay_each
+// Change: labourDays floor from 0.5 to 1.0 for LV joint team
+// Conditional: pot ends only when needsMainsExtension
 ```
 
-Then in the scoring, add a heavy penalty for large snap distances and filter out cables where snap point is too far:
-
-```sql
--- In scored CTE, add snap_distance penalty:
-- (f.snap_distance_m * 5)  -- stronger penalty for snap distance
-
--- In final WHERE, add:
-AND s.snap_distance_m <= p_search_m  -- snap point must be within search radius
-```
-
-Also use staged search (25m snap distance first, then 50m, then full radius) in the `assetEngine.ts` call.
-
-### Files to change
+### Files changed
 | File | Change |
 |------|--------|
-| New migration | Update `find_nearest_compatible_lv_main` to add snap-point distance calculation and heavier weighting |
-| `src/lib/gridwise/assetEngine.ts` | No change needed (already does staged 25→50→100m search) |
-
-### Expected result
-- POC only appears on cables that run along/near the street where the feeder pillar is placed
-- Cables behind buildings or across parks are rejected or heavily penalised
-- If no street-level cable exists within range, the system returns "No compatible LV main found" rather than a false POC
+| `supabase/functions/score-sites-batch/index.ts` | Align cost calc with shared rules |
+| `src/components/la/ProgrammeDashboard.tsx` | Add PDF export button + generation |
 
