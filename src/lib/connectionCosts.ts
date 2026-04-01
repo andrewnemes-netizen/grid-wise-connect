@@ -152,6 +152,8 @@ interface EstimateInput {
   nearest_headroom_kw?: number;
   voltage_override?: VoltageOverride;
   surface_split?: SurfaceSplit;
+  /** Whether to include a feeder pillar in the LV cost estimate (default true) */
+  includeFeederPillar?: boolean;
 }
 
 function deriveSurfaceSplit(constraints?: EstimateInput["constraints"]): SurfaceSplit {
