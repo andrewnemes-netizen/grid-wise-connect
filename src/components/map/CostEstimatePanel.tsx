@@ -15,6 +15,7 @@ interface CostEstimatePanelProps {
   };
   nearest_headroom_kw?: number;
   voltageOverride: VoltageOverride;
+  includeFeederPillar?: boolean;
 }
 
 const CONFIDENCE_CONFIG = {
