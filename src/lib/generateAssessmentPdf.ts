@@ -258,7 +258,11 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     doc.text("ECOPOWER ENERGY", margin, 12);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text("Connection Feasibility Report", margin, 18);
+    // Show site name + postcode in the header subtitle
+    const headerSubtitle = input.siteName
+      ? `${input.siteName}${input.postcode ? ` — ${input.postcode}` : ""}`
+      : "Connection Feasibility Report";
+    doc.text(headerSubtitle, margin, 18);
     doc.setFontSize(8);
     doc.text(`Generated: ${dateStr}`, pageW - margin, 12, { align: "right" });
     doc.text(`Ref: ${refId}`, pageW - margin, 18, { align: "right" });
