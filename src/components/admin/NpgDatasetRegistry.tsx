@@ -171,7 +171,7 @@ export function NpgDatasetRegistry() {
   const resolveStaleProcessing = useCallback(async (silent = true) => {
     const staleCutoffIso = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
 
-    const [staleRowsResult, nullTimeRowsResult] = await Promise.all([
+    const [staleProcessingResult, nullTimeResult, stalePartialResult] = await Promise.all([
       supabase
         .from("dno_dataset_registry")
         .select("id")
@@ -184,6 +184,12 @@ export function NpgDatasetRegistry() {
         .eq("dno", selectedDno)
         .eq("last_sync_status", "processing")
         .is("last_sync_at", null),
+      supabase
+        .from("dno_dataset_registry")
+        .select("id")
+        .eq("dno", selectedDno)
+        .eq("last_sync_status", "partial")
+        .lt("last_sync_at", staleCutoffIso),
     ]);
 
     if (staleRowsResult.error || nullTimeRowsResult.error) {
