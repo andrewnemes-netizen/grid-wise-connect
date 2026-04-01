@@ -171,8 +171,8 @@ describe("getFeederConstraintRisk", () => {
 });
 
 describe("getRecommendedVoltage", () => {
-  it("LV for ≤80kW", () => expect(getRecommendedVoltage(80)).toBe("LV"));
-  it("HV for 81-1500kW", () => expect(getRecommendedVoltage(150)).toBe("HV"));
+  it("LV for ≤275kVA (~261kW)", () => expect(getRecommendedVoltage(261)).toBe("LV"));
+  it("HV for >275kVA to 1500kW", () => expect(getRecommendedVoltage(262)).toBe("HV"));
   it("EHV for >1500kW", () => expect(getRecommendedVoltage(2000)).toBe("EHV"));
 });
 
