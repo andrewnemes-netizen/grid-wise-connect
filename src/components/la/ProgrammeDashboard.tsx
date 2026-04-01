@@ -442,7 +442,10 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </Button>
               )}
               <Button size="sm" variant="outline" onClick={exportCsv}>
-                <Download className="mr-1 h-3 w-3" /> Export CSV
+                <Download className="mr-1 h-3 w-3" /> CSV
+              </Button>
+              <Button size="sm" variant="outline" onClick={exportPdf}>
+                <FileText className="mr-1 h-3 w-3" /> PDF
               </Button>
               <Button size="sm" onClick={saveToPortfolio} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
