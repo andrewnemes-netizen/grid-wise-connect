@@ -25,6 +25,14 @@ function haversineM(a: [number, number], b: [number, number]): number {
 
 const MAX_DETOUR_RATIO = 2.5;
 
+function lineDistanceM(coords: [number, number][]): number {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineM(coords[i - 1], coords[i]);
+  }
+  return Math.round(total);
+}
+
 export async function fetchRoadRoute(
   from: [number, number],
   to: [number, number]
@@ -67,12 +75,13 @@ export async function fetchAllRoadRoutes(
   const results = await Promise.all(
     lines.map(async (line) => {
       const coords = await fetchRoadRoute(line.origin, line.destination);
+      const routedDistanceM = lineDistanceM(coords);
       return {
         id: line.id,
         label: line.label,
         coords,
         color: line.color,
-        distance_m: line.distance_m,
+        distance_m: routedDistanceM > 0 ? routedDistanceM : line.distance_m,
       };
     })
   );
