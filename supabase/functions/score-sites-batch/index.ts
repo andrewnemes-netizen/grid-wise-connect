@@ -596,9 +596,13 @@ Deno.serve(async (req) => {
       const batch = sites.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.allSettled(batch.map(async (site): Promise<ScoredRow> => {
         // Use provided lat/lng if available, otherwise geocode the postcode
-        const geo = (site.lat && site.lng)
+        let geo = (site.lat && site.lng)
           ? { lng: site.lng, lat: site.lat }
           : await geocodePostcode(site.postcode);
+        // Auto-correct swapped UK coordinates
+        if (geo && geo.lat >= -8 && geo.lat <= 2 && geo.lng >= 49 && geo.lng <= 61) {
+          geo = { lat: geo.lng, lng: geo.lat };
+        }
         if (!geo) {
           return {
             site_name: site.site_name, postcode: site.postcode, proposed_kw: site.proposed_kw,
