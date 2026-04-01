@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2, Search, ClipboardCheck, FolderOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,22 +99,39 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [result, setResult] = useState<ScoreResult | null>(null);
+  const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
+
+  const pkw = Number(proposedKw) || 0;
+
+  const effectiveDistances = useMemo(() => {
+    const base = result?.distances;
+    if (!base) return null;
+    if (!routeCableDistanceM || routeCableDistanceM <= 0) return base;
+
+    if (pkw <= 80) {
+      return { ...base, capacity_segment_m: routeCableDistanceM };
+    }
+    if (pkw <= 1500) {
+      return { ...base, feeder_m: routeCableDistanceM };
+    }
+    return { ...base, primary_m: routeCableDistanceM };
+  }, [result?.distances, routeCableDistanceM, pkw]);
 
   const currentStep = saved ? 3 : result ? 2 : 1;
 
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
+    setRouteCableDistanceM(null);
     try {
       const res = await supabase.functions.invoke("score-site", {
-        body: { lng, lat, proposed_kw: Number(proposedKw) || 0, site_name: siteName, postcode, site_type: siteType },
+        body: { lng, lat, proposed_kw: pkw, site_name: siteName, postcode, site_type: siteType },
       });
       if (res.error) throw res.error;
       setResult(res.data);
 
       // ── Find actual cable POC using spatial RPC ──
       const origin: [number, number] = [lng, lat];
-      const pkw = Number(proposedKw) || 0;
       let pocCoord: [number, number] | null = null;
       let pocDistance = 0;
 
@@ -160,6 +177,8 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
           { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
         ];
         const roadLines = await fetchAllRoadRoutes(lineInputs);
+        const primaryLine = roadLines.find((line) => line.id === "line-cable") ?? roadLines[0];
+        setRouteCableDistanceM(primaryLine?.distance_m ?? null);
         onConnectionLines(roadLines);
       }
     } catch (err: any) {
@@ -176,11 +195,11 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
       const { error } = await supabase.from("sites").insert({
         site_name: siteName || "Unnamed Site",
         postcode,
-        proposed_kw: Number(proposedKw) || null,
+        proposed_kw: pkw || null,
         site_type: siteType,
         score: result.score,
         score_reasons: result.reasons,
-        connection_options: result.distances || result.distance_bands || [],
+        connection_options: effectiveDistances || result.distance_bands || result.distances || [],
         next_steps: result.next_steps,
         created_by: user.id,
       } as any);
@@ -289,12 +308,12 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
               {/* Distances / Bands */}
               <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Connection Proximity</p>
-                {isInternal && result.distances ? (
+                {isInternal && effectiveDistances ? (
                   <div className="space-y-1.5">
                     {[
-                      { label: "Primary Substation", val: result.distances.primary_m, color: "#e74c3c" },
-                      { label: "Feeder", val: result.distances.feeder_m, color: "#9b59b6" },
-                      { label: "Cable Segment", val: result.distances.capacity_segment_m, color: "#e67e22" },
+                      { label: "Primary Substation", val: effectiveDistances.primary_m, color: "#e74c3c" },
+                      { label: "Feeder", val: effectiveDistances.feeder_m, color: "#9b59b6" },
+                      { label: "Cable Segment", val: effectiveDistances.capacity_segment_m, color: "#e67e22" },
                     ].map((d) => (
                       <div key={d.label} className="flex items-center justify-between text-sm rounded-md border bg-muted/20 px-3 py-1.5">
                         <span className="flex items-center gap-2">
@@ -342,13 +361,13 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
               )}
 
               {/* Connection Cost Estimate */}
-              {result.distances && Number(proposedKw) > 0 && (
+              {effectiveDistances && pkw > 0 && (
                 <>
                   <Separator />
                   <CostEstimatePanel
                     voltageOverride="Auto"
-                    proposed_kw={Number(proposedKw)}
-                    distances={result.distances}
+                    proposed_kw={pkw}
+                    distances={effectiveDistances}
                     constraints={result.constraints}
                   />
                 </>
@@ -398,13 +417,13 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                     generateAssessmentPdf({
                       siteName: siteName || undefined,
                       postcode: postcode || undefined,
-                      proposedKw: Number(proposedKw) || 0,
+                      proposedKw: pkw,
                       lat: lat ?? undefined,
                       lng: lng ?? undefined,
                       score: result.score,
                       reasons: result.reasons,
                       nextSteps: result.next_steps,
-                      distances: result.distances,
+                      distances: effectiveDistances ?? result.distances,
                       distanceBands: result.distance_bands,
                       constraints: result.constraints,
                       unitRates,
