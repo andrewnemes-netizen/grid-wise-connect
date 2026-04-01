@@ -614,9 +614,11 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
               <div className="space-y-2">
                 <SectionHeader icon={Cable} title="ICP Connection Strategy" />
                 <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
-                  {bestPOC && (
+                  {cablePoc ? (
+                    <MetricRow label="Best POC" value={cablePoc.name} />
+                  ) : bestPOC ? (
                     <MetricRow label="Best POC" value={bestPOC.site_name || bestPOC.site_id} />
-                  )}
+                  ) : null}
                   <MetricRow label="Recommended Voltage" badge={getRecommendedVoltage(pkw)} badgeVariant="outline" />
                   <MetricRow label="Feeder Constraint Risk" badge={feederRisk} badgeVariant={feederRisk === "Low" ? "outline" : feederRisk === "Medium" ? "secondary" : "destructive"} />
                   <MetricRow label="Reinforcement Probability" value={`${reinforceProb}%`} />
