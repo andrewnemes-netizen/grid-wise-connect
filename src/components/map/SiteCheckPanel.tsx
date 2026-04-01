@@ -285,6 +285,10 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                 </Select>
               </div>
             </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="feeder-pillar-sc" checked={includeFeederPillar} onCheckedChange={(v) => setIncludeFeederPillar(!!v)} />
+              <Label htmlFor="feeder-pillar-sc" className="text-xs cursor-pointer">Include feeder pillar</Label>
+            </div>
           </div>
 
           <Button onClick={handleScore} disabled={loading || !lng || !lat} className="w-full">
