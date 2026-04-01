@@ -131,15 +131,54 @@ Deno.serve(async (req) => {
       });
     }
 
+    const staleProcessingWindowMs = 12 * 60 * 1000;
+    if (entry.last_sync_status === "processing") {
+      const lastSyncMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : Number.NaN;
+      const isFreshProcessingRun = Number.isFinite(lastSyncMs) && (Date.now() - lastSyncMs) < staleProcessingWindowMs;
+
+      if (isFreshProcessingRun) {
+        return new Response(JSON.stringify({
+          error: "Ingestion already running for this dataset",
+          detail: "Please wait for the current run to complete before starting another.",
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await supabase
+        .from(registryTable)
+        .update({
+          last_sync_status: "error",
+          last_sync_error: "Previous run timed out or crashed",
+          last_sync_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", registry_id)
+        .eq("last_sync_status", "processing");
+    }
+
     // Mark as processing immediately
-    await supabase
+    const processingStartedAt = new Date().toISOString();
+    const { error: processingStatusError } = await supabase
       .from(registryTable)
       .update({
         last_sync_status: "processing",
         last_sync_error: null,
-        updated_at: new Date().toISOString(),
+        last_sync_at: processingStartedAt,
+        updated_at: processingStartedAt,
       })
       .eq("id", registry_id);
+
+    if (processingStatusError) {
+      return new Response(JSON.stringify({
+        error: "Failed to mark dataset as processing",
+        detail: processingStatusError.message,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const storageTable = layerRow.storage_table;
     // DNO-aware API key lookup
@@ -267,16 +306,21 @@ async function performIngest(
   }
 
   // Update registry entry with sync status
-  await supabase
+  const finalSyncTimestamp = new Date().toISOString();
+  const { error: finalStatusError } = await supabase
     .from(registryTable)
     .update({
-      last_sync_at: new Date().toISOString(),
+      last_sync_at: finalSyncTimestamp,
       last_sync_status: syncError ? "error" : "success",
       last_sync_rows: totalInserted,
       last_sync_error: syncError,
-      updated_at: new Date().toISOString(),
+      updated_at: finalSyncTimestamp,
     })
     .eq("id", registryId);
+
+  if (finalStatusError) {
+    console.error("[ingest] Failed to write final sync status:", finalStatusError.message);
+  }
 
   // Audit
   await supabase.from("audit_log").insert({
