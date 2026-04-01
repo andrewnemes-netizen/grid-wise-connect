@@ -28,19 +28,19 @@ function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(amount);
 }
 
-export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw, voltageOverride }: CostEstimatePanelProps) {
+export function CostEstimatePanel({ proposed_kw, distances, constraints, nearest_headroom_kw, voltageOverride, includeFeederPillar }: CostEstimatePanelProps) {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showBom, setShowBom] = useState(false);
   const { data: unitRates } = useUnitRates();
 
   const estimate = useMemo<CostEstimate>(
-    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw, voltage_override: voltageOverride }, unitRates),
-    [proposed_kw, distances, constraints, nearest_headroom_kw, unitRates, voltageOverride]
+    () => estimateConnectionCost({ proposed_kw, distances, constraints, nearest_headroom_kw, voltage_override: voltageOverride, includeFeederPillar }, unitRates),
+    [proposed_kw, distances, constraints, nearest_headroom_kw, unitRates, voltageOverride, includeFeederPillar]
   );
 
   const bom = useMemo<BomItem[]>(
-    () => generateBom({ proposed_kw, distances, constraints, voltage_override: voltageOverride, nearest_headroom_kw: nearest_headroom_kw }, unitRates),
-    [proposed_kw, distances, constraints, voltageOverride, nearest_headroom_kw, unitRates]
+    () => generateBom({ proposed_kw, distances, constraints, voltage_override: voltageOverride, nearest_headroom_kw, includeFeederPillar }, unitRates),
+    [proposed_kw, distances, constraints, voltageOverride, nearest_headroom_kw, unitRates, includeFeederPillar]
   );
 
   const conf = CONFIDENCE_CONFIG[estimate.confidence];
