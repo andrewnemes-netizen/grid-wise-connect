@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
+import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 
 interface ScoredRow {
   site_name: string;
