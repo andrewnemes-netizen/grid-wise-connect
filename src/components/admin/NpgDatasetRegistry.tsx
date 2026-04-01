@@ -427,6 +427,17 @@ export function NpgDatasetRegistry() {
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
                 {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
+              {(stats?.processing ?? 0) > 0 && (
+                <Button
+                  onClick={handleResetStuck}
+                  size="sm"
+                  variant="ghost"
+                  className="text-amber-600 hover:text-amber-700"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  Reset {stats?.processing} Stuck
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
