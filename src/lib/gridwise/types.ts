@@ -75,6 +75,10 @@ export interface NearestAsset {
   parsed_material?: string;
   parsed_construction?: string;
   cable_score?: number;
+  /** HV/EHV-specific fields */
+  hv_source_table?: string;
+  hv_capacity_flag?: string;
+  hv_circuit_name?: string;
 }
 
 export interface AssetSearchResult {
