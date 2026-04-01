@@ -36,6 +36,7 @@ export interface LvCableMatch {
   feederName: string;
   sourceSiteName: string;
   distanceM: number;
+  snapDistanceM: number;
   score: number;
   snapLon: number;
   snapLat: number;
