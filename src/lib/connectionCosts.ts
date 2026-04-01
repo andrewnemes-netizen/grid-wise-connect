@@ -366,6 +366,8 @@ export function estimateConnectionCost(
   );
 
   // --- EQUIPMENT (Material) ---
+  const includeFeederPillar = input.includeFeederPillar !== false; // default true
+
   // Joint bay + cable joint kit — only when mains extension triggered
   let jointBayCost = 0;
   let jointKitCost = 0;
@@ -387,12 +389,19 @@ export function estimateConnectionCost(
     const jointRate = rates.jointing_each;
     standardJointCost = jointCount * jointRate;
     breakdown.push({ category: "Equipment", description: "Cable joints", quantity: jointCount, unit: "ea", unit_rate: jointRate, total: standardJointCost, cost_type: "material" });
+    // Joint bay required for each joint (HV/EHV)
+    const jb = getJointBayCost(split, rates);
+    const jbTotal = jointCount * jb.cost;
+    jointBayCost += jbTotal;
+    breakdown.push({ category: "Equipment", description: `Joint bay (${jb.surface})`, quantity: jointCount, unit: "ea", unit_rate: jb.cost, total: jbTotal, cost_type: "material" });
   } else {
-    // LV: pot end at service cable end
-    const potEndCost = rates.cable_joint_kit_pot_end;
-    standardJointCost = potEndCost;
-    jointCount = 1;
-    breakdown.push({ category: "Equipment", description: "Pot end (service cable)", quantity: 1, unit: "ea", unit_rate: potEndCost, total: potEndCost, cost_type: "material" });
+    // LV: pot end only when mains extension is required
+    if (needsMainsExtension) {
+      const potEndCost = rates.cable_joint_kit_pot_end;
+      standardJointCost = potEndCost;
+      jointCount = 1;
+      breakdown.push({ category: "Equipment", description: "Pot end (service cable)", quantity: 1, unit: "ea", unit_rate: potEndCost, total: potEndCost, cost_type: "material" });
+    }
   }
 
   // Cable terminations (material)
@@ -407,12 +416,15 @@ export function estimateConnectionCost(
     breakdown.push({ category: "Equipment", description: "Ring main unit", quantity: 1, unit: "ea", unit_rate: rates.switchgear_ring_main, total: rates.switchgear_ring_main, cost_type: "material" });
   }
 
-  // LV endpoint equipment
+  // LV endpoint equipment — feeder pillar is optional (checkbox), no whole current meter
   let lvEndpointCost = 0;
   if (voltageLevel === "LV") {
-    lvEndpointCost = rates.feeder_pillar_each + rates.cutout_100a_3ph;
+    lvEndpointCost = rates.cutout_100a_3ph;
+    if (includeFeederPillar) {
+      lvEndpointCost += rates.feeder_pillar_each;
+      breakdown.push({ category: "Equipment", description: "LV feeder pillar", quantity: 1, unit: "ea", unit_rate: rates.feeder_pillar_each, total: rates.feeder_pillar_each, cost_type: "material" });
+    }
     breakdown.push(
-      { category: "Equipment", description: "LV feeder pillar", quantity: 1, unit: "ea", unit_rate: rates.feeder_pillar_each, total: rates.feeder_pillar_each, cost_type: "material" },
       { category: "Equipment", description: "100A 3-phase cutout", quantity: 1, unit: "ea", unit_rate: rates.cutout_100a_3ph, total: rates.cutout_100a_3ph, cost_type: "material" },
     );
   }
