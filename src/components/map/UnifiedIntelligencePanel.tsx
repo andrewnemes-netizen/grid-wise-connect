@@ -27,6 +27,9 @@ import {
 } from "@/lib/scoringEngine";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { findNearestLvMain, findNearestHvAsset } from "@/lib/gridwise/assetEngine";
+import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
+import type { HvAssetMatch } from "@/lib/gridwise/assetEngine";
 
 export interface ConnectionLine {
   id: string;
