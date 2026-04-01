@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2, CheckCircle2, XCircle, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
 
 interface ScoredRow {
   site_name: string;
@@ -154,6 +155,126 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     a.download = `la-programme-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const exportPdf = () => {
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    let y = margin;
+
+    // Header
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("LA Programme Report", margin, y);
+    y += 8;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Generated: ${format(new Date(), "dd MMM yyyy HH:mm")}`, margin, y);
+    y += 10;
+
+    // Summary
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Programme Summary", margin, y);
+    y += 7;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const summaryLines = [
+      `Total Sites: ${summary.total}  |  Phase 1: ${summary.phase_1}  |  Phase 2: ${summary.phase_2}  |  Phase 3: ${summary.phase_3}`,
+      `Total Demand: ${summary.total_kw.toLocaleString()} kW  |  Total Estimate: £${summary.total_estimate.toLocaleString()}`,
+      `Errors: ${summary.errors}  |  Portfolio Ready: ${portfolioReady.length}`,
+    ];
+    summaryLines.forEach(line => { doc.text(line, margin, y); y += 5; });
+    y += 5;
+
+    // Phase breakdown
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Phase Breakdown", margin, y);
+    y += 7;
+
+    const phaseHeaders = ["Phase", "Sites", "Total kW", "Est. Cost (£)", "Avg Viability"];
+    const colWidths = [30, 20, 30, 35, 30];
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    let cx = margin;
+    phaseHeaders.forEach((h, i) => { doc.text(h, cx, y); cx += colWidths[i]; });
+    y += 1;
+    doc.setDrawColor(180);
+    doc.line(margin, y, margin + colWidths.reduce((a, b) => a + b, 0), y);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    [1, 2, 3].forEach(p => {
+      const phaseRows = results.filter(r => r.phase === p);
+      const totalKw = phaseRows.reduce((s, r) => s + r.proposed_kw, 0);
+      const totalCost = phaseRows.reduce((s, r) => s + r.total_estimate, 0);
+      const avgVia = phaseRows.length ? Math.round(phaseRows.reduce((s, r) => s + r.viability_index, 0) / phaseRows.length) : 0;
+      cx = margin;
+      const vals = [`Phase ${p}`, `${phaseRows.length}`, totalKw.toLocaleString(), `£${totalCost.toLocaleString()}`, `${avgVia}`];
+      vals.forEach((v, i) => { doc.text(v, cx, y); cx += colWidths[i]; });
+      y += 5;
+    });
+    y += 8;
+
+    // Site table
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Site Details", margin, y);
+    y += 7;
+
+    const siteHeaders = ["#", "Site Name", "Postcode", "kW", "Phase", "Score", "Band", "Grid", "Deploy", "Cost Band", "Estimate (£)", "Best POC"];
+    const siteCols = [8, 45, 22, 14, 14, 14, 16, 22, 28, 18, 26, 40];
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    cx = margin;
+    siteHeaders.forEach((h, i) => { doc.text(h, cx, y); cx += siteCols[i]; });
+    y += 1;
+    doc.line(margin, y, margin + siteCols.reduce((a, b) => a + b, 0), y);
+    y += 4;
+
+    doc.setFont("helvetica", "normal");
+    filtered.forEach((r, idx) => {
+      if (y > pageH - 15) {
+        doc.addPage();
+        y = margin;
+        // Re-draw header on new page
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        cx = margin;
+        siteHeaders.forEach((h, i) => { doc.text(h, cx, y); cx += siteCols[i]; });
+        y += 1;
+        doc.line(margin, y, margin + siteCols.reduce((a, b) => a + b, 0), y);
+        y += 4;
+        doc.setFont("helvetica", "normal");
+      }
+      cx = margin;
+      const truncName = r.site_name.length > 28 ? r.site_name.slice(0, 26) + "…" : r.site_name;
+      const truncPoc = r.best_poc.length > 24 ? r.best_poc.slice(0, 22) + "…" : r.best_poc;
+      const vals = [
+        `${idx + 1}`, truncName, r.postcode, `${r.proposed_kw}`, `P${r.phase}`,
+        `${r.viability_index}`, r.band, r.grid_readiness, r.deployment_class,
+        r.cost_band, `£${r.total_estimate.toLocaleString()}`, truncPoc,
+      ];
+      vals.forEach((v, i) => { doc.text(v, cx, y); cx += siteCols[i]; });
+      y += 4.5;
+    });
+
+    // Footer
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(150);
+      doc.text(`Gridwise Connect — LA Programme Report — Page ${p} of ${totalPages}`, margin, pageH - 5);
+      doc.setTextColor(0);
+    }
+
+    doc.save(`la-programme-report-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    toast.success("PDF report exported");
   };
 
   const saveToPortfolio = async () => {
@@ -321,7 +442,10 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
                 </Button>
               )}
               <Button size="sm" variant="outline" onClick={exportCsv}>
-                <Download className="mr-1 h-3 w-3" /> Export CSV
+                <Download className="mr-1 h-3 w-3" /> CSV
+              </Button>
+              <Button size="sm" variant="outline" onClick={exportPdf}>
+                <FileText className="mr-1 h-3 w-3" /> PDF
               </Button>
               <Button size="sm" onClick={saveToPortfolio} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
