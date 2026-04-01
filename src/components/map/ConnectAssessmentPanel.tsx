@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush, Radar } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush, Radar, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteAutoDetect, type RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/
 import { createSnapshot } from "@/lib/snapshotService";
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
 import { VoltageComparisonPanel } from "./VoltageComparisonPanel";
+import { findNearestLvMain } from "@/lib/gridwise/assetEngine";
+import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
 
 export interface ConnectEndpoints {
   source: {
