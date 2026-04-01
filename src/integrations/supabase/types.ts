@@ -1101,6 +1101,48 @@ export type Database = {
         }
         Relationships: []
       }
+      lv_capacity_lookup: {
+        Row: {
+          created_at: string
+          direct_kva: number
+          ducted_kva: number
+          ev_compatible_55kva_80a: boolean
+          family: string
+          green_compatible: boolean
+          id: string
+          notes: string | null
+          priority_tier: number
+          size_unit: string
+          size_value: number
+        }
+        Insert: {
+          created_at?: string
+          direct_kva?: number
+          ducted_kva?: number
+          ev_compatible_55kva_80a?: boolean
+          family: string
+          green_compatible?: boolean
+          id?: string
+          notes?: string | null
+          priority_tier?: number
+          size_unit: string
+          size_value: number
+        }
+        Update: {
+          created_at?: string
+          direct_kva?: number
+          ducted_kva?: number
+          ev_compatible_55kva_80a?: boolean
+          family?: string
+          green_compatible?: boolean
+          id?: string
+          notes?: string | null
+          priority_tier?: number
+          size_unit?: string
+          size_value?: number
+        }
+        Relationships: []
+      }
       ndp_projects: {
         Row: {
           attrs_json: Json | null
@@ -2258,6 +2300,32 @@ export type Database = {
         | { Args: { table_name: string }; Returns: string }
       enablelongtransactions: { Args: never; Returns: string }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      find_nearest_compatible_lv_main: {
+        Args: { p_lat: number; p_lon: number; p_search_m?: number }
+        Returns: {
+          asset_id: string
+          cable_id: string
+          conducting_section_type: string
+          direct_kva: number
+          distance_m: number
+          ducted_kva: number
+          ev_compatible: boolean
+          feeder_name: string
+          green_compatible: boolean
+          is_main_like: boolean
+          is_service_like: boolean
+          is_unknown: boolean
+          parsed_construction: string
+          parsed_family: string
+          parsed_material: string
+          parsed_size_unit: string
+          parsed_size_value: number
+          score: number
+          snap_lat: number
+          snap_lon: number
+          source_site_name: string
+        }[]
+      }
       geometry: { Args: { "": string }; Returns: unknown }
       geometry_above: {
         Args: { geom1: unknown; geom2: unknown }
