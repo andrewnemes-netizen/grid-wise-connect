@@ -164,6 +164,7 @@ export function mapRpcToLvCableMatch(row: Record<string, unknown>): LvCableMatch
     feederName: String(row.feeder_name ?? ""),
     sourceSiteName: String(row.source_site_name ?? ""),
     distanceM: Number(row.distance_m ?? 0),
+    snapDistanceM: Number(row.snap_distance_m ?? 0),
     score: Number(row.score ?? 0),
     snapLon: Number(row.snap_lon ?? 0),
     snapLat: Number(row.snap_lat ?? 0),
