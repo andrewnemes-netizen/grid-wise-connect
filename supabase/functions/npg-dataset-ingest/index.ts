@@ -689,8 +689,10 @@ async function ingestViaCkanDatastore(
 
     offset += records.length;
     if (records.length < limit) break;
-    if (offset >= 10000) {
-      console.warn(`[ingest] CKAN: Hit 10k record cap at offset ${offset}`);
+    // CKAN datastore supports higher offsets than Opendatasoft — no 10k cap
+    // But apply a safety cap at 500k to prevent runaway ingestion
+    if (offset >= 500000) {
+      console.warn(`[ingest] CKAN: Safety cap at ${offset} records`);
       break;
     }
 
