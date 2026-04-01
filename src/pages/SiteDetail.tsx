@@ -14,6 +14,7 @@ import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
+import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
