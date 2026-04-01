@@ -3,11 +3,13 @@
  * 
  * Wraps the existing score-site edge function and scoring engine
  * into the unified AssetSearchResult interface.
+ * Also searches for the nearest compatible LV underground main cable.
  */
 
 import { supabase } from "@/integrations/supabase/client";
 import { buildRawMetrics, type RawMetrics } from "../scoringEngine";
 import type { SiteInput, AssetSearchResult, NearestAsset } from "./types";
+import { mapRpcToLvCableMatch, type LvCableMatch } from "./lvCableParser";
 
 /**
  * Discover all candidate connection assets near the site.
