@@ -139,6 +139,11 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   const [comparisonResult, setComparisonResult] = useState<VoltageComparisonResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
 
+  // LV cable match state
+  const [lvCableMatch, setLvCableMatch] = useState<LvCableMatch | null>(null);
+  const [lvCableLoading, setLvCableLoading] = useState(false);
+  const [lvCableSearched, setLvCableSearched] = useState(false);
+
   // Design conversion state
   const [converting, setConverting] = useState(false);
   const [converted, setConverted] = useState(false);
