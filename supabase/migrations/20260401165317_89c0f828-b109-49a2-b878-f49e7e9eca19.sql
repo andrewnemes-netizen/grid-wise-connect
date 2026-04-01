@@ -1,0 +1,1 @@
+UPDATE public.dno_dataset_registry SET last_sync_status = 'error', last_sync_error = 'Cleared stale lock — ready for partitioned retry', last_sync_at = now() WHERE dno = 'NPG' AND last_sync_status IN ('processing', 'partial');
