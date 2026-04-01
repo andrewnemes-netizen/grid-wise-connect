@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { registry_id, mode = "export", where, select: selectFields, order_by } = body;
+    const { registry_id, mode = "export", where, select: selectFields, order_by, skip_features = 0, chunk_size } = body;
 
     if (!registry_id) {
       return new Response(JSON.stringify({ error: "registry_id is required" }), {
@@ -132,7 +132,9 @@ Deno.serve(async (req) => {
     }
 
     const staleProcessingWindowMs = 8 * 60 * 1000;
-    if (entry.last_sync_status === "processing") {
+    // Allow self-continuation for partial runs (skip_features > 0 means this is a continuation)
+    const isChunkContinuation = skip_features > 0;
+    if (entry.last_sync_status === "processing" && !isChunkContinuation) {
       const lastSyncMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : Number.NaN;
       const isFreshProcessingRun = Number.isFinite(lastSyncMs) && (Date.now() - lastSyncMs) < staleProcessingWindowMs;
 
@@ -156,6 +158,17 @@ Deno.serve(async (req) => {
         })
         .eq("id", registry_id)
         .eq("last_sync_status", "processing");
+    }
+
+    // For chunk continuations, also accept "partial" status
+    if (isChunkContinuation && entry.last_sync_status !== "partial" && entry.last_sync_status !== "processing") {
+      return new Response(JSON.stringify({
+        error: "Dataset is not in a partial/processing state for continuation",
+        detail: `Current status: ${entry.last_sync_status}`,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Mark as processing immediately
@@ -195,14 +208,17 @@ Deno.serve(async (req) => {
 
     console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
 
+    // Determine chunk size based on geometry complexity
+    const effectiveChunkSize = chunk_size ?? getDefaultChunkSize(storageTable, entry.record_count ?? 0);
+    console.log(`[ingest] skip_features=${skip_features}, chunk_size=${effectiveChunkSize}, record_count=${entry.record_count}`);
+
     // Offload heavy work to background via EdgeRuntime.waitUntil
-    // Wrap with timeout safety net — mark as error if not done in 400s
     EdgeRuntime.waitUntil(
       Promise.race([
-        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }, registryTable),
+        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }, registryTable, skip_features, effectiveChunkSize, authHeader),
         new Promise<void>(async (_, reject) => {
-          await new Promise(r => setTimeout(r, 400000));
-          reject(new Error("Background ingest timed out after 400s"));
+          await new Promise(r => setTimeout(r, 120000));
+          reject(new Error("Background ingest timed out after 120s"));
         }),
       ]).catch(async (err) => {
         console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
@@ -242,39 +258,50 @@ async function performIngest(
   supabase: any, entry: any, layerRow: any, storageTable: string,
   apiKey: string | null, userId: string, registryId: string,
   mode: string, opts: { where?: string; select?: string; order_by?: string },
-  registryTable: string = "dno_dataset_registry"
+  registryTable: string = "dno_dataset_registry",
+  skipFeatures: number = 0,
+  chunkSize: number = 15000,
+  authHeader: string = ""
 ) {
   let totalInserted = 0;
   let totalSkipped = 0;
   let syncError: string | null = null;
+  let hasMore = false;
+  let totalProcessed = 0;
 
   try {
-    const layerNeedsShape = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints"].includes(storageTable);
     const isCkan = entry.dno === "NGED";
+    const isLargeDataset = (entry.record_count ?? 0) > 5000;
+    const hasGeoJsonExport = entry.is_geospatial && entry.endpoint_export_geojson;
 
     if (isCkan) {
-      // NGED uses CKAN API — different ingestion path
       const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
-    } else if (mode === "export" && entry.is_geospatial && entry.endpoint_export_geojson) {
-      if (layerNeedsShape) {
-        console.log(`[ingest] Layer needs shapes — using records mode for ${entry.dataset_id}`);
+    } else if (mode === "export" && hasGeoJsonExport && isLargeDataset) {
+      console.log(`[ingest] Large dataset (${entry.record_count}) — chunked GeoJSON export, skip=${skipFeatures}, chunk=${chunkSize}`);
+      try {
+        const result = await ingestViaGeoJsonExportChunked(supabase, entry, layerRow, storageTable, apiKey, skipFeatures, chunkSize);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+        hasMore = result.hasMore;
+        totalProcessed = result.totalProcessed;
+      } catch (exportErr) {
+        console.warn(`[ingest] Chunked export failed (${exportErr}), trying standard export`);
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+      }
+    } else if (mode === "export" && hasGeoJsonExport) {
+      try {
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+      } catch (exportErr) {
+        console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
-      } else {
-        try {
-          const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
-          totalInserted = result.inserted;
-          totalSkipped = result.skipped;
-        } catch (exportErr) {
-          const errMsg = String(exportErr);
-          console.warn(`[ingest] Export failed (${errMsg}), falling back to records mode`);
-          const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
-          totalInserted = result.inserted;
-          totalSkipped = result.skipped;
-        }
       }
     } else if (mode === "export" && entry.endpoint_export_csv) {
       const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
@@ -305,14 +332,17 @@ async function performIngest(
     console.error("[ingest] Failed to update feature count:", e);
   }
 
-  // Update registry entry with sync status
+  // Determine final status
+  const finalStatus = syncError ? "error" : (hasMore ? "partial" : "success");
+  const cumulativeInserted = (skipFeatures > 0 ? (entry.last_sync_rows || 0) : 0) + totalInserted;
+
   const finalSyncTimestamp = new Date().toISOString();
   const { error: finalStatusError } = await supabase
     .from(registryTable)
     .update({
       last_sync_at: finalSyncTimestamp,
-      last_sync_status: syncError ? "error" : "success",
-      last_sync_rows: totalInserted,
+      last_sync_status: finalStatus,
+      last_sync_rows: cumulativeInserted,
       last_sync_error: syncError,
       updated_at: finalSyncTimestamp,
     })
@@ -322,24 +352,119 @@ async function performIngest(
     console.error("[ingest] Failed to write final sync status:", finalStatusError.message);
   }
 
-  // Audit
-  await supabase.from("audit_log").insert({
-    action: "npg_dataset_ingest",
-    user_id: userId,
-    meta_json: {
-      registry_id: registryId,
-      dataset_id: entry.dataset_id,
-      mode,
-      inserted: totalInserted,
-      skipped: totalSkipped,
-      error: syncError,
-    },
-  });
+  // Self-continue if partial
+  if (hasMore && !syncError && authHeader) {
+    const nextSkip = skipFeatures + totalProcessed;
+    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Auto-continuing from feature ${nextSkip}…`);
+    await sleep(2000);
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      await fetch(`${supabaseUrl}/functions/v1/npg-dataset-ingest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": authHeader },
+        body: JSON.stringify({ registry_id: registryId, mode: "export", skip_features: nextSkip }),
+      });
+      console.log(`[ingest] Self-continuation dispatched for skip=${nextSkip}`);
+    } catch (e) {
+      console.error(`[ingest] Self-continuation failed:`, e);
+    }
+  }
 
-  console.log(`[ingest] Background done. Dataset: ${entry.dataset_id}, Inserted: ${totalInserted}, Skipped: ${totalSkipped}, Error: ${syncError || "none"}`);
+  // Audit only on final completion or error
+  if (!hasMore || syncError) {
+    await supabase.from("audit_log").insert({
+      action: "npg_dataset_ingest",
+      user_id: userId,
+      meta_json: { registry_id: registryId, dataset_id: entry.dataset_id, mode, inserted: cumulativeInserted, skipped: totalSkipped, error: syncError },
+    });
+  }
+
+  console.log(`[ingest] Done. Dataset: ${entry.dataset_id}, Chunk inserted: ${totalInserted}, Cumulative: ${cumulativeInserted}, Status: ${finalStatus}`);
 }
 
 // ─── Streaming GeoJSON Feature Extractor ────────────────────────────────────
+
+// ─── Chunked GeoJSON Export (for large datasets) ────────────────────────────
+async function ingestViaGeoJsonExportChunked(
+  supabase: any, entry: any, layerRow: any, storageTable: string,
+  apiKey: string | null, skipFeatures: number, chunkSize: number
+): Promise<{ inserted: number; skipped: number; hasMore: boolean; totalProcessed: number }> {
+  const url = entry.endpoint_export_geojson;
+  console.log(`[ingest] Chunked GeoJSON: ${url} (skip=${skipFeatures}, chunk=${chunkSize})`);
+
+  const resp = await fetchWithRetry(url, apiKey);
+  if (!resp.ok) throw new Error(`GeoJSON export failed: HTTP ${resp.status}`);
+
+  const batchSize = getBatchSize(storageTable);
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let featureIndex = 0;
+  let processedInChunk = 0;
+  let batch: any[] = [];
+  let hasMore = false;
+
+  for await (const feature of streamGeoJsonFeatures(resp)) {
+    featureIndex++;
+
+    // Skip features we've already processed in previous chunks
+    if (featureIndex <= skipFeatures) continue;
+
+    // Check chunk limit
+    if (processedInChunk >= chunkSize) {
+      hasMore = true;
+      console.log(`[ingest] Chunk limit reached at feature ${featureIndex} (processed ${processedInChunk})`);
+      break;
+    }
+
+    processedInChunk++;
+    const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
+    if (mapped) {
+      batch.push(mapped);
+    } else {
+      totalSkipped++;
+    }
+
+    if (batch.length >= batchSize) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable, _features_json: JSON.stringify(batch),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? batch.length;
+      batch = [];
+
+      if (processedInChunk % 5000 === 0) {
+        console.log(`[ingest] Chunk progress: ${processedInChunk}/${chunkSize} processed, ${totalInserted} inserted`);
+      }
+    }
+  }
+
+  // Flush remaining batch
+  if (batch.length > 0) {
+    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+      _table_name: storageTable, _features_json: JSON.stringify(batch),
+    });
+    if (error) throw new Error(`Batch insert error: ${error.message}`);
+    totalInserted += inserted ?? batch.length;
+  }
+
+  // If we never hit the chunk limit and exhausted the stream, no more features
+  if (!hasMore) {
+    console.log(`[ingest] Stream exhausted at feature ${featureIndex}. All features processed.`);
+  }
+
+  console.log(`[ingest] Chunked GeoJSON done: processed=${processedInChunk}, inserted=${totalInserted}, skipped=${totalSkipped}, hasMore=${hasMore}`);
+  return { inserted: totalInserted, skipped: totalSkipped, hasMore, totalProcessed: processedInChunk };
+}
+
+function getDefaultChunkSize(storageTable: string, recordCount: number): number {
+  // Complex geometries (lines, polygons) need smaller chunks due to CPU cost
+  if (storageTable === "geo_cables" || storageTable === "geo_feeders") return 8000;
+  if (storageTable === "geo_polygons" || storageTable === "geo_constraints") return 5000;
+  // Points are lightweight
+  if (storageTable === "geo_points" || storageTable === "geo_substations") return 20000;
+  return 15000;
+}
+
 async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   const reader = resp.body!.getReader();
   const decoder = new TextDecoder();
