@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const staleProcessingWindowMs = 12 * 60 * 1000;
+    const staleProcessingWindowMs = 8 * 60 * 1000;
     if (entry.last_sync_status === "processing") {
       const lastSyncMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : Number.NaN;
       const isFreshProcessingRun = Number.isFinite(lastSyncMs) && (Date.now() - lastSyncMs) < staleProcessingWindowMs;
