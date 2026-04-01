@@ -112,28 +112,55 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
       if (res.error) throw res.error;
       setResult(res.data);
 
-      // Build connection lines if nearest_points are available
-      if (res.data.nearest_points && onConnectionLines) {
-        const origin: [number, number] = [lng, lat];
+      // ── Find actual cable POC using spatial RPC ──
+      const origin: [number, number] = [lng, lat];
+      const pkw = Number(proposedKw) || 0;
+      let pocCoord: [number, number] | null = null;
+      let pocDistance = 0;
+
+      const isLv = pkw <= 100;
+      if (isLv) {
+        try {
+          const lvMatch = await findNearestLvMain(lng, lat);
+          if (lvMatch) {
+            pocCoord = [lvMatch.snapLon, lvMatch.snapLat];
+            pocDistance = lvMatch.snapDistanceM ?? lvMatch.distanceM;
+          }
+        } catch (e) {
+          console.warn("LV cable search for route failed:", e);
+        }
+      } else {
+        try {
+          const hvMatch = await findNearestHvAsset(lng, lat, pkw);
+          if (hvMatch) {
+            pocCoord = [hvMatch.snapLon, hvMatch.snapLat];
+            pocDistance = hvMatch.snapDistanceM;
+          }
+        } catch (e) {
+          console.warn("HV asset search for route failed:", e);
+        }
+      }
+
+      // Fallback to score-site nearest_points
+      if (!pocCoord && res.data.nearest_points) {
         const np = res.data.nearest_points;
-        // Pick the POC: nearest cable segment, or feeder, or primary — whichever is closest
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
         const feederCoord = parseCoord(np.feeder);
         const primaryCoord = parseCoord(np.primary);
-        const pocCoord = cableCoord || feederCoord || primaryCoord;
-        const pocDistance = cableCoord
+        pocCoord = cableCoord || feederCoord || primaryCoord;
+        pocDistance = cableCoord
           ? (res.data.distances?.capacity_segment_m || 0)
           : feederCoord
             ? (res.data.distances?.feeder_m || 0)
             : (res.data.distances?.primary_m || 0);
+      }
 
-        if (pocCoord) {
-          const lineInputs = [
-            { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
-          ];
-          const roadLines = await fetchAllRoadRoutes(lineInputs);
-          onConnectionLines(roadLines);
-        }
+      if (pocCoord && onConnectionLines) {
+        const lineInputs = [
+          { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
+        ];
+        const roadLines = await fetchAllRoadRoutes(lineInputs);
+        onConnectionLines(roadLines);
       }
     } catch (err: any) {
       toast({ title: "Scoring failed", description: err.message, variant: "destructive" });
