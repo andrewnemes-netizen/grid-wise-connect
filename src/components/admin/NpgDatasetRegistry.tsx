@@ -844,6 +844,21 @@ function SyncStatus({ ds }: { ds: DatasetEntry }) {
       </span>
     );
   }
+  if (ds.last_sync_status === "partial") {
+    return (
+      <div className="text-[10px]">
+        <span className="text-amber-600 flex items-center gap-0.5">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          {ds.last_sync_rows.toLocaleString()} rows (chunking…)
+        </span>
+        {ds.last_sync_at && (
+          <span className="text-muted-foreground block">
+            {format(new Date(ds.last_sync_at), "dd MMM HH:mm")}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (ds.last_sync_status === "success") {
     return (
       <div className="text-[10px]">
