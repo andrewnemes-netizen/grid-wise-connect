@@ -156,7 +156,9 @@ export function getRecommendedScale(proposed_kw: number): string {
 }
 
 export function getRecommendedVoltage(proposed_kw: number): string {
-  if (proposed_kw <= 80) return "LV";
+  // 275 kVA threshold at PF 0.95 ≈ 261 kW
+  const kva = proposed_kw / 0.95;
+  if (kva <= 275) return "LV";
   if (proposed_kw <= 1500) return "HV";
   return "EHV";
 }

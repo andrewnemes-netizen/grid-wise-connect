@@ -325,7 +325,8 @@ function estimateTotalCost(
   r: UnitRatesRow,
   surfaceSplit?: { footway_pct: number; carriageway_pct: number; verge_pct: number },
 ): { total: number; confidence: string } {
-  const vl = proposedKw <= 80 ? "LV" : proposedKw <= 1500 ? "HV" : "EHV";
+  const kva = proposedKw / 0.95;
+  const vl = kva <= 275 ? "LV" : proposedKw <= 1500 ? "HV" : "EHV";
   const rawDist = vl === "LV" ? distances.capacity_segment_m : vl === "HV" ? distances.feeder_m : distances.primary_m;
   const maxDist = vl === "LV" ? 500 : vl === "HV" ? 3000 : 5000;
   const dist = Math.min(rawDist, maxDist);

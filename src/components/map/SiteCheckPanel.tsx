@@ -137,7 +137,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
       let pocCoord: [number, number] | null = null;
       let pocDistance = 0;
 
-      const isLv = pkw <= 100;
+      const isLv = (pkw / 0.95) <= 275; // 275 kVA threshold
       if (isLv) {
         try {
           const lvMatch = await findNearestLvMain(lng, lat);

@@ -26,7 +26,8 @@ export function runElectricalEngine(
 
   if (serviceCable !== "PENDING" && lvMainCable !== "PENDING") {
     // Select cables based on load using DNO kVA thresholds
-    const voltageLevel = input.proposed_kw <= 80 ? "LV" as const : input.proposed_kw <= 1500 ? "HV" as const : "EHV" as const;
+    const kva = input.proposed_kw / 0.95;
+    const voltageLevel = kva <= 275 ? "LV" as const : input.proposed_kw <= 1500 ? "HV" as const : "EHV" as const;
     const mainsCable = selectCableForLoad(input.proposed_kw, voltageLevel);
     // Service cable is typically one size down for LV, same for HV/EHV
     const serviceCableSelection = voltageLevel === "LV"
