@@ -931,7 +931,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
             </>
           )}
         </div>
-      </ScrollArea>
+      </ScrollArea>}
     </div>
   );
 }
