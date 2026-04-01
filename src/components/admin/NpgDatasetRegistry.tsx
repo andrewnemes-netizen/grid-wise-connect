@@ -279,6 +279,12 @@ export function NpgDatasetRegistry() {
 
   // Fire-and-forget ingest — no per-row polling
   const handleIngest = async (entry: DatasetEntry, mode: "export" | "records" = "export") => {
+    const alreadyRunning = entry.last_sync_status === "processing" || entry.last_sync_status === "partial";
+    if (alreadyRunning) {
+      toast.info(`${entry.title} is already ingesting in the background`);
+      return;
+    }
+
     setSyncingIds(prev => new Set(prev).add(entry.id));
     try {
       await supabase.auth.refreshSession();
@@ -297,13 +303,25 @@ export function NpgDatasetRegistry() {
           body: JSON.stringify({ registry_id: entry.id, mode }),
         }
       );
-      const result = await resp.json();
-      if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
-      if (result.accepted) {
+      let result: any = null;
+      try {
+        result = await resp.json();
+      } catch {
+        result = null;
+      }
+
+      if (resp.status === 409) {
+        toast.info(result?.detail || `${entry.title} is already processing`);
+        return;
+      }
+
+      if (!resp.ok) throw new Error(result?.error || `HTTP ${resp.status}`);
+
+      if (result?.accepted) {
         toast.info(`Ingestion started for ${entry.title}`);
       } else {
-        toast.success(`Ingested ${result.inserted} features from ${entry.title}`);
+        toast.success(`Ingested ${result?.inserted ?? 0} features from ${entry.title}`);
         invalidateAll();
       }
     } catch (err: any) {
