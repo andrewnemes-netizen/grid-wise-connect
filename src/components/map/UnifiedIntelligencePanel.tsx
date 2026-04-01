@@ -481,21 +481,26 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   };
 
   const bestPOC = result?.nearest_substations?.[0];
+  const [panelExpanded, setPanelExpanded] = useState(true);
 
   return (
-    <div className="absolute top-0 right-0 z-20 h-full w-[420px] border-l bg-background shadow-xl flex flex-col">
+    <div className={`absolute top-0 right-0 z-20 border-l bg-background shadow-xl flex flex-col transition-all duration-200 ${panelExpanded ? "h-full w-[420px]" : "h-auto w-[420px] rounded-bl-lg"}`}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 cursor-pointer select-none"
+        onClick={() => setPanelExpanded((p) => !p)}
+      >
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm">Site Intelligence</span>
+          {panelExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
+        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onClose(); }} className="h-7 w-7">
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
+      {panelExpanded && <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* Location */}
           <div className="rounded-md border bg-muted/20 p-3">
@@ -926,7 +931,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
             </>
           )}
         </div>
-      </ScrollArea>
+      </ScrollArea>}
     </div>
   );
 }
