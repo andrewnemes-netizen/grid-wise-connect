@@ -375,6 +375,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                     proposed_kw={pkw}
                     distances={effectiveDistances}
                     constraints={result.constraints}
+                    includeFeederPillar={includeFeederPillar}
                   />
                 </>
               )}
