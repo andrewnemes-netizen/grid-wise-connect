@@ -12,8 +12,45 @@ import type { SiteInput, AssetSearchResult, NearestAsset } from "./types";
 import { mapRpcToLvCableMatch, type LvCableMatch } from "./lvCableParser";
 
 /**
+ * Search for the nearest compatible LV underground main cable
+ * using the PostGIS RPC with staged search radii (25 → 50 → 100m).
+ */
+export async function findNearestLvMain(
+  lng: number,
+  lat: number
+): Promise<LvCableMatch | null> {
+  const searchRadii = [25, 50, 100];
+
+  for (const radius of searchRadii) {
+    try {
+      const { data, error } = await supabase.rpc("find_nearest_compatible_lv_main", {
+        p_lon: lng,
+        p_lat: lat,
+        p_search_m: radius,
+      });
+
+      if (error) {
+        console.warn(`LV main search (${radius}m) error:`, error.message);
+        continue;
+      }
+
+      // RPC returns an array; take the first (best) result
+      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      if (rows.length > 0 && rows[0].cable_id) {
+        return mapRpcToLvCableMatch(rows[0]);
+      }
+    } catch (err) {
+      console.warn(`LV main search (${radius}m) failed:`, err);
+    }
+  }
+
+  return null;
+}
+
+/**
  * Discover all candidate connection assets near the site.
  * Calls the score-site edge function and maps results to AssetSearchResult.
+ * Also searches for the nearest compatible LV underground main cable.
  */
 export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResult> {
   let scoreData: any = null;
