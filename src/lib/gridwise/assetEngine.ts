@@ -116,10 +116,43 @@ export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResul
     confidence: "medium" as const,
   }));
 
+  // Search for nearest compatible LV underground main cable
+  let nearestCableSegment: NearestAsset | null = null;
+  try {
+    const lvMatch = await findNearestLvMain(input.lng, input.lat);
+    if (lvMatch) {
+      nearestCableSegment = {
+        asset_id: lvMatch.assetId || lvMatch.cableId,
+        asset_type: "cable_segment",
+        name: lvMatch.conductingSectionType,
+        distance_m: lvMatch.distanceM,
+        headroom_kw: null,
+        utilisation_pct: null,
+        capacity_kw: lvMatch.ductedKva ?? null,
+        voltage_kv: null,
+        confidence: lvMatch.evCompatible ? "high" : "medium",
+        cable_type: lvMatch.conductingSectionType,
+        feeder_name: lvMatch.feederName,
+        source_site_name: lvMatch.sourceSiteName,
+        snap_point: { lng: lvMatch.snapLon, lat: lvMatch.snapLat },
+        direct_kva: lvMatch.directKva,
+        ducted_kva: lvMatch.ductedKva,
+        green_compatible: lvMatch.greenCompatible,
+        ev_compatible: lvMatch.evCompatible,
+        parsed_family: lvMatch.parsedFamily,
+        parsed_material: lvMatch.parsedMaterial,
+        parsed_construction: lvMatch.parsedConstruction,
+        cable_score: lvMatch.score,
+      };
+    }
+  } catch (err) {
+    console.warn("LV main search failed, continuing without:", err);
+  }
+
   return {
     nearest_substation: nearestSubstation,
     nearest_feeder: null,
-    nearest_cable_segment: null,
+    nearest_cable_segment: nearestCableSegment,
     alternatives,
     distances,
     constraints: {
