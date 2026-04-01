@@ -178,6 +178,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [exportingPdf, setExportingPdf] = useState(false);
   const [cablePoc, setCablePoc] = useState<{ name: string; snapLon: number; snapLat: number; distanceM: number; type: string } | null>(null);
   const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
+  const [includeFeederPillar, setIncludeFeederPillar] = useState(true);
 
   const pkw = Number(proposedKw) || 0;
 
