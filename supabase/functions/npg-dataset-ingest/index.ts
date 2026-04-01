@@ -457,12 +457,12 @@ async function ingestViaGeoJsonExportChunked(
 }
 
 function getDefaultChunkSize(storageTable: string, recordCount: number): number {
-  // Complex geometries (lines, polygons) need smaller chunks due to CPU cost
-  if (storageTable === "geo_cables" || storageTable === "geo_feeders") return 8000;
-  if (storageTable === "geo_polygons" || storageTable === "geo_constraints") return 5000;
-  // Points are lightweight
-  if (storageTable === "geo_points" || storageTable === "geo_substations") return 20000;
-  return 15000;
+  // Edge Functions have strict CPU limits (~2s wall-clock CPU).
+  // Keep chunks small to avoid "CPU Time exceeded" crashes.
+  if (storageTable === "geo_cables" || storageTable === "geo_feeders") return 2000;
+  if (storageTable === "geo_polygons" || storageTable === "geo_constraints") return 2000;
+  if (storageTable === "geo_points" || storageTable === "geo_substations") return 5000;
+  return 3000;
 }
 
 async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
