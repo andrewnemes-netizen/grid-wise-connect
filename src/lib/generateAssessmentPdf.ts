@@ -87,6 +87,7 @@ interface PdfInput {
   skipSave?: boolean;
   unitRates?: UnitRates;
   voltageOverride?: import("./connectionCosts").VoltageOverride;
+  includeFeederPillar?: boolean;
   nearestHeadroomKw?: number;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
 
