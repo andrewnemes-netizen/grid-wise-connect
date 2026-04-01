@@ -132,7 +132,9 @@ Deno.serve(async (req) => {
     }
 
     const staleProcessingWindowMs = 8 * 60 * 1000;
-    if (entry.last_sync_status === "processing") {
+    // Allow self-continuation for partial runs (skip_features > 0 means this is a continuation)
+    const isChunkContinuation = skip_features > 0;
+    if (entry.last_sync_status === "processing" && !isChunkContinuation) {
       const lastSyncMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : Number.NaN;
       const isFreshProcessingRun = Number.isFinite(lastSyncMs) && (Date.now() - lastSyncMs) < staleProcessingWindowMs;
 
@@ -156,6 +158,17 @@ Deno.serve(async (req) => {
         })
         .eq("id", registry_id)
         .eq("last_sync_status", "processing");
+    }
+
+    // For chunk continuations, also accept "partial" status
+    if (isChunkContinuation && entry.last_sync_status !== "partial" && entry.last_sync_status !== "processing") {
+      return new Response(JSON.stringify({
+        error: "Dataset is not in a partial/processing state for continuation",
+        detail: `Current status: ${entry.last_sync_status}`,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Mark as processing immediately
@@ -370,6 +383,88 @@ async function performIngest(
 }
 
 // ─── Streaming GeoJSON Feature Extractor ────────────────────────────────────
+
+// ─── Chunked GeoJSON Export (for large datasets) ────────────────────────────
+async function ingestViaGeoJsonExportChunked(
+  supabase: any, entry: any, layerRow: any, storageTable: string,
+  apiKey: string | null, skipFeatures: number, chunkSize: number
+): Promise<{ inserted: number; skipped: number; hasMore: boolean; totalProcessed: number }> {
+  const url = entry.endpoint_export_geojson;
+  console.log(`[ingest] Chunked GeoJSON: ${url} (skip=${skipFeatures}, chunk=${chunkSize})`);
+
+  const resp = await fetchWithRetry(url, apiKey);
+  if (!resp.ok) throw new Error(`GeoJSON export failed: HTTP ${resp.status}`);
+
+  const batchSize = getBatchSize(storageTable);
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  let featureIndex = 0;
+  let processedInChunk = 0;
+  let batch: any[] = [];
+  let hasMore = false;
+
+  for await (const feature of streamGeoJsonFeatures(resp)) {
+    featureIndex++;
+
+    // Skip features we've already processed in previous chunks
+    if (featureIndex <= skipFeatures) continue;
+
+    // Check chunk limit
+    if (processedInChunk >= chunkSize) {
+      hasMore = true;
+      console.log(`[ingest] Chunk limit reached at feature ${featureIndex} (processed ${processedInChunk})`);
+      break;
+    }
+
+    processedInChunk++;
+    const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
+    if (mapped) {
+      batch.push(mapped);
+    } else {
+      totalSkipped++;
+    }
+
+    if (batch.length >= batchSize) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable, _features_json: JSON.stringify(batch),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? batch.length;
+      batch = [];
+
+      if (processedInChunk % 5000 === 0) {
+        console.log(`[ingest] Chunk progress: ${processedInChunk}/${chunkSize} processed, ${totalInserted} inserted`);
+      }
+    }
+  }
+
+  // Flush remaining batch
+  if (batch.length > 0) {
+    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+      _table_name: storageTable, _features_json: JSON.stringify(batch),
+    });
+    if (error) throw new Error(`Batch insert error: ${error.message}`);
+    totalInserted += inserted ?? batch.length;
+  }
+
+  // If we never hit the chunk limit and exhausted the stream, no more features
+  if (!hasMore) {
+    console.log(`[ingest] Stream exhausted at feature ${featureIndex}. All features processed.`);
+  }
+
+  console.log(`[ingest] Chunked GeoJSON done: processed=${processedInChunk}, inserted=${totalInserted}, skipped=${totalSkipped}, hasMore=${hasMore}`);
+  return { inserted: totalInserted, skipped: totalSkipped, hasMore, totalProcessed: processedInChunk };
+}
+
+function getDefaultChunkSize(storageTable: string, recordCount: number): number {
+  // Complex geometries (lines, polygons) need smaller chunks due to CPU cost
+  if (storageTable === "geo_cables" || storageTable === "geo_feeders") return 8000;
+  if (storageTable === "geo_polygons" || storageTable === "geo_constraints") return 5000;
+  // Points are lightweight
+  if (storageTable === "geo_points" || storageTable === "geo_substations") return 20000;
+  return 15000;
+}
+
 async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   const reader = resp.body!.getReader();
   const decoder = new TextDecoder();
