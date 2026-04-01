@@ -526,7 +526,11 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                     {SITE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="feeder-pillar" checked={includeFeederPillar} onCheckedChange={(v) => setIncludeFeederPillar(!!v)} />
+              <Label htmlFor="feeder-pillar" className="text-xs cursor-pointer">Include feeder pillar</Label>
+            </div>
             </div>
           </div>
 
