@@ -175,7 +175,9 @@ function deriveSurfaceSplit(constraints?: EstimateInput["constraints"]): Surface
 
 function resolveVoltageLevel(proposed_kw: number, voltage_override?: VoltageOverride): "LV" | "HV" | "EHV" {
   if (voltage_override && voltage_override !== "Auto") return voltage_override;
-  return proposed_kw <= 80 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
+  // 275 kVA threshold at PF 0.95 ≈ 261 kW
+  const kva = proposed_kw / 0.95;
+  return kva <= 275 ? "LV" : proposed_kw <= 1500 ? "HV" : "EHV";
 }
 
 /**
