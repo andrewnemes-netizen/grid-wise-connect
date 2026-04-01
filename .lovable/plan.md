@@ -1,43 +1,54 @@
 
 
-## Fix: Closer Infrastructure Selection + Bidirectional Road Routing
+## Fix: Ingest All Records Beyond 10,000 Limit
 
-### Two issues identified
+### Problem
+The Opendatasoft API caps `offset + limit` at 10,000. The current code stops at that boundary, so datasets with 19k, 179k, or 580k records only ingest 10,000.
 
-**Issue 1: Not picking closest infrastructure**
-The `score_site` PostGIS function finds the nearest substation/feeder/cable by **straight-line distance** (`<->` operator), which is correct. However, `nearest_points` returns the **centroid of the asset geometry** (e.g., a substation polygon centroid), not the **closest point on that asset to the site**. For linear assets like feeders and cables, this means the connection line goes to the middle of the feature, not the nearest edge — making it look further away than it is and potentially skipping a closer asset.
+The same 10k cap exists in the NPG/CKAN ingestion path.
 
-The fix: use `ST_ClosestPoint(asset_geom, site_geom)` instead of the raw asset geometry for `nearest_*_pt_4326`. This returns the closest point on the asset to the site, which is both more accurate for distance and produces better route endpoints.
+### Solution: Use the Opendatasoft Export Endpoint
 
-**Issue 2: OSRM routes like driving, not digging**
-The OSRM `foot` profile follows real walking paths, which means it respects one-way pedestrian restrictions and can take roundabout paths. For cable excavation, you can dig on **either side of any road in any direction** — it's not a navigation problem, it's a "follow the road corridor" problem.
+Instead of paginating with `/api/records?offset=N`, use the **bulk export endpoint**:
+```
+/api/explore/v2.1/catalog/datasets/{dataset_id}/exports/geojson
+```
 
-The fix: switch from OSRM `foot` profile to a simpler approach — use OSRM `foot` but with `alternatives=false&steps=false&continue_straight=true` to get the most direct road-following path. More importantly, if the route is significantly longer than the straight-line distance (e.g., >2x), it's probably going around blocks unnecessarily. We should cap the detour ratio.
+This streams the **entire dataset** as GeoJSON with no offset limit. We process it as a stream, batching inserts in chunks of 500.
+
+For CKAN sources: use the CKAN `datastore_search` with `_id` cursor (`where _id > last_id`) instead of offset to bypass the 10k cap.
 
 ### Implementation
 
-**File: New migration (PostGIS function update)**
-- Update `score_site` to use `ST_ClosestPoint()` for all three infrastructure types:
-  ```sql
-  -- Instead of: nearest_primary_pt_4326 := tmp_geom;
-  -- Use: nearest_primary_pt_4326 := ST_ClosestPoint(tmp_geom, site_4326);
-  ```
-- This ensures the connection line endpoint is the nearest point on the asset geometry to the site, not the asset centroid
+**File: `supabase/functions/dno-open-data-ingest/index.ts`**
+- Add a new `ingestViaExport()` path that fetches the full GeoJSON export endpoint
+- Stream-parse the response using `response.body.getReader()` to avoid memory issues on 500k+ datasets
+- Batch-insert features in groups of 500 via existing `batch_insert_geo_features` RPC
+- Use export path when `totalRecords > 10,000`; keep existing paginated path for smaller datasets
+- Remove the `offset + batch_size > 10000` break condition from the paginated path
 
-**File: `src/lib/roadRoute.ts`**
-- Add `continue_straight=true` parameter to OSRM request for more direct routing
-- Add detour ratio check: if OSRM route distance > 2.5x straight-line distance, fall back to straight line (the route is clearly going around obstacles that don't apply to excavation)
-- Keep `foot` profile (it's the most permissive for road access — `driving` would miss footways entirely)
+**File: `supabase/functions/npg-dataset-ingest/index.ts`**
+- For Opendatasoft sources: same export endpoint approach
+- For CKAN sources: replace offset pagination with cursor-based (`"_id" > last_seen_id`) to bypass the 10k cap
+- Remove the `offset >= 10000` break conditions
 
-### Why this fixes both screenshots
-- The substation shown ("Windmill Terrace") at 72% utilisation may not be the closest asset to the pin at TS17 0AA — `ST_ClosestPoint` will ensure we pick the true nearest point on the nearest asset
-- The cable route will follow the road corridor more directly without unnecessary detours around one-way systems or block perimeters
+### Streaming architecture (for large datasets)
+
+```text
+Export endpoint → streaming reader → JSON chunk parser
+  → batch of 500 features → RPC insert → next batch
+  → periodic feature_count update every 5,000 rows
+```
+
+### Risk mitigation
+- Edge functions have a ~400s timeout; for very large datasets (500k+), we return progress and support resumption via a `last_id` parameter
+- If the export endpoint fails (some portals don't support it), fall back to the 10k paginated approach and log a warning
 
 ### Files to change
 | File | Change |
 |------|--------|
-| New migration | Update `score_site` to use `ST_ClosestPoint()` for nearest_points output |
-| `src/lib/roadRoute.ts` | Add `continue_straight=true`, add detour ratio cap (2.5x) |
+| `supabase/functions/dno-open-data-ingest/index.ts` | Add export-based streaming ingest for datasets > 10k records |
+| `supabase/functions/npg-dataset-ingest/index.ts` | Same export path + CKAN cursor pagination |
 
-### No UI changes needed
+### No database changes needed
 
