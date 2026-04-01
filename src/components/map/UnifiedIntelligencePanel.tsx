@@ -268,6 +268,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
+    setCablePoc(null);
     try {
       // Fire both calls in parallel
       const [scoreRes, safetyRes] = await Promise.all([
@@ -615,7 +616,11 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 <SectionHeader icon={Cable} title="ICP Connection Strategy" />
                 <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
                   {cablePoc ? (
-                    <MetricRow label="Best POC" value={cablePoc.name} />
+                    <>
+                      <MetricRow label="Best POC" value={cablePoc.name} />
+                      <MetricRow label="POC Type" badge={cablePoc.type} badgeVariant="outline" />
+                      <MetricRow label="POC Distance" value={`${Math.round(cablePoc.distanceM)}m`} />
+                    </>
                   ) : bestPOC ? (
                     <MetricRow label="Best POC" value={bestPOC.site_name || bestPOC.site_id} />
                   ) : null}
