@@ -903,6 +903,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                         bestPoc: nearestSub?.site_name ?? null,
                         nearestSubstations: result.nearest_substations,
                         nearestHeadroomKw: nearestSub?.transformer_headroom_kw ?? undefined,
+                        includeFeederPillar,
                       });
                     } finally {
                       setExportingPdf(false);

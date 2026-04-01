@@ -405,10 +405,18 @@ export function estimateConnectionCost(
     }
   }
 
-  // Cable terminations (material)
+  // Cable terminations (material) — with joint bay for each termination
   const termCount = 2;
   const terminationCost = termCount * rates.termination_each;
   breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_rate: rates.termination_each, total: terminationCost, cost_type: "material" });
+
+  // Excavation joint bay for each termination point
+  if (voltageLevel === "LV" && !needsMainsExtension) {
+    const jb = getJointBayCost(split, rates);
+    const termJbTotal = termCount * jb.cost;
+    jointBayCost += termJbTotal;
+    breakdown.push({ category: "Equipment", description: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_rate: jb.cost, total: termJbTotal, cost_type: "material" });
+  }
 
   // Switchgear — HV/EHV only
   let switchgearCost = 0;
@@ -604,8 +612,15 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     items.push({ category: "Jointing", item: `Joint bay (${jb.surface})`, quantity: joints, unit: "ea", unit_cost: jb.cost, total_cost: joints * jb.cost, cost_type: "material" });
   }
 
-  // Terminations
-  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each, cost_type: "material" });
+  // Terminations — with joint bay for each termination point
+  const termCount = 2;
+  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each, cost_type: "material" });
+
+  // Excavation joint bay for each termination point (LV without mains extension)
+  if (voltageLevel === "LV" && !needsMainsExtension) {
+    const jb = getJointBayCost(split, rates);
+    items.push({ category: "Jointing", item: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_cost: jb.cost, total_cost: termCount * jb.cost, cost_type: "material" });
+  }
 
   // Switchgear — HV/EHV only
   if (voltageLevel !== "LV") {

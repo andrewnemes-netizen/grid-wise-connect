@@ -87,6 +87,7 @@ interface PdfInput {
   skipSave?: boolean;
   unitRates?: UnitRates;
   voltageOverride?: import("./connectionCosts").VoltageOverride;
+  includeFeederPillar?: boolean;
   nearestHeadroomKw?: number;
   streetViewCaptures?: { dataUrl: string; heading: number; pitch: number; label: string }[];
 
@@ -740,6 +741,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       constraints: input.constraints,
       voltage_override: input.voltageOverride,
       nearest_headroom_kw: input.nearestHeadroomKw,
+      includeFeederPillar: input.includeFeederPillar,
     }, input.unitRates);
     bom = generateBom({
       proposed_kw: input.proposedKw,
@@ -747,6 +749,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       constraints: input.constraints,
       voltage_override: input.voltageOverride,
       nearest_headroom_kw: input.nearestHeadroomKw,
+      includeFeederPillar: input.includeFeederPillar,
     }, input.unitRates);
 
     checkPage(50);
