@@ -445,9 +445,12 @@ export function estimateConnectionCost(
     }
   }
 
-  // Metering
-  const meteringCost = voltageLevel === "LV" ? rates.metering_wc : rates.metering_ct;
-  breakdown.push({ category: "Equipment", description: voltageLevel === "LV" ? "Whole current meter" : "CT metering", quantity: 1, unit: "ea", unit_rate: meteringCost, total: meteringCost, cost_type: "material" });
+  // Metering — CT metering for HV/EHV only; no whole current meter for LV
+  let meteringCost = 0;
+  if (voltageLevel !== "LV") {
+    meteringCost = rates.metering_ct;
+    breakdown.push({ category: "Equipment", description: "CT metering", quantity: 1, unit: "ea", unit_rate: meteringCost, total: meteringCost, cost_type: "material" });
+  }
 
   // Earthing & transformer civils — HV/EHV only
   let earthingCost = 0;
