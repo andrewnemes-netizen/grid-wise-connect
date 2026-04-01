@@ -1,54 +1,34 @@
 
 
-## Fix: Ingest All Records Beyond 10,000 Limit
+## Fix: LV Underground Cables Ingestion (580k records)
 
-### Problem
-The Opendatasoft API caps `offset + limit` at 10,000. The current code stops at that boundary, so datasets with 19k, 179k, or 580k records only ingest 10,000.
+### Root causes found during testing
 
-The same 10k cap exists in the NPG/CKAN ingestion path.
+1. **CPU Time exceeded** — `PREFIXES_PER_RUN = 8` processes ~18k records per edge function run, exceeding the CPU budget
+2. **Stuck "Processing" state** — when a run crashes, the self-continuation chain breaks and the dataset stays stuck
+3. **Reset button only clears `processing`** — doesn't handle `partial` status, so stuck partial datasets can't be retried
+4. **12-minute stale threshold** too long — edge functions die in ~5 seconds of CPU time
 
-### Solution: Use the Opendatasoft Export Endpoint
-
-Instead of paginating with `/api/records?offset=N`, use the **bulk export endpoint**:
-```
-/api/explore/v2.1/catalog/datasets/{dataset_id}/exports/geojson
-```
-
-This streams the **entire dataset** as GeoJSON with no offset limit. We process it as a stream, batching inserts in chunks of 500.
-
-For CKAN sources: use the CKAN `datastore_search` with `_id` cursor (`where _id > last_id`) instead of offset to bypass the 10k cap.
-
-### Implementation
-
-**File: `supabase/functions/dno-open-data-ingest/index.ts`**
-- Add a new `ingestViaExport()` path that fetches the full GeoJSON export endpoint
-- Stream-parse the response using `response.body.getReader()` to avoid memory issues on 500k+ datasets
-- Batch-insert features in groups of 500 via existing `batch_insert_geo_features` RPC
-- Use export path when `totalRecords > 10,000`; keep existing paginated path for smaller datasets
-- Remove the `offset + batch_size > 10000` break condition from the paginated path
+### Changes
 
 **File: `supabase/functions/npg-dataset-ingest/index.ts`**
-- For Opendatasoft sources: same export endpoint approach
-- For CKAN sources: replace offset pagination with cursor-based (`"_id" > last_seen_id`) to bypass the 10k cap
-- Remove the `offset >= 10000` break conditions
+- Reduce `PREFIXES_PER_RUN` from 8 to **2** (each prefix ≈ 2,270 records for this dataset = ~4,500 records per run)
+- This keeps CPU usage well within limits while still making progress (128 self-continuations to complete)
 
-### Streaming architecture (for large datasets)
+**File: `src/components/admin/NpgDatasetRegistry.tsx`**
+- Reduce `STALE_PROCESSING_MS` from 12 minutes to **2 minutes**
+- Make "Reset Stuck" also reset datasets stuck in `partial` status (where `last_sync_at` is stale)
+- Update the stuck count stat to include stale `partial` records
 
-```text
-Export endpoint → streaming reader → JSON chunk parser
-  → batch of 500 features → RPC insert → next batch
-  → periodic feature_count update every 5,000 rows
-```
+**Database migration**
+- Clear all NPG datasets currently stuck in `processing` or `partial` state so LV Underground Cables can be retried fresh
 
-### Risk mitigation
-- Edge functions have a ~400s timeout; for very large datasets (500k+), we return progress and support resumption via a `last_id` parameter
-- If the export endpoint fails (some portals don't support it), fall back to the 10k paginated approach and log a warning
+### Expected result
+- Click "Ingest" on LV Underground Cables
+- Each run processes ~4,500 records in 2 hex prefixes, then self-continues
+- 128 sequential runs complete the full 580k dataset
+- If any run crashes, the 2-minute stale window auto-clears the lock
+- "Reset Stuck" button works for both `processing` and stale `partial` states
 
-### Files to change
-| File | Change |
-|------|--------|
-| `supabase/functions/dno-open-data-ingest/index.ts` | Add export-based streaming ingest for datasets > 10k records |
-| `supabase/functions/npg-dataset-ingest/index.ts` | Same export path + CKAN cursor pagination |
-
-### No database changes needed
+### No schema changes needed — only edge function logic and UI timing adjustments
 
