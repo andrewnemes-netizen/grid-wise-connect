@@ -49,7 +49,7 @@ interface DatasetEntry {
 
 const LIGHT_COLUMNS = "id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at";
 const PAGE_SIZE = 50;
-const STALE_PROCESSING_MS = 12 * 60 * 1000;
+const STALE_PROCESSING_MS = 2 * 60 * 1000;
 
 export function NpgDatasetRegistry() {
   const queryClient = useQueryClient();
@@ -171,7 +171,7 @@ export function NpgDatasetRegistry() {
   const resolveStaleProcessing = useCallback(async (silent = true) => {
     const staleCutoffIso = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
 
-    const [staleRowsResult, nullTimeRowsResult] = await Promise.all([
+    const [staleProcessingResult, nullTimeResult, stalePartialResult] = await Promise.all([
       supabase
         .from("dno_dataset_registry")
         .select("id")
@@ -184,19 +184,26 @@ export function NpgDatasetRegistry() {
         .eq("dno", selectedDno)
         .eq("last_sync_status", "processing")
         .is("last_sync_at", null),
+      supabase
+        .from("dno_dataset_registry")
+        .select("id")
+        .eq("dno", selectedDno)
+        .eq("last_sync_status", "partial")
+        .lt("last_sync_at", staleCutoffIso),
     ]);
 
-    if (staleRowsResult.error || nullTimeRowsResult.error) {
+    if (staleProcessingResult.error || nullTimeResult.error || stalePartialResult.error) {
       if (!silent) {
-        toast.error(`Failed to resolve stuck datasets: ${staleRowsResult.error?.message || nullTimeRowsResult.error?.message}`);
+        toast.error(`Failed to resolve stuck datasets: ${staleProcessingResult.error?.message || nullTimeResult.error?.message || stalePartialResult.error?.message}`);
       }
       return;
     }
 
     const staleIds = Array.from(
       new Set([
-        ...(staleRowsResult.data ?? []).map(r => r.id),
-        ...(nullTimeRowsResult.data ?? []).map(r => r.id),
+        ...(staleProcessingResult.data ?? []).map(r => r.id),
+        ...(nullTimeResult.data ?? []).map(r => r.id),
+        ...(stalePartialResult.data ?? []).map(r => r.id),
       ])
     );
 

@@ -247,7 +247,7 @@ async function performIngest(
       // Use recordid prefix partitioning to stay under the 10k offset+limit cap.
       // Each 2-char hex prefix covers ~recordCount/256 records.
       // Process PREFIXES_PER_RUN prefixes per invocation, then self-continue.
-      const PREFIXES_PER_RUN = 8; // ~8 × 2.3k = ~18k records per run for 580k dataset
+      const PREFIXES_PER_RUN = 2; // ~2 × 2.3k = ~4.5k records per run — stays within CPU budget
       const endIndex = Math.min(partitionStart + PREFIXES_PER_RUN, HEX_PREFIXES.length);
 
       console.log(`[ingest] Partitioned records: prefixes ${partitionStart}..${endIndex - 1} of ${HEX_PREFIXES.length} (est ${recordCount} total)`);
