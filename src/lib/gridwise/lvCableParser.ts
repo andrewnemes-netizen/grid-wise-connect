@@ -36,6 +36,7 @@ export interface LvCableMatch {
   feederName: string;
   sourceSiteName: string;
   distanceM: number;
+  snapDistanceM: number;
   score: number;
   snapLon: number;
   snapLat: number;
@@ -140,6 +141,7 @@ export function scoreCableCandidate(params: {
   isUnknown: boolean;
   ductedKva?: number | null;
   distanceM: number;
+  snapDistanceM?: number | null;
 }): number {
   let score = 0;
   if (params.compatible) score += 1000;
@@ -148,7 +150,7 @@ export function scoreCableCandidate(params: {
   else if ((params.ductedKva ?? 0) >= 130) score += 75;
   if (params.isServiceLike) score -= 500;
   if (params.isUnknown) score -= 1000;
-  score -= params.distanceM * 2;
+  score -= (params.snapDistanceM ?? params.distanceM) * 5;
   return score;
 }
 
@@ -162,6 +164,7 @@ export function mapRpcToLvCableMatch(row: Record<string, unknown>): LvCableMatch
     feederName: String(row.feeder_name ?? ""),
     sourceSiteName: String(row.source_site_name ?? ""),
     distanceM: Number(row.distance_m ?? 0),
+    snapDistanceM: Number(row.snap_distance_m ?? 0),
     score: Number(row.score ?? 0),
     snapLon: Number(row.snap_lon ?? 0),
     snapLat: Number(row.snap_lat ?? 0),
