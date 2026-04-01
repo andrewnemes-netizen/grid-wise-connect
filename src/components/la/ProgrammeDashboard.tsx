@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Download, AlertTriangle, Zap, Wrench, Building2, ArrowUpDown, Save, Loader2, CheckCircle2, XCircle, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
 
 interface ScoredRow {
   site_name: string;
