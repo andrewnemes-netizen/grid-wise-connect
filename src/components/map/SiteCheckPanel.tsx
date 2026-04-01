@@ -15,6 +15,7 @@ import { CostEstimatePanel } from "./CostEstimatePanel";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { fetchAllRoadRoutes } from "@/lib/roadRoute";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { findNearestLvMain, findNearestHvAsset } from "@/lib/gridwise/assetEngine";
 
 interface SiteCheckPanelProps {
   lng: number | null;
