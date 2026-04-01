@@ -49,6 +49,7 @@ interface DatasetEntry {
 
 const LIGHT_COLUMNS = "id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at";
 const PAGE_SIZE = 50;
+const STALE_PROCESSING_MS = 12 * 60 * 1000;
 
 export function NpgDatasetRegistry() {
   const queryClient = useQueryClient();
@@ -167,6 +168,72 @@ export function NpgDatasetRegistry() {
     queryClient.invalidateQueries({ queryKey: ["dno-active-linked-count"] });
   }, [queryClient]);
 
+  const resolveStaleProcessing = useCallback(async (silent = true) => {
+    const staleCutoffIso = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+
+    const [staleRowsResult, nullTimeRowsResult] = await Promise.all([
+      supabase
+        .from("dno_dataset_registry")
+        .select("id")
+        .eq("dno", selectedDno)
+        .eq("last_sync_status", "processing")
+        .lt("last_sync_at", staleCutoffIso),
+      supabase
+        .from("dno_dataset_registry")
+        .select("id")
+        .eq("dno", selectedDno)
+        .eq("last_sync_status", "processing")
+        .is("last_sync_at", null),
+    ]);
+
+    if (staleRowsResult.error || nullTimeRowsResult.error) {
+      if (!silent) {
+        toast.error(`Failed to resolve stuck datasets: ${staleRowsResult.error?.message || nullTimeRowsResult.error?.message}`);
+      }
+      return;
+    }
+
+    const staleIds = Array.from(
+      new Set([
+        ...(staleRowsResult.data ?? []).map(r => r.id),
+        ...(nullTimeRowsResult.data ?? []).map(r => r.id),
+      ])
+    );
+
+    if (staleIds.length === 0) return;
+
+    const now = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from("dno_dataset_registry")
+      .update({
+        last_sync_status: "error",
+        last_sync_error: "Timed out while ingesting (auto-marked as failed)",
+        last_sync_at: now,
+        updated_at: now,
+      })
+      .in("id", staleIds);
+
+    if (updateError) {
+      if (!silent) {
+        toast.error(`Failed to mark timed-out datasets: ${updateError.message}`);
+      }
+      return;
+    }
+
+    invalidateAll();
+    if (!silent) {
+      toast.info(`Marked ${staleIds.length} timed-out dataset${staleIds.length === 1 ? "" : "s"} as failed`);
+    }
+  }, [invalidateAll, selectedDno]);
+
+  useEffect(() => {
+    void resolveStaleProcessing(true);
+    const timer = setInterval(() => {
+      void resolveStaleProcessing(true);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [resolveStaleProcessing]);
+
   const handleCrawl = async () => {
     setCrawling(true);
     try {
@@ -188,6 +255,10 @@ export function NpgDatasetRegistry() {
         }
       );
       const result = await resp.json();
+      if (resp.status === 409) {
+        toast.info(result.detail || "This dataset is already processing");
+        return;
+      }
       if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
 
       toast.success(`Discovered ${result.total_discovered} ${selectedDno} datasets, upserted ${result.inserted}`);
@@ -293,22 +364,7 @@ export function NpgDatasetRegistry() {
   };
 
   const handleResetStuck = async () => {
-    const { error } = await supabase
-      .from("dno_dataset_registry")
-      .update({
-        last_sync_status: "error",
-        last_sync_error: "Reset by admin — previous run timed out or crashed",
-        last_sync_at: new Date().toISOString(),
-      })
-      .eq("dno", selectedDno)
-      .eq("last_sync_status", "processing");
-
-    if (error) {
-      toast.error(`Reset failed: ${error.message}`);
-    } else {
-      toast.success("Stuck datasets reset to error status");
-      invalidateAll();
-    }
+    await resolveStaleProcessing(false);
   };
 
   // Batch Sync All — fire all ingests, then start a single global poll
@@ -369,6 +425,7 @@ export function NpgDatasetRegistry() {
     let pollCount = 0;
     batchPollRef.current = setInterval(async () => {
       pollCount++;
+      await resolveStaleProcessing(true);
       invalidateAll();
 
       const { count } = await supabase
