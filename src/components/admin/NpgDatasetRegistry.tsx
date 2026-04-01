@@ -124,6 +124,7 @@ export function NpgDatasetRegistry() {
         active: all.filter(d => d.active).length,
         synced: all.filter(d => d.last_sync_status === "success").length,
         failed: all.filter(d => d.last_sync_status === "error").length,
+        processing: all.filter(d => d.last_sync_status === "processing").length,
         totalRows: all.reduce((s, d) => s + (d.last_sync_rows || 0), 0),
       };
     },
@@ -291,6 +292,25 @@ export function NpgDatasetRegistry() {
     }
   };
 
+  const handleResetStuck = async () => {
+    const { error } = await supabase
+      .from("dno_dataset_registry")
+      .update({
+        last_sync_status: "error",
+        last_sync_error: "Reset by admin — previous run timed out or crashed",
+        last_sync_at: new Date().toISOString(),
+      })
+      .eq("dno", selectedDno)
+      .eq("last_sync_status", "processing");
+
+    if (error) {
+      toast.error(`Reset failed: ${error.message}`);
+    } else {
+      toast.success("Stuck datasets reset to error status");
+      invalidateAll();
+    }
+  };
+
   // Batch Sync All — fire all ingests, then start a single global poll
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
@@ -427,6 +447,17 @@ export function NpgDatasetRegistry() {
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
                 {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
+              {(stats?.processing ?? 0) > 0 && (
+                <Button
+                  onClick={handleResetStuck}
+                  size="sm"
+                  variant="ghost"
+                  className="text-amber-600 hover:text-amber-700"
+                >
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  Reset {stats?.processing} Stuck
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
