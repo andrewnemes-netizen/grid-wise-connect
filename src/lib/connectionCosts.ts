@@ -612,8 +612,15 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     items.push({ category: "Jointing", item: `Joint bay (${jb.surface})`, quantity: joints, unit: "ea", unit_cost: jb.cost, total_cost: joints * jb.cost, cost_type: "material" });
   }
 
-  // Terminations
-  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: 2, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each, cost_type: "material" });
+  // Terminations — with joint bay for each termination point
+  const termCount = 2;
+  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each, cost_type: "material" });
+
+  // Excavation joint bay for each termination point (LV without mains extension)
+  if (voltageLevel === "LV" && !needsMainsExtension) {
+    const jb = getJointBayCost(split, rates);
+    items.push({ category: "Jointing", item: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_cost: jb.cost, total_cost: termCount * jb.cost, cost_type: "material" });
+  }
 
   // Switchgear — HV/EHV only
   if (voltageLevel !== "LV") {
