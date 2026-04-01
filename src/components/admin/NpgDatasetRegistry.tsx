@@ -292,6 +292,25 @@ export function NpgDatasetRegistry() {
     }
   };
 
+  const handleResetStuck = async () => {
+    const { error } = await supabase
+      .from("dno_dataset_registry")
+      .update({
+        last_sync_status: "error",
+        last_sync_error: "Reset by admin — previous run timed out or crashed",
+        last_sync_at: new Date().toISOString(),
+      })
+      .eq("dno", selectedDno)
+      .eq("last_sync_status", "processing");
+
+    if (error) {
+      toast.error(`Reset failed: ${error.message}`);
+    } else {
+      toast.success("Stuck datasets reset to error status");
+      invalidateAll();
+    }
+  };
+
   // Batch Sync All — fire all ingests, then start a single global poll
   const handleSyncAll = async () => {
     setSyncAllRunning(true);
