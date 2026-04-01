@@ -268,6 +268,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const handleScore = async () => {
     if (!lng || !lat) return;
     setLoading(true);
+    setCablePoc(null);
     try {
       // Fire both calls in parallel
       const [scoreRes, safetyRes] = await Promise.all([
