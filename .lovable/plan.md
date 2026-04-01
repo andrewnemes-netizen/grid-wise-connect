@@ -1,61 +1,63 @@
 
 
-## Gaps Found
+## Fix: Lat/Lng Coordinate Swap Bug
 
-### 1. Cost Engine: LA Programme uses separate inline logic
-The `score-sites-batch` edge function (lines 370-430) has a hardcoded cost calculator that does NOT reflect the recent changes made to `src/lib/connectionCosts.ts`:
-- Still includes WC meter cost (should be removed for LV)
-- Does not conditionally exclude pot ends
-- Does not include excavation joint bays per joint
-- LV joint team has no 1-day minimum floor
-- No feeder pillar toggle support
+### Problem
+Halifax HX4 8DW is appearing near Madagascar because `raw_score_data.lat` = -1.857 (actually longitude) and `raw_score_data.lng` = 53.686 (actually latitude). The coordinates are stored swapped. This likely affects many sites scored through the LA Programme batch, causing red flags on the portfolio map.
 
-### 2. PDF Export with Map Screenshot: Not implemented
-The LA Programme dashboard only exports CSV. There is no PDF report generation or map screenshot capture for programme sites or portfolio entries.
+### Root Cause
+The swap can originate from two places:
+1. **CSV upload with explicit lat/lng columns** where the source data has them reversed (common with BNG/GIS exports that use x=easting/lng, y=northing/lat)
+2. Possible edge case in the geocoding pipeline
 
----
+Regardless of source, the system has **no validation** to detect obviously-swapped UK coordinates.
 
-## Plan
+### Fix: Add UK coordinate validation + auto-correction
 
-### Step 1 — Align batch cost engine with shared logic
-**File:** `supabase/functions/score-sites-batch/index.ts`
+**Three locations need a guard:**
 
-Update the inline `computeCost` function to match the rules now in `connectionCosts.ts`:
-- Remove WC meter from LV estimates
-- Only include pot ends when mains extension is triggered
-- Add excavation joint bay cost (quantity = joint count)
-- Set LV joint team minimum to 1 day (not 0.5)
-- Default feeder pillar to included (no toggle needed in batch — batch always includes it)
+#### 1. CsvIntakePanel.tsx (CSV parsing)
+After parsing lat/lng from CSV columns (line ~163), add a UK bounds check. If `lat` is in [-8, 2] and `lng` is in [49, 61], swap them — they're clearly reversed. UK bounds: lat ∈ [49, 61], lng ∈ [-8, 2].
 
-### Step 2 — Add PDF export to Programme Dashboard
-**Files:** `src/components/la/ProgrammeDashboard.tsx`, new helper or extend `generateAssessmentPdf.ts`
+#### 2. score-sites-batch edge function (geocoder output + input validation)
+After resolving `geo` from either CSV coords or geocoding (line ~601), validate the coordinates are within UK bounds. If swapped, auto-correct. This catches both bad CSV data and any geocoder anomalies.
 
-Add an "Export PDF" button that generates a programme summary report containing:
-- Summary stats (total sites, phases, total kW, total estimate)
-- Phase breakdown table
-- Per-site table with key metrics
-- No map screenshot per site (batch context — too many sites)
+#### 3. ProgrammeDashboard.tsx (save to portfolio)
+Before saving `raw_score_data`, validate and correct lat/lng one final time as a safety net.
 
-### Step 3 — Add map screenshot to Portfolio site PDF
-**File:** `src/components/portfolio/PortfolioAnalytics.tsx` (or wherever individual portfolio site export lives)
+#### 4. SiteDetail.tsx (View on Map navigation)
+When reading `raw.lat` and `raw.lng` for the "View on Map" button, apply the same swap-detection guard so existing bad data renders correctly.
 
-When a user exports a single portfolio site, use the existing `generateAssessmentPdf` flow which already captures map screenshots. Verify the `includeFeederPillar` flag propagates from the portfolio context.
-
----
-
-### Technical detail
-
-**Batch cost function changes** (edge function):
+### Validation function (shared logic)
+```typescript
+function normalizeUkCoords(lat: number, lng: number): { lat: number; lng: number } {
+  // UK bounds: lat [49, 61], lng [-8, 2]
+  if (lat >= -8 && lat <= 2 && lng >= 49 && lng <= 61) {
+    return { lat: lng, lng: lat }; // They're swapped
+  }
+  return { lat, lng };
+}
 ```
-// Remove: equipment += r.whole_current_meter_each (for LV)
-// Add: equipment += jointCount * r.excavation_joint_bay_each
-// Change: labourDays floor from 0.5 to 1.0 for LV joint team
-// Conditional: pot ends only when needsMainsExtension
+
+### Also: Fix existing bad data
+Run a one-time migration to correct any sites already stored with swapped coordinates.
+
+```sql
+UPDATE sites
+SET raw_score_data = jsonb_set(
+  jsonb_set(raw_score_data, '{lat}', raw_score_data->'lng'),
+  '{lng}', raw_score_data->'lat'
+)
+WHERE (raw_score_data->>'lat')::float BETWEEN -8 AND 2
+  AND (raw_score_data->>'lng')::float BETWEEN 49 AND 61;
 ```
 
 ### Files changed
 | File | Change |
 |------|--------|
-| `supabase/functions/score-sites-batch/index.ts` | Align cost calc with shared rules |
-| `src/components/la/ProgrammeDashboard.tsx` | Add PDF export button + generation |
+| `src/components/la/CsvIntakePanel.tsx` | Add UK coord validation after parsing lat/lng |
+| `supabase/functions/score-sites-batch/index.ts` | Add coord validation after geocoding/input resolution |
+| `src/components/la/ProgrammeDashboard.tsx` | Add coord validation before portfolio save |
+| `src/pages/SiteDetail.tsx` | Add coord validation when reading raw lat/lng for map navigation |
+| Migration | Fix existing swapped records |
 
