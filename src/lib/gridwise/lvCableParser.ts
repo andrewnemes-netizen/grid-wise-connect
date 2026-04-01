@@ -141,6 +141,7 @@ export function scoreCableCandidate(params: {
   isUnknown: boolean;
   ductedKva?: number | null;
   distanceM: number;
+  snapDistanceM?: number | null;
 }): number {
   let score = 0;
   if (params.compatible) score += 1000;
