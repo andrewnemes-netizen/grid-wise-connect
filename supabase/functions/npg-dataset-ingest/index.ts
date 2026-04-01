@@ -533,8 +533,20 @@ async function ingestViaRecords(
 
     const totalCount = data.total_count || 0;
     if (records.length < batchSize || offset >= totalCount) break;
+    // If we're approaching the 10k offset cap, switch to GeoJSON export
     if (offset + batchSize > 10000) {
-      console.warn(`[ingest] Hit 10k record API cap at offset ${offset}`);
+      console.warn(`[ingest] Approaching 10k offset cap at ${offset} — switching to export endpoint`);
+      if (entry.endpoint_export_geojson) {
+        try {
+          const exportResult = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+          // Export downloads everything; deduplicate will be handled by batch_insert (ON CONFLICT)
+          totalInserted = exportResult.inserted;
+          totalSkipped = exportResult.skipped;
+          return { inserted: totalInserted, skipped: totalSkipped };
+        } catch (e) {
+          console.warn(`[ingest] Export fallback failed: ${e}, returning partial results`);
+        }
+      }
       break;
     }
 
@@ -677,8 +689,10 @@ async function ingestViaCkanDatastore(
 
     offset += records.length;
     if (records.length < limit) break;
-    if (offset >= 10000) {
-      console.warn(`[ingest] CKAN: Hit 10k record cap at offset ${offset}`);
+    // CKAN datastore supports higher offsets than Opendatasoft — no 10k cap
+    // But apply a safety cap at 500k to prevent runaway ingestion
+    if (offset >= 500000) {
+      console.warn(`[ingest] CKAN: Safety cap at ${offset} records`);
       break;
     }
 

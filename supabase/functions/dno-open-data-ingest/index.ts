@@ -183,61 +183,182 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Paginate through the Opendatasoft API
+    // Determine total record count first
     const apiBase = `${dnoConfig.base_url}/catalog/datasets/${dsConfig.dataset_id}/records`;
-    let offset = 0;
     let totalInserted = 0;
     let totalSkipped = 0;
     let totalRecords = 0;
 
-    while (true) {
-      const url = `${apiBase}?limit=${batch_size}&offset=${offset}`;
-      console.log(`[dno-ingest] Fetching ${url}`);
+    // Check total count
+    const countResp = await fetch(`${apiBase}?limit=0`);
+    if (countResp.ok) {
+      const countData = await countResp.json();
+      totalRecords = countData.total_count || 0;
+    }
+    console.log(`[dno-ingest] Total records available: ${totalRecords}`);
 
-      const resp = await fetch(url);
-      if (!resp.ok) {
-        const errText = await resp.text();
-        console.error(`[dno-ingest] API error ${resp.status}: ${errText}`);
+    if (totalRecords > 10000) {
+      // Use bulk GeoJSON export endpoint for large datasets
+      const exportUrl = `${dnoConfig.base_url}/catalog/datasets/${dsConfig.dataset_id}/exports/geojson`;
+      console.log(`[dno-ingest] Using streaming export (${totalRecords} records): ${exportUrl}`);
+
+      const exportResp = await fetch(exportUrl);
+      if (!exportResp.ok) {
+        const errText = await exportResp.text();
+        console.error(`[dno-ingest] Export endpoint error ${exportResp.status}: ${errText}`);
         return new Response(
-          JSON.stringify({ error: `DNO API error: ${resp.status}`, detail: errText, inserted: totalInserted }),
+          JSON.stringify({ error: `Export endpoint error: ${exportResp.status}`, detail: errText }),
           { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const data = await resp.json();
-      if (offset === 0) {
-        totalRecords = data.total_count || 0;
-        console.log(`[dno-ingest] Total records available: ${totalRecords}`);
+      // Stream-parse GeoJSON features
+      const reader = exportResp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let inFeatures = false;
+      let depth = 0;
+      let featureStart = -1;
+      let featureBatch: any[] = [];
+
+      const flushBatch = async () => {
+        if (featureBatch.length === 0) return;
+        const features = featureBatch
+          .map((f: any) => {
+            const props = f.properties || {};
+            const geom = f.geometry;
+            const rec = { ...props };
+            // Re-attach geometry fields for convertRecord
+            if (dsConfig.geometry_mode === "geo_shape") {
+              rec[dsConfig.geometry_field] = f;
+            } else if (dsConfig.geometry_mode === "geo_point_2d" && geom?.type === "Point") {
+              rec[dsConfig.geometry_field] = { lat: geom.coordinates[1], lon: geom.coordinates[0] };
+            } else if (dsConfig.geometry_mode === "latlon_field" && geom?.type === "Point") {
+              rec[dsConfig.geometry_field] = { lat: geom.coordinates[1], lon: geom.coordinates[0] };
+            }
+            return convertRecord(rec, dsConfig, dno, layer_id);
+          })
+          .filter(Boolean);
+
+        if (features.length > 0) {
+          const { data: inserted, error: rpcError } = await supabase.rpc("batch_insert_geo_features", {
+            _table_name: dsConfig.storage_table,
+            _features_json: JSON.stringify(features),
+          });
+          if (rpcError) {
+            console.error(`[dno-ingest] RPC error during streaming:`, rpcError);
+            throw new Error(rpcError.message);
+          }
+          totalInserted += inserted ?? features.length;
+        }
+        totalSkipped += featureBatch.length - features.length;
+        featureBatch = [];
+        console.log(`[dno-ingest] Stream progress: ${totalInserted} inserted`);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        if (!inFeatures) {
+          const idx = buffer.indexOf('"features"');
+          if (idx === -1) {
+            if (buffer.length > 1000) buffer = buffer.slice(-200);
+            continue;
+          }
+          const bracketIdx = buffer.indexOf("[", idx);
+          if (bracketIdx === -1) continue;
+          inFeatures = true;
+          buffer = buffer.slice(bracketIdx + 1);
+          depth = 0;
+          featureStart = -1;
+        }
+
+        let i = 0;
+        while (i < buffer.length) {
+          const ch = buffer[i];
+          if (ch === "{") {
+            if (depth === 0) featureStart = i;
+            depth++;
+          } else if (ch === "}") {
+            depth--;
+            if (depth === 0 && featureStart !== -1) {
+              const featureStr = buffer.slice(featureStart, i + 1);
+              try {
+                featureBatch.push(JSON.parse(featureStr));
+              } catch { /* skip malformed */ }
+              featureStart = -1;
+              if (featureBatch.length >= 500) {
+                await flushBatch();
+              }
+            }
+          } else if (ch === "]" && depth === 0) {
+            break;
+          }
+          i++;
+        }
+
+        if (featureStart !== -1) {
+          buffer = buffer.slice(featureStart);
+          featureStart = 0;
+        } else {
+          buffer = "";
+        }
       }
 
-      const records = data.results || [];
-      if (records.length === 0) break;
+      // Flush remaining
+      await flushBatch();
+    } else {
+      // Standard paginated path for datasets <= 10k
+      let offset = 0;
 
-      // Convert records to geo features
-      const features = records.map((rec: any) => convertRecord(rec, dsConfig, dno, layer_id)).filter(Boolean);
+      while (true) {
+        const url = `${apiBase}?limit=${batch_size}&offset=${offset}`;
+        console.log(`[dno-ingest] Fetching ${url}`);
 
-      if (features.length > 0) {
-        const { data: inserted, error: rpcError } = await supabase.rpc("batch_insert_geo_features", {
-          _table_name: dsConfig.storage_table,
-          _features_json: JSON.stringify(features),
-        });
-
-        if (rpcError) {
-          console.error(`[dno-ingest] RPC error at offset ${offset}:`, rpcError);
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          const errText = await resp.text();
+          console.error(`[dno-ingest] API error ${resp.status}: ${errText}`);
           return new Response(
-            JSON.stringify({ error: rpcError.message, inserted: totalInserted, offset }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ error: `DNO API error: ${resp.status}`, detail: errText, inserted: totalInserted }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        totalInserted += inserted ?? features.length;
+        const data = await resp.json();
+        if (offset === 0) {
+          totalRecords = data.total_count || totalRecords;
+        }
+
+        const records = data.results || [];
+        if (records.length === 0) break;
+
+        const features = records.map((rec: any) => convertRecord(rec, dsConfig, dno, layer_id)).filter(Boolean);
+
+        if (features.length > 0) {
+          const { data: inserted, error: rpcError } = await supabase.rpc("batch_insert_geo_features", {
+            _table_name: dsConfig.storage_table,
+            _features_json: JSON.stringify(features),
+          });
+
+          if (rpcError) {
+            console.error(`[dno-ingest] RPC error at offset ${offset}:`, rpcError);
+            return new Response(
+              JSON.stringify({ error: rpcError.message, inserted: totalInserted, offset }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          totalInserted += inserted ?? features.length;
+        }
+
+        totalSkipped += records.length - features.length;
+        offset += records.length;
+
+        if (offset >= totalRecords) break;
       }
-
-      totalSkipped += records.length - features.length;
-      offset += records.length;
-
-      // Opendatasoft API caps offset+limit at 10000
-      if (offset >= totalRecords || offset + batch_size > 10000) break;
     }
 
     // Update feature count in layer_registry
