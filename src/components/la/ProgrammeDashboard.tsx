@@ -340,7 +340,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
           route_constraints: r.route_constraints || [],
           osm_coverage: r.osm_coverage || "none",
         },
-      }));
+      };
+      });
 
       // Insert in batches of 50
       let saved = 0;
