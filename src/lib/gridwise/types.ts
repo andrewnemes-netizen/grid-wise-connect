@@ -62,6 +62,19 @@ export interface NearestAsset {
   capacity_kw?: number | null;
   voltage_kv?: number | null;
   confidence: "high" | "medium" | "low";
+  /** LV cable-specific fields (populated when asset_type = "cable_segment") */
+  cable_type?: string;
+  feeder_name?: string;
+  source_site_name?: string;
+  snap_point?: { lng: number; lat: number };
+  direct_kva?: number;
+  ducted_kva?: number;
+  green_compatible?: boolean;
+  ev_compatible?: boolean;
+  parsed_family?: string;
+  parsed_material?: string;
+  parsed_construction?: string;
+  cable_score?: number;
 }
 
 export interface AssetSearchResult {

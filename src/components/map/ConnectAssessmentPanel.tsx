@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush, Radar } from "lucide-react";
+import { X, Cable, Zap, Loader2, AlertTriangle, CheckCircle, XCircle, Download, Save, Activity, Shield, FileJson, Paintbrush, Radar, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouteAutoDetect, type RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/
 import { createSnapshot } from "@/lib/snapshotService";
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
 import { VoltageComparisonPanel } from "./VoltageComparisonPanel";
+import { findNearestLvMain } from "@/lib/gridwise/assetEngine";
+import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
 
 export interface ConnectEndpoints {
   source: {
@@ -136,6 +138,11 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
   // Voltage comparison state
   const [comparisonResult, setComparisonResult] = useState<VoltageComparisonResult | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+
+  // LV cable match state
+  const [lvCableMatch, setLvCableMatch] = useState<LvCableMatch | null>(null);
+  const [lvCableLoading, setLvCableLoading] = useState(false);
+  const [lvCableSearched, setLvCableSearched] = useState(false);
 
   // Design conversion state
   const [converting, setConverting] = useState(false);
@@ -379,6 +386,92 @@ export function ConnectAssessmentPanel({ endpoints, onClose, onCaptureMapScreens
                 <p className="text-[10px] text-muted-foreground">No spatial data found along this route</p>
               )}
             </div>
+          )}
+
+          {/* LV Cable Search */}
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={lvCableLoading}
+            onClick={async () => {
+              setLvCableLoading(true);
+              setLvCableSearched(true);
+              try {
+                const [dstLng, dstLat] = endpoints.destination.lngLat;
+                const match = await findNearestLvMain(dstLng, dstLat);
+                setLvCableMatch(match);
+                if (match) {
+                  toast({ title: "LV main found", description: `${match.conductingSectionType} at ${Math.round(match.distanceM)}m` });
+                } else {
+                  toast({ title: "No compatible LV main", description: "No compatible LV underground main within 100m search radius", variant: "destructive" });
+                }
+              } catch (err: any) {
+                toast({ title: "LV search failed", description: err.message, variant: "destructive" });
+              } finally {
+                setLvCableLoading(false);
+              }
+            }}
+          >
+            {lvCableLoading ? (
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Searching LV mains…</>
+            ) : (
+              <><Search className="mr-2 h-4 w-4" />Find Nearest Compatible LV Main</>
+            )}
+          </Button>
+
+          {/* LV Cable Match Results */}
+          {lvCableSearched && !lvCableLoading && (
+            lvCableMatch ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Cable className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Nearest Compatible LV Main</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                  <span className="text-muted-foreground">Cable Type</span>
+                  <span className="font-medium text-right truncate" title={lvCableMatch.conductingSectionType}>
+                    {lvCableMatch.conductingSectionType}
+                  </span>
+                  <span className="text-muted-foreground">Family</span>
+                  <span className="font-medium text-right capitalize">{lvCableMatch.parsedFamily.replace(/_/g, ' ')}</span>
+                  <span className="text-muted-foreground">Distance</span>
+                  <span className="font-medium text-right">{Math.round(lvCableMatch.distanceM)} m</span>
+                  <span className="text-muted-foreground">Feeder</span>
+                  <span className="font-medium text-right truncate" title={lvCableMatch.feederName}>{lvCableMatch.feederName || '—'}</span>
+                  <span className="text-muted-foreground">Source Site</span>
+                  <span className="font-medium text-right truncate" title={lvCableMatch.sourceSiteName}>{lvCableMatch.sourceSiteName || '—'}</span>
+                  <span className="text-muted-foreground">Direct kVA</span>
+                  <span className="font-medium text-right">{lvCableMatch.directKva}</span>
+                  <span className="text-muted-foreground">Ducted kVA</span>
+                  <span className="font-medium text-right">{lvCableMatch.ductedKva}</span>
+                  <span className="text-muted-foreground">Score</span>
+                  <span className="font-medium text-right">{Math.round(lvCableMatch.score)}</span>
+                </div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  <Badge variant="outline" className="text-[9px] border-emerald-300 text-emerald-700 dark:text-emerald-400">
+                    {lvCableMatch.evCompatible ? "EV Compatible" : "Not Compatible"}
+                  </Badge>
+                  {lvCableMatch.greenCompatible && (
+                    <Badge variant="outline" className="text-[9px] border-emerald-300 text-emerald-700 dark:text-emerald-400">Green</Badge>
+                  )}
+                  {lvCableMatch.isMainLike && (
+                    <Badge variant="outline" className="text-[9px]">Main-like</Badge>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Snap point: {lvCableMatch.snapLat.toFixed(5)}, {lvCableMatch.snapLon.toFixed(5)}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                    No compatible LV underground main found within search radius
+                  </span>
+                </div>
+              </div>
+            )
           )}
 
 

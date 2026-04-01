@@ -3,15 +3,54 @@
  * 
  * Wraps the existing score-site edge function and scoring engine
  * into the unified AssetSearchResult interface.
+ * Also searches for the nearest compatible LV underground main cable.
  */
 
 import { supabase } from "@/integrations/supabase/client";
 import { buildRawMetrics, type RawMetrics } from "../scoringEngine";
 import type { SiteInput, AssetSearchResult, NearestAsset } from "./types";
+import { mapRpcToLvCableMatch, type LvCableMatch } from "./lvCableParser";
+
+/**
+ * Search for the nearest compatible LV underground main cable
+ * using the PostGIS RPC with staged search radii (25 → 50 → 100m).
+ */
+export async function findNearestLvMain(
+  lng: number,
+  lat: number
+): Promise<LvCableMatch | null> {
+  const searchRadii = [25, 50, 100];
+
+  for (const radius of searchRadii) {
+    try {
+      const { data, error } = await supabase.rpc("find_nearest_compatible_lv_main", {
+        p_lon: lng,
+        p_lat: lat,
+        p_search_m: radius,
+      });
+
+      if (error) {
+        console.warn(`LV main search (${radius}m) error:`, error.message);
+        continue;
+      }
+
+      // RPC returns an array; take the first (best) result
+      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      if (rows.length > 0 && rows[0].cable_id) {
+        return mapRpcToLvCableMatch(rows[0]);
+      }
+    } catch (err) {
+      console.warn(`LV main search (${radius}m) failed:`, err);
+    }
+  }
+
+  return null;
+}
 
 /**
  * Discover all candidate connection assets near the site.
  * Calls the score-site edge function and maps results to AssetSearchResult.
+ * Also searches for the nearest compatible LV underground main cable.
  */
 export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResult> {
   let scoreData: any = null;
@@ -77,10 +116,43 @@ export async function runAssetEngine(input: SiteInput): Promise<AssetSearchResul
     confidence: "medium" as const,
   }));
 
+  // Search for nearest compatible LV underground main cable
+  let nearestCableSegment: NearestAsset | null = null;
+  try {
+    const lvMatch = await findNearestLvMain(input.lng, input.lat);
+    if (lvMatch) {
+      nearestCableSegment = {
+        asset_id: lvMatch.assetId || lvMatch.cableId,
+        asset_type: "cable_segment",
+        name: lvMatch.conductingSectionType,
+        distance_m: lvMatch.distanceM,
+        headroom_kw: null,
+        utilisation_pct: null,
+        capacity_kw: lvMatch.ductedKva ?? null,
+        voltage_kv: null,
+        confidence: lvMatch.evCompatible ? "high" : "medium",
+        cable_type: lvMatch.conductingSectionType,
+        feeder_name: lvMatch.feederName,
+        source_site_name: lvMatch.sourceSiteName,
+        snap_point: { lng: lvMatch.snapLon, lat: lvMatch.snapLat },
+        direct_kva: lvMatch.directKva,
+        ducted_kva: lvMatch.ductedKva,
+        green_compatible: lvMatch.greenCompatible,
+        ev_compatible: lvMatch.evCompatible,
+        parsed_family: lvMatch.parsedFamily,
+        parsed_material: lvMatch.parsedMaterial,
+        parsed_construction: lvMatch.parsedConstruction,
+        cable_score: lvMatch.score,
+      };
+    }
+  } catch (err) {
+    console.warn("LV main search failed, continuing without:", err);
+  }
+
   return {
     nearest_substation: nearestSubstation,
     nearest_feeder: null,
-    nearest_cable_segment: null,
+    nearest_cable_segment: nearestCableSegment,
     alternatives,
     distances,
     constraints: {
