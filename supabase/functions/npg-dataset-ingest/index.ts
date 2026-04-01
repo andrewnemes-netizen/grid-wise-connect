@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const staleProcessingWindowMs = 8 * 60 * 1000;
+    const staleProcessingWindowMs = 2 * 60 * 1000; // 2 minutes — edge functions timeout well before this
     // Allow self-continuation for partial runs (skip_features > 0 means this is a continuation)
     const isChunkContinuation = skip_features > 0;
     if (entry.last_sync_status === "processing" && !isChunkContinuation) {
