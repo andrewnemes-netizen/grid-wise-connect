@@ -27,6 +27,9 @@ import {
 } from "@/lib/scoringEngine";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { findNearestLvMain, findNearestHvAsset } from "@/lib/gridwise/assetEngine";
+import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
+import type { HvAssetMatch } from "@/lib/gridwise/assetEngine";
 
 export interface ConnectionLine {
   id: string;
@@ -172,6 +175,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [safetyResult, setSafetyResult] = useState<SafetyResult | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [cablePoc, setCablePoc] = useState<{ name: string; snapLon: number; snapLat: number; distanceM: number; type: string } | null>(null);
 
   const pkw = Number(proposedKw) || 0;
 
@@ -282,27 +286,68 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         setSafetyResult(safetyRes.data);
       }
 
-      if (scoreRes.data.nearest_points && onConnectionLines) {
+      // ── Find actual cable POC using spatial RPC ──
+      const origin: [number, number] = [lng, lat];
+      let pocCoord: [number, number] | null = null;
+      let pocDistance = 0;
+
+      const isLv = pkw <= 100;
+      if (isLv) {
+        try {
+          const lvMatch = await findNearestLvMain(lng, lat);
+          if (lvMatch) {
+            pocCoord = [lvMatch.snapLon, lvMatch.snapLat];
+            pocDistance = lvMatch.snapDistanceM ?? lvMatch.distanceM;
+            setCablePoc({
+              name: lvMatch.sourceSiteName || lvMatch.feederName || lvMatch.conductingSectionType || "LV Cable",
+              snapLon: lvMatch.snapLon,
+              snapLat: lvMatch.snapLat,
+              distanceM: pocDistance,
+              type: "LV",
+            });
+          }
+        } catch (e) {
+          console.warn("LV cable search for route failed:", e);
+        }
+      } else {
+        try {
+          const hvMatch = await findNearestHvAsset(lng, lat, pkw);
+          if (hvMatch) {
+            pocCoord = [hvMatch.snapLon, hvMatch.snapLat];
+            pocDistance = hvMatch.snapDistanceM;
+            setCablePoc({
+              name: hvMatch.name || `${hvMatch.voltageKv}kV ${hvMatch.assetType}`,
+              snapLon: hvMatch.snapLon,
+              snapLat: hvMatch.snapLat,
+              distanceM: pocDistance,
+              type: `${hvMatch.voltageKv}kV`,
+            });
+          }
+        } catch (e) {
+          console.warn("HV asset search for route failed:", e);
+        }
+      }
+
+      // Fallback to score-site nearest_points if cable search didn't find anything
+      if (!pocCoord && scoreRes.data.nearest_points) {
         const np = scoreRes.data.nearest_points;
-        const origin: [number, number] = [lng, lat];
-        // Pick the POC: nearest cable segment, or feeder, or primary — whichever is closest
         const cableCoord = parseCoord(np.cable) || parseCoord(np.capacity_segment);
         const feederCoord = parseCoord(np.feeder);
         const primaryCoord = parseCoord(np.primary);
-        const pocCoord = cableCoord || feederCoord || primaryCoord;
-        const pocDistance = cableCoord
+        pocCoord = cableCoord || feederCoord || primaryCoord;
+        pocDistance = cableCoord
           ? (scoreRes.data.distances?.capacity_segment_m || 0)
           : feederCoord
             ? (scoreRes.data.distances?.feeder_m || 0)
             : (scoreRes.data.distances?.primary_m || 0);
+      }
 
-        if (pocCoord) {
-          const lineInputs = [
-            { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
-          ];
-          const roadLines = await fetchAllRoadRoutes(lineInputs);
-          onConnectionLines(roadLines);
-        }
+      if (pocCoord && onConnectionLines) {
+        const lineInputs = [
+          { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
+        ];
+        const roadLines = await fetchAllRoadRoutes(lineInputs);
+        onConnectionLines(roadLines);
       }
     } catch (err: any) {
       toast({ title: "Assessment failed", description: err.message, variant: "destructive" });
@@ -569,9 +614,11 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
               <div className="space-y-2">
                 <SectionHeader icon={Cable} title="ICP Connection Strategy" />
                 <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
-                  {bestPOC && (
+                  {cablePoc ? (
+                    <MetricRow label="Best POC" value={cablePoc.name} />
+                  ) : bestPOC ? (
                     <MetricRow label="Best POC" value={bestPOC.site_name || bestPOC.site_id} />
-                  )}
+                  ) : null}
                   <MetricRow label="Recommended Voltage" badge={getRecommendedVoltage(pkw)} badgeVariant="outline" />
                   <MetricRow label="Feeder Constraint Risk" badge={feederRisk} badgeVariant={feederRisk === "Low" ? "outline" : feederRisk === "Medium" ? "secondary" : "destructive"} />
                   <MetricRow label="Reinforcement Probability" value={`${reinforceProb}%`} />
@@ -587,8 +634,8 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                   {costBand && (
                     <MetricRow label="Cost Band" badge={costBand} badgeVariant={costBand === "£" ? "default" : costBand === "££" ? "secondary" : "destructive"} />
                   )}
-                  {result.distances && isInternal && (
-                    <MetricRow label="Cable Length Est." value={`${Math.min(pkw <= 80 ? result.distances.capacity_segment_m : pkw <= 1500 ? result.distances.feeder_m : result.distances.primary_m, pkw <= 80 ? 500 : pkw <= 1500 ? 3000 : 5000).toLocaleString()}m`} />
+                  {isInternal && (
+                    <MetricRow label="Cable Length Est." value={`${Math.round(cablePoc ? cablePoc.distanceM : Math.min(pkw <= 80 ? (result.distances?.capacity_segment_m ?? 0) : pkw <= 1500 ? (result.distances?.feeder_m ?? 0) : (result.distances?.primary_m ?? 0), pkw <= 80 ? 500 : pkw <= 1500 ? 3000 : 5000))}m`} />
                   )}
                   {rawMetrics.civils.constraint_count > 0 && (
                     <MetricRow label="Civils Complexity" badge={rawMetrics.civils.constraint_count > 1 ? "High" : "Medium"} badgeVariant={rawMetrics.civils.constraint_count > 1 ? "destructive" : "secondary"} />
