@@ -363,27 +363,44 @@ function estimateTotalCost(
   // --- EQUIPMENT ---
   let equipment = 0;
 
+  // Determine dominant surface for joint bay pricing
+  const dominantJointBayCost = sp.carriageway_pct >= sp.footway_pct && sp.carriageway_pct >= sp.verge_pct
+    ? r.joint_bay_carriageway
+    : sp.footway_pct >= sp.verge_pct ? r.joint_bay_footway : r.joint_bay_soft;
+
   // Joint bay + cable joint kit (LV mains extension only)
   if (needsMainsExtension) {
-    equipment += r.joint_bay_footway; // dominant surface
+    equipment += dominantJointBayCost; // joint bay for mains extension joint
     equipment += r.cable_joint_kit_185mm;
   }
 
   // Joints
+  let jointCount = 0;
   if (vl !== "LV") {
-    const jointCount = Math.max(2, Math.ceil(dist / 250));
+    jointCount = Math.max(2, Math.ceil(dist / 250));
     equipment += jointCount * r.jointing_each;
+    // Joint bay required for each joint (HV/EHV)
+    equipment += jointCount * dominantJointBayCost;
   } else {
-    equipment += r.cable_joint_kit_pot_end; // pot end
+    // LV: pot end only when mains extension is required
+    if (needsMainsExtension) {
+      equipment += r.cable_joint_kit_pot_end;
+      jointCount = 1;
+    }
   }
 
   // Terminations
   equipment += 2 * r.termination_each;
 
+  // Excavation joint bay for LV termination points (when no mains extension)
+  if (vl === "LV" && !needsMainsExtension) {
+    equipment += 2 * dominantJointBayCost;
+  }
+
   // Switchgear — HV/EHV only
   if (vl !== "LV") equipment += r.switchgear_ring_main;
 
-  // LV endpoint equipment
+  // LV endpoint equipment — feeder pillar always included in batch, no WC meter
   if (vl === "LV") equipment += r.feeder_pillar_each + r.cutout_100a_3ph;
 
   // Transformer — HV/EHV ONLY (NOT LV)
@@ -393,8 +410,8 @@ function estimateTotalCost(
     else equipment += Math.ceil(proposedKw / 1500) * r.transformer_1500kva;
   }
 
-  // Metering
-  equipment += vl === "LV" ? r.metering_wc : r.metering_ct;
+  // Metering — CT only for HV/EHV; no WC meter for LV
+  if (vl !== "LV") equipment += r.metering_ct;
 
   // Earthing & plinth — HV/EHV only
   if (vl !== "LV") {
@@ -407,12 +424,11 @@ function estimateTotalCost(
 
   // --- LABOUR ---
   let labourDays = Math.max(0.5, (dist / 100) * 0.5); // cable pulling
-  const jointCount = vl !== "LV" ? Math.max(2, Math.ceil(dist / 250)) : 1;
   labourDays += (jointCount + (needsMainsExtension ? 1 : 0)) * 0.5; // jointing
   labourDays += 2 * 0.25; // terminations
   labourDays += 0.5; // testing
   if (needsMainsExtension) labourDays += 0.5;
-  labourDays = Math.round(labourDays * 2) / 2;
+  labourDays = Math.max(1, Math.round(labourDays * 2) / 2); // minimum 1 day
   const labourCost = Math.round(labourDays * r.lv_joint_team_day);
 
   // --- REINFORCEMENT ---
