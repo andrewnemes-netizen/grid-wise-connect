@@ -99,6 +99,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [includeFeederPillar, setIncludeFeederPillar] = useState(true);
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
 
