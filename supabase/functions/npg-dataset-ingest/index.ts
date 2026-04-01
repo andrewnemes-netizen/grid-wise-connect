@@ -7,11 +7,16 @@ const corsHeaders = {
 };
 
 /**
- * NPG Dataset Ingest — Background Processing Edition
+ * NPG Dataset Ingest — Partitioned Records Edition
  *
- * Uses EdgeRuntime.waitUntil() to perform heavy ingestion in the background,
- * returning immediately with a status update to avoid WORKER_LIMIT errors.
+ * For large datasets (>10k records), uses the Records API partitioned by
+ * 2-char hex recordid prefix (256 buckets of ~2k records each).
+ * Processes a batch of prefixes per invocation and self-continues.
  */
+
+// 256 two-char hex prefixes for partitioning
+const HEX_PREFIXES: string[] = [];
+for (let i = 0; i < 256; i++) HEX_PREFIXES.push(i.toString(16).padStart(2, "0"));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -35,7 +40,6 @@ Deno.serve(async (req) => {
     });
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
-      console.error("[ingest] auth error:", authError?.message, "header present:", !!authHeader);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -51,7 +55,18 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { registry_id, mode = "export", where, select: selectFields, order_by, skip_features = 0, chunk_size } = body;
+    const {
+      registry_id,
+      mode = "export",
+      where,
+      select: selectFields,
+      order_by,
+      // Partition-based continuation
+      partition_start = 0,   // index into HEX_PREFIXES to start from
+      // Legacy chunk continuation (kept for backward compat)
+      skip_features = 0,
+      chunk_size,
+    } = body;
 
     if (!registry_id) {
       return new Response(JSON.stringify({ error: "registry_id is required" }), {
@@ -59,12 +74,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch the registry entry — try dno_dataset_registry first, then gas_dataset_registry
-    const GAS_OPERATORS = ["CADENT", "NGN", "SGN", "WWU"];
+    // Fetch the registry entry
     let entry: any = null;
     let registryTable = "dno_dataset_registry";
 
-    const { data: dnoEntry, error: dnoErr } = await supabase
+    const { data: dnoEntry } = await supabase
       .from("dno_dataset_registry")
       .select("*")
       .eq("id", registry_id)
@@ -73,7 +87,7 @@ Deno.serve(async (req) => {
     if (dnoEntry) {
       entry = dnoEntry;
     } else {
-      const { data: gasEntry, error: gasErr } = await supabase
+      const { data: gasEntry } = await supabase
         .from("gas_dataset_registry")
         .select("*")
         .eq("id", registry_id)
@@ -96,7 +110,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify linked layer
     const { data: layerRow } = await supabase
       .from("layer_registry")
       .select("id, storage_table, geometry_type")
@@ -109,7 +122,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Early return for non-geospatial datasets linked to spatial layers
+    // Skip non-geospatial datasets linked to spatial layers
     const spatialTables = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints", "geo_substations", "geo_points"];
     if (!entry.is_geospatial && spatialTables.includes(layerRow.storage_table)) {
       await supabase
@@ -122,127 +135,79 @@ Deno.serve(async (req) => {
         })
         .eq("id", registry_id);
 
-      return new Response(JSON.stringify({
-        accepted: false,
-        skipped: true,
-        reason: "Tabular dataset linked to spatial layer — no geometry available",
-      }), {
+      return new Response(JSON.stringify({ accepted: false, skipped: true, reason: "Tabular dataset — no geometry" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const staleProcessingWindowMs = 2 * 60 * 1000; // 2 minutes — edge functions timeout well before this
-    // Allow self-continuation for partial runs (skip_features > 0 means this is a continuation)
-    const isChunkContinuation = skip_features > 0;
-    if (entry.last_sync_status === "processing" && !isChunkContinuation) {
-      const lastSyncMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : Number.NaN;
-      const isFreshProcessingRun = Number.isFinite(lastSyncMs) && (Date.now() - lastSyncMs) < staleProcessingWindowMs;
-
-      if (isFreshProcessingRun) {
+    // Stale processing lock detection (1 minute)
+    const staleMs = 60_000;
+    const isContinuation = partition_start > 0 || skip_features > 0;
+    if (entry.last_sync_status === "processing" && !isContinuation) {
+      const lastMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : 0;
+      if (Date.now() - lastMs < staleMs) {
         return new Response(JSON.stringify({
           error: "Ingestion already running for this dataset",
           detail: "Please wait for the current run to complete before starting another.",
-        }), {
-          status: 409,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      await supabase
-        .from(registryTable)
-        .update({
-          last_sync_status: "error",
-          last_sync_error: "Previous run timed out or crashed",
-          last_sync_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", registry_id)
-        .eq("last_sync_status", "processing");
+      // Auto-clear stale lock
+      await supabase.from(registryTable).update({
+        last_sync_status: "error",
+        last_sync_error: "Previous run timed out or crashed",
+        last_sync_at: new Date().toISOString(),
+      }).eq("id", registry_id).eq("last_sync_status", "processing");
     }
 
-    // For chunk continuations, also accept "partial" status
-    if (isChunkContinuation && entry.last_sync_status !== "partial" && entry.last_sync_status !== "processing") {
+    // Allow continuations from partial state
+    if (isContinuation && entry.last_sync_status !== "partial" && entry.last_sync_status !== "processing") {
       return new Response(JSON.stringify({
         error: "Dataset is not in a partial/processing state for continuation",
         detail: `Current status: ${entry.last_sync_status}`,
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Mark as processing immediately
-    const processingStartedAt = new Date().toISOString();
-    const { error: processingStatusError } = await supabase
-      .from(registryTable)
-      .update({
-        last_sync_status: "processing",
-        last_sync_error: null,
-        last_sync_at: processingStartedAt,
-        updated_at: processingStartedAt,
-      })
-      .eq("id", registry_id);
-
-    if (processingStatusError) {
-      return new Response(JSON.stringify({
-        error: "Failed to mark dataset as processing",
-        detail: processingStatusError.message,
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Mark processing
+    const now = new Date().toISOString();
+    await supabase.from(registryTable).update({
+      last_sync_status: "processing",
+      last_sync_error: null,
+      last_sync_at: now,
+      updated_at: now,
+    }).eq("id", registry_id);
 
     const storageTable = layerRow.storage_table;
-    // DNO-aware API key lookup
     const dnoApiKeyMap: Record<string, string> = {
-      NPG: "NPG_API_KEY",
-      ENWL: "ENWL_API_KEY",
-      SPEN: "SPEN_API_KEY",
-      NGED: "NGED_API_KEY",
-      UKPN: "UKPN_API_KEY",
-      CADENT: "CADENT_API_KEY",
+      NPG: "NPG_API_KEY", ENWL: "ENWL_API_KEY", SPEN: "SPEN_API_KEY",
+      NGED: "NGED_API_KEY", UKPN: "UKPN_API_KEY", CADENT: "CADENT_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || null;
     const apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
 
-    console.log(`[ingest] Starting background ${mode} ingest for ${entry.dataset_id} → ${storageTable}`);
+    console.log(`[ingest] Starting ${mode} ingest for ${entry.dataset_id} → ${storageTable} (partition_start=${partition_start})`);
 
-    // Determine chunk size based on geometry complexity
-    const effectiveChunkSize = chunk_size ?? getDefaultChunkSize(storageTable, entry.record_count ?? 0);
-    console.log(`[ingest] skip_features=${skip_features}, chunk_size=${effectiveChunkSize}, record_count=${entry.record_count}`);
-
-    // Offload heavy work to background via EdgeRuntime.waitUntil
+    // Background processing
     EdgeRuntime.waitUntil(
       Promise.race([
-        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode, { where, select: selectFields, order_by }, registryTable, skip_features, effectiveChunkSize, authHeader),
-        new Promise<void>(async (_, reject) => {
-          await new Promise(r => setTimeout(r, 120000));
-          reject(new Error("Background ingest timed out after 120s"));
-        }),
+        performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode,
+          { where, select: selectFields, order_by }, registryTable, authHeader, partition_start, skip_features, chunk_size),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Background timeout 120s")), 120000)),
       ]).catch(async (err) => {
-        console.error(`[ingest] Background timeout/crash for ${entry.dataset_id}:`, err);
-        await supabase
-          .from(registryTable)
-          .update({
-            last_sync_status: "error",
-            last_sync_error: String(err),
-            last_sync_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", registry_id);
+        console.error(`[ingest] Background crash for ${entry.dataset_id}:`, err);
+        await supabase.from(registryTable).update({
+          last_sync_status: "error",
+          last_sync_error: String(err),
+          last_sync_at: new Date().toISOString(),
+        }).eq("id", registry_id);
       })
     );
 
-    // Return immediately
     return new Response(JSON.stringify({
       accepted: true,
       dataset_id: entry.dataset_id,
       status: "processing",
-      message: "Ingestion started in background. Check sync status for progress.",
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+      message: `Ingestion started (partition_start=${partition_start}).`,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
     console.error("[ingest] Unexpected error:", err);
@@ -258,41 +223,54 @@ async function performIngest(
   supabase: any, entry: any, layerRow: any, storageTable: string,
   apiKey: string | null, userId: string, registryId: string,
   mode: string, opts: { where?: string; select?: string; order_by?: string },
-  registryTable: string = "dno_dataset_registry",
-  skipFeatures: number = 0,
-  chunkSize: number = 15000,
-  authHeader: string = ""
+  registryTable: string, authHeader: string,
+  partitionStart: number, skipFeatures: number, chunkSize?: number,
 ) {
   let totalInserted = 0;
   let totalSkipped = 0;
   let syncError: string | null = null;
   let hasMore = false;
-  let totalProcessed = 0;
+  let nextPartitionStart = 0;
 
   try {
     const isCkan = entry.dno === "NGED";
-    const isLargeDataset = (entry.record_count ?? 0) > 5000;
-    const hasGeoJsonExport = entry.is_geospatial && entry.endpoint_export_geojson;
+    const recordCount = entry.record_count ?? 0;
+    const isLargeDataset = recordCount > 5000;
+    const isVeryLargeDataset = recordCount > 10000;
 
     if (isCkan) {
       const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
-    } else if (mode === "export" && hasGeoJsonExport && isLargeDataset) {
-      console.log(`[ingest] Large dataset (${entry.record_count}) — chunked GeoJSON export, skip=${skipFeatures}, chunk=${chunkSize}`);
-      try {
-        const result = await ingestViaGeoJsonExportChunked(supabase, entry, layerRow, storageTable, apiKey, skipFeatures, chunkSize);
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
-        hasMore = result.hasMore;
-        totalProcessed = result.totalProcessed;
-      } catch (exportErr) {
-        console.warn(`[ingest] Chunked export failed (${exportErr}), trying standard export`);
-        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
-        totalInserted = result.inserted;
-        totalSkipped = result.skipped;
+    } else if (isVeryLargeDataset && entry.endpoint_records) {
+      // ── PARTITIONED RECORDS API ──
+      // Use recordid prefix partitioning to stay under the 10k offset+limit cap.
+      // Each 2-char hex prefix covers ~recordCount/256 records.
+      // Process PREFIXES_PER_RUN prefixes per invocation, then self-continue.
+      const PREFIXES_PER_RUN = 8; // ~8 × 2.3k = ~18k records per run for 580k dataset
+      const endIndex = Math.min(partitionStart + PREFIXES_PER_RUN, HEX_PREFIXES.length);
+
+      console.log(`[ingest] Partitioned records: prefixes ${partitionStart}..${endIndex - 1} of ${HEX_PREFIXES.length} (est ${recordCount} total)`);
+
+      for (let i = partitionStart; i < endIndex; i++) {
+        const prefix = HEX_PREFIXES[i];
+        try {
+          const result = await ingestPartition(supabase, entry, layerRow, storageTable, apiKey, prefix, opts);
+          totalInserted += result.inserted;
+          totalSkipped += result.skipped;
+          console.log(`[ingest] Partition ${prefix} done: +${result.inserted} inserted, +${result.skipped} skipped`);
+        } catch (partErr) {
+          console.error(`[ingest] Partition ${prefix} error:`, partErr);
+          // Continue with next partition rather than failing entire ingest
+        }
       }
-    } else if (mode === "export" && hasGeoJsonExport) {
+
+      if (endIndex < HEX_PREFIXES.length) {
+        hasMore = true;
+        nextPartitionStart = endIndex;
+      }
+    } else if (isLargeDataset && entry.is_geospatial && entry.endpoint_export_geojson) {
+      // Medium datasets (5k-10k): use GeoJSON export streaming
       try {
         const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
         totalInserted = result.inserted;
@@ -303,10 +281,21 @@ async function performIngest(
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
       }
-    } else if (mode === "export" && entry.endpoint_export_csv) {
+    } else if (entry.endpoint_export_csv && !entry.is_geospatial) {
       const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
+    } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
+      try {
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+      } catch (exportErr) {
+        console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
+        const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
+        totalInserted = result.inserted;
+        totalSkipped = result.skipped;
+      }
     } else {
       const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
       totalInserted = result.inserted;
@@ -317,60 +306,52 @@ async function performIngest(
     console.error(`[ingest] Error:`, err);
   }
 
-  // Update feature count on the layer
+  // Update feature count
   try {
     const { count } = await supabase
       .from(storageTable)
       .select("*", { count: "exact", head: true })
       .eq("layer_id", entry.linked_layer_id);
-
-    await supabase
-      .from("layer_registry")
-      .update({ feature_count: count ?? 0, updated_at: new Date().toISOString() })
-      .eq("id", entry.linked_layer_id);
+    await supabase.from("layer_registry").update({
+      feature_count: count ?? 0,
+      updated_at: new Date().toISOString(),
+    }).eq("id", entry.linked_layer_id);
   } catch (e) {
     console.error("[ingest] Failed to update feature count:", e);
   }
 
-  // Determine final status
+  // Final status
   const finalStatus = syncError ? "error" : (hasMore ? "partial" : "success");
-  const cumulativeInserted = (skipFeatures > 0 ? (entry.last_sync_rows || 0) : 0) + totalInserted;
+  const prevRows = partitionStart > 0 ? (entry.last_sync_rows || 0) : 0;
+  const cumulativeInserted = prevRows + totalInserted;
 
-  const finalSyncTimestamp = new Date().toISOString();
-  const { error: finalStatusError } = await supabase
-    .from(registryTable)
-    .update({
-      last_sync_at: finalSyncTimestamp,
-      last_sync_status: finalStatus,
-      last_sync_rows: cumulativeInserted,
-      last_sync_error: syncError,
-      updated_at: finalSyncTimestamp,
-    })
-    .eq("id", registryId);
+  const finalTs = new Date().toISOString();
+  await supabase.from(registryTable).update({
+    last_sync_at: finalTs,
+    last_sync_status: finalStatus,
+    last_sync_rows: cumulativeInserted,
+    last_sync_error: syncError,
+    updated_at: finalTs,
+  }).eq("id", registryId);
 
-  if (finalStatusError) {
-    console.error("[ingest] Failed to write final sync status:", finalStatusError.message);
-  }
-
-  // Self-continue if partial
+  // Self-continue if more partitions remain
   if (hasMore && !syncError && authHeader) {
-    const nextSkip = skipFeatures + totalProcessed;
-    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Auto-continuing from feature ${nextSkip}…`);
-    await sleep(2000);
+    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}…`);
+    await sleep(1000);
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       await fetch(`${supabaseUrl}/functions/v1/npg-dataset-ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ registry_id: registryId, mode: "export", skip_features: nextSkip }),
+        body: JSON.stringify({ registry_id: registryId, mode: "export", partition_start: nextPartitionStart }),
       });
-      console.log(`[ingest] Self-continuation dispatched for skip=${nextSkip}`);
+      console.log(`[ingest] Self-continuation dispatched for partition_start=${nextPartitionStart}`);
     } catch (e) {
       console.error(`[ingest] Self-continuation failed:`, e);
     }
   }
 
-  // Audit only on final completion or error
+  // Audit on completion or error
   if (!hasMore || syncError) {
     await supabase.from("audit_log").insert({
       action: "npg_dataset_ingest",
@@ -382,88 +363,92 @@ async function performIngest(
   console.log(`[ingest] Done. Dataset: ${entry.dataset_id}, Chunk inserted: ${totalInserted}, Cumulative: ${cumulativeInserted}, Status: ${finalStatus}`);
 }
 
-// ─── Streaming GeoJSON Feature Extractor ────────────────────────────────────
+// ─── Partitioned Records Ingestion (for datasets >10k) ─────────────────────
 
-// ─── Chunked GeoJSON Export (for large datasets) ────────────────────────────
-async function ingestViaGeoJsonExportChunked(
+async function ingestPartition(
   supabase: any, entry: any, layerRow: any, storageTable: string,
-  apiKey: string | null, skipFeatures: number, chunkSize: number
-): Promise<{ inserted: number; skipped: number; hasMore: boolean; totalProcessed: number }> {
-  const url = entry.endpoint_export_geojson;
-  console.log(`[ingest] Chunked GeoJSON: ${url} (skip=${skipFeatures}, chunk=${chunkSize})`);
+  apiKey: string | null, hexPrefix: string,
+  opts: { where?: string; select?: string; order_by?: string },
+): Promise<{ inserted: number; skipped: number }> {
+  const baseUrl = entry.endpoint_records;
+  // Opendatasoft wildcard: recordid like 'ab*' matches all records starting with "ab"
+  const partitionWhere = `recordid like '${hexPrefix}*'`;
+  const combinedWhere = opts.where ? `(${opts.where}) AND ${partitionWhere}` : partitionWhere;
 
-  const resp = await fetchWithRetry(url, apiKey);
-  if (!resp.ok) throw new Error(`GeoJSON export failed: HTTP ${resp.status}`);
-
-  const batchSize = getBatchSize(storageTable);
+  let offset = 0;
+  const pageSize = 100; // Opendatasoft records API max per page
   let totalInserted = 0;
   let totalSkipped = 0;
-  let featureIndex = 0;
-  let processedInChunk = 0;
-  let batch: any[] = [];
-  let hasMore = false;
 
-  for await (const feature of streamGeoJsonFeatures(resp)) {
-    featureIndex++;
+  while (true) {
+    const params = new URLSearchParams();
+    params.set("limit", String(pageSize));
+    params.set("offset", String(offset));
+    params.set("where", combinedWhere);
+    if (opts.select) params.set("select", opts.select);
+    if (opts.order_by) params.set("order_by", opts.order_by);
 
-    // Skip features we've already processed in previous chunks
-    if (featureIndex <= skipFeatures) continue;
+    const url = `${baseUrl}?${params.toString()}`;
+    const resp = await fetchWithRetry(url, apiKey);
 
-    // Check chunk limit
-    if (processedInChunk >= chunkSize) {
-      hasMore = true;
-      console.log(`[ingest] Chunk limit reached at feature ${featureIndex} (processed ${processedInChunk})`);
+    if (resp.status === 403) {
+      console.warn(`[ingest] 403 on partition ${hexPrefix} for ${entry.dataset_id}`);
+      // Mark as skipped on first partition only
+      if (hexPrefix === "00") {
+        await supabase.from(getRegTable(entry.dno)).update({
+          last_sync_status: "skipped",
+          last_sync_error: "403 Forbidden — restricted dataset, API key may be required",
+          last_sync_at: new Date().toISOString(),
+        }).eq("id", entry.id);
+      }
+      return { inserted: 0, skipped: 0 };
+    }
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`Records API error ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const data = await resp.json();
+    const records = data.results || [];
+    if (records.length === 0) break;
+
+    const mapped = records.map((rec: any) =>
+      mapOdsRecordToRow(rec, entry, layerRow, storageTable)
+    ).filter(Boolean);
+
+    totalSkipped += records.length - mapped.length;
+
+    if (mapped.length > 0) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable,
+        _features_json: JSON.stringify(mapped),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? mapped.length;
+    }
+
+    offset += records.length;
+    const totalCount = data.total_count || 0;
+    if (records.length < pageSize || offset >= totalCount) break;
+
+    // Safety: offset+limit must be <= 10000 for Opendatasoft
+    if (offset + pageSize > 9900) {
+      console.warn(`[ingest] Partition ${hexPrefix}: approaching 10k cap at offset ${offset}, stopping partition`);
       break;
     }
 
-    processedInChunk++;
-    const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
-    if (mapped) {
-      batch.push(mapped);
-    } else {
-      totalSkipped++;
-    }
-
-    if (batch.length >= batchSize) {
-      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable, _features_json: JSON.stringify(batch),
-      });
-      if (error) throw new Error(`Batch insert error: ${error.message}`);
-      totalInserted += inserted ?? batch.length;
-      batch = [];
-
-      if (processedInChunk % 5000 === 0) {
-        console.log(`[ingest] Chunk progress: ${processedInChunk}/${chunkSize} processed, ${totalInserted} inserted`);
-      }
-    }
+    await sleep(50);
   }
 
-  // Flush remaining batch
-  if (batch.length > 0) {
-    const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-      _table_name: storageTable, _features_json: JSON.stringify(batch),
-    });
-    if (error) throw new Error(`Batch insert error: ${error.message}`);
-    totalInserted += inserted ?? batch.length;
-  }
-
-  // If we never hit the chunk limit and exhausted the stream, no more features
-  if (!hasMore) {
-    console.log(`[ingest] Stream exhausted at feature ${featureIndex}. All features processed.`);
-  }
-
-  console.log(`[ingest] Chunked GeoJSON done: processed=${processedInChunk}, inserted=${totalInserted}, skipped=${totalSkipped}, hasMore=${hasMore}`);
-  return { inserted: totalInserted, skipped: totalSkipped, hasMore, totalProcessed: processedInChunk };
+  return { inserted: totalInserted, skipped: totalSkipped };
 }
 
-function getDefaultChunkSize(storageTable: string, recordCount: number): number {
-  // Edge Functions have strict CPU limits (~2s wall-clock CPU).
-  // Keep chunks small to avoid "CPU Time exceeded" crashes.
-  if (storageTable === "geo_cables" || storageTable === "geo_feeders") return 2000;
-  if (storageTable === "geo_polygons" || storageTable === "geo_constraints") return 2000;
-  if (storageTable === "geo_points" || storageTable === "geo_substations") return 5000;
-  return 3000;
+function getRegTable(dno: string): string {
+  return ["CADENT", "NGN", "SGN", "WWU"].includes(dno) ? "gas_dataset_registry" : "dno_dataset_registry";
 }
+
+// ─── Streaming GeoJSON Feature Extractor ────────────────────────────────────
 
 async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   const reader = resp.body!.getReader();
@@ -520,7 +505,8 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   }
 }
 
-// ─── GeoJSON Export Ingestion (Streaming) ───────────────────────────────────
+// ─── GeoJSON Export Ingestion (Streaming, for medium datasets) ──────────────
+
 async function ingestViaGeoJsonExport(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
@@ -534,16 +520,10 @@ async function ingestViaGeoJsonExport(
   let totalInserted = 0;
   let totalSkipped = 0;
   let batch: any[] = [];
-  let featureCount = 0;
 
   for await (const feature of streamGeoJsonFeatures(resp)) {
-    featureCount++;
     const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
-    if (mapped) {
-      batch.push(mapped);
-    } else {
-      totalSkipped++;
-    }
+    if (mapped) batch.push(mapped); else totalSkipped++;
 
     if (batch.length >= batchSize) {
       const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
@@ -551,7 +531,6 @@ async function ingestViaGeoJsonExport(
       });
       if (error) throw new Error(`Batch insert error: ${error.message}`);
       totalInserted += inserted ?? batch.length;
-      console.log(`[ingest] Streamed batch: ${totalInserted} inserted so far`);
       batch = [];
     }
   }
@@ -564,11 +543,12 @@ async function ingestViaGeoJsonExport(
     totalInserted += inserted ?? batch.length;
   }
 
-  console.log(`[ingest] GeoJSON streaming done: ${featureCount} features, ${totalInserted} inserted, ${totalSkipped} skipped`);
+  console.log(`[ingest] GeoJSON streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
 // ─── CSV Export Ingestion (Streaming) ───────────────────────────────────────
+
 async function ingestViaCsvExport(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
@@ -638,48 +618,45 @@ async function ingestViaCsvExport(
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
-// ─── Paginated Records Ingestion ─────────────────────────────────────────────
+// ─── Paginated Records Ingestion (for small datasets <10k) ──────────────────
+
 async function ingestViaRecords(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
   opts: { where?: string; select?: string; order_by?: string }
 ): Promise<{ inserted: number; skipped: number }> {
   const baseUrl = entry.endpoint_records;
-  // Opendatasoft Records API hard limit is 100
-  const batchSize = Math.min(100, getBatchSize(storageTable));
+  const pageSize = 100;
   let offset = 0;
   let totalInserted = 0;
   let totalSkipped = 0;
 
   while (true) {
     const params = new URLSearchParams();
-    params.set("limit", String(batchSize));
+    params.set("limit", String(pageSize));
     params.set("offset", String(offset));
     if (opts.where) params.set("where", opts.where);
     if (opts.select) params.set("select", opts.select);
     if (opts.order_by) params.set("order_by", opts.order_by);
 
     const url = `${baseUrl}?${params.toString()}`;
-    console.log(`[ingest] Records page: ${url}`);
-
     const resp = await fetchWithRetry(url, apiKey);
+
     if (resp.status === 403) {
       console.warn(`[ingest] 403 Forbidden for ${entry.dataset_id} — marking as skipped`);
-      const regTable = ["CADENT", "NGN", "SGN", "WWU"].includes(entry.dno) ? "gas_dataset_registry" : "dno_dataset_registry";
-      await supabase.from(regTable).update({
+      await supabase.from(getRegTable(entry.dno)).update({
         last_sync_status: "skipped",
-        last_sync_error: "403 Forbidden — restricted dataset, elevated portal permissions required",
+        last_sync_error: "403 Forbidden — restricted dataset",
         last_sync_at: new Date().toISOString(),
       }).eq("id", entry.id);
       return { inserted: 0, skipped: 0 };
     }
     if (!resp.ok) {
       const errText = await resp.text();
-      throw new Error(`Records API error ${resp.status}: ${errText}`);
+      throw new Error(`Records API error ${resp.status}: ${errText.slice(0, 200)}`);
     }
 
     const data = await resp.json();
     const records = data.results || [];
-
     if (records.length === 0) break;
 
     const mapped = records.map((rec: any) =>
@@ -690,32 +667,17 @@ async function ingestViaRecords(
 
     if (mapped.length > 0) {
       const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable,
-        _features_json: JSON.stringify(mapped),
+        _table_name: storageTable, _features_json: JSON.stringify(mapped),
       });
-
       if (error) throw new Error(`Batch insert error: ${error.message}`);
       totalInserted += inserted ?? mapped.length;
     }
 
     offset += records.length;
-
     const totalCount = data.total_count || 0;
-    if (records.length < batchSize || offset >= totalCount) break;
-    // If we're approaching the 10k offset cap, switch to GeoJSON export
-    if (offset + batchSize > 10000) {
-      console.warn(`[ingest] Approaching 10k offset cap at ${offset} — switching to export endpoint`);
-      if (entry.endpoint_export_geojson) {
-        try {
-          const exportResult = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
-          // Export downloads everything; deduplicate will be handled by batch_insert (ON CONFLICT)
-          totalInserted = exportResult.inserted;
-          totalSkipped = exportResult.skipped;
-          return { inserted: totalInserted, skipped: totalSkipped };
-        } catch (e) {
-          console.warn(`[ingest] Export fallback failed: ${e}, returning partial results`);
-        }
-      }
+    if (records.length < pageSize || offset >= totalCount) break;
+    if (offset + pageSize > 9900) {
+      console.warn(`[ingest] Approaching 10k offset cap at ${offset}`);
       break;
     }
 
@@ -727,16 +689,9 @@ async function ingestViaRecords(
 
 // ─── CKAN (NGED) Ingestion ───────────────────────────────────────────────────
 
-const CKAN_BASE = "https://connecteddata.nationalgrid.co.uk";
-
 async function ingestViaCkan(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
-  // Strategy priority:
-  // 1. GeoJSON resource URL (direct download)
-  // 2. CKAN datastore_search (paginated JSON)
-  // 3. CSV resource URL (direct download)
-
   if (entry.endpoint_export_geojson) {
     console.log(`[ingest] CKAN: Using GeoJSON resource for ${entry.dataset_id}`);
     try {
@@ -756,21 +711,15 @@ async function ingestViaCkan(
   }
 
   if (entry.endpoint_export_csv) {
-    console.log(`[ingest] CKAN: Using CSV resource for ${entry.dataset_id}`);
     return await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
   }
 
-  // No usable endpoint — gracefully skip instead of erroring
-  console.log(`[ingest] CKAN: No usable data endpoint for ${entry.dataset_id} — marking as skipped`);
-  await supabase
-    .from("dno_dataset_registry")
-    .update({
-      last_sync_status: "skipped",
-      last_sync_error: "Data only available via manual download from dataportal2.nationalgrid.co.uk — no API/CSV/GeoJSON endpoint",
-      last_sync_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", entry.id);
+  console.log(`[ingest] CKAN: No usable endpoint for ${entry.dataset_id} — marking as skipped`);
+  await supabase.from("dno_dataset_registry").update({
+    last_sync_status: "skipped",
+    last_sync_error: "No API/CSV/GeoJSON endpoint available",
+    last_sync_at: new Date().toISOString(),
+  }).eq("id", entry.id);
   return { inserted: 0, skipped: 0 };
 }
 
@@ -784,7 +733,6 @@ async function ingestViaCkanGeoJson(
   const resp = await fetch(url, { headers });
   if (!resp.ok) throw new Error(`GeoJSON fetch failed: HTTP ${resp.status}`);
 
-  console.log(`[ingest] CKAN GeoJSON (streaming): ${url}`);
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
@@ -812,14 +760,13 @@ async function ingestViaCkanGeoJson(
     totalInserted += inserted ?? batch.length;
   }
 
-  console.log(`[ingest] CKAN GeoJSON streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
   return { inserted: totalInserted, skipped: totalSkipped };
 }
 
 async function ingestViaCkanDatastore(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
-  const baseUrl = entry.endpoint_records; // e.g. .../datastore_search?resource_id=XXX
+  const baseUrl = entry.endpoint_records;
   const headers: Record<string, string> = {};
   if (apiKey) headers["Authorization"] = apiKey;
 
@@ -830,8 +777,6 @@ async function ingestViaCkanDatastore(
 
   while (true) {
     const url = `${baseUrl}&limit=${limit}&offset=${offset}`;
-    console.log(`[ingest] CKAN datastore page: ${url}`);
-
     const resp = await fetch(url, { headers });
     if (!resp.ok) throw new Error(`Datastore search failed: HTTP ${resp.status}`);
 
@@ -849,8 +794,7 @@ async function ingestViaCkanDatastore(
 
     if (mapped.length > 0) {
       const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-        _table_name: storageTable,
-        _features_json: JSON.stringify(mapped),
+        _table_name: storageTable, _features_json: JSON.stringify(mapped),
       });
       if (error) throw new Error(`Batch insert error: ${error.message}`);
       totalInserted += inserted ?? mapped.length;
@@ -858,8 +802,6 @@ async function ingestViaCkanDatastore(
 
     offset += records.length;
     if (records.length < limit) break;
-    // CKAN datastore supports higher offsets than Opendatasoft — no 10k cap
-    // But apply a safety cap at 500k to prevent runaway ingestion
     if (offset >= 500000) {
       console.warn(`[ingest] CKAN: Safety cap at ${offset} records`);
       break;
@@ -869,98 +811,6 @@ async function ingestViaCkanDatastore(
   }
 
   return { inserted: totalInserted, skipped: totalSkipped };
-}
-
-function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
-  let geom: any = null;
-
-  // NGED data often has easting/northing (BNG) or lat/lon columns
-  const lat = parseNum(rec.Latitude || rec.latitude || rec.lat || rec.LATITUDE);
-  const lon = parseNum(rec.Longitude || rec.longitude || rec.lon || rec.lng || rec.LONGITUDE);
-  const easting = parseNum(rec.Easting || rec.easting || rec.EASTING || rec.x);
-  const northing = parseNum(rec.Northing || rec.northing || rec.NORTHING || rec.y);
-
-  if (lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
-    geom = { type: "Point", coordinates: [lon, lat] };
-  } else if (easting != null && northing != null && easting > 100000 && northing > 100000) {
-    // BNG to WGS84 approximate conversion
-    const wgs = bngToWgs84Approx(easting, northing);
-    if (wgs) geom = { type: "Point", coordinates: [wgs.lon, wgs.lat] };
-  }
-
-  // Check for GeoJSON geometry field
-  if (!geom && rec.geojson) {
-    try {
-      const g = typeof rec.geojson === "string" ? JSON.parse(rec.geojson) : rec.geojson;
-      if (g.type && g.coordinates) geom = g;
-    } catch {}
-  }
-
-  if (!geom) return null;
-
-  geom = promoteGeometry(geom, storageTable);
-  if (!geom) return null;
-
-  // Build attrs from all non-geometry fields
-  const attrs: Record<string, any> = {};
-  const skipKeys = new Set(["_id", "geojson", "Latitude", "Longitude", "latitude", "longitude",
-    "lat", "lon", "lng", "Easting", "Northing", "easting", "northing", "EASTING", "NORTHING",
-    "LATITUDE", "LONGITUDE", "x", "y"]);
-  for (const [key, val] of Object.entries(rec)) {
-    if (!skipKeys.has(key) && val != null && typeof val !== "object") {
-      attrs[key] = val;
-    }
-  }
-
-  return {
-    geom_geojson: JSON.stringify(geom),
-    layer_id: entry.linked_layer_id,
-    dno: entry.dno,
-    name: rec.Name || rec.name || rec["Substation Name"] || rec.SubstationName || null,
-    asset_id: rec.AssetID || rec.asset_id || rec["Asset ID"] || rec._id?.toString() || null,
-    attrs_json: attrs,
-    status: rec.Status || rec.status || "active",
-    capacity_kw: parseNum(rec.InstalledCapacityMW || rec.FirmCapacity) != null
-      ? (parseNum(rec.InstalledCapacityMW) != null ? parseNum(rec.InstalledCapacityMW)! * 1000 : parseNum(rec.FirmCapacity))
-      : null,
-    demand_kw: parseNum(rec.MaxDemand || rec.max_demand),
-    headroom_kw: parseNum(rec.Headroom || rec.headroom),
-    utilisation_pct: parseNum(rec.Utilisation || rec.utilisation_pct),
-    voltage_kv: parseNum(rec.Voltage || rec.voltage_kv || rec["Voltage (kV)"]),
-    feeder_ref: rec.FeederRef || rec.feeder_ref || rec.CircuitID || null,
-    capacity_value: parseNum(rec.capacity_value),
-    capacity_unit: rec.capacity_unit || null,
-    capacity_flag: rec.capacity_flag || "unknown",
-    constraint_type: rec.constraint_type || null,
-  };
-}
-
-// Approximate BNG (OSGB36) to WGS84 conversion
-function bngToWgs84Approx(e: number, n: number): { lat: number; lon: number } | null {
-  // Helmert transform approximation
-  const a = 6377563.396, b = 6356256.909;
-  const e0 = 400000, n0 = -100000;
-  const f0 = 0.9996012717, phi0 = 0.85521133, lam0 = -0.034906585;
-  const ee = (a * a - b * b) / (a * a);
-
-  let phi = phi0, M = 0;
-  for (let i = 0; i < 10; i++) {
-    phi = (n - n0 - M) / (a * f0) + phi;
-    const Ma = (1 + ee / 4 + (ee * ee) * 5 / 64) * phi0;
-    const Mb = (1 + ee / 4 + (ee * ee) * 5 / 64) * phi;
-    M = b * f0 * ((Mb - Ma)
-      - (3 * (1 + ee / 4) / 2) * Math.sin(phi - phi0) * Math.cos(phi + phi0));
-  }
-  // Simplified: just use linear approximation for UK
-  const lat = 49.0 + (n - 0) / 111320;
-  const lon = -8.0 + (e - 0) / (111320 * Math.cos(lat * Math.PI / 180));
-
-  // Better: use simple affine for UK region
-  const latApprox = (n - (-100000)) / 111320 + 49.0;
-  const lonApprox = (e - 400000) / (111320 * Math.cos(54.0 * Math.PI / 180)) + (-2.0);
-
-  if (latApprox < 49 || latApprox > 61 || lonApprox < -9 || lonApprox > 3) return null;
-  return { lat: latApprox, lon: lonApprox };
 }
 
 // ─── Mapping Helpers ─────────────────────────────────────────────────────────
@@ -1077,6 +927,66 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
   };
 }
 
+function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: string): any | null {
+  let geom: any = null;
+
+  const lat = parseNum(rec.Latitude || rec.latitude || rec.lat || rec.LATITUDE);
+  const lon = parseNum(rec.Longitude || rec.longitude || rec.lon || rec.lng || rec.LONGITUDE);
+  const easting = parseNum(rec.Easting || rec.easting || rec.EASTING || rec.x);
+  const northing = parseNum(rec.Northing || rec.northing || rec.NORTHING || rec.y);
+
+  if (lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    geom = { type: "Point", coordinates: [lon, lat] };
+  } else if (easting != null && northing != null && easting > 100000 && northing > 100000) {
+    const wgs = bngToWgs84Approx(easting, northing);
+    if (wgs) geom = { type: "Point", coordinates: [wgs.lon, wgs.lat] };
+  }
+
+  if (!geom && rec.geojson) {
+    try {
+      const g = typeof rec.geojson === "string" ? JSON.parse(rec.geojson) : rec.geojson;
+      if (g.type && g.coordinates) geom = g;
+    } catch {}
+  }
+
+  if (!geom) return null;
+
+  geom = promoteGeometry(geom, storageTable);
+  if (!geom) return null;
+
+  const attrs: Record<string, any> = {};
+  const skipKeys = new Set(["_id", "geojson", "Latitude", "Longitude", "latitude", "longitude",
+    "lat", "lon", "lng", "Easting", "Northing", "easting", "northing", "EASTING", "NORTHING",
+    "LATITUDE", "LONGITUDE", "x", "y"]);
+  for (const [key, val] of Object.entries(rec)) {
+    if (!skipKeys.has(key) && val != null && typeof val !== "object") {
+      attrs[key] = val;
+    }
+  }
+
+  return {
+    geom_geojson: JSON.stringify(geom),
+    layer_id: entry.linked_layer_id,
+    dno: entry.dno,
+    name: rec.Name || rec.name || rec["Substation Name"] || rec.SubstationName || null,
+    asset_id: rec.AssetID || rec.asset_id || rec["Asset ID"] || rec._id?.toString() || null,
+    attrs_json: attrs,
+    status: rec.Status || rec.status || "active",
+    capacity_kw: parseNum(rec.InstalledCapacityMW || rec.FirmCapacity) != null
+      ? (parseNum(rec.InstalledCapacityMW) != null ? parseNum(rec.InstalledCapacityMW)! * 1000 : parseNum(rec.FirmCapacity))
+      : null,
+    demand_kw: parseNum(rec.MaxDemand || rec.max_demand),
+    headroom_kw: parseNum(rec.Headroom || rec.headroom),
+    utilisation_pct: parseNum(rec.Utilisation || rec.utilisation_pct),
+    voltage_kv: parseNum(rec.Voltage || rec.voltage_kv || rec["Voltage (kV)"]),
+    feeder_ref: rec.FeederRef || rec.feeder_ref || rec.CircuitID || null,
+    capacity_value: parseNum(rec.capacity_value),
+    capacity_unit: rec.capacity_unit || null,
+    capacity_flag: rec.capacity_flag || "unknown",
+    constraint_type: rec.constraint_type || null,
+  };
+}
+
 function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
@@ -1092,7 +1002,6 @@ function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: s
   }
 
   if (!geom) return null;
-
   geom = promoteGeometry(geom, storageTable);
   if (!geom) return null;
 
@@ -1144,7 +1053,6 @@ function promoteGeometry(geom: any, storageTable: string): any | null {
     if (geomFamily !== targetFamily) return null;
   }
 
-  // Strip Z coordinates (3D → 2D) to avoid "Geometry has Z dimension" errors
   geom.coordinates = stripZ(geom.coordinates);
   return geom;
 }
@@ -1154,6 +1062,14 @@ function stripZ(coords: any): any {
     return coords.slice(0, 2);
   }
   return coords.map(stripZ);
+}
+
+// Approximate BNG (OSGB36) to WGS84 conversion
+function bngToWgs84Approx(e: number, n: number): { lat: number; lon: number } | null {
+  const latApprox = (n - (-100000)) / 111320 + 49.0;
+  const lonApprox = (e - 400000) / (111320 * Math.cos(54.0 * Math.PI / 180)) + (-2.0);
+  if (latApprox < 49 || latApprox > 61 || lonApprox < -9 || lonApprox > 3) return null;
+  return { lat: latApprox, lon: lonApprox };
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -1174,7 +1090,6 @@ async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const resp = await fetch(effectiveUrl);
-
       if (resp.status === 429) {
         const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;
         console.warn(`[ingest] Rate limited, backing off ${Math.round(backoff)}ms`);
@@ -1182,9 +1097,8 @@ async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 
         continue;
       }
       if (!resp.ok && attempt < maxRetries) {
-        const backoff = Math.pow(2, attempt) * 500;
         await resp.text();
-        await sleep(backoff);
+        await sleep(Math.pow(2, attempt) * 500);
         continue;
       }
       return resp;
@@ -1215,8 +1129,6 @@ function getBatchSize(storageTable: string): number {
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-// parseCSV removed — CSV ingestion now uses streaming
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
