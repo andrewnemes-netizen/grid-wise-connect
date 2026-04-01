@@ -176,8 +176,40 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [supportOpen, setSupportOpen] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [cablePoc, setCablePoc] = useState<{ name: string; snapLon: number; snapLat: number; distanceM: number; type: string } | null>(null);
+  const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
 
   const pkw = Number(proposedKw) || 0;
+
+  const effectiveDistances = useMemo(() => {
+    const base = result?.distances;
+    if (!base) return null;
+    if (!routeCableDistanceM || routeCableDistanceM <= 0) return base;
+
+    if (pkw <= 80) {
+      return { ...base, capacity_segment_m: routeCableDistanceM };
+    }
+    if (pkw <= 1500) {
+      return { ...base, feeder_m: routeCableDistanceM };
+    }
+    return { ...base, primary_m: routeCableDistanceM };
+  }, [result?.distances, routeCableDistanceM, pkw]);
+
+  const resolvedCableLengthM = useMemo(() => {
+    if (routeCableDistanceM && routeCableDistanceM > 0) return Math.round(routeCableDistanceM);
+    if (cablePoc?.distanceM && cablePoc.distanceM > 0) return Math.round(cablePoc.distanceM);
+
+    const rawDistance =
+      pkw <= 80
+        ? result?.distances?.capacity_segment_m
+        : pkw <= 1500
+          ? result?.distances?.feeder_m
+          : result?.distances?.primary_m;
+
+    if (!rawDistance || rawDistance <= 0) return null;
+
+    const maxDistance = pkw <= 80 ? 500 : pkw <= 1500 ? 3000 : 5000;
+    return Math.round(Math.min(rawDistance, maxDistance));
+  }, [routeCableDistanceM, cablePoc?.distanceM, pkw, result?.distances]);
 
   const rawMetrics = useMemo<RawMetrics | null>(() => {
     if (!result) return null;
@@ -195,15 +227,15 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const feederRisk = rawMetrics ? getFeederConstraintRisk(rawMetrics) : "Medium";
 
   const costEstimate = useMemo(() => {
-    if (!result?.distances || pkw <= 0) return null;
+    if (!effectiveDistances || pkw <= 0) return null;
     const nearestSub = result.nearest_substations?.[0];
     return estimateConnectionCost({
       proposed_kw: pkw,
-      distances: result.distances,
+      distances: effectiveDistances,
       constraints: result.constraints,
       nearest_headroom_kw: nearestSub?.transformer_headroom_kw ?? undefined,
     }, unitRates);
-  }, [result, pkw, unitRates]);
+  }, [effectiveDistances, pkw, result, unitRates]);
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
@@ -269,6 +301,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
     if (!lng || !lat) return;
     setLoading(true);
     setCablePoc(null);
+    setRouteCableDistanceM(null);
     try {
       // Fire both calls in parallel
       const [scoreRes, safetyRes] = await Promise.all([
@@ -348,6 +381,24 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
           { id: "line-cable", label: "Proposed Cable Route", origin, destination: pocCoord, color: "#2ecc71", distance_m: pocDistance },
         ];
         const roadLines = await fetchAllRoadRoutes(lineInputs);
+
+        const primaryLine = roadLines.find((line) => line.id === "line-cable") ?? roadLines[0];
+        setRouteCableDistanceM(primaryLine?.distance_m ?? null);
+
+        if (primaryLine?.coords?.length >= 2) {
+          const [snapLon, snapLat] = primaryLine.coords[primaryLine.coords.length - 1];
+          setCablePoc((existing) =>
+            existing
+              ? {
+                  ...existing,
+                  snapLon,
+                  snapLat,
+                  distanceM: primaryLine.distance_m,
+                }
+              : existing
+          );
+        }
+
         onConnectionLines(roadLines);
       }
     } catch (err: any) {
@@ -374,6 +425,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
 
       const enrichedRawData = {
         ...result,
+        distances: effectiveDistances ?? result.distances ?? null,
         // Persist pin coordinates so SiteDetail can link back to map
         lng,
         lat,
@@ -394,6 +446,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         cost_band: costBand,
         safety_incidents: safetyResult?.accident_summary?.total ?? 0,
         ai_safety_narrative: safetyResult?.ai_narrative ?? null,
+        routed_cable_length_m: routeCableDistanceM ?? null,
         map_screenshot: mapScreenshot,
       };
       const { error } = await supabase.from("sites").insert({
@@ -403,7 +456,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         site_type: siteType,
         score: band,
         score_reasons: result.reasons,
-        connection_options: result.distances || result.distance_bands || [],
+        connection_options: effectiveDistances || result.distance_bands || result.distances || [],
         next_steps: result.next_steps,
         created_by: user.id,
         viability_index: viabilityIndex,
@@ -639,8 +692,8 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                   {costBand && (
                     <MetricRow label="Cost Band" badge={costBand} badgeVariant={costBand === "£" ? "default" : costBand === "££" ? "secondary" : "destructive"} />
                   )}
-                  {isInternal && (
-                    <MetricRow label="Cable Length Est." value={`${Math.round(cablePoc ? cablePoc.distanceM : Math.min(pkw <= 80 ? (result.distances?.capacity_segment_m ?? 0) : pkw <= 1500 ? (result.distances?.feeder_m ?? 0) : (result.distances?.primary_m ?? 0), pkw <= 80 ? 500 : pkw <= 1500 ? 3000 : 5000))}m`} />
+                  {isInternal && resolvedCableLengthM !== null && (
+                    <MetricRow label="Cable Length Est." value={`${resolvedCableLengthM}m`} />
                   )}
                   {rawMetrics.civils.constraint_count > 0 && (
                     <MetricRow label="Civils Complexity" badge={rawMetrics.civils.constraint_count > 1 ? "High" : "Medium"} badgeVariant={rawMetrics.civils.constraint_count > 1 ? "destructive" : "secondary"} />
@@ -651,11 +704,11 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 </div>
 
                 {/* Full cost estimate expandable */}
-                {result.distances && pkw > 0 && (
+                {effectiveDistances && pkw > 0 && (
                   <CostEstimatePanel
                     voltageOverride="Auto"
                     proposed_kw={pkw}
-                    distances={result.distances}
+                    distances={effectiveDistances}
                     constraints={result.constraints}
                     nearest_headroom_kw={bestPOC?.transformer_headroom_kw ?? undefined}
                   />
@@ -813,7 +866,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                         score: band,
                         reasons: result.reasons,
                         nextSteps: result.next_steps,
-                        distances: result.distances,
+                        distances: effectiveDistances ?? result.distances,
                         distanceBands: result.distance_bands,
                         constraints: result.constraints,
                         unitRates,
@@ -838,7 +891,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                         feederConstraintRisk: feederRisk,
                         reinforcementProbability: reinforceProb,
                         costBand: costBand,
-                        cableLengthEst: result.distances?.capacity_segment_m ?? null,
+                        cableLengthEst: resolvedCableLengthM,
                         civilsComplexity: friction,
                         bestPoc: nearestSub?.site_name ?? null,
                         nearestSubstations: result.nearest_substations,
