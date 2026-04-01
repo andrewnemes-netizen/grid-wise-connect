@@ -14,6 +14,7 @@ import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
+import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
@@ -198,10 +199,11 @@ const SiteDetail = () => {
           </div>
         )}
         <Button size="sm" onClick={() => {
-          const lat = raw.lat ?? raw.latitude;
-          const lng = raw.lng ?? raw.longitude;
-          if (lat && lng) {
-            navigate(`/?lat=${lat}&lng=${lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}`);
+          const rawLat = raw.lat ?? raw.latitude;
+          const rawLng = raw.lng ?? raw.longitude;
+          if (rawLat && rawLng) {
+            const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
+            navigate(`/?lat=${coords.lat}&lng=${coords.lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}`);
           } else {
             toast({ title: "No coordinates", description: "This site has no location data to show on the map.", variant: "destructive" });
           }

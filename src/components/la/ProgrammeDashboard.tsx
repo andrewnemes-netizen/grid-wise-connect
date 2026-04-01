@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
+import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 
 interface ScoredRow {
   site_name: string;
@@ -287,7 +288,9 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
 
     setIsSaving(true);
     try {
-      const siteInserts = rowsToSave.map(r => ({
+      const siteInserts = rowsToSave.map(r => {
+        const coords = normalizeUkCoords(r.lat ?? 0, r.lng ?? 0);
+        return {
         site_name: r.site_name,
         postcode: r.postcode,
         proposed_kw: r.proposed_kw,
@@ -305,8 +308,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
           ? ["Submit G99 application", "Arrange point of connection meeting"]
           : ["Commission detailed feasibility study", "Submit connection application"],
         raw_score_data: {
-          lng: r.lng,
-          lat: r.lat,
+          lng: coords.lng,
+          lat: coords.lat,
           master_score: r.master_score ?? r.viability_index,
           viability_index: r.viability_index,
           band: r.band,
@@ -337,7 +340,8 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
           route_constraints: r.route_constraints || [],
           osm_coverage: r.osm_coverage || "none",
         },
-      }));
+      };
+      });
 
       // Insert in batches of 50
       let saved = 0;

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import * as XLSX from "xlsx";
+import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 
 export interface SiteRow {
   site_name: string;
@@ -166,6 +167,10 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
               errs.push(`Row ${i + 2}: invalid latitude/longitude`);
               return;
             }
+            // Auto-correct swapped UK coordinates
+            const normalized = normalizeUkCoords(lat, lng);
+            lat = normalized.lat;
+            lng = normalized.lng;
           }
 
           if (hasPostcode && mapped.postcode) {
