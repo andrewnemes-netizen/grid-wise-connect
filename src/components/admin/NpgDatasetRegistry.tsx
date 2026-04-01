@@ -124,6 +124,7 @@ export function NpgDatasetRegistry() {
         active: all.filter(d => d.active).length,
         synced: all.filter(d => d.last_sync_status === "success").length,
         failed: all.filter(d => d.last_sync_status === "error").length,
+        processing: all.filter(d => d.last_sync_status === "processing").length,
         totalRows: all.reduce((s, d) => s + (d.last_sync_rows || 0), 0),
       };
     },
