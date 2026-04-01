@@ -167,6 +167,10 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
               errs.push(`Row ${i + 2}: invalid latitude/longitude`);
               return;
             }
+            // Auto-correct swapped UK coordinates
+            const normalized = normalizeUkCoords(lat, lng);
+            lat = normalized.lat;
+            lng = normalized.lng;
           }
 
           if (hasPostcode && mapped.postcode) {
