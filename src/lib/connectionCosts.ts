@@ -405,10 +405,18 @@ export function estimateConnectionCost(
     }
   }
 
-  // Cable terminations (material)
+  // Cable terminations (material) — with joint bay for each termination
   const termCount = 2;
   const terminationCost = termCount * rates.termination_each;
   breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_rate: rates.termination_each, total: terminationCost, cost_type: "material" });
+
+  // Excavation joint bay for each termination point
+  if (voltageLevel === "LV" && !needsMainsExtension) {
+    const jb = getJointBayCost(split, rates);
+    const termJbTotal = termCount * jb.cost;
+    jointBayCost += termJbTotal;
+    breakdown.push({ category: "Equipment", description: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_rate: jb.cost, total: termJbTotal, cost_type: "material" });
+  }
 
   // Switchgear — HV/EHV only
   let switchgearCost = 0;
