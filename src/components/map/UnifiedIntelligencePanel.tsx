@@ -6,6 +6,7 @@ import {
   TrafficCone, Bus, ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -177,6 +178,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [exportingPdf, setExportingPdf] = useState(false);
   const [cablePoc, setCablePoc] = useState<{ name: string; snapLon: number; snapLat: number; distanceM: number; type: string } | null>(null);
   const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
+  const [includeFeederPillar, setIncludeFeederPillar] = useState(true);
 
   const pkw = Number(proposedKw) || 0;
 
@@ -234,8 +236,9 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       distances: effectiveDistances,
       constraints: result.constraints,
       nearest_headroom_kw: nearestSub?.transformer_headroom_kw ?? undefined,
+      includeFeederPillar,
     }, unitRates);
-  }, [effectiveDistances, pkw, result, unitRates]);
+  }, [effectiveDistances, pkw, result, unitRates, includeFeederPillar]);
 
   const costBand = costEstimate ? getCostBand(costEstimate.total_estimate) : null;
 
@@ -522,8 +525,12 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                   <SelectContent>
                     {SITE_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                   </SelectContent>
-                </Select>
+              </Select>
               </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="feeder-pillar" checked={includeFeederPillar} onCheckedChange={(v) => setIncludeFeederPillar(!!v)} />
+              <Label htmlFor="feeder-pillar" className="text-xs cursor-pointer">Include feeder pillar</Label>
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2, Search, ClipboardCheck, FolderOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -98,6 +99,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [includeFeederPillar, setIncludeFeederPillar] = useState(true);
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
 
@@ -283,6 +285,10 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                 </Select>
               </div>
             </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox id="feeder-pillar-sc" checked={includeFeederPillar} onCheckedChange={(v) => setIncludeFeederPillar(!!v)} />
+              <Label htmlFor="feeder-pillar-sc" className="text-xs cursor-pointer">Include feeder pillar</Label>
+            </div>
           </div>
 
           <Button onClick={handleScore} disabled={loading || !lng || !lat} className="w-full">
@@ -369,6 +375,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
                     proposed_kw={pkw}
                     distances={effectiveDistances}
                     constraints={result.constraints}
+                    includeFeederPillar={includeFeederPillar}
                   />
                 </>
               )}
