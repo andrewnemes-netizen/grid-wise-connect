@@ -277,6 +277,7 @@ export function ProgrammeDashboard({ results, summary, isInternal }: Props) {
     toast.success("PDF report exported");
   };
 
+  const saveToPortfolio = async () => {
     if (!user) { toast.error("Please log in"); return; }
 
     const rowsToSave = selected.size > 0
