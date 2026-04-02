@@ -1,0 +1,1 @@
+UPDATE dno_dataset_registry SET last_sync_status = 'error', last_sync_error = 'Auto-cleared: stuck processing state', updated_at = now() WHERE last_sync_status IN ('processing', 'partial') AND last_sync_at < now() - interval '2 minutes'
