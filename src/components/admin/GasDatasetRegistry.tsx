@@ -223,8 +223,14 @@ export function GasDatasetRegistry() {
           body: JSON.stringify({ registry_id: entry.id, mode: "export" }),
         }
       );
-      const result = await resp.json();
-      if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+      let result: any = null;
+      try { result = await resp.json(); } catch { result = null; }
+
+      if (resp.status === 409) {
+        toast.info(result?.detail || `${entry.title} is already processing`);
+        return;
+      }
+      if (!resp.ok) throw new Error(result?.error || `HTTP ${resp.status}`);
       // No per-row polling — batch poll handles status updates
     } catch (err: any) {
       toast.error(`Ingest failed for ${entry.title}: ${err.message}`);
