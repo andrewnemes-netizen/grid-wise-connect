@@ -281,6 +281,7 @@ export function NpgDatasetRegistry() {
   const handleIngest = async (entry: DatasetEntry, mode: "export" | "records" = "export") => {
     const alreadyRunning = entry.last_sync_status === "processing" || entry.last_sync_status === "partial";
     if (alreadyRunning) {
+      invalidateAll();
       toast.info(`${entry.title} is already ingesting in the background`);
       return;
     }
@@ -311,7 +312,14 @@ export function NpgDatasetRegistry() {
         result = null;
       }
 
+      if (result?.already_running) {
+        invalidateAll();
+        toast.info(result.detail || `${entry.title} is already processing`);
+        return;
+      }
+
       if (resp.status === 409) {
+        invalidateAll();
         toast.info(result?.detail || `${entry.title} is already processing`);
         return;
       }
@@ -319,6 +327,7 @@ export function NpgDatasetRegistry() {
       if (!resp.ok) throw new Error(result?.error || `HTTP ${resp.status}`);
 
       if (result?.accepted) {
+        invalidateAll();
         toast.info(`Ingestion started for ${entry.title}`);
       } else {
         toast.success(`Ingested ${result?.inserted ?? 0} features from ${entry.title}`);

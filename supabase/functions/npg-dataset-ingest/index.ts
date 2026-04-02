@@ -17,6 +17,25 @@ const corsHeaders = {
 // 256 two-char hex prefixes for partitioning
 const HEX_PREFIXES: string[] = [];
 for (let i = 0; i < 256; i++) HEX_PREFIXES.push(i.toString(16).padStart(2, "0"));
+const ACTIVE_SYNC_STATUSES = new Set(["processing", "partial"]);
+const STALE_INGEST_MS = 2 * 60 * 1000;
+
+function hasFreshIngestLock(lastSyncAt?: string | null) {
+  const lastMs = lastSyncAt ? Date.parse(lastSyncAt) : Number.NaN;
+  return Number.isFinite(lastMs) && Date.now() - lastMs < STALE_INGEST_MS;
+}
+
+function buildAlreadyRunningResponse(status: string | null, lastSyncAt: string | null) {
+  return new Response(JSON.stringify({
+    accepted: true,
+    already_running: true,
+    error: "Ingestion already running for this dataset",
+    message: "Ingestion already running for this dataset",
+    status: status ?? "processing",
+    detail: "Please wait for the current run to complete before starting another.",
+    last_sync_at: lastSyncAt,
+  }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -140,27 +159,23 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Stale processing lock detection (1 minute)
-    const staleMs = 60_000;
     const isContinuation = partition_start > 0 || skip_features > 0;
-    if (entry.last_sync_status === "processing" && !isContinuation) {
-      const lastMs = entry.last_sync_at ? Date.parse(entry.last_sync_at) : 0;
-      if (Date.now() - lastMs < staleMs) {
-        return new Response(JSON.stringify({
-          error: "Ingestion already running for this dataset",
-          detail: "Please wait for the current run to complete before starting another.",
-        }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (ACTIVE_SYNC_STATUSES.has(entry.last_sync_status) && !isContinuation) {
+      if (hasFreshIngestLock(entry.last_sync_at)) {
+        return buildAlreadyRunningResponse(entry.last_sync_status, entry.last_sync_at ?? null);
       }
-      // Auto-clear stale lock
+
+      const staleNow = new Date().toISOString();
       await supabase.from(registryTable).update({
         last_sync_status: "error",
-        last_sync_error: "Previous run timed out or crashed",
-        last_sync_at: new Date().toISOString(),
-      }).eq("id", registry_id).eq("last_sync_status", "processing");
+        last_sync_error: "Previous run timed out or crashed (stale lock auto-cleared)",
+        last_sync_at: staleNow,
+        updated_at: staleNow,
+      }).eq("id", registry_id).in("last_sync_status", ["processing", "partial"]);
     }
 
     // Allow continuations from partial state
-    if (isContinuation && entry.last_sync_status !== "partial" && entry.last_sync_status !== "processing") {
+    if (isContinuation && !ACTIVE_SYNC_STATUSES.has(entry.last_sync_status)) {
       return new Response(JSON.stringify({
         error: "Dataset is not in a partial/processing state for continuation",
         detail: `Current status: ${entry.last_sync_status}`,

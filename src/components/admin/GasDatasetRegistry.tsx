@@ -226,11 +226,19 @@ export function GasDatasetRegistry() {
       let result: any = null;
       try { result = await resp.json(); } catch { result = null; }
 
+      if (result?.already_running) {
+        invalidateAll();
+        toast.info(result?.detail || `${entry.title} is already processing`);
+        return;
+      }
+
       if (resp.status === 409) {
+        invalidateAll();
         toast.info(result?.detail || `${entry.title} is already processing`);
         return;
       }
       if (!resp.ok) throw new Error(result?.error || `HTTP ${resp.status}`);
+      invalidateAll();
       // No per-row polling — batch poll handles status updates
     } catch (err: any) {
       toast.error(`Ingest failed for ${entry.title}: ${err.message}`);
