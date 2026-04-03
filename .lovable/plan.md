@@ -1,63 +1,46 @@
 
 
-## Fix: Lat/Lng Coordinate Swap Bug
+## Ingest NGN Gas GeoPackage via Manual Upload
 
 ### Problem
-Halifax HX4 8DW is appearing near Madagascar because `raw_score_data.lat` = -1.857 (actually longitude) and `raw_score_data.lng` = 53.686 (actually latitude). The coordinates are stored swapped. This likely affects many sites scored through the LA Programme batch, causing red flags on the portfolio map.
+You have a downloaded NGN GeoPackage ZIP file but no API key. The GeoFileUploader currently only supports GeoJSON, CSV, GML, and Shapefile — not GeoPackage (.gpkg) or ZIP archives.
 
-### Root Cause
-The swap can originate from two places:
-1. **CSV upload with explicit lat/lng columns** where the source data has them reversed (common with BNG/GIS exports that use x=easting/lng, y=northing/lat)
-2. Possible edge case in the geocoding pipeline
+### Approach
 
-Regardless of source, the system has **no validation** to detect obviously-swapped UK coordinates.
+Since GeoPackage is an SQLite-based binary format, it cannot be parsed client-side in the browser easily. Instead, we'll handle this server-side with an edge function that accepts the ZIP upload, extracts the .gpkg file, reads features using a lightweight SQLite/GeoPackage parser, and ingests them into the database.
 
-### Fix: Add UK coordinate validation + auto-correction
+### Steps
 
-**Three locations need a guard:**
+**1. Add GeoPackage support via a new edge function `ingest-geopackage`**
+- Accepts a multipart/form-data upload with the ZIP or .gpkg file, plus `layer_id` and `dno` parameters
+- Unzips if needed, opens the .gpkg SQLite database using Deno's SQLite bindings
+- Reads geometry (WKB) and properties from the feature table
+- Converts WKB geometries to GeoJSON, reprojects BNG to WGS84 if detected
+- Batch-inserts features via the existing `ingest_geo_features_v4` RPC
+- Returns insert count
 
-#### 1. CsvIntakePanel.tsx (CSV parsing)
-After parsing lat/lng from CSV columns (line ~163), add a UK bounds check. If `lat` is in [-8, 2] and `lng` is in [49, 61], swap them — they're clearly reversed. UK bounds: lat ∈ [49, 61], lng ∈ [-8, 2].
+**2. Update GeoFileUploader to support .gpkg and .zip files**
+- Add `.gpkg` and `.zip` to the accepted file extensions
+- When a .gpkg or .zip file is detected, upload it directly to the edge function instead of trying to parse client-side
+- Show progress indicator during upload and server-side processing
 
-#### 2. score-sites-batch edge function (geocoder output + input validation)
-After resolving `geo` from either CSV coords or geocoding (line ~601), validate the coordinates are within UK bounds. If swapped, auto-correct. This catches both bad CSV data and any geocoder anomalies.
+**3. Register NGN datasets in the Gas Dataset Registry**
+- Add a manual upload button for NGN in the GasDatasetRegistry component (since `crawler: null`)
+- Allow uploading .gpkg/.zip files directly from the NGN card, linked to the correct layer
 
-#### 3. ProgrammeDashboard.tsx (save to portfolio)
-Before saving `raw_score_data`, validate and correct lat/lng one final time as a safety net.
+**4. Create the target layer in layer_registry**
+- Register an "NGN Distribution Mains" layer in `geo_feeders` (LineString) for West Yorkshire
+- DNO key: `NGN`, category: `gas`
 
-#### 4. SiteDetail.tsx (View on Map navigation)
-When reading `raw.lat` and `raw.lng` for the "View on Map" button, apply the same swap-detection guard so existing bad data renders correctly.
+### Technical details
 
-### Validation function (shared logic)
-```typescript
-function normalizeUkCoords(lat: number, lng: number): { lat: number; lng: number } {
-  // UK bounds: lat [49, 61], lng [-8, 2]
-  if (lat >= -8 && lat <= 2 && lng >= 49 && lng <= 61) {
-    return { lat: lng, lng: lat }; // They're swapped
-  }
-  return { lat, lng };
-}
-```
-
-### Also: Fix existing bad data
-Run a one-time migration to correct any sites already stored with swapped coordinates.
-
-```sql
-UPDATE sites
-SET raw_score_data = jsonb_set(
-  jsonb_set(raw_score_data, '{lat}', raw_score_data->'lng'),
-  '{lng}', raw_score_data->'lat'
-)
-WHERE (raw_score_data->>'lat')::float BETWEEN -8 AND 2
-  AND (raw_score_data->>'lng')::float BETWEEN 49 AND 61;
-```
+The edge function will use Deno's built-in SQLite support (`https://deno.land/x/sqlite/mod.ts`) to read the GeoPackage. GeoPackage stores geometries as GeoPackage Binary (GPB) which wraps standard WKB with an 8-byte header — we strip the header and parse the WKB to GeoJSON coordinates.
 
 ### Files changed
 | File | Change |
 |------|--------|
-| `src/components/la/CsvIntakePanel.tsx` | Add UK coord validation after parsing lat/lng |
-| `supabase/functions/score-sites-batch/index.ts` | Add coord validation after geocoding/input resolution |
-| `src/components/la/ProgrammeDashboard.tsx` | Add coord validation before portfolio save |
-| `src/pages/SiteDetail.tsx` | Add coord validation when reading raw lat/lng for map navigation |
-| Migration | Fix existing swapped records |
+| `supabase/functions/ingest-geopackage/index.ts` | New edge function for .gpkg/.zip upload and ingestion |
+| `src/components/admin/GeoFileUploader.tsx` | Add .gpkg/.zip support, route to edge function |
+| `src/components/admin/GasDatasetRegistry.tsx` | Add manual upload option for NGN |
+| Migration SQL | Create NGN layer in `layer_registry` |
 
