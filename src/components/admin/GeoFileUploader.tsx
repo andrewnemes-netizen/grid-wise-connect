@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { gmlToGeoJSON, decompressGzip, bngToWgs84 } from "@/lib/gmlParser";
 import { detectGeometryType } from "@/lib/detectGeometryType";
 import * as shapefile from "shapefile";
+import { parseGeoPackage } from "@/lib/gpkgParser";
 
 const GEOM_TYPE_RE = /"type"\s*:\s*"(Multi)?(Point|LineString|Polygon|GeometryCollection)"/i;
 const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon|MultiSurface|MultiCurve)/i;
