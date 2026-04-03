@@ -499,6 +499,26 @@ export function GasDatasetRegistry() {
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
                 {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
+              {!currentConfig.available && (
+                <>
+                  <input
+                    ref={gpkgInputRef}
+                    type="file"
+                    accept=".gpkg,.zip"
+                    className="hidden"
+                    onChange={handleGpkgUpload}
+                  />
+                  <Button
+                    onClick={() => gpkgInputRef.current?.click()}
+                    disabled={gpkgUploading}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    {gpkgUploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                    {gpkgUploading ? "Uploading…" : "Upload GeoPackage / ZIP"}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
