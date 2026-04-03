@@ -182,8 +182,10 @@ function wkbToGeoJSON(
     : view.getUint32(offset, false);
   offset += 4;
 
-  const baseType = rawType % 1000;
-  const hasZ = (rawType >= 1000 && rawType < 2000) || rawType >= 3000;
+  // Handle both ISO (high-bit) and OGC (1000+) Z/M encoding
+  const hasZ = Boolean(rawType & 0x80000000) || (rawType % 10000 >= 1000 && rawType % 10000 < 2000) || rawType % 10000 >= 3000;
+  const hasM = Boolean(rawType & 0x40000000) || (rawType % 10000 >= 2000 && rawType % 10000 < 3000) || rawType % 10000 >= 3000;
+  const baseType = (rawType & 0x0000FFFF) % 1000;
 
   function readCoord(): number[] {
     const x = le ? view.getFloat64(offset, true) : view.getFloat64(offset, false);
@@ -191,6 +193,7 @@ function wkbToGeoJSON(
     const y = le ? view.getFloat64(offset, true) : view.getFloat64(offset, false);
     offset += 8;
     if (hasZ) offset += 8;
+    if (hasM) offset += 8;
 
     if (isBNG) {
       const [lng, lat] = bngToWgs84(x, y);
