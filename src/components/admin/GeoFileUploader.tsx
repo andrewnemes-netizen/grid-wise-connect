@@ -17,6 +17,7 @@ async function detectGeomTypeFromFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "shp") return "Shapefile";
+  if (ext === "gpkg" || ext === "zip") return "GeoPackage (server-side)";
 
   if (ext === "csv") {
     const header = await file.slice(0, 1024).text();
