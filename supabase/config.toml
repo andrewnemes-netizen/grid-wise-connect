@@ -54,8 +54,5 @@ verify_jwt = false
 [functions.overpass-road-fetch]
 verify_jwt = false
 
-[functions.ingest-geopackage]
-verify_jwt = false
-
 [functions.spen-catalog-crawler]
 verify_jwt = false

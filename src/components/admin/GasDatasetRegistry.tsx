@@ -395,39 +395,50 @@ export function GasDatasetRegistry() {
 
     setGpkgUploading(true);
     try {
-      await supabase.auth.refreshSession();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-
-      // Find the NGN layer
-      const ngnLayer = layers.find(l => l.dno === selectedGdn && l.storage_table === "geo_feeders");
-      if (!ngnLayer) {
+      // Find the target layer
+      const targetLayer = layers.find(l => l.dno === selectedGdn && l.storage_table === "geo_feeders");
+      if (!targetLayer) {
         toast.error(`No layer found for ${selectedGdn}. Run Auto-Create & Link Layers first, or create a layer manually.`);
         return;
       }
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("layer_id", ngnLayer.id);
-      formData.append("dno", selectedGdn);
+      // Parse GeoPackage client-side
+      const { parseGeoPackage } = await import("@/lib/gpkgParser");
+      const geojson = await parseGeoPackage(file, (msg) => {
+        console.log(`[GasRegistry] ${msg}`);
+      });
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/ingest-geopackage`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          body: formData,
-        }
-      );
+      if (geojson.features.length === 0) {
+        toast.error("No features found in the GeoPackage file");
+        return;
+      }
 
-      const result = await resp.json();
-      if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+      // Upload in batches via existing ingest-geo-features edge function
+      const BATCH_SIZE = 500;
+      let totalInserted = 0;
 
-      toast.success(`Uploaded ${result.inserted?.toLocaleString()} features from ${file.name}`);
+      for (let b = 0; b < geojson.features.length; b += BATCH_SIZE) {
+        const batch = geojson.features.slice(b, b + BATCH_SIZE);
+        const res = await supabase.functions.invoke("ingest-geo-features", {
+          body: {
+            layer_id: targetLayer.id,
+            storage_table: targetLayer.storage_table,
+            dno: selectedGdn,
+            features: batch.map((f) => ({
+              geometry: f.geometry,
+              properties: f.properties || {},
+            })),
+          },
+        });
+        if (res.error) throw new Error(String(res.error));
+        totalInserted += res.data?.inserted ?? batch.length;
+      }
+
+      toast.success(`Uploaded ${totalInserted.toLocaleString()} features from ${file.name}`);
       invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
     } catch (err: any) {
+      console.error("[GasRegistry] GeoPackage upload error:", err);
       toast.error(`Upload failed: ${err.message}`);
     } finally {
       setGpkgUploading(false);
