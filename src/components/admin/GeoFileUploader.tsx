@@ -17,6 +17,7 @@ async function detectGeomTypeFromFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "shp") return "Shapefile";
+  if (ext === "gpkg" || ext === "zip") return "GeoPackage (server-side)";
 
   if (ext === "csv") {
     const header = await file.slice(0, 1024).text();
@@ -100,7 +101,7 @@ async function parseFile(file: File, companionFiles?: File[]): Promise<{ geojson
     return parseShapefile(file, companionFiles || []);
   }
 
-  throw new Error("Unsupported format. Upload GeoJSON, CSV, GML, or Shapefile (.shp).");
+  throw new Error("Unsupported format. Upload GeoJSON, CSV, GML, Shapefile (.shp), or GeoPackage (.gpkg/.zip).");
 }
 
 /** Detect if coordinates are in BNG (large values) and need reprojection */
@@ -283,6 +284,52 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         statuses[i].status = "done";
         statuses[i].featureCount = 0;
         parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
+        setFileStatuses([...statuses]);
+        continue;
+      }
+
+      // GeoPackage / ZIP → send to server-side edge function directly
+      if (ext === "gpkg" || ext === "zip") {
+        statuses[i].status = "uploading";
+        setFileStatuses([...statuses]);
+        setOverallStatus(`Uploading ${files[i].name} to server for processing…`);
+
+        try {
+          await supabase.auth.getSession();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error("Not authenticated");
+
+          const formData = new FormData();
+          formData.append("file", files[i]);
+          formData.append("layer_id", layerId);
+          formData.append("dno", layer.dno);
+
+          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+          const resp = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/ingest-geopackage`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              body: formData,
+            }
+          );
+
+          const result = await resp.json();
+          if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+
+          statuses[i].status = "done";
+          statuses[i].inserted = result.inserted ?? 0;
+          statuses[i].featureCount = result.inserted ?? 0;
+          statuses[i].hasSpatial = true;
+          statuses[i].detectedGeomType = "GeoPackage";
+          statuses[i].progress = 100;
+        } catch (err: any) {
+          console.error(`[GeoUploader] GeoPackage upload error:`, err);
+          statuses[i].status = "error";
+          statuses[i].error = err.message;
+          hasError = true;
+        }
+        parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: true });
         setFileStatuses([...statuses]);
         continue;
       }
@@ -521,14 +568,14 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload one or more files (GeoJSON, CSV, GML, or Shapefile). For Shapefiles, select all companion
-        files (.shp, .dbf, .prj, .shx) together. BNG/OSGB projections are automatically reprojected to WGS84.
+        Upload one or more files (GeoJSON, CSV, GML, Shapefile, or GeoPackage). For Shapefiles, select all companion
+        files (.shp, .dbf, .prj, .shx) together. GeoPackage (.gpkg) and ZIP archives are processed server-side. BNG/OSGB projections are automatically reprojected to WGS84.
       </p>
 
       <input
         ref={fileRef}
         type="file"
-        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx"
+        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx,.gpkg,.zip"
         multiple
         onChange={handleFilesSelected}
         className="hidden"

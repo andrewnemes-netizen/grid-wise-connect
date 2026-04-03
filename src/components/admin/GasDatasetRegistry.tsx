@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   RefreshCw, CheckCircle, XCircle, Loader2, Database, Globe, Search,
   Download, MapPin, FileSpreadsheet, Clock, AlertTriangle, Radar,
-  ChevronDown, ChevronUp, Eye, Layers, Info, Flame,
+  ChevronDown, ChevronUp, Eye, Layers, Info, Flame, Upload,
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -72,6 +72,8 @@ export function GasDatasetRegistry() {
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
   const [page, setPage] = useState(0);
   const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpkgInputRef = useRef<HTMLInputElement>(null);
+  const [gpkgUploading, setGpkgUploading] = useState(false);
 
   const currentConfig = gdnConfig[selectedGdn];
 
@@ -385,6 +387,53 @@ export function GasDatasetRegistry() {
     }, 5000);
   };
 
+  // Manual GeoPackage/ZIP upload for GDNs without API crawlers (e.g. NGN)
+  const handleGpkgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (gpkgInputRef.current) gpkgInputRef.current.value = "";
+
+    setGpkgUploading(true);
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      // Find the NGN layer
+      const ngnLayer = layers.find(l => l.dno === selectedGdn && l.storage_table === "geo_feeders");
+      if (!ngnLayer) {
+        toast.error(`No layer found for ${selectedGdn}. Run Auto-Create & Link Layers first, or create a layer manually.`);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("layer_id", ngnLayer.id);
+      formData.append("dno", selectedGdn);
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/ingest-geopackage`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: formData,
+        }
+      );
+
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+
+      toast.success(`Uploaded ${result.inserted?.toLocaleString()} features from ${file.name}`);
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
+    } catch (err: any) {
+      toast.error(`Upload failed: ${err.message}`);
+    } finally {
+      setGpkgUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Summary Dashboard */}
@@ -450,6 +499,26 @@ export function GasDatasetRegistry() {
                 {syncAllRunning ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-1" />}
                 {syncAllRunning ? "Syncing…" : `Sync All Active (${activeLinkedCount})`}
               </Button>
+              {!currentConfig.available && (
+                <>
+                  <input
+                    ref={gpkgInputRef}
+                    type="file"
+                    accept=".gpkg,.zip"
+                    className="hidden"
+                    onChange={handleGpkgUpload}
+                  />
+                  <Button
+                    onClick={() => gpkgInputRef.current?.click()}
+                    disabled={gpkgUploading}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    {gpkgUploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                    {gpkgUploading ? "Uploading…" : "Upload GeoPackage / ZIP"}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
