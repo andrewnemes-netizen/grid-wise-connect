@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { gmlToGeoJSON, decompressGzip, bngToWgs84 } from "@/lib/gmlParser";
 import { detectGeometryType } from "@/lib/detectGeometryType";
 import * as shapefile from "shapefile";
+import { parseGeoPackage } from "@/lib/gpkgParser";
 
 const GEOM_TYPE_RE = /"type"\s*:\s*"(Multi)?(Point|LineString|Polygon|GeometryCollection)"/i;
 const GML_GEOM_RE = /<gml:(Point|LineString|Polygon|MultiPoint|MultiLineString|MultiPolygon|MultiSurface|MultiCurve)/i;
@@ -17,7 +18,7 @@ async function detectGeomTypeFromFile(file: File): Promise<string> {
   const ext = file.name.split(".").pop()?.toLowerCase();
 
   if (ext === "shp") return "Shapefile";
-  if (ext === "gpkg" || ext === "zip") return "GeoPackage (server-side)";
+  if (ext === "gpkg" || ext === "zip") return "GeoPackage";
 
   if (ext === "csv") {
     const header = await file.slice(0, 1024).text();
@@ -288,48 +289,27 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         continue;
       }
 
-      // GeoPackage / ZIP → send to server-side edge function directly
+      // GeoPackage / ZIP → parse client-side with sql.js
       if (ext === "gpkg" || ext === "zip") {
-        statuses[i].status = "uploading";
+        statuses[i].status = "parsing";
         setFileStatuses([...statuses]);
-        setOverallStatus(`Uploading ${files[i].name} to server for processing…`);
+        setOverallStatus(`Parsing ${files[i].name} (GeoPackage)…`);
 
         try {
-          await supabase.auth.getSession();
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("Not authenticated");
-
-          const formData = new FormData();
-          formData.append("file", files[i]);
-          formData.append("layer_id", layerId);
-          formData.append("dno", layer.dno);
-
-          const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-          const resp = await fetch(
-            `https://${projectId}.supabase.co/functions/v1/ingest-geopackage`,
-            {
-              method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` },
-              body: formData,
-            }
-          );
-
-          const result = await resp.json();
-          if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
-
-          statuses[i].status = "done";
-          statuses[i].inserted = result.inserted ?? 0;
-          statuses[i].featureCount = result.inserted ?? 0;
+          const geojson = await parseGeoPackage(files[i], (msg) => setOverallStatus(msg));
+          console.log(`[GeoUploader] GeoPackage parsed: ${geojson.features.length} features`);
+          parsed.push({ geojson, hasSpatial: true });
+          statuses[i].featureCount = geojson.features.length;
           statuses[i].hasSpatial = true;
-          statuses[i].detectedGeomType = "GeoPackage";
-          statuses[i].progress = 100;
+          statuses[i].detectedGeomType = detectGeometryType(geojson.features);
+          statuses[i].status = "pending";
         } catch (err: any) {
-          console.error(`[GeoUploader] GeoPackage upload error:`, err);
+          console.error(`[GeoUploader] GeoPackage parse error:`, err);
+          parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: false });
           statuses[i].status = "error";
           statuses[i].error = err.message;
           hasError = true;
         }
-        parsed.push({ geojson: { type: "FeatureCollection", features: [] }, hasSpatial: true });
         setFileStatuses([...statuses]);
         continue;
       }
