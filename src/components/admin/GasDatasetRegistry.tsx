@@ -72,6 +72,8 @@ export function GasDatasetRegistry() {
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
   const [page, setPage] = useState(0);
   const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gpkgInputRef = useRef<HTMLInputElement>(null);
+  const [gpkgUploading, setGpkgUploading] = useState(false);
 
   const currentConfig = gdnConfig[selectedGdn];
 
