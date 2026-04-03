@@ -522,14 +522,14 @@ export function GeoFileUploader({ layerId, layer, onComplete }: GeoFileUploaderP
         <Badge variant="secondary" className="text-[10px]">{layer.geometry_type}</Badge>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload one or more files (GeoJSON, CSV, GML, or Shapefile). For Shapefiles, select all companion
-        files (.shp, .dbf, .prj, .shx) together. BNG/OSGB projections are automatically reprojected to WGS84.
+        Upload one or more files (GeoJSON, CSV, GML, Shapefile, or GeoPackage). For Shapefiles, select all companion
+        files (.shp, .dbf, .prj, .shx) together. GeoPackage (.gpkg) and ZIP archives are processed server-side. BNG/OSGB projections are automatically reprojected to WGS84.
       </p>
 
       <input
         ref={fileRef}
         type="file"
-        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx"
+        accept=".geojson,.json,.csv,.gml,.gz,.shp,.dbf,.prj,.shx,.gpkg,.zip"
         multiple
         onChange={handleFilesSelected}
         className="hidden"
