@@ -193,6 +193,7 @@ function wkbToGeoJSON(
     const y = le ? view.getFloat64(offset, true) : view.getFloat64(offset, false);
     offset += 8;
     if (hasZ) offset += 8;
+    if (hasM) offset += 8;
 
     if (isBNG) {
       const [lng, lat] = bngToWgs84(x, y);
