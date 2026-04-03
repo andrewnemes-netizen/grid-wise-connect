@@ -387,6 +387,53 @@ export function GasDatasetRegistry() {
     }, 5000);
   };
 
+  // Manual GeoPackage/ZIP upload for GDNs without API crawlers (e.g. NGN)
+  const handleGpkgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (gpkgInputRef.current) gpkgInputRef.current.value = "";
+
+    setGpkgUploading(true);
+    try {
+      await supabase.auth.refreshSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      // Find the NGN layer
+      const ngnLayer = layers.find(l => l.dno === selectedGdn && l.storage_table === "geo_feeders");
+      if (!ngnLayer) {
+        toast.error(`No layer found for ${selectedGdn}. Run Auto-Create & Link Layers first, or create a layer manually.`);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("layer_id", ngnLayer.id);
+      formData.append("dno", selectedGdn);
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/ingest-geopackage`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          body: formData,
+        }
+      );
+
+      const result = await resp.json();
+      if (!resp.ok) throw new Error(result.error || `HTTP ${resp.status}`);
+
+      toast.success(`Uploaded ${result.inserted?.toLocaleString()} features from ${file.name}`);
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["admin-layers-for-linking"] });
+    } catch (err: any) {
+      toast.error(`Upload failed: ${err.message}`);
+    } finally {
+      setGpkgUploading(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Summary Dashboard */}
