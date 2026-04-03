@@ -101,7 +101,7 @@ async function parseFile(file: File, companionFiles?: File[]): Promise<{ geojson
     return parseShapefile(file, companionFiles || []);
   }
 
-  throw new Error("Unsupported format. Upload GeoJSON, CSV, GML, or Shapefile (.shp).");
+  throw new Error("Unsupported format. Upload GeoJSON, CSV, GML, Shapefile (.shp), or GeoPackage (.gpkg/.zip).");
 }
 
 /** Detect if coordinates are in BNG (large values) and need reprojection */
