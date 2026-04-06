@@ -233,6 +233,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         cost_band: project.commercial.cost_range.mid < 50000 ? "£" : project.commercial.cost_range.mid < 150000 ? "££" : "£££",
         reinforcement_probability: project.feasibility.reinforcement_probability,
         raw_score_data: project as any,
+        org_id: orgId,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });

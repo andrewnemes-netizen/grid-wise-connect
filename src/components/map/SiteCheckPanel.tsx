@@ -204,6 +204,7 @@ export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, 
         connection_options: effectiveDistances || result.distance_bands || result.distances || [],
         next_steps: result.next_steps,
         created_by: user.id,
+        org_id: orgId,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });

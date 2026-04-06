@@ -468,6 +468,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         cost_band: costBand,
         reinforcement_probability: reinforceProb,
         raw_score_data: enrichedRawData,
+        org_id: orgId,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });
