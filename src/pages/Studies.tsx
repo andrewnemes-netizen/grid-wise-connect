@@ -98,7 +98,7 @@ function StudyCard({ s, onDelete, navigate, showSharedBadge, selectable, selecte
 }
 
 export default function Studies() {
-  const { user } = useAuth();
+  const { user, orgId } = useAuth();
   const navigate = useNavigate();
   const { data: unitRates } = useUnitRates();
   const queryClient = useQueryClient();
@@ -201,7 +201,8 @@ export default function Studies() {
         mode,
         proposed_kw: proposedKw ? Number(proposedKw) : null,
         created_by: user!.id,
-      });
+        org_id: orgId,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
