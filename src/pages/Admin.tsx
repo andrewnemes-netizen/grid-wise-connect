@@ -79,8 +79,6 @@ const Admin = () => {
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
         </TabsContent>
-          <AuditLogTab />
-        </TabsContent>
       </Tabs>
     </div>
   );
