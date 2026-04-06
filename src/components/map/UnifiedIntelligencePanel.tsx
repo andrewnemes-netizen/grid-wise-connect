@@ -160,7 +160,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
 }
 
 export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: Props) {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, orgId } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");

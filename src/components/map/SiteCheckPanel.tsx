@@ -87,7 +87,7 @@ const STEPS = [
 ];
 
 export function SiteCheckPanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: SiteCheckPanelProps) {
-  const { user, hasRole } = useAuth();
+  const { user, hasRole, orgId } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");
