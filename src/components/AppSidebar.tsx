@@ -38,7 +38,7 @@ const adminItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { user, hasRole, signOut } = useAuth();
+  const { user, hasRole, signOut, orgName } = useAuth();
   const showAdmin = hasRole("admin");
   const showInternal = hasRole("admin") || hasRole("engineer");
 
@@ -103,7 +103,12 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         {!collapsed && <RoleRequestDialog />}
-        <div className="flex items-center gap-2 px-2 py-1">
+        <div className="flex flex-col gap-1 px-2 py-1">
+          {!collapsed && orgName && (
+            <span className="truncate text-[10px] font-medium text-sidebar-foreground/50 uppercase tracking-wider">
+              {orgName}
+            </span>
+          )}
           {!collapsed && (
             <span className="truncate text-xs text-sidebar-foreground/70">
               {user?.email}

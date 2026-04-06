@@ -1214,6 +1214,65 @@ export type Database = {
           },
         ]
       }
+      org_members: {
+        Row: {
+          created_at: string
+          id: string
+          org_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          org_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          org_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_members_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organisations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       osm_ingestion_meta: {
         Row: {
           bbox: Json
@@ -1620,6 +1679,7 @@ export type Database = {
           grid_readiness: string | null
           id: string
           next_steps: Json | null
+          org_id: string | null
           postcode: string | null
           proposed_kw: number | null
           raw_score_data: Json | null
@@ -1643,6 +1703,7 @@ export type Database = {
           grid_readiness?: string | null
           id?: string
           next_steps?: Json | null
+          org_id?: string | null
           postcode?: string | null
           proposed_kw?: number | null
           raw_score_data?: Json | null
@@ -1666,6 +1727,7 @@ export type Database = {
           grid_readiness?: string | null
           id?: string
           next_steps?: Json | null
+          org_id?: string | null
           postcode?: string | null
           proposed_kw?: number | null
           raw_score_data?: Json | null
@@ -1678,7 +1740,15 @@ export type Database = {
           updated_at?: string
           viability_index?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sites_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       spatial_ref_sys: {
         Row: {
@@ -1716,6 +1786,7 @@ export type Database = {
           engine_output_json: Json | null
           id: string
           mode: string
+          org_id: string | null
           proposed_kw: number | null
           route_geojson: Json | null
           ruleset_version: string | null
@@ -1736,6 +1807,7 @@ export type Database = {
           engine_output_json?: Json | null
           id?: string
           mode?: string
+          org_id?: string | null
           proposed_kw?: number | null
           route_geojson?: Json | null
           ruleset_version?: string | null
@@ -1756,6 +1828,7 @@ export type Database = {
           engine_output_json?: Json | null
           id?: string
           mode?: string
+          org_id?: string | null
           proposed_kw?: number | null
           route_geojson?: Json | null
           ruleset_version?: string | null
@@ -1766,6 +1839,13 @@ export type Database = {
           voltage_level?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "studies_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "studies_site_id_fkey"
             columns: ["site_id"]
@@ -2497,6 +2577,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_org_member: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
       longtransactionsenabled: { Args: never; Returns: boolean }
       lookup_dno_by_location: {
         Args: { p_lat: number; p_lng: number }
@@ -3220,6 +3304,7 @@ export type Database = {
         Args: { _study_id: string; _user_id: string }
         Returns: boolean
       }
+      user_org_id: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {
       app_role: "admin" | "engineer" | "client"

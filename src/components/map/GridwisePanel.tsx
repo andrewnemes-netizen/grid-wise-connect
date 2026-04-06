@@ -101,7 +101,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
 }
 
 export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson, onCaptureScreenshot, hasActiveStudy, onConvertToDesign }: Props) {
-  const { user } = useAuth();
+  const { user, orgId } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
 
@@ -233,6 +233,7 @@ export function GridwisePanel({ lng, lat, onClose, routeGeojson, boundaryGeojson
         cost_band: project.commercial.cost_range.mid < 50000 ? "£" : project.commercial.cost_range.mid < 150000 ? "££" : "£££",
         reinforcement_probability: project.feasibility.reinforcement_probability,
         raw_score_data: project as any,
+        org_id: orgId,
       } as any);
       if (error) throw error;
       toast({ title: "Site saved to portfolio" });

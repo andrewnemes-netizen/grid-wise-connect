@@ -92,6 +92,7 @@ const Portfolio = () => {
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ["sites", user?.id],
     queryFn: async () => {
+      // RLS handles org-scoped filtering server-side
       const { data, error } = await supabase
         .from("sites")
         .select("*")
