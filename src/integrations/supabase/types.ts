@@ -430,6 +430,93 @@ export type Database = {
         }
         Relationships: []
       }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email: string
+          status: string
+          template_name: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          recipient_email?: string
+          status?: string
+          template_name?: string
+        }
+        Relationships: []
+      }
+      email_send_state: {
+        Row: {
+          auth_email_ttl_minutes: number
+          batch_size: number
+          id: number
+          retry_after_until: string | null
+          send_delay_ms: number
+          transactional_email_ttl_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          auth_email_ttl_minutes?: number
+          batch_size?: number
+          id?: number
+          retry_after_until?: string | null
+          send_delay_ms?: number
+          transactional_email_ttl_minutes?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_unsubscribe_tokens: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       ev_hub_rulesets: {
         Row: {
           created_at: string
@@ -1994,6 +2081,30 @@ export type Database = {
           },
         ]
       }
+      suppressed_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          metadata: Json | null
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          metadata?: Json | null
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          metadata?: Json | null
+          reason?: string
+        }
+        Relationships: []
+      }
       unit_rates: {
         Row: {
           cable_ehv_per_m: number
@@ -2347,6 +2458,10 @@ export type Database = {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
       }
+      delete_email: {
+        Args: { message_id: number; queue_name: string }
+        Returns: boolean
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
@@ -2379,6 +2494,10 @@ export type Database = {
         | { Args: { schema_name: string; table_name: string }; Returns: string }
         | { Args: { table_name: string }; Returns: string }
       enablelongtransactions: { Args: never; Returns: string }
+      enqueue_email: {
+        Args: { payload: Json; queue_name: string }
+        Returns: number
+      }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
       find_nearest_compatible_lv_main:
         | {
@@ -2586,6 +2705,15 @@ export type Database = {
         Args: { p_lat: number; p_lng: number }
         Returns: string
       }
+      move_to_dlq: {
+        Args: {
+          dlq_name: string
+          message_id: number
+          payload: Json
+          source_queue: string
+        }
+        Returns: number
+      }
       nearby_geo_points_by_slug: {
         Args: {
           p_lat: number
@@ -2642,6 +2770,14 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      read_email_batch: {
+        Args: { batch_size: number; queue_name: string; vt: number }
+        Returns: {
+          message: Json
+          msg_id: number
+          read_ct: number
+        }[]
+      }
       route_crossing_detect: {
         Args: { route_wkt: string }
         Returns: {
