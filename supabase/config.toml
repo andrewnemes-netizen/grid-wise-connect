@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.spen-catalog-crawler]
 verify_jwt = false
+
+[functions.process-email-queue]
+verify_jwt = true
