@@ -69,7 +69,7 @@ export default function Unsubscribe() {
           )}
           {state === "success" && (
             <>
-              <CheckCircle className="h-10 w-10 mx-auto text-green-600" />
+              <CheckCircle className="h-10 w-10 mx-auto text-success" />
               <h2 className="text-xl font-semibold">Unsubscribed</h2>
               <p className="text-muted-foreground text-sm">You've been unsubscribed successfully.</p>
             </>
