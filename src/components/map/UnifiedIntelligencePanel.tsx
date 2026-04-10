@@ -724,6 +724,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                     distances={effectiveDistances}
                     constraints={result.constraints}
                     nearest_headroom_kw={bestPOC?.transformer_headroom_kw ?? undefined}
+                    includeFeederPillar={includeFeederPillar}
                   />
                 )}
               </div>
