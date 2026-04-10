@@ -256,21 +256,20 @@ function calculateLabourDays(
   cableDistance: number,
   joints: number,
   terminations: number,
-  hasMaInsExtension: boolean,
+  hasMainsExtension: boolean,
 ): number {
-  let days = 0;
-  // Cable pulling: 0.5 day per 100m
-  days += Math.max(0.5, (cableDistance / 100) * 0.5);
-  // Jointing: 0.5 day per joint
+  // Base: 0.5 day for simple LV service connection (pull, term, test)
+  let days = 0.5;
+  // Extra cable pulling time for longer runs: +0.5 day per 100m beyond first 100m
+  if (cableDistance > 100) {
+    days += ((cableDistance - 100) / 100) * 0.5;
+  }
+  // Jointing: 0.5 day per joint (only when mains extension adds joints)
   days += joints * 0.5;
-  // Terminations: 0.25 day each
-  days += terminations * 0.25;
-  // Testing & commissioning: 0.5 day
-  days += 0.5;
-  // Mains extension adds joint bay prep: 0.5 day
-  if (hasMaInsExtension) days += 0.5;
-  // Cap LV work at minimum 1 day
-  return Math.max(1, Math.round(days * 2) / 2); // round to nearest 0.5, min 1
+  // Mains extension adds joint bay prep + extra termination: 0.5 day
+  if (hasMainsExtension) days += 0.5;
+  // Round to nearest 0.5, minimum 0.5
+  return Math.max(0.5, Math.round(days * 2) / 2);
 }
 
 /**
@@ -407,8 +406,8 @@ export function estimateConnectionCost(
     }
   }
 
-  // Cable terminations (material) — with joint bay for each termination
-  const termCount = 2;
+  // Cable terminations (material) — 1 for simple LV, 2 when mains extension required
+  const termCount = (voltageLevel === "LV" && !needsMainsExtension) ? 1 : 2;
   const terminationCost = termCount * rates.termination_each;
   breakdown.push({ category: "Equipment", description: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_rate: rates.termination_each, total: terminationCost, cost_type: "material" });
 
@@ -614,9 +613,9 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
     items.push({ category: "Jointing", item: `Joint bay (${jb.surface})`, quantity: joints, unit: "ea", unit_cost: jb.cost, total_cost: joints * jb.cost, cost_type: "material" });
   }
 
-  // Terminations — with joint bay for each termination point
-  const termCount = 2;
-  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_cost: rates.termination_each, total_cost: 2 * rates.termination_each, cost_type: "material" });
+  // Terminations — 1 for simple LV, 2 when mains extension required
+  const termCount = (voltageLevel === "LV" && !needsMainsExtension) ? 1 : 2;
+  items.push({ category: "Jointing", item: `${voltageLevel} cable termination`, quantity: termCount, unit: "ea", unit_cost: rates.termination_each, total_cost: termCount * rates.termination_each, cost_type: "material" });
 
   // Excavation joint bay for each termination point (LV without mains extension)
   if (voltageLevel === "LV" && !needsMainsExtension) {
