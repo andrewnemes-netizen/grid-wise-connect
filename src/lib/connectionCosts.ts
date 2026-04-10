@@ -664,7 +664,7 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
 
   // --- LABOUR ---
   const totalJoints = (voltageLevel === "LV" ? (needsMainsExtension ? 1 : 0) : Math.max(2, Math.ceil(cableDistance / 250))) + (needsMainsExtension ? 1 : 0);
-  const labourDays = calculateLabourDays(cableDistance, totalJoints, 2, needsMainsExtension);
+  const labourDays = calculateLabourDays(cableDistance, totalJoints, termCount, needsMainsExtension);
   items.push({
     category: "Labour", item: `LV Joint Team (Day rate)`,
     quantity: labourDays, unit: "days", unit_cost: rates.lv_joint_team_day,
