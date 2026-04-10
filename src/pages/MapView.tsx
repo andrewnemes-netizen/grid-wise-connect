@@ -358,8 +358,12 @@ const MapView = () => {
 
     // No extra infrastructure layers needed — just show the route + markers
     const tempLayerIds: string[] = [];
-    // Compute overview bbox including pin + all connection endpoints
+    // Compute overview bbox including pin + all connection endpoints + boundary
     const allPts: [number, number][] = [[lng, lat], ...allLineCoords];
+    // Include boundary vertices so the boundary polygon is visible in the screenshot
+    if (boundary.vertices && boundary.vertices.length > 0) {
+      allPts.push(...boundary.vertices);
+    }
     let minLng = lng, maxLng = lng, minLat = lat, maxLat = lat;
     allPts.forEach(([pLng, pLat]) => {
       if (pLng < minLng) minLng = pLng;
@@ -367,7 +371,7 @@ const MapView = () => {
       if (pLat < minLat) minLat = pLat;
       if (pLat > maxLat) maxLat = pLat;
     });
-    const PAD = 0.002; // ~200m padding
+    const PAD = 0.0008; // ~80m padding — tighter zoom for clearer detail
     const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
 
@@ -441,7 +445,7 @@ const MapView = () => {
     // Restore original camera
     map.jumpTo({ center: origCenter, zoom: origZoom });
     return { location: locationScreenshot, route: null };
-  }, [map, pin.pinLocation]);
+  }, [map, pin.pinLocation, boundary.vertices]);
 
   return (
     <div className="relative h-full w-full">
