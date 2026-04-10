@@ -445,7 +445,7 @@ const MapView = () => {
     // Restore original camera
     map.jumpTo({ center: origCenter, zoom: origZoom });
     return { location: locationScreenshot, route: null };
-  }, [map, pin.pinLocation]);
+  }, [map, pin.pinLocation, boundary.vertices]);
 
   return (
     <div className="relative h-full w-full">
