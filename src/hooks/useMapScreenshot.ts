@@ -23,9 +23,9 @@ export function useMapScreenshot(
         boundaryCoords.forEach((c) => bounds.extend(c));
       }
 
-      // ~50m buffer — tight zoom for clear boundary/route visibility
-      const BUFFER_DEG_LAT = 0.00045;
-      const BUFFER_DEG_LNG = 0.0007;
+      // ~25m buffer — very tight zoom for maximum detail
+      const BUFFER_DEG_LAT = 0.00022;
+      const BUFFER_DEG_LNG = 0.00035;
       bounds.extend([bounds.getWest() - BUFFER_DEG_LNG, bounds.getSouth() - BUFFER_DEG_LAT]);
       bounds.extend([bounds.getEast() + BUFFER_DEG_LNG, bounds.getNorth() + BUFFER_DEG_LAT]);
 
