@@ -371,9 +371,51 @@ const MapView = () => {
       if (pLat < minLat) minLat = pLat;
       if (pLat > maxLat) maxLat = pLat;
     });
-    const PAD = 0.0008; // ~80m padding — tighter zoom for clearer detail
+    const PAD = 0.0004; // ~40m padding — very tight zoom for maximum detail
     const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
+    // --- Temporary green cable route line for screenshot ---
+    const routeSrcId = "screenshot-route-src";
+    const routeLineId = "screenshot-route-line";
+    const routeOutlineId = "screenshot-route-outline";
+    const cleanupRoute = () => {
+      try {
+        if (map.getLayer(routeLineId)) map.removeLayer(routeLineId);
+        if (map.getLayer(routeOutlineId)) map.removeLayer(routeOutlineId);
+        if (map.getSource(routeSrcId)) map.removeSource(routeSrcId);
+      } catch {}
+    };
+    cleanupRoute();
+
+    // Build route line features from all connection lines
+    const routeFeatures: any[] = [];
+    connectionLinesRef.current.forEach((line) => {
+      const validCoords = line.coords.filter(isValidCoord);
+      if (validCoords.length >= 2) {
+        routeFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: validCoords },
+        });
+      }
+    });
+
+    if (routeFeatures.length > 0) {
+      map.addSource(routeSrcId, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: routeFeatures },
+      });
+      // White outline for contrast
+      map.addLayer({
+        id: routeOutlineId, type: "line", source: routeSrcId,
+        paint: { "line-color": "#ffffff", "line-width": 6, "line-opacity": 1 },
+      });
+      // Green cable route
+      map.addLayer({
+        id: routeLineId, type: "line", source: routeSrcId,
+        paint: { "line-color": "#22c55e", "line-width": 3.5, "line-opacity": 1 },
+      });
+    }
 
     // --- Temporary GeoJSON markers for pin + connection endpoints ---
     const markerSrcId = "screenshot-ep-src";
@@ -409,6 +451,7 @@ const MapView = () => {
 
     const cleanupAll = () => {
       cleanupMarkers();
+      cleanupRoute();
       for (const id of tempLayerIds) {
         try {
           const mid = `layer-${id}`;
