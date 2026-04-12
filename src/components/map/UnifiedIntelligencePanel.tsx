@@ -47,6 +47,7 @@ interface Props {
   onSaved?: () => void;
   onConnectionLines?: (lines: ConnectionLine[]) => void;
   onCaptureMapScreenshot?: () => Promise<{ location: string | null; route: string | null }>;
+  existingSiteId?: string | null;
 }
 
 interface ScoreResult {
@@ -159,7 +160,7 @@ function MetricRow({ label, value, badge, badgeVariant }: { label: string; value
   );
 }
 
-export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot }: Props) {
+export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnectionLines, onCaptureMapScreenshot, existingSiteId }: Props) {
   const { user, hasRole, orgId } = useAuth();
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
