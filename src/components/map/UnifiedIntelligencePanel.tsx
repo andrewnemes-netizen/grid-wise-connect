@@ -951,7 +951,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 ) : (
                   <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 p-2 flex items-center justify-center gap-1.5">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="text-xs text-emerald-700 font-medium">Saved</span>
+                    <span className="text-xs text-emerald-700 font-medium">{existingSiteId ? "Updated" : "Saved"}</span>
                   </div>
                 )}
               </div>
