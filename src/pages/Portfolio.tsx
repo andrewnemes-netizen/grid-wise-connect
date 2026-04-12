@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair } from "lucide-react";
+import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import { PortfolioAnalytics, extractOsmFlags } from "@/components/portfolio/PortfolioAnalytics";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
@@ -79,6 +81,7 @@ const Portfolio = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: unitRates } = useUnitRates();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filterScore, setFilterScore] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -88,6 +91,7 @@ const Portfolio = () => {
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ["sites", user?.id],
@@ -148,6 +152,23 @@ const Portfolio = () => {
     });
   };
 
+  const handleDelete = async () => {
+    if (deleteIds.length === 0) return;
+    const { error } = await supabase.from("sites").delete().in("id", deleteIds);
+    if (error) {
+      toast.error("Failed to delete: " + error.message);
+    } else {
+      toast.success(`Deleted ${deleteIds.length} site(s)`);
+      setCompareIds(prev => {
+        const next = new Set(prev);
+        deleteIds.forEach(id => next.delete(id));
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    }
+    setDeleteIds([]);
+  };
+
   const exportCsv = () => {
     const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Constraints", "OSM Coverage", "Status", "Created"];
     const rows = filtered.map((s: any) => {
@@ -186,6 +207,11 @@ const Portfolio = () => {
           <Badge variant="secondary" className="ml-2">{filtered.length} sites</Badge>
         </div>
         <div className="flex gap-2">
+          {compareIds.size > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteIds(Array.from(compareIds))}>
+              <Trash2 className="mr-1 h-3 w-3" />Delete Selected ({compareIds.size})
+            </Button>
+          )}
           {compareIds.size >= 2 && (
             <Button variant="outline" size="sm" onClick={() => setCompareIds(new Set())}>
               <X className="mr-1 h-3 w-3" />Clear Compare
@@ -406,9 +432,12 @@ const Portfolio = () => {
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
-                    <TableCell>
+                    <TableCell className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/site/${site.id}`)}>
                         <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteIds([site.id])}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -418,6 +447,19 @@ const Portfolio = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteIds.length > 0} onOpenChange={(open) => { if (!open) setDeleteIds([]); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteIds.length} site{deleteIds.length > 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. The site data will be permanently removed.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
