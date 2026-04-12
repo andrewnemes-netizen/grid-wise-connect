@@ -432,9 +432,12 @@ const Portfolio = () => {
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
                     <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
-                    <TableCell>
+                    <TableCell className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/site/${site.id}`)}>
                         <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteIds([site.id])}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>
                   </TableRow>
