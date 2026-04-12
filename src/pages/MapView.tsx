@@ -107,12 +107,18 @@ const MapView = () => {
   const osOpen = useOsOpenLayers();
 
   // Deep-link: fly to site from Portfolio → Site Detail
+  const [existingSiteId, setExistingSiteId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!map || !mapLoaded) return;
     const lat = parseFloat(searchParams.get("lat") || "");
     const lng = parseFloat(searchParams.get("lng") || "");
     const siteName = searchParams.get("siteName") || "";
+    const siteId = searchParams.get("siteId") || null;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    // Store siteId for update flow
+    if (siteId) setExistingSiteId(siteId);
 
     // Clear params so refresh doesn't re-trigger
     setSearchParams({}, { replace: true });

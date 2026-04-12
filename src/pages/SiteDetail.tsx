@@ -203,7 +203,7 @@ const SiteDetail = () => {
           const rawLng = raw.lng ?? raw.longitude;
           if (rawLat && rawLng) {
             const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
-            navigate(`/?lat=${coords.lat}&lng=${coords.lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}`);
+            navigate(`/?lat=${coords.lat}&lng=${coords.lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}&siteId=${site.id}`);
           } else {
             toast({ title: "No coordinates", description: "This site has no location data to show on the map.", variant: "destructive" });
           }
