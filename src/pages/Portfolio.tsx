@@ -207,6 +207,11 @@ const Portfolio = () => {
           <Badge variant="secondary" className="ml-2">{filtered.length} sites</Badge>
         </div>
         <div className="flex gap-2">
+          {compareIds.size > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setDeleteIds(Array.from(compareIds))}>
+              <Trash2 className="mr-1 h-3 w-3" />Delete Selected ({compareIds.size})
+            </Button>
+          )}
           {compareIds.size >= 2 && (
             <Button variant="outline" size="sm" onClick={() => setCompareIds(new Set())}>
               <X className="mr-1 h-3 w-3" />Clear Compare
