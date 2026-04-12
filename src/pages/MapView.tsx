@@ -651,9 +651,10 @@ const MapView = () => {
             <UnifiedIntelligencePanel
               lng={pin.pinLocation.lng}
               lat={pin.pinLocation.lat}
-              onClose={() => { pin.closeSiteCheck(); clearConnectionLines(); }}
+              onClose={() => { pin.closeSiteCheck(); clearConnectionLines(); setExistingSiteId(null); }}
               onConnectionLines={handleConnectionLines}
               onCaptureMapScreenshot={handlePinScreenshot}
+              existingSiteId={existingSiteId}
             />
           )}
 

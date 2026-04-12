@@ -453,26 +453,50 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         routed_cable_length_m: routeCableDistanceM ?? null,
         map_screenshot: mapScreenshot,
       };
-      const { error } = await supabase.from("sites").insert({
-        site_name: siteName || "Unnamed Site",
-        postcode,
-        proposed_kw: pkw || null,
-        site_type: siteType,
-        score: band,
-        score_reasons: result.reasons,
-        connection_options: effectiveDistances || result.distance_bands || result.distances || [],
-        next_steps: result.next_steps,
-        created_by: user.id,
-        viability_index: viabilityIndex,
-        grid_readiness: gridReady,
-        deployment_class: deployClass,
-        cost_band: costBand,
-        reinforcement_probability: reinforceProb,
-        raw_score_data: enrichedRawData,
-        org_id: orgId,
-      } as any);
-      if (error) throw error;
-      toast({ title: "Site saved to portfolio" });
+      if (existingSiteId) {
+        // Update existing portfolio site
+        const { error } = await supabase.from("sites").update({
+          site_name: siteName || "Unnamed Site",
+          postcode,
+          proposed_kw: pkw || null,
+          site_type: siteType,
+          score: band,
+          score_reasons: result.reasons,
+          connection_options: effectiveDistances || result.distance_bands || result.distances || [],
+          next_steps: result.next_steps,
+          viability_index: viabilityIndex,
+          grid_readiness: gridReady,
+          deployment_class: deployClass,
+          cost_band: costBand,
+          reinforcement_probability: reinforceProb,
+          raw_score_data: enrichedRawData,
+          updated_at: new Date().toISOString(),
+        } as any).eq("id", existingSiteId);
+        if (error) throw error;
+        toast({ title: "Portfolio site updated with new assessment" });
+      } else {
+        // Insert new site
+        const { error } = await supabase.from("sites").insert({
+          site_name: siteName || "Unnamed Site",
+          postcode,
+          proposed_kw: pkw || null,
+          site_type: siteType,
+          score: band,
+          score_reasons: result.reasons,
+          connection_options: effectiveDistances || result.distance_bands || result.distances || [],
+          next_steps: result.next_steps,
+          created_by: user.id,
+          viability_index: viabilityIndex,
+          grid_readiness: gridReady,
+          deployment_class: deployClass,
+          cost_band: costBand,
+          reinforcement_probability: reinforceProb,
+          raw_score_data: enrichedRawData,
+          org_id: orgId,
+        } as any);
+        if (error) throw error;
+        toast({ title: "Site saved to portfolio" });
+      }
       setSaved(true);
       onSaved?.();
     } catch (err: any) {
