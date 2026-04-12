@@ -81,6 +81,7 @@ const Portfolio = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: unitRates } = useUnitRates();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [filterScore, setFilterScore] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -90,6 +91,7 @@ const Portfolio = () => {
   const [sortKey, setSortKey] = useState<SortKey>("viability_index");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
   const { data: sites = [], isLoading } = useQuery({
     queryKey: ["sites", user?.id],
