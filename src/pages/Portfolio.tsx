@@ -152,6 +152,23 @@ const Portfolio = () => {
     });
   };
 
+  const handleDelete = async () => {
+    if (deleteIds.length === 0) return;
+    const { error } = await supabase.from("sites").delete().in("id", deleteIds);
+    if (error) {
+      toast.error("Failed to delete: " + error.message);
+    } else {
+      toast.success(`Deleted ${deleteIds.length} site(s)`);
+      setCompareIds(prev => {
+        const next = new Set(prev);
+        deleteIds.forEach(id => next.delete(id));
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["sites"] });
+    }
+    setDeleteIds([]);
+  };
+
   const exportCsv = () => {
     const headers = ["Name", "Postcode", "Type", "kW", "Score", "Viability", "Grid Readiness", "Deployment Class", "Cost Band", "Estimated Cost", "Reinforcement %", "Constraints", "OSM Coverage", "Status", "Created"];
     const rows = filtered.map((s: any) => {
