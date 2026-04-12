@@ -946,7 +946,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
                 </Button>
                 {!saved ? (
                   <Button onClick={handleSave} disabled={saving} className="flex-1">
-                    {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />Save</>}
+                    {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</> : <><Save className="mr-2 h-4 w-4" />{existingSiteId ? "Update Portfolio" : "Save"}</>}
                   </Button>
                 ) : (
                   <div className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 p-2 flex items-center justify-center gap-1.5">
