@@ -414,9 +414,9 @@ export function estimateConnectionCost(
   // Excavation joint bay for each termination point
   if (voltageLevel === "LV" && !needsMainsExtension) {
     const jb = getJointBayCost(split, rates);
-    const termJbTotal = termCount * jb.cost;
-    jointBayCost += termJbTotal;
-    breakdown.push({ category: "Equipment", description: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_rate: jb.cost, total: termJbTotal, cost_type: "material" });
+    // Standard LV: exactly 1 joint bay for the single termination point
+    jointBayCost += jb.cost;
+    breakdown.push({ category: "Equipment", description: `Joint bay - termination (${jb.surface})`, quantity: 1, unit: "ea", unit_rate: jb.cost, total: jb.cost, cost_type: "material" });
   }
 
   // Switchgear — HV/EHV only
@@ -481,7 +481,8 @@ export function estimateConnectionCost(
   const equipmentCost = jointBayCost + jointKitCost + standardJointCost + terminationCost + switchgearCost + lvEndpointCost + transformerCost + meteringCost + earthingCost + plinthCost + markerTapeCost;
 
   // --- LABOUR ---
-  const totalJoints = jointCount + (needsMainsExtension ? 1 : 0);
+  // For standard LV (no mains extension): 0 joints → base 0.5 day
+  const totalJoints = (voltageLevel === "LV" && !needsMainsExtension) ? 0 : jointCount + (needsMainsExtension ? 1 : 0);
   const labourDays = calculateLabourDays(cableDistance, totalJoints, termCount, needsMainsExtension);
   const labourCost = Math.round(labourDays * rates.lv_joint_team_day);
   breakdown.push({
@@ -620,7 +621,8 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   // Excavation joint bay for each termination point (LV without mains extension)
   if (voltageLevel === "LV" && !needsMainsExtension) {
     const jb = getJointBayCost(split, rates);
-    items.push({ category: "Jointing", item: `Joint bay - termination (${jb.surface})`, quantity: termCount, unit: "ea", unit_cost: jb.cost, total_cost: termCount * jb.cost, cost_type: "material" });
+    // Standard LV: exactly 1 joint bay for the single termination point
+    items.push({ category: "Jointing", item: `Joint bay - termination (${jb.surface})`, quantity: 1, unit: "ea", unit_cost: jb.cost, total_cost: jb.cost, cost_type: "material" });
   }
 
   // Switchgear — HV/EHV only
@@ -663,7 +665,10 @@ export function generateBom(input: EstimateInput, rates: UnitRates = DEFAULT_UNI
   items.push({ category: "Civils", item: "Cable marker tape", quantity: cableDistance, unit: "m", unit_cost: rates.cable_marker_tape_per_m, total_cost: cableDistance * rates.cable_marker_tape_per_m, cost_type: "material" });
 
   // --- LABOUR ---
-  const totalJoints = (voltageLevel === "LV" ? (needsMainsExtension ? 1 : 0) : Math.max(2, Math.ceil(cableDistance / 250))) + (needsMainsExtension ? 1 : 0);
+  // For standard LV (no mains extension): 0 joints → base 0.5 day
+  const totalJoints = (voltageLevel === "LV" && !needsMainsExtension)
+    ? 0
+    : (voltageLevel === "LV" ? 1 : Math.max(2, Math.ceil(cableDistance / 250))) + (needsMainsExtension ? 1 : 0);
   const labourDays = calculateLabourDays(cableDistance, totalJoints, termCount, needsMainsExtension);
   items.push({
     category: "Labour", item: `LV Joint Team (Day rate)`,
