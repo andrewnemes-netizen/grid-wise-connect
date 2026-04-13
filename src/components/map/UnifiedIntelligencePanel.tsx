@@ -186,16 +186,24 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const effectiveDistances = useMemo(() => {
     const base = result?.distances;
     if (!base) return null;
-    if (!routeCableDistanceM || routeCableDistanceM <= 0) return base;
+
+    // Use route distance first, then snap distance from POC, then raw score
+    const overrideM = (routeCableDistanceM && routeCableDistanceM > 0)
+      ? routeCableDistanceM
+      : (cablePoc?.distanceM && cablePoc.distanceM > 0)
+        ? cablePoc.distanceM
+        : null;
+
+    if (!overrideM) return base;
 
     if (pkw <= 80) {
-      return { ...base, capacity_segment_m: routeCableDistanceM };
+      return { ...base, capacity_segment_m: overrideM };
     }
     if (pkw <= 1500) {
-      return { ...base, feeder_m: routeCableDistanceM };
+      return { ...base, feeder_m: overrideM };
     }
-    return { ...base, primary_m: routeCableDistanceM };
-  }, [result?.distances, routeCableDistanceM, pkw]);
+    return { ...base, primary_m: overrideM };
+  }, [result?.distances, routeCableDistanceM, cablePoc?.distanceM, pkw]);
 
   const resolvedCableLengthM = useMemo(() => {
     if (routeCableDistanceM && routeCableDistanceM > 0) return Math.round(routeCableDistanceM);
