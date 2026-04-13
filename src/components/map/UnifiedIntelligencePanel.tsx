@@ -194,15 +194,33 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
         ? cablePoc.distanceM
         : null;
 
-    if (!overrideM) return base;
+    const merged = { ...base };
 
-    if (pkw <= 80) {
-      return { ...base, capacity_segment_m: overrideM };
+    if (overrideM) {
+      if (pkw <= 80) {
+        merged.capacity_segment_m = overrideM;
+      } else if (pkw <= 1500) {
+        merged.feeder_m = overrideM;
+      } else {
+        merged.primary_m = overrideM;
+      }
     }
-    if (pkw <= 1500) {
-      return { ...base, feeder_m: overrideM };
+
+    // Ensure the key cable distance is never 0 when we have a fallback
+    // (e.g. score-site returned 0 because no cable data in this DNO area)
+    if (pkw <= 80 && (!merged.capacity_segment_m || merged.capacity_segment_m <= 0)) {
+      const fallback = merged.feeder_m || merged.primary_m;
+      if (fallback && fallback > 0) {
+        merged.capacity_segment_m = Math.min(fallback, 500);
+      }
+    } else if (pkw > 80 && pkw <= 1500 && (!merged.feeder_m || merged.feeder_m <= 0)) {
+      const fallback = merged.capacity_segment_m || merged.primary_m;
+      if (fallback && fallback > 0) {
+        merged.feeder_m = Math.min(fallback, 3000);
+      }
     }
-    return { ...base, primary_m: overrideM };
+
+    return merged;
   }, [result?.distances, routeCableDistanceM, cablePoc?.distanceM, pkw]);
 
   const resolvedCableLengthM = useMemo(() => {
