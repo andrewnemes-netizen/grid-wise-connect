@@ -1,32 +1,34 @@
 
 
-## Plan: Save Updated Costs Back to Portfolio from Map
+## Plan: Fix LV BOM Quantities — Terminations, Joint Bays, and Labour
 
 ### Problem
-When an engineer opens a site from SiteDetail via "Open on Map", draws/adjusts the cable route, and runs a new assessment, there is no way to save the updated costs back to the existing portfolio site. The current flow always creates a **new** site entry instead of updating the existing one.
+The BOM is showing 2 LV cable terminations, 2 joint bays, and 1.5 days labour for standard LV connections that should show 1 termination, 1 joint bay, and 0.5 days.
 
-### What will be built
-A "Save back to Portfolio" workflow that passes the site ID through to the map, and when the engineer re-runs the assessment, updates the existing site record rather than creating a duplicate.
+### Root Cause
+The `needsMainsExtension` flag (cable distance > 25m threshold) is likely being triggered because the `capacity_segment_m` from the scoring engine is large, even when the actual site connection is short. This cascades into doubled terminations, doubled joint bays, and inflated labour.
 
-### Changes
+### Changes — `src/lib/connectionCosts.ts`
 
-**1. `src/pages/SiteDetail.tsx`** — Pass `siteId` in the "Open on Map" URL
-- Add `&siteId=${site.id}` to the navigate URL so the map knows which portfolio site to update.
+**1. Termination count** (lines ~410 and ~617)
+- For LV without mains extension: force `termCount = 1`
+- For LV with mains extension: `termCount = 2`
+- Already coded correctly, but add a hardened guard
 
-**2. `src/pages/MapView.tsx`** — Read `siteId` from search params
-- Extract `siteId` from the URL and pass it down to `UnifiedIntelligencePanel` as a new prop (`existingSiteId`).
-- Include it in the deep-link effect alongside lat/lng/siteName.
+**2. Joint bay for terminations** (lines ~415-420 and ~621-624)
+- For LV without mains extension: force `quantity = 1` (currently uses `termCount` which should be 1 but is showing 2)
+- Explicitly set quantity to 1 independent of termCount for the non-extension case
 
-**3. `src/components/map/UnifiedIntelligencePanel.tsx`** — Add "Update Site" logic
-- Accept a new `existingSiteId?: string` prop.
-- When `existingSiteId` is set, change the "Save Site" button label to **"Update Portfolio Site"**.
-- On click, perform a `supabase.from("sites").update(...)` instead of `.insert(...)`, updating the same fields (score, distances, cost_band, raw_score_data, connection_options, etc.) on the existing record.
-- Show a success toast: "Portfolio site updated with new assessment".
-- Keep the existing "Save Site" (insert) flow for new sites where no `existingSiteId` is present.
+**3. Labour days** (`calculateLabourDays` function, lines ~255-273)
+- Ensure base case for simple LV (no mains extension, short run, 0 joints) returns exactly 0.5 days
+- The `joints * 0.5` term should be 0 for standard LV — verify `totalJoints` calculation at call sites (lines ~484 and ~666) passes 0 joints when no mains extension
 
-### Technical details
-- The `sites` table already supports all needed Update fields (cost_band, raw_score_data, connection_options, viability_index, etc.)
-- No database migration needed — just switching from INSERT to UPDATE when a site ID is provided.
-- RLS policies already permit org-scoped updates.
-- The `updated_at` column will be set to `new Date().toISOString()` on update.
+**4. Additional hardening at both call sites** (estimateConnectionCost line ~484, generateBom line ~666)
+- For LV without mains extension, explicitly set `totalJoints = 0` to prevent any stale joint count from inflating labour
+
+### Summary of expected output for standard LV (no mains extension)
+- LV cable termination: **1 ea**
+- Joint bay - termination: **1 ea**  
+- LV Joint Team: **0.5 days**
+- LV feeder pillar: **1 ea** (when toggle on)
 
