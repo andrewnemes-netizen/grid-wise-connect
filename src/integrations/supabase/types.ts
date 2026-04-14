@@ -1515,6 +1515,7 @@ export type Database = {
           full_name: string | null
           id: string
           is_approved: boolean
+          is_platform_admin: boolean
           phone: string | null
           updated_at: string
           user_id: string
@@ -1526,6 +1527,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_approved?: boolean
+          is_platform_admin?: boolean
           phone?: string | null
           updated_at?: string
           user_id: string
@@ -1537,6 +1539,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_approved?: boolean
+          is_platform_admin?: boolean
           phone?: string | null
           updated_at?: string
           user_id?: string
@@ -2800,6 +2803,7 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      is_platform_admin: { Args: { _user_id: string }; Returns: boolean }
       longtransactionsenabled: { Args: never; Returns: boolean }
       lookup_dno_by_location: {
         Args: { p_lat: number; p_lng: number }
