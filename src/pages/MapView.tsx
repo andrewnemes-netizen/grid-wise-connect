@@ -562,7 +562,7 @@ const MapView = () => {
           />
 
           {/* Route drawing controls (assess tool with source selected) */}
-          {activeTool === "assess" && connect.connectSource && (
+          {(activeTool === "assess" || routeDrawActive) && connect.connectSource && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
               <span className="text-xs text-muted-foreground">
                 {connect.connectWaypoints.length === 0
