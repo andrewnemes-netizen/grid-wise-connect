@@ -33,18 +33,28 @@ export function useConnectTool(
       const { lng, lat } = e.lngLat;
 
       if (!connectSource) {
-        // First click: select source asset
+        // First click: select source asset (or custom POC on empty space)
         const features = map.queryRenderedFeatures(e.point);
         const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
-        if (!layerFeature) {
-          toast({ title: "Click on an asset", description: "First click should be on a visible network asset." });
-          return;
+
+        let coords: [number, number];
+        let sourceProps: Record<string, unknown>;
+        let sourceLabel: string;
+
+        if (layerFeature) {
+          const layerId = layerFeature.layer.id.replace("layer-", "");
+          const regLayer = layerMap.get(layerId);
+          coords = layerFeature.geometry.type === "Point"
+            ? (layerFeature.geometry as GeoJSON.Point).coordinates as [number, number]
+            : [lng, lat] as [number, number];
+          sourceProps = (layerFeature.properties || {}) as Record<string, unknown>;
+          sourceLabel = regLayer?.display_name || "Asset";
+        } else {
+          // No asset hit — allow custom POC placement
+          coords = [lng, lat];
+          sourceProps = {};
+          sourceLabel = "Custom POC";
         }
-        const layerId = layerFeature.layer.id.replace("layer-", "");
-        const regLayer = layerMap.get(layerId);
-        const coords = layerFeature.geometry.type === "Point"
-          ? (layerFeature.geometry as GeoJSON.Point).coordinates as [number, number]
-          : [lng, lat] as [number, number];
 
         connectSrcMarkerRef.current?.remove();
         const srcMarker = new maplibregl.Marker({ color: "#3498db" })
@@ -54,11 +64,11 @@ export function useConnectTool(
 
         setConnectSource({
           lngLat: coords,
-          properties: (layerFeature.properties || {}) as Record<string, unknown>,
-          layerLabel: regLayer?.display_name || "Asset",
+          properties: sourceProps,
+          layerLabel: sourceLabel,
         });
         setConnectWaypoints([]);
-        toast({ title: `Source: ${regLayer?.display_name || "Asset"}`, description: "Click to add route waypoints. Double-click to finish." });
+        toast({ title: `Source: ${sourceLabel}`, description: "Click to add route waypoints. Double-click to finish." });
       } else {
         // Subsequent clicks: add waypoint
         const newPoint: [number, number] = [lng, lat];

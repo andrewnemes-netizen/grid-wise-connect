@@ -13,6 +13,7 @@ import {
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
   Gauge, Construction, Eye, Paintbrush, Radar, Search, FileJson,
+  Route,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,8 @@ interface AssessmentPanelProps {
   ) => Promise<number>;
   /** Callback when auto-detect completes */
   onAutoDetectComplete?: (result: RouteAutoDetectResult) => void;
+  /** Callback to toggle route-draw mode in the parent MapView */
+  onRouteDrawChange?: (active: boolean) => void;
 }
 
 // ── Shared UI helpers ───────────────────────────────────────
@@ -162,6 +165,7 @@ export function AssessmentPanel({
   lng, lat, onClose, connectEndpoints, boundaryGeojson,
   onCaptureScreenshot, streetViewCaptures, designElements,
   hasActiveStudy, onConvertToDesign, onAutoDetectComplete,
+  onRouteDrawChange,
 }: AssessmentPanelProps) {
   const { user, orgId } = useAuth();
   const { toast } = useToast();
@@ -169,6 +173,7 @@ export function AssessmentPanel({
   const autoDetect = useRouteAutoDetect();
 
   // ── Inputs ──
+  const [routeDrawActive, setRouteDrawActive] = useState(false);
   const [siteName, setSiteName] = useState("");
   const [postcode, setPostcode] = useState("");
   const [chargerCount, setChargerCount] = useState("4");
@@ -491,6 +496,39 @@ export function AssessmentPanel({
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
+          {/* ── Mode Toggle: Pin Drop / Draw Route ── */}
+          <div className="flex gap-1 rounded-md border bg-muted/30 p-1">
+            <Button
+              variant={routeDrawActive ? "ghost" : "default"}
+              size="sm"
+              className="flex-1 h-8 text-xs gap-1.5"
+              onClick={() => {
+                setRouteDrawActive(false);
+                onRouteDrawChange?.(false);
+              }}
+            >
+              <MapPin className="h-3.5 w-3.5" />Pin Drop
+            </Button>
+            <Button
+              variant={routeDrawActive ? "default" : "ghost"}
+              size="sm"
+              className="flex-1 h-8 text-xs gap-1.5"
+              onClick={() => {
+                setRouteDrawActive(true);
+                onRouteDrawChange?.(true);
+              }}
+            >
+              <Route className="h-3.5 w-3.5" />Draw Route
+            </Button>
+          </div>
+
+          {routeDrawActive && !hasDrawnRoute && (
+            <div className="rounded-md border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <p className="font-medium text-foreground mb-1">Draw Route Mode</p>
+              <p>Click the map to select your POC (on an asset or any location), then click to add waypoints. Double-click or press Finish to complete the route to your feeder pillar location.</p>
+            </div>
+          )}
+
           {/* ── Location ── */}
           <div className="rounded-md border bg-muted/20 p-3">
             <p className="text-xs text-muted-foreground flex items-center gap-1">
