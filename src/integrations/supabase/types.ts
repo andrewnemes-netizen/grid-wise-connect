@@ -2787,6 +2787,7 @@ export type Database = {
         Args: { _bbox_filter?: string; _limit?: number; _table_name: string }
         Returns: Json
       }
+      get_user_org_id: { Args: { _user_id: string }; Returns: string }
       gettransactionid: { Args: never; Returns: unknown }
       has_role: {
         Args: {
