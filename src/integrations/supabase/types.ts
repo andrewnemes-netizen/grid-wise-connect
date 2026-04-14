@@ -1573,6 +1573,105 @@ export type Database = {
         }
         Relationships: []
       }
+      route_amendments: {
+        Row: {
+          ai_cost_estimate: Json | null
+          ai_distance_m: number | null
+          ai_poc_lat: number | null
+          ai_poc_lng: number | null
+          ai_route_geojson: Json | null
+          ai_surface_split: Json | null
+          amendment_notes: string | null
+          approved_for_training: boolean
+          cost_delta_pct: number | null
+          created_at: string
+          created_by: string
+          distance_delta_m: number | null
+          dno_region: string | null
+          eng_cost_estimate: Json | null
+          eng_distance_m: number | null
+          eng_poc_lat: number | null
+          eng_poc_lng: number | null
+          eng_route_geojson: Json | null
+          eng_surface_split: Json | null
+          id: string
+          poc_shift_m: number | null
+          proposed_kw: number | null
+          site_id: string | null
+          study_id: string | null
+          voltage_level: string | null
+        }
+        Insert: {
+          ai_cost_estimate?: Json | null
+          ai_distance_m?: number | null
+          ai_poc_lat?: number | null
+          ai_poc_lng?: number | null
+          ai_route_geojson?: Json | null
+          ai_surface_split?: Json | null
+          amendment_notes?: string | null
+          approved_for_training?: boolean
+          cost_delta_pct?: number | null
+          created_at?: string
+          created_by: string
+          distance_delta_m?: number | null
+          dno_region?: string | null
+          eng_cost_estimate?: Json | null
+          eng_distance_m?: number | null
+          eng_poc_lat?: number | null
+          eng_poc_lng?: number | null
+          eng_route_geojson?: Json | null
+          eng_surface_split?: Json | null
+          id?: string
+          poc_shift_m?: number | null
+          proposed_kw?: number | null
+          site_id?: string | null
+          study_id?: string | null
+          voltage_level?: string | null
+        }
+        Update: {
+          ai_cost_estimate?: Json | null
+          ai_distance_m?: number | null
+          ai_poc_lat?: number | null
+          ai_poc_lng?: number | null
+          ai_route_geojson?: Json | null
+          ai_surface_split?: Json | null
+          amendment_notes?: string | null
+          approved_for_training?: boolean
+          cost_delta_pct?: number | null
+          created_at?: string
+          created_by?: string
+          distance_delta_m?: number | null
+          dno_region?: string | null
+          eng_cost_estimate?: Json | null
+          eng_distance_m?: number | null
+          eng_poc_lat?: number | null
+          eng_poc_lng?: number | null
+          eng_route_geojson?: Json | null
+          eng_surface_split?: Json | null
+          id?: string
+          poc_shift_m?: number | null
+          proposed_kw?: number | null
+          site_id?: string | null
+          study_id?: string | null
+          voltage_level?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "route_amendments_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_amendments_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ruleset_change_log: {
         Row: {
           change_summary: string

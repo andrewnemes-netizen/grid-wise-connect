@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2,
   Search, ClipboardCheck, FolderOpen, Download, Activity, Gauge, TrendingUp,
@@ -31,6 +31,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { findNearestLvMain, findNearestHvAsset } from "@/lib/gridwise/assetEngine";
 import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
 import type { HvAssetMatch } from "@/lib/gridwise/assetEngine";
+import { captureBaseline, hasAmendment, recordAmendment, type RouteBaseline } from "@/lib/routeAmendmentService";
 
 export interface ConnectionLine {
   id: string;
@@ -180,6 +181,7 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
   const [cablePoc, setCablePoc] = useState<{ name: string; snapLon: number; snapLat: number; distanceM: number; type: string } | null>(null);
   const [routeCableDistanceM, setRouteCableDistanceM] = useState<number | null>(null);
   const [includeFeederPillar, setIncludeFeederPillar] = useState(true);
+  const aiBaselineRef = useRef<RouteBaseline | null>(null);
 
   const pkw = Number(proposedKw) || 0;
 
@@ -435,6 +437,16 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       toast({ title: "Assessment failed", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
+
+      // Capture AI baseline for amendment tracking (when opening from portfolio)
+      if (existingSiteId) {
+        aiBaselineRef.current = captureBaseline({
+          pocLat: cablePoc?.snapLat ?? null,
+          pocLng: cablePoc?.snapLon ?? null,
+          distanceM: routeCableDistanceM ?? cablePoc?.distanceM ?? null,
+          costEstimate: null, // will be computed after effectiveDistances settles
+        });
+      }
     }
   };
 
@@ -525,6 +537,35 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       }
       setSaved(true);
       onSaved?.();
+
+      // ── Route Amendment Tracking ──
+      if (existingSiteId && aiBaselineRef.current) {
+        const currentState = captureBaseline({
+          pocLat: cablePoc?.snapLat ?? null,
+          pocLng: cablePoc?.snapLon ?? null,
+          distanceM: routeCableDistanceM ?? cablePoc?.distanceM ?? null,
+          costEstimate: costEstimate ?? null,
+        });
+        // Update baseline with cost that wasn't available at capture time
+        if (!aiBaselineRef.current.costEstimate && costEstimate) {
+          aiBaselineRef.current.costEstimate = costEstimate as any;
+        }
+        if (hasAmendment(aiBaselineRef.current, currentState)) {
+          recordAmendment(
+            {
+              siteId: existingSiteId,
+              studyId: null,
+              dnoRegion: result?.nearest_substations?.[0]?.site_name?.match(/\b(UKPN|NGED|SSEN|SPEN|NPG|ENWL)\b/i)?.[0] ?? null,
+              voltageLevel: pkw <= 80 ? "LV" : pkw <= 1500 ? "HV" : "EHV",
+              proposedKw: pkw,
+            },
+            aiBaselineRef.current,
+            currentState
+          ).then((id) => {
+            if (id) console.log("Route amendment recorded:", id);
+          });
+        }
+      }
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
     } finally {
