@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   X, MapPin, Zap, AlertTriangle, CheckCircle, XCircle, Save, Loader2,
   Search, ClipboardCheck, FolderOpen, Download, Activity, Gauge, TrendingUp,
