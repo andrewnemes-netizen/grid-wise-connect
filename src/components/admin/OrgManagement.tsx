@@ -257,9 +257,11 @@ export function OrgManagement() {
                         </div>
                       </DialogContent>
                     </Dialog>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteOrg.mutate(org.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isSuperAdmin && (
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteOrg.mutate(org.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
