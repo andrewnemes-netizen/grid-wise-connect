@@ -1,36 +1,49 @@
 
 
-# Fix: Org-Scoped Admin Visibility + Name Resolution
+# Fix: Platform Super-Admin Access
 
-## Problems Identified
+## Problem
+You're logged in as an EcoPower member with the admin role. The current system defines "super-admin" as an admin with **no org membership** — but you ARE in an org, so you're treated as an org-scoped admin and can only see EcoPower users.
 
-1. **"Characters as name" in Organisations tab**: The `organisations` and `org_members` RLS policies still give admins global access (no org filter), so the OrgManagement page loads ALL orgs and ALL members. But the `profiles` RLS is now org-scoped, so profile names for users in *other* orgs can't be resolved — they fall back to showing truncated UUIDs like "b680abf5".
+You need a proper way to mark specific users as **platform administrators** who can see everything across all organisations, even though they belong to one.
 
-2. **Role management confusion**: The Users & Roles tab correctly shows only same-org users (RLS is working), but the Organisations tab shows all orgs, creating a mismatch. You can see other orgs' members but can't read their names.
+## Solution
 
-## Fix
+### 1. Database Migration
 
-### 1. Database: Scope `organisations` and `org_members` RLS for admins
+Add a `is_platform_admin` column to `profiles`:
+```sql
+ALTER TABLE public.profiles ADD COLUMN is_platform_admin boolean NOT NULL DEFAULT false;
+```
 
-Update the admin policies on these two tables so org-scoped admins can only manage their own org:
+Set your account as platform admin (your user_id from the EcoPower org).
 
-- **`organisations`**: Replace `"Admins can manage organisations"` with org-scoped version — admin can only manage orgs where `id = get_user_org_id(auth.uid())`. Super-admins (no org) retain global access.
-- **`org_members`**: Replace `"Admins can manage org_members"` with org-scoped version — admin can only manage members where `org_id = get_user_org_id(auth.uid())`. Super-admins retain global access.
+Create a `is_platform_admin(uuid)` security definer function that checks this flag.
 
-### 2. Frontend: Pass `orgId` context in OrgManagement
+Update ALL the org-scoped RLS policies (profiles, user_roles, role_requests, audit_log, sites, organisations, org_members) to use:
+```sql
+is_platform_admin(auth.uid()) OR org_id = get_user_org_id(auth.uid())
+```
+instead of:
+```sql
+get_user_org_id(auth.uid()) IS NULL OR ...
+```
+
+### 2. Frontend: useAuth Update
+
+Update `src/hooks/useAuth.tsx` to fetch `is_platform_admin` from the profiles table and expose it in the auth context.
+
+### 3. Frontend: OrgManagement + UserRolesManagement
 
 Update `src/components/admin/OrgManagement.tsx`:
-- Import `useAuth` and get `orgId`
-- If `orgId` exists, filter the organisations query to only fetch that org (`.eq("id", orgId)`)
-- Hide "New Organisation" and "Delete Organisation" buttons for org-scoped admins (only super-admins should create/delete orgs)
-- The member list and profile names will resolve correctly since RLS now matches
+- Use `isPlatformAdmin` instead of `!myOrgId` for the super-admin check
+- Platform admins see all orgs and can create/delete orgs
+- Non-platform admins see only their own org
 
-### 3. No changes needed to Users & Roles
+The Users & Roles tab will automatically show all users for platform admins because the RLS policies will grant global access based on the `is_platform_admin` flag.
 
-The Users & Roles tab already works correctly — it only shows same-org users due to the profiles RLS policy. Role assignment (add/remove) also works because `user_roles` RLS is org-scoped.
-
-## Files Modified
-
-- New Supabase migration — update RLS on `organisations` and `org_members`
-- `src/components/admin/OrgManagement.tsx` — filter by own org, hide create/delete for org admins
+### Files Modified
+- New Supabase migration (add column, create function, update ~12 RLS policies)
+- `src/hooks/useAuth.tsx` — fetch and expose `isPlatformAdmin`
+- `src/components/admin/OrgManagement.tsx` — use `isPlatformAdmin` for visibility logic
 
