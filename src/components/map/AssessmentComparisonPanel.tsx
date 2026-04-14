@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { SavedAssessment } from "./ConnectAssessmentPanel";
+import type { SavedAssessment } from "./AssessmentPanel";
 
 interface AssessmentComparisonPanelProps {
   assessments: SavedAssessment[];
