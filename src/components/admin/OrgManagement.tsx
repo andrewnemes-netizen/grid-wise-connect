@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Plus, Building2, UserPlus, Trash2, Users } from "lucide-react";
 import { format } from "date-fns";
 
@@ -96,15 +97,19 @@ function CreateUserDialog({ orgId, orgName, onSuccess }: { orgId: string; orgNam
 export function OrgManagement() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId: myOrgId } = useAuth();
+  const isSuperAdmin = !myOrgId;
   const [createOpen, setCreateOpen] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [addMemberOrgId, setAddMemberOrgId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
 
   const { data: orgs = [], isLoading } = useQuery({
-    queryKey: ["admin-organisations"],
+    queryKey: ["admin-organisations", myOrgId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("organisations").select("*").order("name");
+      let q = supabase.from("organisations").select("*").order("name");
+      if (myOrgId) q = q.eq("id", myOrgId);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
@@ -190,21 +195,23 @@ export function OrgManagement() {
           <h3 className="text-lg font-semibold">Organisations</h3>
           <Badge variant="secondary">{orgs.length}</Badge>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Organisation</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Organisation</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label>Organisation Name</Label>
-                <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="e.g. Acme Energy Ltd" />
+        {isSuperAdmin && (
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Organisation</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Create Organisation</DialogTitle></DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Organisation Name</Label>
+                  <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="e.g. Acme Energy Ltd" />
+                </div>
+                <Button className="w-full" disabled={!orgName.trim()} onClick={() => createOrg.mutate()}>Create</Button>
               </div>
-              <Button className="w-full" disabled={!orgName.trim()} onClick={() => createOrg.mutate()}>Create</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {isLoading ? (
@@ -250,9 +257,11 @@ export function OrgManagement() {
                         </div>
                       </DialogContent>
                     </Dialog>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteOrg.mutate(org.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isSuperAdmin && (
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteOrg.mutate(org.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
