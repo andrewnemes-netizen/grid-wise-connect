@@ -13,6 +13,7 @@ import {
   ShieldAlert, Wrench, ChevronDown, ChevronUp, Cable, PoundSterling,
   Truck, Activity, Shield, FileText, Download, Save, BatteryCharging,
   Gauge, Construction, Eye, Paintbrush, Radar, Search, FileJson,
+  Route,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -127,6 +128,8 @@ interface AssessmentPanelProps {
   ) => Promise<number>;
   /** Callback when auto-detect completes */
   onAutoDetectComplete?: (result: RouteAutoDetectResult) => void;
+  /** Callback to toggle route-draw mode in the parent MapView */
+  onRouteDrawChange?: (active: boolean) => void;
 }
 
 // ── Shared UI helpers ───────────────────────────────────────
@@ -162,6 +165,7 @@ export function AssessmentPanel({
   lng, lat, onClose, connectEndpoints, boundaryGeojson,
   onCaptureScreenshot, streetViewCaptures, designElements,
   hasActiveStudy, onConvertToDesign, onAutoDetectComplete,
+  onRouteDrawChange,
 }: AssessmentPanelProps) {
   const { user, orgId } = useAuth();
   const { toast } = useToast();
