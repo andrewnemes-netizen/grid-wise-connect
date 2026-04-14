@@ -81,6 +81,9 @@ const Admin = () => {
         <TabsContent value="audit" className="mt-4">
           <AuditLogTab />
         </TabsContent>
+        <TabsContent value="learning" className="mt-4">
+          <RouteLearningDashboard />
+        </TabsContent>
       </Tabs>
     </div>
   );
