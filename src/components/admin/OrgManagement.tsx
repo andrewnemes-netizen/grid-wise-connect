@@ -108,7 +108,7 @@ export function OrgManagement() {
     queryKey: ["admin-organisations", myOrgId],
     queryFn: async () => {
       let q = supabase.from("organisations").select("*").order("name");
-      if (myOrgId) q = q.eq("id", myOrgId);
+      if (!isPlatformAdmin && myOrgId) q = q.eq("id", myOrgId);
       const { data, error } = await q;
       if (error) throw error;
       return data;
