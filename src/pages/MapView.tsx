@@ -80,10 +80,13 @@ const MapView = () => {
   const [autoDetectResult, setAutoDetectResult] = useState<RouteAutoDetectResult | null>(null);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [assessLocation, setAssessLocation] = useState<{ lng: number; lat: number } | null>(null);
+  const [routeDrawActive, setRouteDrawActive] = useState(false);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
+  const routeDrawRef = useRef(routeDrawActive);
   activeToolRef.current = activeTool;
+  routeDrawRef.current = routeDrawActive;
 
   // Extracted hooks
   const {
@@ -174,23 +177,13 @@ const MapView = () => {
         return;
       }
       if (activeToolRef.current === "assess") {
-        // If no source selected yet, try to select a source asset (route draw mode)
-        // If source already selected, add waypoints
-        if (!connect.connectSource) {
-          // Try to click on an asset first for route draw
-          const features = map.queryRenderedFeatures(e.point);
-          const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
-          if (layerFeature) {
-            // Start route draw from asset
-            connect.handleConnectClick(e);
-          } else {
-            // No asset clicked — use as pin drop location for auto pipeline
-            setAssessLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-            setActiveTool(null);
-          }
-        } else {
-          // Source already selected — add waypoints
+        if (routeDrawRef.current) {
+          // Route draw mode: all clicks go to connect tool
           connect.handleConnectClick(e);
+        } else {
+          // Pin drop mode: drop pin at click location
+          setAssessLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+          setActiveTool(null);
         }
         return;
       }
@@ -655,7 +648,7 @@ const MapView = () => {
             <AssessmentPanel
               lng={assessLocation.lng}
               lat={assessLocation.lat}
-              onClose={() => { setAssessLocation(null); connect.clearConnect(); }}
+              onClose={() => { setAssessLocation(null); connect.clearConnect(); setRouteDrawActive(false); }}
               connectEndpoints={connect.connectEndpoints}
               boundaryGeojson={boundary.polygon ?? undefined}
               onCaptureScreenshot={handleCaptureScreenshot}
@@ -673,6 +666,10 @@ const MapView = () => {
               hasActiveStudy={!!activeStudy.study}
               onConvertToDesign={design.bulkInsert}
               onAutoDetectComplete={(res) => setAutoDetectResult(res)}
+              onRouteDrawChange={(active) => {
+                setRouteDrawActive(active);
+                if (active) setActiveTool("assess");
+              }}
             />
           )}
 
