@@ -19,6 +19,128 @@ import { PortfolioAnalytics, extractOsmFlags } from "@/components/portfolio/Port
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
+const PORTFOLIO_SITE_SELECT = `
+  id,
+  site_name,
+  postcode,
+  site_type,
+  proposed_kw,
+  score,
+  viability_index,
+  reinforcement_probability,
+  cost_band,
+  grid_readiness,
+  deployment_class,
+  created_at,
+  status,
+  connection_options,
+  route_constraints:raw_score_data->route_constraints,
+  osm_coverage:raw_score_data->>osm_coverage,
+  nearby_crossings:raw_score_data->>nearby_crossings,
+  nearby_signals:raw_score_data->>nearby_signals,
+  surface_split:raw_score_data->surface_split,
+  constraints:raw_score_data->constraints,
+  distances:raw_score_data->distances,
+  raw_connection_options:raw_score_data->connection_options,
+  persisted_total_estimate:raw_score_data->cost_estimate->>total_estimate,
+  fallback_total_estimate:raw_score_data->>total_estimate
+`;
+
+const PORTFOLIO_LOAD_TIMEOUT_MS = 12000;
+
+type PortfolioSiteRow = {
+  id: string;
+  site_name: string;
+  postcode: string | null;
+  site_type: string | null;
+  proposed_kw: number | null;
+  score: string | null;
+  viability_index: number | null;
+  reinforcement_probability: number | null;
+  cost_band: string | null;
+  grid_readiness: string | null;
+  deployment_class: string | null;
+  created_at: string;
+  status: string;
+  connection_options: Record<string, unknown> | null;
+  route_constraints: string[] | null;
+  osm_coverage: string | null;
+  nearby_crossings: number | string | null;
+  nearby_signals: number | string | null;
+  surface_split: Record<string, unknown> | null;
+  constraints: Record<string, unknown> | null;
+  distances: Record<string, unknown> | null;
+  raw_connection_options: Record<string, unknown> | null;
+  persisted_total_estimate: number | string | null;
+  fallback_total_estimate: number | string | null;
+};
+
+function withTimeout<T>(promise: PromiseLike<T> | T, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
+function toFiniteNumber(value: number | string | null | undefined): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapPortfolioSite(row: PortfolioSiteRow) {
+  const {
+    route_constraints,
+    osm_coverage,
+    nearby_crossings,
+    nearby_signals,
+    surface_split,
+    constraints,
+    distances,
+    raw_connection_options,
+    persisted_total_estimate,
+    fallback_total_estimate,
+    ...site
+  } = row;
+
+  const persistedTotalEstimate = toFiniteNumber(persisted_total_estimate);
+  const fallbackTotalEstimate = toFiniteNumber(fallback_total_estimate);
+
+  return {
+    ...site,
+    raw_score_data: {
+      route_constraints: Array.isArray(route_constraints) ? route_constraints : [],
+      osm_coverage: osm_coverage ?? "none",
+      nearby_crossings: toFiniteNumber(nearby_crossings) ?? 0,
+      nearby_signals: toFiniteNumber(nearby_signals) ?? 0,
+      surface_split: surface_split ?? null,
+      constraints: constraints ?? null,
+      distances: distances ?? null,
+      connection_options: raw_connection_options ?? null,
+      ...(persistedTotalEstimate != null
+        ? {
+            cost_estimate: { total_estimate: persistedTotalEstimate },
+            costEstimate: { total_estimate: persistedTotalEstimate },
+          }
+        : {}),
+      ...(fallbackTotalEstimate != null
+        ? {
+            total_estimate: fallbackTotalEstimate,
+            totalEstimate: fallbackTotalEstimate,
+          }
+        : {}),
+    },
+  };
+}
+
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
@@ -93,18 +215,28 @@ const Portfolio = () => {
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
-  const { data: sites = [], isLoading } = useQuery({
+  const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
     queryFn: async () => {
-      // RLS handles org-scoped filtering server-side
-      const { data, error } = await supabase
-        .from("sites")
-        .select("*")
+      const portfolioQuery = (supabase.from("sites") as any)
+        .select(PORTFOLIO_SITE_SELECT)
         .order("created_at", { ascending: false });
+
+      const response = await withTimeout<{ data: PortfolioSiteRow[] | null; error: { message: string } | null }>(
+        portfolioQuery,
+        PORTFOLIO_LOAD_TIMEOUT_MS,
+        "Portfolio took too long to load. Please retry."
+      );
+
+      const { data, error } = response;
+
       if (error) throw error;
-      return data;
+
+      return (data as PortfolioSiteRow[] | null)?.map(mapPortfolioSite) ?? [];
     },
     enabled: !!user,
+    retry: 0,
+    refetchOnWindowFocus: false,
   });
 
   const filtered = useMemo(() => {
@@ -164,7 +296,7 @@ const Portfolio = () => {
         deleteIds.forEach(id => next.delete(id));
         return next;
       });
-      queryClient.invalidateQueries({ queryKey: ["sites"] });
+      queryClient.invalidateQueries({ queryKey: ["sites", user?.id] });
     }
     setDeleteIds([]);
   };
@@ -356,6 +488,20 @@ const Portfolio = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow>
+                  <TableCell colSpan={16} className="py-8">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <p className="text-sm font-medium text-destructive">Portfolio failed to load.</p>
+                      <p className="text-xs text-muted-foreground">
+                        {error instanceof Error ? error.message : "Something went wrong while loading your sites."}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+                        Retry
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
               ) : (
