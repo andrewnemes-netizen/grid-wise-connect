@@ -209,12 +209,14 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      if (activeToolRef.current === "assess" && connect.connectSource) {
+      if ((activeToolRef.current === "assess" || routeDrawRef.current) && connect.connectSource) {
         connect.handleDblClick(e);
-        // After finishing route, open assess panel at destination
+        // After finishing route, ensure assess panel is open at destination
         if (connect.connectWaypoints.length > 0) {
           const lastPt = connect.connectWaypoints[connect.connectWaypoints.length - 1];
-          setAssessLocation({ lng: lastPt[0], lat: lastPt[1] });
+          if (!assessLocation) {
+            setAssessLocation({ lng: lastPt[0], lat: lastPt[1] });
+          }
         }
         setActiveTool(null);
       }
