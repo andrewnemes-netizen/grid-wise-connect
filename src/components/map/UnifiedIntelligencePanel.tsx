@@ -537,6 +537,35 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       }
       setSaved(true);
       onSaved?.();
+
+      // ── Route Amendment Tracking ──
+      if (existingSiteId && aiBaselineRef.current) {
+        const currentState = captureBaseline({
+          pocLat: cablePoc?.snapLat ?? null,
+          pocLng: cablePoc?.snapLon ?? null,
+          distanceM: routeCableDistanceM ?? cablePoc?.distanceM ?? null,
+          costEstimate: costEstimate ?? null,
+        });
+        // Update baseline with cost that wasn't available at capture time
+        if (!aiBaselineRef.current.costEstimate && costEstimate) {
+          aiBaselineRef.current.costEstimate = costEstimate as any;
+        }
+        if (hasAmendment(aiBaselineRef.current, currentState)) {
+          recordAmendment(
+            {
+              siteId: existingSiteId,
+              studyId: null,
+              dnoRegion: result?.nearest_substations?.[0]?.site_name?.match(/\b(UKPN|NGED|SSEN|SPEN|NPG|ENWL)\b/i)?.[0] ?? null,
+              voltageLevel: pkw <= 80 ? "LV" : pkw <= 1500 ? "HV" : "EHV",
+              proposedKw: pkw,
+            },
+            aiBaselineRef.current,
+            currentState
+          ).then((id) => {
+            if (id) console.log("Route amendment recorded:", id);
+          });
+        }
+      }
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
     } finally {
