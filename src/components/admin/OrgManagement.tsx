@@ -195,21 +195,23 @@ export function OrgManagement() {
           <h3 className="text-lg font-semibold">Organisations</h3>
           <Badge variant="secondary">{orgs.length}</Badge>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Organisation</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Organisation</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label>Organisation Name</Label>
-                <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="e.g. Acme Energy Ltd" />
+        {isSuperAdmin && (
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Organisation</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Create Organisation</DialogTitle></DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <Label>Organisation Name</Label>
+                  <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="e.g. Acme Energy Ltd" />
+                </div>
+                <Button className="w-full" disabled={!orgName.trim()} onClick={() => createOrg.mutate()}>Create</Button>
               </div>
-              <Button className="w-full" disabled={!orgName.trim()} onClick={() => createOrg.mutate()}>Create</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {isLoading ? (
