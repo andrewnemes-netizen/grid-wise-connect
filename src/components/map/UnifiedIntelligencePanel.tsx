@@ -437,6 +437,16 @@ export function UnifiedIntelligencePanel({ lng, lat, onClose, onSaved, onConnect
       toast({ title: "Assessment failed", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
+
+      // Capture AI baseline for amendment tracking (when opening from portfolio)
+      if (existingSiteId) {
+        aiBaselineRef.current = captureBaseline({
+          pocLat: cablePoc?.snapLat ?? null,
+          pocLng: cablePoc?.snapLon ?? null,
+          distanceM: routeCableDistanceM ?? cablePoc?.distanceM ?? null,
+          costEstimate: null, // will be computed after effectiveDistances settles
+        });
+      }
     }
   };
 
