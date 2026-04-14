@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { SavedAssessment } from "./ConnectAssessmentPanel";
+import type { SavedAssessment } from "./AssessmentPanel";
 
 interface SavedAssessmentsDrawerProps {
   assessments: SavedAssessment[];

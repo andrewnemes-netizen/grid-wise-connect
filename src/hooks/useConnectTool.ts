@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import type { ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
+import type { ConnectEndpoints } from "@/components/map/AssessmentPanel";
 import type { RegistryLayer } from "@/components/map/LayerTogglePanel";
 import { useToast } from "@/hooks/use-toast";
 

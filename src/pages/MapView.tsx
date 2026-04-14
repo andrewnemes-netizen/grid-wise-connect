@@ -27,12 +27,10 @@ import { MapLegend } from "@/components/map/MapLegend";
 import { MapToolbar } from "@/components/map/MapToolbar";
 import { UnifiedIntelligencePanel, type ConnectionLine } from "@/components/map/UnifiedIntelligencePanel";
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
-import { ConnectAssessmentPanel } from "@/components/map/ConnectAssessmentPanel";
+import { AssessmentPanel } from "@/components/map/AssessmentPanel";
 import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
-import { EvHubPanel, type ConnectData } from "@/components/map/EvHubPanel";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
-import { GridwisePanel } from "@/components/map/GridwisePanel";
 
 import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 
@@ -75,14 +73,13 @@ const MapView = () => {
   const { toast: mapToast } = useToast();
   const { map, mapLoaded, setBasemap } = useMap(containerRef);
   const [basemapId, setBasemapId] = useState<BasemapId>("street");
-  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "connect" | "boundary" | "design" | "evhub" | "gridwise" | "streetview" | null>(null);
+  const [activeTool, setActiveTool] = useState<"pin" | "measure" | "polygon" | "assess" | "boundary" | "design" | "streetview" | null>(null);
   const [streetViewLocation, setStreetViewLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [streetViewCaptures, setStreetViewCaptures] = useState<StreetViewCapture[]>([]);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [autoDetectResult, setAutoDetectResult] = useState<RouteAutoDetectResult | null>(null);
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
-  const [evHubLocation, setEvHubLocation] = useState<{ lng: number; lat: number } | null>(null);
-  const [gridwiseLocation, setGridwiseLocation] = useState<{ lng: number; lat: number } | null>(null);
+  const [assessLocation, setAssessLocation] = useState<{ lng: number; lat: number } | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
@@ -117,15 +114,11 @@ const MapView = () => {
     const siteId = searchParams.get("siteId") || null;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    // Store siteId for update flow
     if (siteId) setExistingSiteId(siteId);
-
-    // Clear params so refresh doesn't re-trigger
     setSearchParams({}, { replace: true });
 
     map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
 
-    // Drop a marker
     markerRef.current?.remove();
     const marker = new maplibregl.Marker({ color: "hsl(100, 38%, 30%)" })
       .setLngLat([lng, lat])
@@ -138,12 +131,11 @@ const MapView = () => {
     marker.togglePopup();
     markerRef.current = marker;
 
-    // Also trigger the pin so intelligence panel can pick it up
     pin.setPinLocation({ lng, lat });
 
     mapToast({
       title: `${siteName || "Site"} loaded`,
-      description: "Use the Connect tool to draw your route and de-risk the connection.",
+      description: "Use the Assess tool to run a full assessment.",
     });
   }, [map, mapLoaded]);
 
@@ -181,18 +173,25 @@ const MapView = () => {
         boundary.handleBoundaryClick(e);
         return;
       }
-      if (activeToolRef.current === "connect") {
-        connect.handleConnectClick(e);
-        return;
-      }
-      if (activeToolRef.current === "evhub") {
-        setEvHubLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-        setActiveTool(null);
-        return;
-      }
-      if (activeToolRef.current === "gridwise") {
-        setGridwiseLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
-        setActiveTool(null);
+      if (activeToolRef.current === "assess") {
+        // If no source selected yet, try to select a source asset (route draw mode)
+        // If source already selected, add waypoints
+        if (!connect.connectSource) {
+          // Try to click on an asset first for route draw
+          const features = map.queryRenderedFeatures(e.point);
+          const layerFeature = features.find((f) => f.layer.id.startsWith("layer-"));
+          if (layerFeature) {
+            // Start route draw from asset
+            connect.handleConnectClick(e);
+          } else {
+            // No asset clicked — use as pin drop location for auto pipeline
+            setAssessLocation({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+            setActiveTool(null);
+          }
+        } else {
+          // Source already selected — add waypoints
+          connect.handleConnectClick(e);
+        }
         return;
       }
       if (activeToolRef.current === "streetview") {
@@ -217,8 +216,13 @@ const MapView = () => {
         setActiveTool(null);
         return;
       }
-      if (activeToolRef.current === "connect") {
+      if (activeToolRef.current === "assess" && connect.connectSource) {
         connect.handleDblClick(e);
+        // After finishing route, open assess panel at destination
+        if (connect.connectWaypoints.length > 0) {
+          const lastPt = connect.connectWaypoints[connect.connectWaypoints.length - 1];
+          setAssessLocation({ lng: lastPt[0], lat: lastPt[1] });
+        }
         setActiveTool(null);
       }
     };
@@ -234,7 +238,7 @@ const MapView = () => {
   useEffect(() => {
     if (!map) return;
     map.getCanvas().style.cursor =
-      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "connect" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview"
+      activeTool === "pin" || activeTool === "measure" || activeTool === "polygon" || activeTool === "assess" || activeTool === "boundary" || activeTool === "design" || activeTool === "streetview"
         ? "crosshair"
         : "";
   }, [map, activeTool]);
@@ -330,26 +334,27 @@ const MapView = () => {
     [map, registryLayers, visibility]
   );
 
-  // Screenshot handler for ConnectAssessmentPanel
+  // Screenshot handler for AssessmentPanel
   const handleCaptureScreenshot = useCallback(async (): Promise<string | null> => {
-    if (!connect.connectEndpoints) return null;
+    if (!connect.connectEndpoints) {
+      // For pin-drop mode, use the pin screenshot
+      if (!map || !assessLocation) return null;
+      return captureScreenshot(null);
+    }
     return captureScreenshot(connect.connectEndpoints);
-  }, [connect.connectEndpoints, captureScreenshot]);
+  }, [connect.connectEndpoints, captureScreenshot, map, assessLocation]);
 
   // Screenshot handler — returns { location, route } for PDF export
   const handlePinScreenshot = useCallback(async (): Promise<{ location: string | null; route: string | null }> => {
     if (!map || !pin.pinLocation) return { location: null, route: null };
     const { lng, lat } = pin.pinLocation;
 
-    // Save original camera to restore after screenshots
     const origCenter = map.getCenter();
     const origZoom = map.getZoom();
 
-    // Helper: validate a coord tuple
     const isValidCoord = (c: any): c is [number, number] =>
       Array.isArray(c) && c.length >= 2 && typeof c[0] === "number" && typeof c[1] === "number" && isFinite(c[0]) && isFinite(c[1]);
 
-    // --- Collect all connection line coords from stored ref ---
     const allLineCoords: [number, number][] = [];
     const endpointFeatures: { coord: [number, number]; role: string; color: string }[] = [];
 
@@ -362,11 +367,8 @@ const MapView = () => {
       }
     });
 
-    // No extra infrastructure layers needed — just show the route + markers
     const tempLayerIds: string[] = [];
-    // Compute overview bbox including pin + all connection endpoints + boundary
     const allPts: [number, number][] = [[lng, lat], ...allLineCoords];
-    // Include boundary vertices so the boundary polygon is visible in the screenshot
     if (boundary.vertices && boundary.vertices.length > 0) {
       allPts.push(...boundary.vertices);
     }
@@ -377,10 +379,9 @@ const MapView = () => {
       if (pLat < minLat) minLat = pLat;
       if (pLat > maxLat) maxLat = pLat;
     });
-    const PAD = 0.0004; // ~40m padding — very tight zoom for maximum detail
+    const PAD = 0.0004;
     const overviewBbox: [number, number, number, number] = [minLng - PAD, minLat - PAD, maxLng + PAD, maxLat + PAD];
 
-    // --- Temporary green cable route line for screenshot ---
     const routeSrcId = "screenshot-route-src";
     const routeLineId = "screenshot-route-line";
     const routeOutlineId = "screenshot-route-outline";
@@ -393,7 +394,6 @@ const MapView = () => {
     };
     cleanupRoute();
 
-    // Build route line features from all connection lines
     const routeFeatures: any[] = [];
     connectionLinesRef.current.forEach((line) => {
       const validCoords = line.coords.filter(isValidCoord);
@@ -411,19 +411,16 @@ const MapView = () => {
         type: "geojson",
         data: { type: "FeatureCollection", features: routeFeatures },
       });
-      // White outline for contrast
       map.addLayer({
         id: routeOutlineId, type: "line", source: routeSrcId,
         paint: { "line-color": "#ffffff", "line-width": 6, "line-opacity": 1 },
       });
-      // Green cable route
       map.addLayer({
         id: routeLineId, type: "line", source: routeSrcId,
         paint: { "line-color": "#22c55e", "line-width": 3.5, "line-opacity": 1 },
       });
     }
 
-    // --- Temporary GeoJSON markers for pin + connection endpoints ---
     const markerSrcId = "screenshot-ep-src";
     const markerFillId = "screenshot-ep-fill";
     const markerStrokeId = "screenshot-ep-stroke";
@@ -470,7 +467,6 @@ const MapView = () => {
       }
     };
 
-    // Helper: capture canvas after tiles load
     const captureCanvas = (): Promise<string | null> =>
       new Promise((resolve) => {
         const doCapture = () => {
@@ -482,7 +478,6 @@ const MapView = () => {
         }, 800);
       });
 
-    // --- Single screenshot: everything (pin + infrastructure + connection lines) ---
     const overviewBounds = new maplibregl.LngLatBounds(
       [overviewBbox[0], overviewBbox[1]],
       [overviewBbox[2], overviewBbox[3]]
@@ -491,7 +486,6 @@ const MapView = () => {
     const locationScreenshot = await captureCanvas();
 
     cleanupAll();
-    // Restore original camera
     map.jumpTo({ center: origCenter, zoom: origZoom });
     return { location: locationScreenshot, route: null };
   }, [map, pin.pinLocation, boundary.vertices]);
@@ -559,7 +553,7 @@ const MapView = () => {
           <MapToolbar
             activeTool={activeTool}
             onToolChange={(tool) => {
-              if (tool !== "connect") {
+              if (tool !== "assess") {
                 connect.setConnectSource(null);
                 connect.clearConnect();
               }
@@ -574,8 +568,8 @@ const MapView = () => {
             hasActiveStudy={!!activeStudy.study}
           />
 
-          {/* Route drawing controls */}
-          {activeTool === "connect" && connect.connectSource && (
+          {/* Route drawing controls (assess tool with source selected) */}
+          {activeTool === "assess" && connect.connectSource && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 bg-background/95 backdrop-blur rounded-lg border shadow-lg px-3 py-2">
               <span className="text-xs text-muted-foreground">
                 {connect.connectWaypoints.length === 0
@@ -595,7 +589,14 @@ const MapView = () => {
                 size="sm"
                 className="h-7 text-xs"
                 disabled={connect.connectWaypoints.length === 0}
-                onClick={() => { connect.finishRoute(); setActiveTool(null); }}
+                onClick={() => {
+                  connect.finishRoute();
+                  if (connect.connectWaypoints.length > 0) {
+                    const lastPt = connect.connectWaypoints[connect.connectWaypoints.length - 1];
+                    setAssessLocation({ lng: lastPt[0], lat: lastPt[1] });
+                  }
+                  setActiveTool(null);
+                }}
               >
                 <CheckCircle2 className="h-3 w-3 mr-1" />Finish
               </Button>
@@ -610,29 +611,13 @@ const MapView = () => {
                   ? "Click to start boundary"
                   : `${boundary.vertices.length} point${boundary.vertices.length !== 1 ? "s" : ""} — click to add more`}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={boundary.vertices.length === 0}
-                onClick={boundary.undoPoint}
-              >
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={boundary.vertices.length === 0} onClick={boundary.undoPoint}>
                 <Undo2 className="h-3 w-3 mr-1" />Undo
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => { boundary.clearBoundary(); setActiveTool(null); }}
-              >
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { boundary.clearBoundary(); setActiveTool(null); }}>
                 <Trash2 className="h-3 w-3 mr-1" />Clear
               </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs"
-                disabled={boundary.vertices.length < 3}
-                onClick={() => { boundary.finishBoundary(); setActiveTool(null); }}
-              >
+              <Button size="sm" className="h-7 text-xs" disabled={boundary.vertices.length < 3} onClick={() => { boundary.finishBoundary(); setActiveTool(null); }}>
                 <CheckCircle2 className="h-3 w-3 mr-1" />Finish
               </Button>
             </div>
@@ -665,11 +650,15 @@ const MapView = () => {
             />
           )}
 
-          {connect.connectEndpoints && (
-            <ConnectAssessmentPanel
-              endpoints={connect.connectEndpoints}
-              onCaptureMapScreenshot={handleCaptureScreenshot}
-              onClose={() => { connect.clearConnect(); handleClear(); }}
+          {/* ── Unified Assessment Panel ── */}
+          {assessLocation && (
+            <AssessmentPanel
+              lng={assessLocation.lng}
+              lat={assessLocation.lat}
+              onClose={() => { setAssessLocation(null); connect.clearConnect(); }}
+              connectEndpoints={connect.connectEndpoints}
+              boundaryGeojson={boundary.polygon ?? undefined}
+              onCaptureScreenshot={handleCaptureScreenshot}
               streetViewCaptures={streetViewCaptures}
               designElements={
                 design.elements.length > 0
@@ -704,42 +693,6 @@ const MapView = () => {
             />
           )}
 
-          {evHubLocation && (
-            <EvHubPanel
-              lng={evHubLocation.lng}
-              lat={evHubLocation.lat}
-              onClose={() => setEvHubLocation(null)}
-              connectData={connect.connectEndpoints ? {
-                routeCoords: connect.connectEndpoints.routeCoords,
-                routeLengthM: calcRouteLength(connect.connectEndpoints.routeCoords),
-                sourceProperties: connect.connectEndpoints.source.properties,
-                sourceLayerLabel: connect.connectEndpoints.source.layerLabel,
-              } : null}
-              designCables={design.cables.length > 0 ? design.cables.map(c => ({
-                cable_type: c.cable_type,
-                coordinates: c.coordinates,
-                length_m: c.length_m,
-                label: c.label,
-              })) : undefined}
-              autoDetectData={autoDetectResult}
-            />
-          )}
-
-          {gridwiseLocation && (
-            <GridwisePanel
-              lng={gridwiseLocation.lng}
-              lat={gridwiseLocation.lat}
-              onClose={() => setGridwiseLocation(null)}
-              routeGeojson={connect.connectEndpoints ? {
-                type: "LineString" as const,
-                coordinates: connect.connectEndpoints.routeCoords,
-              } : undefined}
-              boundaryGeojson={boundary.polygon ?? undefined}
-              hasActiveStudy={!!activeStudy.study}
-              onConvertToDesign={design.bulkInsert}
-            />
-          )}
-
           {streetViewLocation && (
             <StreetViewPanel
               lng={streetViewLocation.lng}
@@ -768,15 +721,12 @@ const MapView = () => {
               onDeleteMarker={(id) => design.removeElement(id)}
               onAddMarker={(type, markerLat, markerLng) => {
                 design.setPlacingType(type as any);
-                // Directly place at the camera position
                 setTimeout(() => {
                   design.placeElement(markerLng, markerLat);
                 }, 50);
               }}
             />
           )}
-
-          {/* Street View re-enabled via toolbar */}
         </>
       )}
     </div>
