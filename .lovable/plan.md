@@ -1,142 +1,56 @@
 
 
-# Merge Three Assessment Tools into One Master "Assess" Function
+# Fix: Restore Manual Route Drawing in Assess Tool
 
-## Duplicate Analysis
+## Problem
+After the merger, the Assess tool's click handler automatically decides between "pin drop" and "route draw" based on whether the first click hits a network asset feature. Users cannot explicitly select POC → feeder pillar because:
+1. Clicking empty map immediately triggers pin-drop mode and deactivates the tool
+2. There's no explicit "Draw Route" sub-mode toggle
+3. The old Connect tool had a dedicated route-drawing workflow that's been lost
 
-After examining all engine files, here are the exact duplications:
+## Solution
+Add an explicit **mode toggle** inside the AssessmentPanel and update the MapView click handler to respect it.
 
-### 1. Voltage Resolution — duplicated 3 times
-- `connectionCosts.ts:176` → `resolveVoltageLevel()`: `kva = kw / 0.95; kva <= 275 → LV`
-- `evHub/electricalSizing.ts:27` → `totalDemandKva = diversifiedKw / 0.95; lvMaxKva ?? 276`
-- `gridwise/electricalEngine.ts:29-30` → `kva = proposed_kw / 0.95; kva <= 275 → LV`
+### Step 1: Add mode state to AssessmentPanel
+Add a "Route Draw" toggle button at the top of AssessmentPanel that the user can activate before clicking the map. When active, ALL clicks go through the connect tool flow (POC selection → waypoints → feeder pillar).
 
-All three use the same 275 kVA / 0.95 PF threshold but implement it independently.
-
-### 2. DNO Options List — duplicated 2 times
-- `EvHubPanel.tsx:51-58` → `DNO_OPTIONS` array (6 DNOs)
-- `GridwisePanel.tsx:54-62` → `DNO_OPTIONS` array (same 6 DNOs + auto)
-
-### 3. Feasibility State Config — duplicated 2 times
-- `EvHubPanel.tsx:43-49` → `STATE_CONFIG` (5 states with icons/colors)
-- `GridwisePanel.tsx:64-70` → `FEASIBILITY_CONFIG` (identical 5 states)
-
-### 4. DNO Lookup Logic — duplicated 2 times
-- `EvHubPanel.tsx:79-99` → calls `supabase.rpc("lookup_dno_by_location")`
-- `GridwisePanel.tsx` → same RPC call with same error handling
-
-### 5. Haversine Distance — duplicated in Connect panel
-- `ConnectAssessmentPanel.tsx:76-87` → `haversineM()` — only used here, could use Turf.js or shared util
-
-### 6. Surface Split Derivation — duplicated 2 times
-- `connectionCosts.ts:159-174` → `deriveSurfaceSplit()` from constraint widths
-- `gridwise/routeEngine.ts:269-279` → identical calculation inline
-
-### 7. EV Hub Engine = Subset of Gridwise
-- `EvHubPanel` calls `runEvHubEngine()` directly
-- `GridwisePanel` calls `runGridwiseProject()` which calls `runFeasibilityEngine()` which calls `runEvHubEngine()` internally
-- The EV Hub panel is a strict subset — it produces less output with the same inputs
-
-### 8. Cost Estimation — two separate paths
-- `ConnectAssessmentPanel` calls `estimateConnectionCost()` directly with drawn route distances
-- `GridwisePanel` calls `runCommercialEngine()` which calls `estimateConnectionCost()` with asset-discovered distances
-- Same underlying function, different distance sources
-
-## What's NOT duplicated (unique per tool)
-
-| Feature | Owner | Status |
-|---------|-------|--------|
-| LV/HV/EHV Voltage Comparison | Connect only | Keep — absorb into merged panel |
-| LV Optimiser (cable catalogue ranking) | Connect only | Keep — absorb into merged panel |
-| Saved Assessments + Comparison | Connect only | Keep — absorb into merged panel |
-| PDF/JSON Export | Connect only | Keep — absorb into merged panel |
-| Score-site GREEN/AMBER/RED | Connect only | Keep — run alongside pipeline |
-| Manual Route Drawing mode | Connect only | Keep — becomes sub-mode |
-| Asset Discovery (PostGIS spatial) | Gridwise only | Keep |
-| Commercial Pack (audience filter) | Gridwise only | Keep |
-| Viability Index (0-100) + banding | Gridwise only | Keep |
-| Pipeline progress stages | Gridwise only | Keep |
-| Save to Portfolio | Gridwise only | Keep |
-| Engineering BOQ (4-category split) | EV Hub / Gridwise | Keep (already shared) |
-| Earthing + Reinforcement | EV Hub / Gridwise | Keep (already shared) |
-
-## Implementation Plan
-
-### Step 1: Extract shared constants to a shared module
-
-Create `src/lib/shared/assessmentConstants.ts`:
-- `resolveVoltageLevel(kw, override)` — single source of truth for 275 kVA threshold
-- `DNO_OPTIONS` array
-- `FEASIBILITY_STATE_CONFIG` (icons, colors, labels)
-- `deriveSurfaceSplit()` — move from `connectionCosts.ts`
-
-Update `connectionCosts.ts`, `evHub/electricalSizing.ts`, `gridwise/electricalEngine.ts` to import from shared module instead of duplicating.
-
-### Step 2: Create unified `AssessmentPanel.tsx` (~1200 lines)
-
-Combines all three panels:
-- **Input section**: Site name, charger count/kW, diversity, voltage override, DNO selector, extraneous toggle (from all three)
-- **Two entry modes**: Pin drop (auto pipeline) OR Route draw (manual source→destination)
-- **Run button**: Always calls `runGridwiseProject()` — which internally runs EV Hub
-- **Results sections** (merged from all three):
-  1. Feasibility verdict + viability index (Gridwise)
-  2. Site score GREEN/AMBER/RED (Connect's score-site call)
-  3. Asset discovery (Gridwise)
-  4. Route & streetworks (Gridwise)
-  5. Electrical & safety (Gridwise)
-  6. Cost estimate breakdown (Connect's CostEstimatePanel)
-  7. LV Optimiser button (Connect)
-  8. Voltage Comparison button (Connect)
-  9. Commercial pack with audience filter (Gridwise)
-  10. Engineering BOQ (Gridwise/EV Hub)
-  11. Audit trail (Gridwise)
-- **Actions**: Save to Portfolio, Export PDF/JSON, Convert to Design, Saved Assessments drawer
-
-### Step 3: Update `MapToolbar.tsx`
-
-Remove tool IDs: `evhub`, `connect`, `gridwise`
-Add single tool ID: `assess` (Zap icon, label "Assess")
-
-Tool type union becomes:
-```ts
-"pin" | "measure" | "polygon" | "assess" | "boundary" | "design" | "streetview"
+```
+Two modes:
+  [📍 Pin Drop]  [🔌 Draw Route]
 ```
 
-### Step 4: Update `MapView.tsx`
+- **Pin Drop** (default): Click map → auto pipeline at that location
+- **Draw Route**: Click asset (POC) → click waypoints → double-click/finish at feeder pillar location → pipeline runs with drawn route injected
 
-- Remove conditional renders for EvHubPanel and ConnectAssessmentPanel
-- Single `<AssessmentPanel>` render when `activeTool === "assess"`
-- Pass `useConnectTool` outputs for route-draw sub-mode
+### Step 2: Update MapView click handler
+Pass a `routeDrawActive` flag from AssessmentPanel up to MapView. When route-draw mode is active:
+- First click on a `layer-*` feature = select POC source (existing behavior)
+- First click on empty space = still select POC at that coordinate (don't abort to pin-drop)
+- Subsequent clicks = waypoints
+- Double-click or Finish button = set destination and open results
 
-### Step 5: Update orchestrator for drawn route injection
+This means the click handler at line 176-195 changes:
+- If `routeDrawActive` is true → always forward to `connect.handleConnectClick(e)`, never fall through to pin-drop
+- If `routeDrawActive` is false → set `assessLocation` as pin-drop (current empty-space behavior)
 
-Update `gridwise/orchestrator.ts` to accept manual route distances so drawn routes override automated asset discovery distances in the commercial engine.
+### Step 3: Allow source selection on empty space
+Update `useConnectTool.ts` so that if no `layer-*` feature is found, it still creates a source marker at the clicked location (with a generic "Custom POC" label). This lets users place a POC anywhere, not just on rendered assets.
 
-### Step 6: Delete duplicate files
+### Files Changed
 
-- Delete `src/components/map/EvHubPanel.tsx` (450 lines)
-- Delete `src/components/map/ConnectAssessmentPanel.tsx` (850 lines)
+| File | Change |
+|------|--------|
+| `src/components/map/AssessmentPanel.tsx` | Add mode toggle (Pin Drop / Draw Route), expose `routeDrawActive` via callback prop |
+| `src/pages/MapView.tsx` | Read `routeDrawActive` flag, update click handler logic at lines 176-195 |
+| `src/hooks/useConnectTool.ts` | Allow source selection on empty space (fallback to clicked coordinates) |
 
-### Step 7: Keep unchanged
-
-All engine files remain (`evHub/*`, `gridwise/*`, `connectionCosts.ts`, `electricalEngine.ts`, `voltageComparison.ts`, `lvOptimiser.ts`, `hvOptimiser.ts`, `ehvOptimiser.ts`). Only the UI panels and shared constants change.
-
-## Files Summary
-
-| Action | File |
-|--------|------|
-| **Create** | `src/lib/shared/assessmentConstants.ts` |
-| **Create** | `src/components/map/AssessmentPanel.tsx` |
-| **Edit** | `src/components/map/MapToolbar.tsx` |
-| **Edit** | `src/pages/MapView.tsx` |
-| **Edit** | `src/lib/connectionCosts.ts` (import shared `deriveSurfaceSplit`) |
-| **Edit** | `src/lib/evHub/electricalSizing.ts` (import shared voltage fn) |
-| **Edit** | `src/lib/gridwise/electricalEngine.ts` (import shared voltage fn) |
-| **Edit** | `src/lib/gridwise/routeEngine.ts` (import shared `deriveSurfaceSplit`) |
-| **Edit** | `src/lib/gridwise/orchestrator.ts` (route distance injection) |
-| **Edit** | `src/hooks/useConnectTool.ts` (type cleanup) |
-| **Delete** | `src/components/map/EvHubPanel.tsx` |
-| **Delete** | `src/components/map/ConnectAssessmentPanel.tsx` |
-
-**Net result**: ~1300 lines removed, 6 duplicated functions consolidated into 1 each, single toolbar button, one cost path.
+### User Flow After Fix
+1. Click **Assess** in toolbar
+2. Panel opens with **[Pin Drop] [Draw Route]** toggle
+3. Select **Draw Route**
+4. Click on POC asset (or any map location) → blue source marker placed
+5. Click waypoints along the route
+6. Click **Finish** or double-click → red destination marker placed
+7. Panel populates with route distance, runs full Gridwise pipeline with drawn route
+8. Or select **Pin Drop** → click anywhere → auto pipeline runs at that location
 
