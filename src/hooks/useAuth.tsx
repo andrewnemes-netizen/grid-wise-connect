@@ -11,6 +11,7 @@ interface AuthContextType {
   roles: AppRole[];
   orgId: string | null;
   orgName: string | null;
+  isPlatformAdmin: boolean;
   hasRole: (role: AppRole) => boolean;
   signOut: () => Promise<void>;
 }
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   roles: [],
   orgId: null,
   orgName: null,
+  isPlatformAdmin: false,
   hasRole: () => false,
   signOut: async () => {},
 });
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const rolesRef = useRef<AppRole[]>([]);
   const lastUserIdRef = useRef<string | null>(null);
@@ -41,9 +44,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchRolesAndOrg = useCallback(async (userId: string) => {
     if (userId === lastUserIdRef.current && rolesRef.current.length > 0) return;
     try {
-      const [rolesRes, orgRes] = await Promise.all([
+      const [rolesRes, orgRes, profileRes] = await Promise.all([
         supabase.from("user_roles").select("role").eq("user_id", userId),
         supabase.from("org_members").select("org_id, organisations(name)").eq("user_id", userId).limit(1).single(),
+        supabase.from("profiles").select("is_platform_admin").eq("user_id", userId).limit(1).single(),
       ]);
 
       if (rolesRes.data) {
@@ -63,6 +67,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setOrgId(null);
         setOrgName(null);
       }
+
+      setIsPlatformAdmin(profileRes.data?.is_platform_admin === true);
     } catch (e) {
       console.error("Failed to fetch roles/org:", e);
     }
@@ -87,6 +93,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setRoles([]);
           setOrgId(null);
           setOrgName(null);
+          setIsPlatformAdmin(false);
         }
       }
     );
@@ -131,8 +138,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const hasRole = useCallback((role: AppRole) => roles.includes(role), [roles]);
 
   const value = useMemo<AuthContextType>(
-    () => ({ user, session, loading, roles, orgId, orgName, hasRole, signOut }),
-    [user, session, loading, roles, orgId, orgName, hasRole, signOut]
+    () => ({ user, session, loading, roles, orgId, orgName, isPlatformAdmin, hasRole, signOut }),
+    [user, session, loading, roles, orgId, orgName, isPlatformAdmin, hasRole, signOut]
   );
 
   return (

@@ -97,8 +97,8 @@ function CreateUserDialog({ orgId, orgName, onSuccess }: { orgId: string; orgNam
 export function OrgManagement() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { orgId: myOrgId } = useAuth();
-  const isSuperAdmin = !myOrgId;
+  const { orgId: myOrgId, isPlatformAdmin } = useAuth();
+  const isSuperAdmin = isPlatformAdmin;
   const [createOpen, setCreateOpen] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [addMemberOrgId, setAddMemberOrgId] = useState<string | null>(null);
