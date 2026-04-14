@@ -218,16 +218,15 @@ const Portfolio = () => {
   const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
     queryFn: async () => {
-      const response = await withTimeout(
-        Promise.resolve(
-          supabase
-          .from("sites")
-          .select(PORTFOLIO_SITE_SELECT)
-          .order("created_at", { ascending: false })
-        ),
+      const portfolioQuery = (supabase.from("sites") as any)
+        .select(PORTFOLIO_SITE_SELECT)
+        .order("created_at", { ascending: false });
+
+      const response = await withTimeout<{ data: PortfolioSiteRow[] | null; error: { message: string } | null }>(
+        portfolioQuery,
         PORTFOLIO_LOAD_TIMEOUT_MS,
         "Portfolio took too long to load. Please retry."
-      ) as { data: PortfolioSiteRow[] | null; error: { message: string } | null };
+      );
 
       const { data, error } = response;
 
