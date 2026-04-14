@@ -9,7 +9,7 @@
  */
 
 import type { EquipmentType, CableType } from "@/hooks/useDesignMode";
-import type { ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
+import type { ConnectEndpoints } from "@/components/map/AssessmentPanel";
 
 export interface ConnectDesignResult {
   elements: { element_type: EquipmentType; label: string; lng: number; lat: number; properties_json: Record<string, unknown> }[];

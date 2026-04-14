@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import maplibregl from "maplibre-gl";
-import type { ConnectEndpoints } from "@/components/map/ConnectAssessmentPanel";
+import type { ConnectEndpoints } from "@/components/map/AssessmentPanel";
 
 export function useMapScreenshot(
   map: maplibregl.Map | null,
