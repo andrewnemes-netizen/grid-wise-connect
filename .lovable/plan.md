@@ -1,54 +1,36 @@
 
 
-# Plan: Org-Scoped Data Protection for Admin
+# Fix: Org-Scoped Admin Visibility + Name Resolution
 
-## What You Want
-- Admins keep full access to platform settings (DNO, EV Hub Rules, Cable Catalogue, Layers, APIs, etc.)
-- Admins can only see **users and roles within their own organisation** in the Users & Roles tab
-- Portfolio/sites data is already org-scoped via RLS — but the admin override lets admins see ALL sites; this needs tightening
-- Audit log should only show entries related to the admin's own org users
-- Meet data protection requirements: no cross-org visibility of personal data
+## Problems Identified
 
-## What's Already in Place
-- `sites` table has `org_id` column with `is_org_member()` RLS — working for non-admin users
-- `profiles` has an "Org members can view org profiles" policy — working for non-admin users
-- Problem: Admin RLS policies on `profiles`, `user_roles`, `role_requests`, `audit_log`, and `sites` grant **global access** with no org filter
+1. **"Characters as name" in Organisations tab**: The `organisations` and `org_members` RLS policies still give admins global access (no org filter), so the OrgManagement page loads ALL orgs and ALL members. But the `profiles` RLS is now org-scoped, so profile names for users in *other* orgs can't be resolved — they fall back to showing truncated UUIDs like "b680abf5".
 
-## Changes Required
+2. **Role management confusion**: The Users & Roles tab correctly shows only same-org users (RLS is working), but the Organisations tab shows all orgs, creating a mismatch. You can see other orgs' members but can't read their names.
 
-### 1. Database Migration — Scope Admin RLS Policies
+## Fix
 
-Create a `get_user_org_id(uuid)` security definer function and update these policies:
+### 1. Database: Scope `organisations` and `org_members` RLS for admins
 
-- **`profiles`**: Replace "Admins can view all profiles" with org-scoped version using `get_user_org_id`. Admins without an org (platform super-admins) retain global access via a fallback check.
-- **`profiles`** (UPDATE): Same org scoping for "Admins can update all profiles"
-- **`user_roles`**: Replace "Admins can manage roles" with org-scoped version — admin can only manage roles for users in their org
-- **`role_requests`**: Scope admin SELECT to same-org requesters
-- **`audit_log`**: Scope admin SELECT to entries where `user_id` belongs to same org
-- **`sites`**: Scope "Admins can manage all sites" and "Admins can view all sites" to same org via `org_id = get_user_org_id(auth.uid())`
+Update the admin policies on these two tables so org-scoped admins can only manage their own org:
 
-Platform super-admin fallback: if `get_user_org_id` returns NULL (user has no org membership), the admin retains global access. This keeps your platform operator role working.
+- **`organisations`**: Replace `"Admins can manage organisations"` with org-scoped version — admin can only manage orgs where `id = get_user_org_id(auth.uid())`. Super-admins (no org) retain global access.
+- **`org_members`**: Replace `"Admins can manage org_members"` with org-scoped version — admin can only manage members where `org_id = get_user_org_id(auth.uid())`. Super-admins retain global access.
 
-### 2. Frontend — Users & Roles Tab
+### 2. Frontend: Pass `orgId` context in OrgManagement
 
-Modify `src/components/admin/UserRolesManagement.tsx`:
-- Use `orgId` from `useAuth()` to filter the profiles query — join through `org_members` so only same-org users appear
-- Filter role requests to same-org users
-- If `orgId` is null (super-admin), show all users as today
+Update `src/components/admin/OrgManagement.tsx`:
+- Import `useAuth` and get `orgId`
+- If `orgId` exists, filter the organisations query to only fetch that org (`.eq("id", orgId)`)
+- Hide "New Organisation" and "Delete Organisation" buttons for org-scoped admins (only super-admins should create/delete orgs)
+- The member list and profile names will resolve correctly since RLS now matches
 
-### 3. Frontend — Audit Log
+### 3. No changes needed to Users & Roles
 
-Modify the `AuditLogTab` in `src/pages/Admin.tsx`:
-- If admin has an `orgId`, filter audit entries to only show those where `user_id` is in the same org
-- Super-admins continue to see all entries
-
-### 4. No Changes To
-- Admin tabs: All tabs remain visible (Layers, DNO, EV Hub, Cable Catalogue, APIs, Gas Registry, Route Learning)
-- Unit rates: Stay global/shared as currently designed
-- Portfolio page: Already org-scoped for clients; admin scoping handled by the RLS policy update in step 1
+The Users & Roles tab already works correctly — it only shows same-org users due to the profiles RLS policy. Role assignment (add/remove) also works because `user_roles` RLS is org-scoped.
 
 ## Files Modified
-- New Supabase migration (RLS policy updates + `get_user_org_id` function)
-- `src/components/admin/UserRolesManagement.tsx` — org-filtered queries
-- `src/pages/Admin.tsx` — org-filtered audit log
+
+- New Supabase migration — update RLS on `organisations` and `org_members`
+- `src/components/admin/OrgManagement.tsx` — filter by own org, hide create/delete for org admins
 
