@@ -16,6 +16,7 @@ import { DnoApiSources } from "@/components/admin/DnoApiSources";
 import { NpgDatasetRegistry } from "@/components/admin/NpgDatasetRegistry";
 import { GasDatasetRegistry } from "@/components/admin/GasDatasetRegistry";
 import { OrgManagement } from "@/components/admin/OrgManagement";
+import { RouteLearningDashboard } from "@/components/admin/RouteLearningDashboard";
 
 const Admin = () => {
   const { hasRole } = useAuth();
