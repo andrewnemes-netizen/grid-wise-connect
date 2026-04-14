@@ -97,15 +97,19 @@ function CreateUserDialog({ orgId, orgName, onSuccess }: { orgId: string; orgNam
 export function OrgManagement() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { orgId: myOrgId } = useAuth();
+  const isSuperAdmin = !myOrgId;
   const [createOpen, setCreateOpen] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [addMemberOrgId, setAddMemberOrgId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
 
   const { data: orgs = [], isLoading } = useQuery({
-    queryKey: ["admin-organisations"],
+    queryKey: ["admin-organisations", myOrgId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("organisations").select("*").order("name");
+      let q = supabase.from("organisations").select("*").order("name");
+      if (myOrgId) q = q.eq("id", myOrgId);
+      const { data, error } = await q;
       if (error) throw error;
       return data;
     },
