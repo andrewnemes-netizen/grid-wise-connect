@@ -75,11 +75,11 @@ type PortfolioSiteRow = {
   fallback_total_estimate: number | string | null;
 };
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T> | T, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
 
-    promise
+    Promise.resolve(promise)
       .then((value) => {
         window.clearTimeout(timer);
         resolve(value);
@@ -218,14 +218,18 @@ const Portfolio = () => {
   const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
     queryFn: async () => {
-      const { data, error } = await withTimeout(
-        supabase
+      const response = await withTimeout(
+        Promise.resolve(
+          supabase
           .from("sites")
           .select(PORTFOLIO_SITE_SELECT)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+        ),
         PORTFOLIO_LOAD_TIMEOUT_MS,
         "Portfolio took too long to load. Please retry."
-      );
+      ) as { data: PortfolioSiteRow[] | null; error: { message: string } | null };
+
+      const { data, error } = response;
 
       if (error) throw error;
 
