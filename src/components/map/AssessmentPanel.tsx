@@ -1020,7 +1020,12 @@ export function AssessmentPanel({
                     />
                     {lvCableMatch && (
                       <>
-                        <MetricRow label="Distance to POC" value={`${Math.round(lvCableMatch.distanceM)} m`} />
+                        <MetricRow
+                          label="Spur to POC"
+                          value={lvCableMatch.distanceM < 1
+                            ? "0 m (route touches main)"
+                            : `${Math.round(lvCableMatch.distanceM)} m (included in cable total)`}
+                        />
                         <MetricRow label="Existing Main Capacity" value={`${lvCableMatch.directKva} kVA (direct) · ${lvCableMatch.ductedKva} kVA (ducted)`} />
                         <MetricRow
                           label="EV Compatibility"
@@ -1029,7 +1034,35 @@ export function AssessmentPanel({
                         />
                       </>
                     )}
-                    <MetricRow label="New Service Cable (BoQ)" value="35mm² concentric CNE" />
+                    {hasDrawnRoute && (
+                      <>
+                        <MetricRow
+                          label="Cable Composition"
+                          badge={needsMainsExtension ? "Mains Extension Required" : "Standard Service"}
+                          badgeVariant={needsMainsExtension ? "secondary" : "outline"}
+                        />
+                        {needsMainsExtension ? (
+                          <>
+                            <MetricRow
+                              label="Service Cable"
+                              value={`${serviceCableLengthM} m × 35mm² concentric CNE`}
+                            />
+                            <MetricRow
+                              label="Mains Extension"
+                              value={`${mainsExtensionLengthM} m × 185mm² 4c XLPE/SWA`}
+                            />
+                          </>
+                        ) : (
+                          <MetricRow
+                            label="Service Cable"
+                            value={`${serviceCableLengthM} m × 35mm² concentric CNE`}
+                          />
+                        )}
+                      </>
+                    )}
+                    {!hasDrawnRoute && (
+                      <MetricRow label="New Service Cable (BoQ)" value="35mm² concentric CNE" />
+                    )}
                     <MetricRow label="Reinforcement Trigger" badge={project.electrical.sizing.reinforcement_trigger ? "Yes" : "No"} badgeVariant={project.electrical.sizing.reinforcement_trigger ? "secondary" : "outline"} />
                     <MetricRow label="Earthing" badge={project.electrical.earthing.review_required ? "Review Required" : "OK"} badgeVariant={project.electrical.earthing.review_required ? "destructive" : "outline"} />
                     <MetricRow label="Reinforcement" badge={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? project.electrical.reinforcement.state.replace(/_/g, " ") : "None"} badgeVariant={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? "destructive" : "outline"} />
