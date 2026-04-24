@@ -52,6 +52,7 @@ import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
 import { findNearestLvMain, findNearestLvMainForRoute } from "@/lib/gridwise/assetEngine";
 import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
+import { DnoRulesValidatorPanel } from "./DnoRulesValidatorPanel";
 import {
   DNO_OPTIONS,
   FEASIBILITY_STATE_CONFIG,
@@ -1084,6 +1085,20 @@ export function AssessmentPanel({
                   </div>
                 </CollapsibleContent>
               </Collapsible>
+
+              {/* ── DNO Rules Validator (between Electrical and Commercial) ── */}
+              {hasDrawnRoute && (
+                <DnoRulesValidatorPanel
+                  drawnRouteM={routeDistanceM}
+                  spurToPocM={lvCableMatch?.distanceM ?? null}
+                  thresholdM={mainsExtensionThresholdM}
+                  proposedKw={proposedKw}
+                  existingMainType={lvCableMatch?.conductingSectionType ?? null}
+                  existingMainEvCompatible={lvCableMatch?.evCompatible ?? null}
+                  existingMainDirectKva={lvCableMatch?.directKva ?? null}
+                  dno={resolvedDnoLookup ?? null}
+                />
+              )}
 
               {/* ── Engine 5: Commercial ── */}
               <Collapsible open={commercialOpen} onOpenChange={setCommercialOpen}>
