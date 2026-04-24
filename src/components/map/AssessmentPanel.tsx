@@ -50,7 +50,7 @@ import { createSnapshot } from "@/lib/snapshotService";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
 import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/electricalEngine";
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
-import { findNearestLvMain } from "@/lib/gridwise/assetEngine";
+import { findNearestLvMain, findNearestLvMainForRoute } from "@/lib/gridwise/assetEngine";
 import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
 import {
   DNO_OPTIONS,
@@ -290,23 +290,44 @@ export function AssessmentPanel({
 
   // Distances for cost estimate (from score-site or drawn route)
   const distances = useMemo(() => {
+    // Single source of truth for the *installed* cable length:
+    // drawn route + the spur from the nearest existing LV main (if found).
+    // The route-aware POC lookup returns 0 m when the drawn route already
+    // touches the main, so this never double-counts.
+    const effective = routeDistanceM + (lvCableMatch?.distanceM ?? 0);
     if (scoreResult?.distances) {
       return {
         ...scoreResult.distances,
-        primary_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.primary_m,
-        feeder_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.feeder_m,
-        capacity_segment_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.capacity_segment_m,
+        primary_m: hasDrawnRoute ? effective : scoreResult.distances.primary_m,
+        feeder_m: hasDrawnRoute ? effective : scoreResult.distances.feeder_m,
+        capacity_segment_m: hasDrawnRoute ? effective : scoreResult.distances.capacity_segment_m,
       };
     }
     if (project?.assets?.distances) {
       return {
-        primary_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.primary_m,
-        feeder_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.feeder_m,
-        capacity_segment_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.capacity_segment_m,
+        primary_m: hasDrawnRoute ? effective : project.assets.distances.primary_m,
+        feeder_m: hasDrawnRoute ? effective : project.assets.distances.feeder_m,
+        capacity_segment_m: hasDrawnRoute ? effective : project.assets.distances.capacity_segment_m,
       };
     }
-    return { primary_m: routeDistanceM, feeder_m: routeDistanceM, capacity_segment_m: routeDistanceM };
-  }, [scoreResult, project, routeDistanceM, hasDrawnRoute]);
+    return { primary_m: effective, feeder_m: effective, capacity_segment_m: effective };
+  }, [scoreResult, project, routeDistanceM, hasDrawnRoute, lvCableMatch]);
+
+  // ── Mains extension status (NPG / standard ICP rule: > 25 m) ──
+  // Used by both the side panel and the PDF to show the cable composition.
+  const mainsExtensionThresholdM = unitRates?.mains_extension_threshold_m ?? 25;
+  const effectiveCableLengthM = useMemo(
+    () => routeDistanceM + (lvCableMatch?.distanceM ?? 0),
+    [routeDistanceM, lvCableMatch],
+  );
+  const needsMainsExtension =
+    hasDrawnRoute && effectiveCableLengthM > mainsExtensionThresholdM;
+  const serviceCableLengthM = needsMainsExtension
+    ? mainsExtensionThresholdM
+    : effectiveCableLengthM;
+  const mainsExtensionLengthM = needsMainsExtension
+    ? Math.max(0, effectiveCableLengthM - mainsExtensionThresholdM)
+    : 0;
 
   // ── Run Gridwise Pipeline ──
   const handleRunPipeline = useCallback(async () => {
@@ -354,13 +375,14 @@ export function AssessmentPanel({
       toast({ title: "Assessment complete", description: `Run ID: ${result.run_id}` });
 
       // ── Auto-locate the existing LV main we'll be connecting onto ──
-      // Use the drawn destination if available, otherwise the pin location.
+      // Route-aware lookup: measures spur from any point on the drawn route
+      // (returns 0 m if the route already touches the main). Falls back to
+      // the destination pin if no route was drawn.
       try {
-        const [pocLng, pocLat] = connectEndpoints
-          ? connectEndpoints.destination.lngLat
-          : [lng, lat];
         setLvCableSearched(true);
-        const match = await findNearestLvMain(pocLng, pocLat);
+        const match = connectEndpoints
+          ? await findNearestLvMainForRoute(connectEndpoints.routeCoords)
+          : await findNearestLvMain(lng, lat);
         setLvCableMatch(match);
       } catch (err) {
         console.warn("Auto LV main lookup failed:", err);
@@ -473,6 +495,13 @@ export function AssessmentPanel({
         connectingOntoDistanceM: lvCableMatch?.distanceM ?? null,
         connectingOntoEvCompatible: lvCableMatch?.evCompatible ?? null,
         connectingOntoDirectKva: lvCableMatch?.directKva ?? null,
+        // ── True installed cable length & DNO mains-extension trigger ──
+        drawnRouteLengthM: hasDrawnRoute ? routeDistanceM : null,
+        totalCableLengthM: hasDrawnRoute ? effectiveCableLengthM : null,
+        mainsExtensionRequired: hasDrawnRoute ? needsMainsExtension : null,
+        mainsExtensionThresholdM: mainsExtensionThresholdM,
+        serviceCableLengthM: hasDrawnRoute ? serviceCableLengthM : null,
+        mainsExtensionLengthM: hasDrawnRoute ? mainsExtensionLengthM : null,
         totalDemandKva: sizing?.total_demand_kva ?? null,
         upstreamCapacityKw: sub?.capacity_kw ?? null,
         upstreamUtilisationPct: sub?.utilisation_pct ?? null,
@@ -651,13 +680,22 @@ export function AssessmentPanel({
 
               {/* Route distance */}
               <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Route Distance</p>
-                <p className="text-2xl font-bold text-foreground">{routeDistanceM.toLocaleString()} m</p>
-                {connectEndpoints.routeCoords.length > 2 && (
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  {lvCableMatch ? "Total Cable Length" : "Route Distance"}
+                </p>
+                <p className="text-2xl font-bold text-foreground">{effectiveCableLengthM.toLocaleString()} m</p>
+                {lvCableMatch ? (
+                  <span className="text-[10px] text-muted-foreground">
+                    {routeDistanceM.toLocaleString()} m drawn
+                    {lvCableMatch.distanceM > 0
+                      ? ` + ${Math.round(lvCableMatch.distanceM)} m spur to existing LV main`
+                      : " · route already touches LV main"}
+                  </span>
+                ) : connectEndpoints.routeCoords.length > 2 ? (
                   <span className="text-[10px] text-muted-foreground">
                     {connectEndpoints.routeCoords.length - 2} waypoint{connectEndpoints.routeCoords.length - 2 !== 1 ? "s" : ""}
                   </span>
-                )}
+                ) : null}
               </div>
 
               {/* Auto-detect from map data */}
@@ -717,8 +755,9 @@ export function AssessmentPanel({
                   setLvCableLoading(true);
                   setLvCableSearched(true);
                   try {
-                    const [dstLng, dstLat] = connectEndpoints.destination.lngLat;
-                    const match = await findNearestLvMain(dstLng, dstLat);
+                    // Route-aware: spur is measured from the drawn polyline,
+                    // not just the destination pin, so it never double-counts.
+                    const match = await findNearestLvMainForRoute(connectEndpoints.routeCoords);
                     setLvCableMatch(match);
                     if (match) toast({ title: "LV main found", description: `${match.conductingSectionType} at ${Math.round(match.distanceM)}m` });
                     else toast({ title: "No compatible LV main", description: "No compatible LV underground main within 100m search radius", variant: "destructive" });
@@ -988,7 +1027,12 @@ export function AssessmentPanel({
                     />
                     {lvCableMatch && (
                       <>
-                        <MetricRow label="Distance to POC" value={`${Math.round(lvCableMatch.distanceM)} m`} />
+                        <MetricRow
+                          label="Spur to POC"
+                          value={lvCableMatch.distanceM < 1
+                            ? "0 m (route touches main)"
+                            : `${Math.round(lvCableMatch.distanceM)} m (included in cable total)`}
+                        />
                         <MetricRow label="Existing Main Capacity" value={`${lvCableMatch.directKva} kVA (direct) · ${lvCableMatch.ductedKva} kVA (ducted)`} />
                         <MetricRow
                           label="EV Compatibility"
@@ -997,7 +1041,35 @@ export function AssessmentPanel({
                         />
                       </>
                     )}
-                    <MetricRow label="New Service Cable (BoQ)" value="35mm² concentric CNE" />
+                    {hasDrawnRoute && (
+                      <>
+                        <MetricRow
+                          label="Cable Composition"
+                          badge={needsMainsExtension ? "Mains Extension Required" : "Standard Service"}
+                          badgeVariant={needsMainsExtension ? "secondary" : "outline"}
+                        />
+                        {needsMainsExtension ? (
+                          <>
+                            <MetricRow
+                              label="Service Cable"
+                              value={`${serviceCableLengthM} m × 35mm² concentric CNE`}
+                            />
+                            <MetricRow
+                              label="Mains Extension"
+                              value={`${mainsExtensionLengthM} m × 185mm² 4c XLPE/SWA`}
+                            />
+                          </>
+                        ) : (
+                          <MetricRow
+                            label="Service Cable"
+                            value={`${serviceCableLengthM} m × 35mm² concentric CNE`}
+                          />
+                        )}
+                      </>
+                    )}
+                    {!hasDrawnRoute && (
+                      <MetricRow label="New Service Cable (BoQ)" value="35mm² concentric CNE" />
+                    )}
                     <MetricRow label="Reinforcement Trigger" badge={project.electrical.sizing.reinforcement_trigger ? "Yes" : "No"} badgeVariant={project.electrical.sizing.reinforcement_trigger ? "secondary" : "outline"} />
                     <MetricRow label="Earthing" badge={project.electrical.earthing.review_required ? "Review Required" : "OK"} badgeVariant={project.electrical.earthing.review_required ? "destructive" : "outline"} />
                     <MetricRow label="Reinforcement" badge={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? project.electrical.reinforcement.state.replace(/_/g, " ") : "None"} badgeVariant={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? "destructive" : "outline"} />
@@ -1083,7 +1155,7 @@ export function AssessmentPanel({
                       try {
                         const optRes = runLvOptimiser({
                           proposed_kw: proposedKw,
-                          route_length_m: hasDrawnRoute ? routeDistanceM : (project?.route?.route_quantities?.total_length_m ?? 100),
+                          route_length_m: hasDrawnRoute ? effectiveCableLengthM : (project?.route?.route_quantities?.total_length_m ?? 100),
                           catalogue: cableCatalogue,
                           unit_rates: unitRates,
                         });
@@ -1150,7 +1222,7 @@ export function AssessmentPanel({
                       try {
                         const res = runVoltageComparison({
                           proposed_kw: proposedKw,
-                          route_length_m: hasDrawnRoute ? routeDistanceM : (project?.route?.route_quantities?.total_length_m ?? 100),
+                          route_length_m: hasDrawnRoute ? effectiveCableLengthM : (project?.route?.route_quantities?.total_length_m ?? 100),
                           catalogue: cableCatalogue,
                           unit_rates: unitRates,
                         });

@@ -1,56 +1,74 @@
+## Fix POC distance logic and mains-extension surfacing
 
+Three coordinated changes so the drawn route, POC distance, BoQ and DNO mains-extension rule all reconcile.
 
-# Fix: Restore Manual Route Drawing in Assess Tool
+### 1. Snap POC to the nearest point on the drawn route (PostGIS)
 
-## Problem
-After the merger, the Assess tool's click handler automatically decides between "pin drop" and "route draw" based on whether the first click hits a network asset feature. Users cannot explicitly select POC → feeder pillar because:
-1. Clicking empty map immediately triggers pin-drop mode and deactivates the tool
-2. There's no explicit "Draw Route" sub-mode toggle
-3. The old Connect tool had a dedicated route-drawing workflow that's been lost
+Update the `find_nearest_compatible_lv_main` RPC to accept the full drawn route as a LineString, not just the destination point.
 
-## Solution
-Add an explicit **mode toggle** inside the AssessmentPanel and update the MapView click handler to respect it.
+- New signature: `find_nearest_compatible_lv_main(route_geojson jsonb, search_radius_m int default 100)`
+- Build route geometry once: `ST_GeomFromGeoJSON(route_geojson)` → SRID 4326 → transform to 27700 for metric work
+- Bounding-box prefilter on `geo_cables.geom` against the route's expanded envelope (keeps GIST index in play)
+- For each candidate cable: `ST_Distance(route_27700, cable_27700)` is the **true spur length** from any point on the route to the cable
+- Return: cable type, asset_id, EV-compatibility, direct/ducted kVA, **distance_m** (spur, can be 0 if route already touches main), and the snap point lng/lat (from `ST_ClosestPoint(cable, route)`)
+- Keep the LV-only filter and EV-compatibility check from the current RPC
 
-### Step 1: Add mode state to AssessmentPanel
-Add a "Route Draw" toggle button at the top of AssessmentPanel that the user can activate before clicking the map. When active, ALL clicks go through the connect tool flow (POC selection → waypoints → feeder pillar).
+Old single-point version stays callable as a thin wrapper for backward compatibility (wraps the point in a 1-vertex LineString).
 
-```
-Two modes:
-  [📍 Pin Drop]  [🔌 Draw Route]
-```
+### 2. Single source of truth for cable length
 
-- **Pin Drop** (default): Click map → auto pipeline at that location
-- **Draw Route**: Click asset (POC) → click waypoints → double-click/finish at feeder pillar location → pipeline runs with drawn route injected
+In `src/components/map/AssessmentPanel.tsx`:
 
-### Step 2: Update MapView click handler
-Pass a `routeDrawActive` flag from AssessmentPanel up to MapView. When route-draw mode is active:
-- First click on a `layer-*` feature = select POC source (existing behavior)
-- First click on empty space = still select POC at that coordinate (don't abort to pin-drop)
-- Subsequent clicks = waypoints
-- Double-click or Finish button = set destination and open results
+- Add `effectiveCableLengthM = routeDistanceM + (lvCableMatch?.distanceM ?? 0)`
+- Replace every use of `routeDistanceM` that feeds an engine with `effectiveCableLengthM`:
+  - `distances` memo (lines 296–308) — drives `connectionCosts.ts`, BoQ, voltage drop
+  - `runLvOptimiser` route_length_m (line 1086)
+  - `runVoltageComparison` route_length_m (line 1153)
+- `routeDistanceM` itself stays untouched — still used for the "Route Distance" headline so the user can see what they drew
 
-This means the click handler at line 176-195 changes:
-- If `routeDrawActive` is true → always forward to `connect.handleConnectClick(e)`, never fall through to pin-drop
-- If `routeDrawActive` is false → set `assessLocation` as pin-drop (current empty-space behavior)
+Because the snapped POC distance can now legitimately be 0 (route already touches the main), the engine never double-counts.
 
-### Step 3: Allow source selection on empty space
-Update `useConnectTool.ts` so that if no `layer-*` feature is found, it still creates a source marker at the clicked location (with a generic "Custom POC" label). This lets users place a POC anywhere, not just on rendered assets.
+### 3. Surface mains extension in panel + PDF
 
-### Files Changed
+The cost engine already implements the `> 25 m` branch (185mm² 4c XLPE/SWA + 2 terminations + 2 joint bays + pot end + extra labour). We just need to expose it.
 
-| File | Change |
-|------|--------|
-| `src/components/map/AssessmentPanel.tsx` | Add mode toggle (Pin Drop / Draw Route), expose `routeDrawActive` via callback prop |
-| `src/pages/MapView.tsx` | Read `routeDrawActive` flag, update click handler logic at lines 176-195 |
-| `src/hooks/useConnectTool.ts` | Allow source selection on empty space (fallback to clicked coordinates) |
+**Electrical & Safety panel** (`AssessmentPanel.tsx`, around line 985):
 
-### User Flow After Fix
-1. Click **Assess** in toolbar
-2. Panel opens with **[Pin Drop] [Draw Route]** toggle
-3. Select **Draw Route**
-4. Click on POC asset (or any map location) → blue source marker placed
-5. Click waypoints along the route
-6. Click **Finish** or double-click → red destination marker placed
-7. Panel populates with route distance, runs full Gridwise pipeline with drawn route
-8. Or select **Pin Drop** → click anywhere → auto pipeline runs at that location
+- Replace the single "New Service Cable (BoQ)" row with a Mains Extension block driven by `effectiveCableLengthM > 25`:
+  - **Yes**: shows two lines — `Service: 25 m × 35mm² concentric CNE` and `Mains Extension: Xm × 185mm² 4c XLPE/SWA`
+  - **No**: shows one line — `Service: Xm × 35mm² concentric CNE`
+- Add a small badge: "Mains Extension Required" (amber) or "Standard Service" (neutral)
 
+**Route Distance card** (line 653):
+
+- When a POC is found, change the headline to `effectiveCableLengthM` and add a sub-line: `21 m drawn + 50 m spur to existing LV main`
+- When no POC found yet, current behaviour preserved
+
+**Functional Proposal PDF** (`src/lib/generateAssessmentPdf.ts`):
+
+- In the **Connection Cable & Upstream Headroom** block, add three rows:
+  - Total New Cable Length: `Xm` (drawn + spur breakdown)
+  - Mains Extension Triggered: `Yes / No` with the 25m DNO threshold cited
+  - Cable Composition: the two-cable split when triggered, single cable otherwise
+- BoQ table picks up the new lengths automatically (reads from cost engine output, no template changes needed)
+
+### Files touched
+
+- `supabase/migrations/<new>.sql` — updated RPC accepting LineString
+- `src/lib/lvMainSearch.ts` (or wherever `findNearestLvMain` lives) — pass route GeoJSON instead of single point
+- `src/components/map/AssessmentPanel.tsx` — `effectiveCableLengthM`, panel surfacing, route-card sub-line
+- `src/lib/generateAssessmentPdf.ts` — Mains Extension block in Connection Cable section
+
+### Out of scope (deliberately)
+
+- Not changing the 25 m threshold — already DNO-configurable via `unit_rates.ln_threshold_m`
+- Not auto-extending the user's drawn polyline to the main — engineer keeps control of the trench alignment
+- Not changing the 35mm² CNE / 185mm² XLPE cable choices — they match NPG v3.0 standard practice
+
+### Verification (after build)
+
+End-to-end check on the Starbeck test site:
+1. Re-draw the same 21 m route → POC lookup → confirm spur ≈ 50 m, total ≈ 71 m, **mains extension triggered**, BoQ shows 25 m of 35mm² CNE + 46 m of 185mm² 4c XLPE/SWA + 2 terminations
+2. Re-draw a route that intentionally crosses the LV main → POC lookup → confirm spur ≈ 0 m, no double-counting, mains extension still fires because route itself > 25 m
+3. Re-draw a short 10 m route directly onto the main → confirm spur = 0, no mains extension, single 10 m service cable in BoQ
+4. Generate PDF → confirm Connection Cable section shows split, BoQ matches panel
