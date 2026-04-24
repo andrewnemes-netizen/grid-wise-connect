@@ -673,13 +673,22 @@ export function AssessmentPanel({
 
               {/* Route distance */}
               <div className="rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Route Distance</p>
-                <p className="text-2xl font-bold text-foreground">{routeDistanceM.toLocaleString()} m</p>
-                {connectEndpoints.routeCoords.length > 2 && (
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  {lvCableMatch ? "Total Cable Length" : "Route Distance"}
+                </p>
+                <p className="text-2xl font-bold text-foreground">{effectiveCableLengthM.toLocaleString()} m</p>
+                {lvCableMatch ? (
+                  <span className="text-[10px] text-muted-foreground">
+                    {routeDistanceM.toLocaleString()} m drawn
+                    {lvCableMatch.distanceM > 0
+                      ? ` + ${Math.round(lvCableMatch.distanceM)} m spur to existing LV main`
+                      : " · route already touches LV main"}
+                  </span>
+                ) : connectEndpoints.routeCoords.length > 2 ? (
                   <span className="text-[10px] text-muted-foreground">
                     {connectEndpoints.routeCoords.length - 2} waypoint{connectEndpoints.routeCoords.length - 2 !== 1 ? "s" : ""}
                   </span>
-                )}
+                ) : null}
               </div>
 
               {/* Auto-detect from map data */}
