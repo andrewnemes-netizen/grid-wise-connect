@@ -142,10 +142,16 @@ interface PdfInput {
   locationMapScreenshot?: string | null;
 
   // ── Engineering sizing & headroom (from Gridwise / EV Hub engine) ──
-  /** Recommended service cable (e.g. "95mm² Al WAV") */
-  recommendedServiceCable?: string | null;
-  /** Recommended LV main cable */
-  recommendedLvMainCable?: string | null;
+  /** Service cable used in BoQ (e.g. "35mm² concentric CNE") */
+  serviceCableUsed?: string | null;
+  /** Existing LV main cable we are connecting onto (from POC asset, e.g. "LV 185 SQ.MM CONSAC") */
+  connectingOntoCable?: string | null;
+  /** Distance to the existing LV main connection point (m) */
+  connectingOntoDistanceM?: number | null;
+  /** Whether the existing LV main is rated for the new EV load */
+  connectingOntoEvCompatible?: boolean | null;
+  /** Direct-buried capacity of the existing LV main (kVA) */
+  connectingOntoDirectKva?: number | null;
   /** Total diversified demand (kVA) */
   totalDemandKva?: number | null;
   /** Upstream substation / source headroom (kW) */
