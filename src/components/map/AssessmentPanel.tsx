@@ -612,14 +612,14 @@ export function AssessmentPanel({
       voltageOverride,
       result: scoreResult,
       distances,
-      totalEstimate: project?.commercial?.cost_range?.mid ?? costEst?.total_estimate ?? 0,
+      totalEstimate: effectiveCommercial?.cost_range?.mid ?? project?.commercial?.cost_range?.mid ?? costEst?.total_estimate ?? 0,
       voltageLevel: costEst?.voltage_level ?? voltageOverride,
       confidence: costEst?.confidence ?? "low",
       costEstimate: costEst,
     };
     setSavedAssessments((prev) => [...prev, saved]);
     toast({ title: `Saved as ${saved.label}` });
-  }, [project, scoreResult, proposedKw, distances, sourceHeadroomKw, voltageOverride, connectEndpoints, savedAssessments, toast]);
+  }, [project, scoreResult, proposedKw, distances, sourceHeadroomKw, voltageOverride, connectEndpoints, savedAssessments, toast, effectiveCommercial]);
 
   // ── Progress ──
   const progressPct = progress
