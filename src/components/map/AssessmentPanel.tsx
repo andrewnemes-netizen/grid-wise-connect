@@ -52,6 +52,7 @@ import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
 import { findNearestLvMain, findNearestLvMainForRoute } from "@/lib/gridwise/assetEngine";
 import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
+import { DnoRulesValidatorPanel } from "./DnoRulesValidatorPanel";
 import {
   DNO_OPTIONS,
   FEASIBILITY_STATE_CONFIG,
