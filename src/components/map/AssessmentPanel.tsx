@@ -428,7 +428,7 @@ export function AssessmentPanel({
         lng,
         score: project.feasibility.viability_band,
         reasons: project.audit.reason_codes ?? [],
-        nextSteps: project.commercial?.recommended_next_steps ?? [],
+        nextSteps: project.audit?.warnings ?? [],
         distances: project.assets.distances,
         constraints: {
           capacity_flag: project.assets.constraints.capacity_flag,
