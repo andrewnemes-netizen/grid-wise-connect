@@ -969,8 +969,22 @@ export function AssessmentPanel({
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-2 pt-1">
                   <div className="rounded-md border bg-muted/10 p-3 space-y-1.5">
-                    <MetricRow label="Service Cable" value={project.electrical.sizing.service_cable} />
-                    <MetricRow label="LV Main Cable" value={project.electrical.sizing.lv_main_cable} />
+                    <MetricRow
+                      label="Connecting Onto (Existing LV Main)"
+                      value={lvCableMatch?.conductingSectionType ?? "Run POC lookup to populate"}
+                    />
+                    {lvCableMatch && (
+                      <>
+                        <MetricRow label="Distance to POC" value={`${Math.round(lvCableMatch.distanceM)} m`} />
+                        <MetricRow label="Existing Main Capacity" value={`${lvCableMatch.directKva} kVA (direct) · ${lvCableMatch.ductedKva} kVA (ducted)`} />
+                        <MetricRow
+                          label="EV Compatibility"
+                          badge={lvCableMatch.evCompatible ? "Compatible" : "Not Compatible"}
+                          badgeVariant={lvCableMatch.evCompatible ? "outline" : "destructive"}
+                        />
+                      </>
+                    )}
+                    <MetricRow label="New Service Cable (BoQ)" value="35mm² concentric CNE" />
                     <MetricRow label="Reinforcement Trigger" badge={project.electrical.sizing.reinforcement_trigger ? "Yes" : "No"} badgeVariant={project.electrical.sizing.reinforcement_trigger ? "secondary" : "outline"} />
                     <MetricRow label="Earthing" badge={project.electrical.earthing.review_required ? "Review Required" : "OK"} badgeVariant={project.electrical.earthing.review_required ? "destructive" : "outline"} />
                     <MetricRow label="Reinforcement" badge={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? project.electrical.reinforcement.state.replace(/_/g, " ") : "None"} badgeVariant={project.electrical.reinforcement.state !== "NO_REINFORCEMENT" ? "destructive" : "outline"} />
