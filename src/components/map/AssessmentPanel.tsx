@@ -315,7 +315,7 @@ export function AssessmentPanel({
 
   // ── Mains extension status (NPG / standard ICP rule: > 25 m) ──
   // Used by both the side panel and the PDF to show the cable composition.
-  const mainsExtensionThresholdM = unitRates?.ln_threshold_m ?? 25;
+  const mainsExtensionThresholdM = unitRates?.mains_extension_threshold_m ?? 25;
   const effectiveCableLengthM = useMemo(
     () => routeDistanceM + (lvCableMatch?.distanceM ?? 0),
     [routeDistanceM, lvCableMatch],
