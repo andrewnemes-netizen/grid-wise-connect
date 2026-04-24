@@ -375,13 +375,14 @@ export function AssessmentPanel({
       toast({ title: "Assessment complete", description: `Run ID: ${result.run_id}` });
 
       // ── Auto-locate the existing LV main we'll be connecting onto ──
-      // Use the drawn destination if available, otherwise the pin location.
+      // Route-aware lookup: measures spur from any point on the drawn route
+      // (returns 0 m if the route already touches the main). Falls back to
+      // the destination pin if no route was drawn.
       try {
-        const [pocLng, pocLat] = connectEndpoints
-          ? connectEndpoints.destination.lngLat
-          : [lng, lat];
         setLvCableSearched(true);
-        const match = await findNearestLvMain(pocLng, pocLat);
+        const match = connectEndpoints
+          ? await findNearestLvMainForRoute(connectEndpoints.routeCoords)
+          : await findNearestLvMain(lng, lat);
         setLvCableMatch(match);
       } catch (err) {
         console.warn("Auto LV main lookup failed:", err);
