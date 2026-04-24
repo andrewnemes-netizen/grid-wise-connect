@@ -140,6 +140,28 @@ interface PdfInput {
   nearestSubstations?: SubstationInfo[];
   /** Map screenshot (base64 data URL) showing infrastructure around the site */
   locationMapScreenshot?: string | null;
+
+  // ── Engineering sizing & headroom (from Gridwise / EV Hub engine) ──
+  /** Recommended service cable (e.g. "95mm² Al WAV") */
+  recommendedServiceCable?: string | null;
+  /** Recommended LV main cable */
+  recommendedLvMainCable?: string | null;
+  /** Total diversified demand (kVA) */
+  totalDemandKva?: number | null;
+  /** Upstream substation / source headroom (kW) */
+  upstreamHeadroomKw?: number | null;
+  /** Upstream substation / source capacity (kW) */
+  upstreamCapacityKw?: number | null;
+  /** Upstream substation utilisation (%) */
+  upstreamUtilisationPct?: number | null;
+  /** Whether headroom is adequate for the new load */
+  headroomAdequate?: boolean | null;
+  /** Reinforcement trigger flag from sizing */
+  reinforcementTrigger?: boolean | null;
+  /** Feasibility state from EV Hub engine (e.g. LV_OK) */
+  feasibilityState?: string | null;
+  /** Engineering reason codes */
+  engineeringReasonCodes?: string[];
 }
 
 // EcoPower brand colours (HSL from design tokens → hex)
