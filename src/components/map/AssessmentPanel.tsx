@@ -50,7 +50,7 @@ import { createSnapshot } from "@/lib/snapshotService";
 import { runLvOptimiser, type OptimiserResult, type CableCatalogueEntry } from "@/lib/lvOptimiser";
 import { runElectricalValidation, type ElectricalValidationResult } from "@/lib/electricalEngine";
 import { runVoltageComparison, type VoltageComparisonResult } from "@/lib/voltageComparison";
-import { findNearestLvMain } from "@/lib/gridwise/assetEngine";
+import { findNearestLvMain, findNearestLvMainForRoute } from "@/lib/gridwise/assetEngine";
 import type { LvCableMatch } from "@/lib/gridwise/lvCableParser";
 import {
   DNO_OPTIONS,
