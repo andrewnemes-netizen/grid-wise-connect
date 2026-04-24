@@ -32,7 +32,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { useRouteAutoDetect, type RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { supabase } from "@/integrations/supabase/client";
 import { runGridwiseProject } from "@/lib/gridwise";
-import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
+import { filterPackForAudience, runCommercialEngine } from "@/lib/gridwise/commercialEngine";
 import { convertGridwiseToDesign } from "@/lib/gridwise/designBridge";
 import { convertConnectToDesign } from "@/lib/connectDesignBridge";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
