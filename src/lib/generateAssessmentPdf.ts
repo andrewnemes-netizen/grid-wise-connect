@@ -816,7 +816,13 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       if (input.connectingOntoCable) {
         metricRow("Connecting Onto (Existing LV Main)", input.connectingOntoCable);
         if (input.connectingOntoDistanceM != null) {
-          metricRow("Distance to Existing Main", `${Math.round(input.connectingOntoDistanceM)} m`);
+          const spur = Math.round(input.connectingOntoDistanceM);
+          metricRow(
+            "Spur to Existing Main",
+            spur < 1
+              ? "0 m (route touches main)"
+              : `${spur} m (included in cable total below)`,
+          );
         }
         if (input.connectingOntoDirectKva != null) {
           metricRow("Existing Main Capacity (Direct Bury)", `${input.connectingOntoDirectKva} kVA`);
@@ -828,7 +834,29 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
           );
         }
       }
-      if (input.serviceCableUsed) {
+
+      // ── New cable composition (drives BoQ) ──
+      if (input.totalCableLengthM != null) {
+        const drawn = input.drawnRouteLengthM ?? input.totalCableLengthM;
+        const spur = Math.max(0, (input.totalCableLengthM ?? 0) - drawn);
+        const breakdown = spur > 0
+          ? `${input.totalCableLengthM} m (${drawn} m drawn + ${spur} m spur)`
+          : `${input.totalCableLengthM} m`;
+        metricRow("Total New Cable Length", breakdown);
+      }
+      if (input.mainsExtensionRequired != null) {
+        const threshold = input.mainsExtensionThresholdM ?? 25;
+        metricRow(
+          "Mains Extension Required",
+          input.mainsExtensionRequired
+            ? `Yes — cable exceeds ${threshold} m DNO threshold`
+            : `No — within ${threshold} m DNO threshold`,
+        );
+      }
+      if (input.mainsExtensionRequired && input.serviceCableLengthM != null && input.mainsExtensionLengthM != null) {
+        metricRow("Service Cable", `${input.serviceCableLengthM} m × 35mm² concentric CNE`);
+        metricRow("Mains Extension Cable", `${input.mainsExtensionLengthM} m × 185mm² 4c XLPE/SWA`);
+      } else if (input.serviceCableUsed) {
         metricRow("New Service Cable (BoQ)", input.serviceCableUsed);
       }
       if (input.totalDemandKva != null) {
