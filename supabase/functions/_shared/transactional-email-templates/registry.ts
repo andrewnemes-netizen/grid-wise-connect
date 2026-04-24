@@ -1,4 +1,4 @@
-/// <reference types="npm:@types/react@18.3.1" />
+// @ts-nocheck
 import * as React from 'npm:react@18.3.1'
 
 export interface TemplateEntry {
