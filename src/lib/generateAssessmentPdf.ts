@@ -142,10 +142,16 @@ interface PdfInput {
   locationMapScreenshot?: string | null;
 
   // ── Engineering sizing & headroom (from Gridwise / EV Hub engine) ──
-  /** Recommended service cable (e.g. "95mm² Al WAV") */
-  recommendedServiceCable?: string | null;
-  /** Recommended LV main cable */
-  recommendedLvMainCable?: string | null;
+  /** Service cable used in BoQ (e.g. "35mm² concentric CNE") */
+  serviceCableUsed?: string | null;
+  /** Existing LV main cable we are connecting onto (from POC asset, e.g. "LV 185 SQ.MM CONSAC") */
+  connectingOntoCable?: string | null;
+  /** Distance to the existing LV main connection point (m) */
+  connectingOntoDistanceM?: number | null;
+  /** Whether the existing LV main is rated for the new EV load */
+  connectingOntoEvCompatible?: boolean | null;
+  /** Direct-buried capacity of the existing LV main (kVA) */
+  connectingOntoDirectKva?: number | null;
   /** Total diversified demand (kVA) */
   totalDemandKva?: number | null;
   /** Upstream substation / source headroom (kW) */
@@ -759,8 +765,8 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
   // ── ENGINEERING SIZING & HEADROOM (Gridwise / EV Hub) ──
   {
     const hasSizing =
-      input.recommendedServiceCable ||
-      input.recommendedLvMainCable ||
+      input.serviceCableUsed ||
+      input.connectingOntoCable ||
       input.totalDemandKva != null ||
       input.upstreamHeadroomKw != null ||
       input.headroomAdequate != null ||
@@ -770,7 +776,7 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setTextColor(BRAND.black);
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text("Engineering Sizing & Upstream Headroom", margin, y);
+      doc.text("Connection Cable & Upstream Headroom", margin, y);
 
       // Verdict badge for headroom adequacy
       if (input.headroomAdequate != null) {
@@ -792,14 +798,26 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
       doc.setFontSize(8);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(BRAND.grey);
-      doc.text("RECOMMENDED CABLE SIZES", margin + 2, y);
+      doc.text("CONNECTION CABLES", margin + 2, y);
       y += 5;
 
-      if (input.recommendedServiceCable) {
-        metricRow("Service Cable", input.recommendedServiceCable);
+      if (input.connectingOntoCable) {
+        metricRow("Connecting Onto (Existing LV Main)", input.connectingOntoCable);
+        if (input.connectingOntoDistanceM != null) {
+          metricRow("Distance to Existing Main", `${Math.round(input.connectingOntoDistanceM)} m`);
+        }
+        if (input.connectingOntoDirectKva != null) {
+          metricRow("Existing Main Capacity (Direct Bury)", `${input.connectingOntoDirectKva} kVA`);
+        }
+        if (input.connectingOntoEvCompatible != null) {
+          metricRow(
+            "EV Load Compatibility",
+            input.connectingOntoEvCompatible ? "Compatible" : "Not compatible — review required"
+          );
+        }
       }
-      if (input.recommendedLvMainCable) {
-        metricRow("LV Main Cable", input.recommendedLvMainCable);
+      if (input.serviceCableUsed) {
+        metricRow("New Service Cable (BoQ)", input.serviceCableUsed);
       }
       if (input.totalDemandKva != null) {
         metricRow("Total Demand", `${input.totalDemandKva.toFixed(1)} kVA`);
