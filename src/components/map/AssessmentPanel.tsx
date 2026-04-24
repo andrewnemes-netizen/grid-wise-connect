@@ -739,8 +739,9 @@ export function AssessmentPanel({
                   setLvCableLoading(true);
                   setLvCableSearched(true);
                   try {
-                    const [dstLng, dstLat] = connectEndpoints.destination.lngLat;
-                    const match = await findNearestLvMain(dstLng, dstLat);
+                    // Route-aware: spur is measured from the drawn polyline,
+                    // not just the destination pin, so it never double-counts.
+                    const match = await findNearestLvMainForRoute(connectEndpoints.routeCoords);
                     setLvCableMatch(match);
                     if (match) toast({ title: "LV main found", description: `${match.conductingSectionType} at ${Math.round(match.distanceM)}m` });
                     else toast({ title: "No compatible LV main", description: "No compatible LV underground main within 100m search radius", variant: "destructive" });
