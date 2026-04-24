@@ -353,6 +353,19 @@ export function AssessmentPanel({
       setProject(result);
       toast({ title: "Assessment complete", description: `Run ID: ${result.run_id}` });
 
+      // ── Auto-locate the existing LV main we'll be connecting onto ──
+      // Use the drawn destination if available, otherwise the pin location.
+      try {
+        const [pocLng, pocLat] = connectEndpoints
+          ? connectEndpoints.destination.lngLat
+          : [lng, lat];
+        setLvCableSearched(true);
+        const match = await findNearestLvMain(pocLng, pocLat);
+        setLvCableMatch(match);
+      } catch (err) {
+        console.warn("Auto LV main lookup failed:", err);
+      }
+
       // Also run score-site if we have a drawn route (supplementary GREEN/AMBER/RED)
       if (hasDrawnRoute && connectEndpoints) {
         try {
