@@ -32,7 +32,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { useRouteAutoDetect, type RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 import { supabase } from "@/integrations/supabase/client";
 import { runGridwiseProject } from "@/lib/gridwise";
-import { filterPackForAudience } from "@/lib/gridwise/commercialEngine";
+import { filterPackForAudience, runCommercialEngine } from "@/lib/gridwise/commercialEngine";
 import { convertGridwiseToDesign } from "@/lib/gridwise/designBridge";
 import { convertConnectToDesign } from "@/lib/connectDesignBridge";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
@@ -330,6 +330,46 @@ export function AssessmentPanel({
     ? Math.max(0, effectiveCableLengthM - mainsExtensionThresholdM)
     : 0;
 
+  // ── Route-aware Commercial pack ─────────────────────────────────────────
+  // The orchestrator's commercial pack is computed from `assets.distances`
+  // (pin → nearest substation), measured BEFORE the user drew a route or
+  // before `lvCableMatch` (the spur to the nearest existing LV main) had
+  // resolved. Once we know the true installed cable length
+  // (`effectiveCableLengthM` = drawn route + spur), recompute the commercial
+  // pack so the Commercial total, Engineering BoQ, and Budget Estimate all
+  // share one source of truth and produce matching numbers.
+  const effectiveCommercial = useMemo(() => {
+    if (!project) return null;
+    if (!hasDrawnRoute) return project.commercial;
+    try {
+      const overriddenAssets = {
+        ...project.assets,
+        distances: {
+          ...project.assets.distances,
+          primary_m: effectiveCableLengthM,
+          feeder_m: effectiveCableLengthM,
+          capacity_segment_m: effectiveCableLengthM,
+        },
+      };
+      const siteForCommercial = {
+        ...project.site,
+        voltage_override:
+          voltageOverride === "Auto" ? undefined : voltageOverride,
+      };
+      return runCommercialEngine(
+        siteForCommercial,
+        overriddenAssets,
+        project.feasibility,
+        project.route,
+        project.electrical,
+        unitRates ?? undefined,
+      );
+    } catch (err) {
+      console.warn("Commercial re-run with effective distances failed:", err);
+      return project.commercial;
+    }
+  }, [project, hasDrawnRoute, effectiveCableLengthM, unitRates, voltageOverride]);
+
   // ── Run Gridwise Pipeline ──
   const handleRunPipeline = useCallback(async () => {
     if (!resolvedDnoLookup) {
@@ -411,6 +451,7 @@ export function AssessmentPanel({
     if (!project || !user) return;
     setSaving(true);
     try {
+      const commercialForSave = effectiveCommercial ?? project.commercial;
       const { error } = await supabase.from("sites").insert({
         site_name: project.site.site_name,
         postcode: project.site.postcode ?? null,
@@ -422,9 +463,9 @@ export function AssessmentPanel({
         viability_index: project.feasibility.viability_index,
         grid_readiness: project.feasibility.grid_readiness,
         deployment_class: project.feasibility.deployment_class,
-        cost_band: project.commercial.cost_range.mid < 50000 ? "£" : project.commercial.cost_range.mid < 150000 ? "££" : "£££",
+        cost_band: commercialForSave.cost_range.mid < 50000 ? "£" : commercialForSave.cost_range.mid < 150000 ? "££" : "£££",
         reinforcement_probability: project.feasibility.reinforcement_probability,
-        raw_score_data: project as any,
+        raw_score_data: { ...project, commercial: commercialForSave } as any,
         org_id: orgId,
       } as any);
       if (error) throw error;
@@ -435,7 +476,7 @@ export function AssessmentPanel({
     } finally {
       setSaving(false);
     }
-  }, [project, user, orgId, toast]);
+  }, [project, user, orgId, toast, effectiveCommercial]);
 
   // ── Generate PDF (Functional Proposal) ──
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -465,7 +506,14 @@ export function AssessmentPanel({
         score: project.feasibility.viability_band,
         reasons: project.audit.reason_codes ?? [],
         nextSteps: project.audit?.warnings ?? [],
-        distances: project.assets.distances,
+        distances: hasDrawnRoute
+          ? {
+              ...project.assets.distances,
+              primary_m: effectiveCableLengthM,
+              feeder_m: effectiveCableLengthM,
+              capacity_segment_m: effectiveCableLengthM,
+            }
+          : project.assets.distances,
         constraints: {
           capacity_flag: project.assets.constraints.capacity_flag,
           ndp_intersect: project.assets.constraints.ndp_intersect,
@@ -571,14 +619,14 @@ export function AssessmentPanel({
       voltageOverride,
       result: scoreResult,
       distances,
-      totalEstimate: project?.commercial?.cost_range?.mid ?? costEst?.total_estimate ?? 0,
+      totalEstimate: effectiveCommercial?.cost_range?.mid ?? project?.commercial?.cost_range?.mid ?? costEst?.total_estimate ?? 0,
       voltageLevel: costEst?.voltage_level ?? voltageOverride,
       confidence: costEst?.confidence ?? "low",
       costEstimate: costEst,
     };
     setSavedAssessments((prev) => [...prev, saved]);
     toast({ title: `Saved as ${saved.label}` });
-  }, [project, scoreResult, proposedKw, distances, sourceHeadroomKw, voltageOverride, connectEndpoints, savedAssessments, toast]);
+  }, [project, scoreResult, proposedKw, distances, sourceHeadroomKw, voltageOverride, connectEndpoints, savedAssessments, toast, effectiveCommercial]);
 
   // ── Progress ──
   const progressPct = progress
@@ -587,7 +635,9 @@ export function AssessmentPanel({
     : Math.round(((progress.stage_index + 1) / progress.total_stages) * 100)
     : 0;
 
-  const filteredPack = project ? filterPackForAudience(project.commercial, packAudience) : null;
+  const filteredPack = effectiveCommercial
+    ? filterPackForAudience(effectiveCommercial, packAudience)
+    : null;
   const fState = project ? FEASIBILITY_STATE_CONFIG[project.feasibility.feasibility_state] : null;
   const bandCfg = project ? BAND_CONFIG[project.feasibility.viability_band] || BAND_CONFIG.AMBER : null;
   const sc = scoreResult ? SCORE_CONFIG[scoreResult.score] || SCORE_CONFIG.AMBER : null;
@@ -1112,10 +1162,18 @@ export function AssessmentPanel({
                   <div className="rounded-md border bg-primary/5 p-3 text-center">
                     <p className="text-[10px] text-muted-foreground">Estimated Cost Range</p>
                     <div className="flex items-baseline justify-center gap-1 mt-1">
-                      <span className="text-xs text-muted-foreground">£{project.commercial.cost_range.low.toLocaleString()}</span>
-                      <span className="text-lg font-bold text-primary">£{project.commercial.cost_range.mid.toLocaleString()}</span>
-                      <span className="text-xs text-muted-foreground">£{project.commercial.cost_range.high.toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">£{(effectiveCommercial ?? project.commercial).cost_range.low.toLocaleString()}</span>
+                      <span className="text-lg font-bold text-primary">£{(effectiveCommercial ?? project.commercial).cost_range.mid.toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">£{(effectiveCommercial ?? project.commercial).cost_range.high.toLocaleString()}</span>
                     </div>
+                    {hasDrawnRoute && (
+                      <p className="mt-1 text-[9px] text-muted-foreground">
+                        Based on {effectiveCableLengthM.toLocaleString()} m of cable
+                        {needsMainsExtension
+                          ? ` (${serviceCableLengthM} m service + ${mainsExtensionLengthM} m mains extension)`
+                          : " (service only)"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     {(["client", "installer", "dno"] as PackAudience[]).map((aud) => (
@@ -1134,10 +1192,10 @@ export function AssessmentPanel({
                   )}
                   <div className="rounded-md border bg-muted/10 p-3 space-y-1">
                     <p className="text-[10px] text-muted-foreground font-medium">Engineering BOQ</p>
-                    <MetricRow label="Electrical Items" value={`${project.commercial.engineering_boq.electrical.length}`} />
-                    <MetricRow label="Civils Items" value={`${project.commercial.engineering_boq.civils.length}`} />
-                    <MetricRow label="TM Items" value={`${project.commercial.engineering_boq.traffic_mgmt.length}`} />
-                    <MetricRow label="Fees" value={`${project.commercial.engineering_boq.fees.length}`} />
+                    <MetricRow label="Electrical Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.electrical.length}`} />
+                    <MetricRow label="Civils Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.civils.length}`} />
+                    <MetricRow label="TM Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.traffic_mgmt.length}`} />
+                    <MetricRow label="Fees" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.fees.length}`} />
                   </div>
                 </CollapsibleContent>
               </Collapsible>
