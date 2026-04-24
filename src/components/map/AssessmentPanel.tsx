@@ -628,46 +628,6 @@ export function AssessmentPanel({
     : Math.round(((progress.stage_index + 1) / progress.total_stages) * 100)
     : 0;
 
-  // ── Route-aware Commercial pack ─────────────────────────────────────────
-  // The orchestrator's commercial pack is computed from `assets.distances`
-  // (pin → nearest substation), measured BEFORE the user drew a route or
-  // before `lvCableMatch` (the spur to the nearest existing LV main) had
-  // resolved. Once we know the true installed cable length
-  // (`effectiveCableLengthM` = drawn route + spur), recompute the commercial
-  // pack so the Commercial total, Engineering BoQ, and Budget Estimate all
-  // share one source of truth and produce matching numbers.
-  const effectiveCommercial = useMemo(() => {
-    if (!project) return null;
-    if (!hasDrawnRoute) return project.commercial;
-    try {
-      const overriddenAssets = {
-        ...project.assets,
-        distances: {
-          ...project.assets.distances,
-          primary_m: effectiveCableLengthM,
-          feeder_m: effectiveCableLengthM,
-          capacity_segment_m: effectiveCableLengthM,
-        },
-      };
-      const siteForCommercial = {
-        ...project.site,
-        voltage_override:
-          voltageOverride === "Auto" ? undefined : voltageOverride,
-      };
-      return runCommercialEngine(
-        siteForCommercial,
-        overriddenAssets,
-        project.feasibility,
-        project.route,
-        project.electrical,
-        unitRates ?? undefined,
-      );
-    } catch (err) {
-      console.warn("Commercial re-run with effective distances failed:", err);
-      return project.commercial;
-    }
-  }, [project, hasDrawnRoute, effectiveCableLengthM, unitRates, voltageOverride]);
-
   const filteredPack = effectiveCommercial
     ? filterPackForAudience(effectiveCommercial, packAudience)
     : null;
