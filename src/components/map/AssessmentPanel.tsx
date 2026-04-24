@@ -1155,10 +1155,18 @@ export function AssessmentPanel({
                   <div className="rounded-md border bg-primary/5 p-3 text-center">
                     <p className="text-[10px] text-muted-foreground">Estimated Cost Range</p>
                     <div className="flex items-baseline justify-center gap-1 mt-1">
-                      <span className="text-xs text-muted-foreground">£{project.commercial.cost_range.low.toLocaleString()}</span>
-                      <span className="text-lg font-bold text-primary">£{project.commercial.cost_range.mid.toLocaleString()}</span>
-                      <span className="text-xs text-muted-foreground">£{project.commercial.cost_range.high.toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">£{(effectiveCommercial ?? project.commercial).cost_range.low.toLocaleString()}</span>
+                      <span className="text-lg font-bold text-primary">£{(effectiveCommercial ?? project.commercial).cost_range.mid.toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">£{(effectiveCommercial ?? project.commercial).cost_range.high.toLocaleString()}</span>
                     </div>
+                    {hasDrawnRoute && (
+                      <p className="mt-1 text-[9px] text-muted-foreground">
+                        Based on {effectiveCableLengthM.toLocaleString()} m of cable
+                        {needsMainsExtension
+                          ? ` (${serviceCableLengthM} m service + ${mainsExtensionLengthM} m mains extension)`
+                          : " (service only)"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     {(["client", "installer", "dno"] as PackAudience[]).map((aud) => (
@@ -1177,10 +1185,10 @@ export function AssessmentPanel({
                   )}
                   <div className="rounded-md border bg-muted/10 p-3 space-y-1">
                     <p className="text-[10px] text-muted-foreground font-medium">Engineering BOQ</p>
-                    <MetricRow label="Electrical Items" value={`${project.commercial.engineering_boq.electrical.length}`} />
-                    <MetricRow label="Civils Items" value={`${project.commercial.engineering_boq.civils.length}`} />
-                    <MetricRow label="TM Items" value={`${project.commercial.engineering_boq.traffic_mgmt.length}`} />
-                    <MetricRow label="Fees" value={`${project.commercial.engineering_boq.fees.length}`} />
+                    <MetricRow label="Electrical Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.electrical.length}`} />
+                    <MetricRow label="Civils Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.civils.length}`} />
+                    <MetricRow label="TM Items" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.traffic_mgmt.length}`} />
+                    <MetricRow label="Fees" value={`${(effectiveCommercial ?? project.commercial).engineering_boq.fees.length}`} />
                   </div>
                 </CollapsibleContent>
               </Collapsible>
