@@ -411,6 +411,7 @@ export function AssessmentPanel({
     if (!project || !user) return;
     setSaving(true);
     try {
+      const commercialForSave = effectiveCommercial ?? project.commercial;
       const { error } = await supabase.from("sites").insert({
         site_name: project.site.site_name,
         postcode: project.site.postcode ?? null,
@@ -422,9 +423,9 @@ export function AssessmentPanel({
         viability_index: project.feasibility.viability_index,
         grid_readiness: project.feasibility.grid_readiness,
         deployment_class: project.feasibility.deployment_class,
-        cost_band: project.commercial.cost_range.mid < 50000 ? "£" : project.commercial.cost_range.mid < 150000 ? "££" : "£££",
+        cost_band: commercialForSave.cost_range.mid < 50000 ? "£" : commercialForSave.cost_range.mid < 150000 ? "££" : "£££",
         reinforcement_probability: project.feasibility.reinforcement_probability,
-        raw_score_data: project as any,
+        raw_score_data: { ...project, commercial: commercialForSave } as any,
         org_id: orgId,
       } as any);
       if (error) throw error;
@@ -435,7 +436,7 @@ export function AssessmentPanel({
     } finally {
       setSaving(false);
     }
-  }, [project, user, orgId, toast]);
+  }, [project, user, orgId, toast, effectiveCommercial]);
 
   // ── Generate PDF (Functional Proposal) ──
   const [generatingPdf, setGeneratingPdf] = useState(false);
