@@ -100,6 +100,55 @@ export async function findNearestLvMain(
   return null;
 }
 
+/**
+ * Route-aware variant: measures the shortest spur from any point on the drawn
+ * cable route to the nearest compatible LV main. Returns 0m distance when the
+ * route already crosses or touches the main, eliminating double-counting in
+ * the BoQ. Falls back to the point-based search if the RPC is unavailable.
+ */
+export async function findNearestLvMainForRoute(
+  routeCoords: Array<[number, number]>
+): Promise<LvCableMatch | null> {
+  if (!routeCoords || routeCoords.length === 0) return null;
+
+  // Single-point routes degrade to the legacy point-based search.
+  if (routeCoords.length === 1) {
+    const [lng, lat] = routeCoords[0];
+    return findNearestLvMain(lng, lat);
+  }
+
+  const routeGeojson = {
+    type: "LineString",
+    coordinates: routeCoords,
+  };
+
+  const searchRadii = [25, 50, 100];
+  for (const radius of searchRadii) {
+    try {
+      const { data, error } = await (supabase.rpc as any)("find_nearest_compatible_lv_main_route", {
+        p_route_geojson: routeGeojson,
+        p_search_m: radius,
+      });
+
+      if (error) {
+        console.warn(`LV route search (${radius}m) error:`, error.message);
+        continue;
+      }
+
+      const rows = Array.isArray(data) ? data : data ? [data] : [];
+      if (rows.length > 0 && rows[0].cable_id) {
+        return mapRpcToLvCableMatch(rows[0]);
+      }
+    } catch (err) {
+      console.warn(`LV route search (${radius}m) failed:`, err);
+    }
+  }
+
+  // Final fallback: try the destination pin via the legacy RPC.
+  const [lng, lat] = routeCoords[routeCoords.length - 1];
+  return findNearestLvMain(lng, lat);
+}
+
 // ── HV/EHV asset search ─────────────────────────────────────
 
 /**
