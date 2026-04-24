@@ -1,74 +1,71 @@
-## Fix POC distance logic and mains-extension surfacing
+# Why the Commercial total (£6,371) and Budget Estimate (£18,581) disagree
 
-Three coordinated changes so the drawn route, POC distance, BoQ and DNO mains-extension rule all reconcile.
+## Root cause
 
-### 1. Snap POC to the nearest point on the drawn route (PostGIS)
+The two panels are powered by **two independent calculations** that receive **different cable lengths**:
 
-Update the `find_nearest_compatible_lv_main` RPC to accept the full drawn route as a LineString, not just the destination point.
+1. **Commercial section — £6,371**
+   Comes from `project.commercial.cost_range` and `filteredPack.total_shown`, produced by `runCommercialEngine` inside `runGridwiseProject`. It uses `assets.distances` — the distances the Asset engine measured from the destination pin to the nearest substation **at the moment the orchestrator ran**. This number does not know about the drawn route or the spur-to-POC measured by the new `findNearestLvMainForRoute` lookup.
 
-- New signature: `find_nearest_compatible_lv_main(route_geojson jsonb, search_radius_m int default 100)`
-- Build route geometry once: `ST_GeomFromGeoJSON(route_geojson)` → SRID 4326 → transform to 27700 for metric work
-- Bounding-box prefilter on `geo_cables.geom` against the route's expanded envelope (keeps GIST index in play)
-- For each candidate cable: `ST_Distance(route_27700, cable_27700)` is the **true spur length** from any point on the route to the cable
-- Return: cable type, asset_id, EV-compatibility, direct/ducted kVA, **distance_m** (spur, can be 0 if route already touches main), and the snap point lng/lat (from `ST_ClosestPoint(cable, route)`)
-- Keep the LV-only filter and EV-compatibility check from the current RPC
+2. **Budget Estimate — £18,581**
+   Computed locally inside `CostEstimatePanel` by `estimateConnectionCost(...)`, fed by the panel's `distances` memo (`AssessmentPanel.tsx` lines 293–314), which **overrides** primary/feeder/capacity to the new `effectiveCableLengthM = routeDistanceM + spurToPocM` (~88 m in your screenshot).
 
-Old single-point version stays callable as a thin wrapper for backward compatibility (wraps the point in a 1-vertex LineString).
+Same pricing function, different inputs → different totals. The Commercial pack also doesn't see the 25 m service / 185mm² mains-extension split, so its BoQ is internally inconsistent with the DNO Rules Validator.
 
-### 2. Single source of truth for cable length
+```text
+runGridwiseProject ──► assets.distances (pin → nearest substation)
+        │                       │
+        │                       ▼
+        │              runCommercialEngine ──► cost_range £6,371   ◄── stale
+        │
+        ▼
+project (state)
 
-In `src/components/map/AssessmentPanel.tsx`:
+[user draws route, lvCableMatch resolved AFTER orchestrator]
+        │
+        ▼
+AssessmentPanel.distances  (effectiveCableLengthM = route + spur, ~88 m)
+        │
+        ▼
+CostEstimatePanel.estimateConnectionCost ──► £18,581             ◄── current
+```
 
-- Add `effectiveCableLengthM = routeDistanceM + (lvCableMatch?.distanceM ?? 0)`
-- Replace every use of `routeDistanceM` that feeds an engine with `effectiveCableLengthM`:
-  - `distances` memo (lines 296–308) — drives `connectionCosts.ts`, BoQ, voltage drop
-  - `runLvOptimiser` route_length_m (line 1086)
-  - `runVoltageComparison` route_length_m (line 1153)
-- `routeDistanceM` itself stays untouched — still used for the "Route Distance" headline so the user can see what they drew
+## Plan — one source of truth, route-aware
 
-Because the snapped POC distance can now legitimately be 0 (route already touches the main), the engine never double-counts.
+### 1. Centralise effective distances
+In `AssessmentPanel.tsx`, build a single `effectiveDistances` object derived from `effectiveCableLengthM` (route + spur, capped/split by the mains-extension threshold). Use it everywhere a cost engine is invoked: the inline `CostEstimatePanel`, `runLvOptimiser`, the saved-assessment payload, and the new orchestrator re-run below.
 
-### 3. Surface mains extension in panel + PDF
+### 2. Re-run the Commercial engine after the route is known
+Two options, pick whichever the user prefers:
 
-The cost engine already implements the `> 25 m` branch (185mm² 4c XLPE/SWA + 2 terminations + 2 joint bays + pot end + extra labour). We just need to expose it.
+- **A. Re-run `runGridwiseProject` once `lvCableMatch` resolves**, passing the route + spur so the Asset engine reports `assets.distances` with `effectiveCableLengthM`. Cleanest, but doubles work.
+- **B. Lighter patch**: keep one orchestrator run, then call `runCommercialEngine` again locally with overridden `assets.distances` and update `project.commercial`. Faster, smaller blast radius.
 
-**Electrical & Safety panel** (`AssessmentPanel.tsx`, around line 985):
+Recommendation: **B** for now (fast, accurate), with a follow-up to fold route-awareness into the Asset engine itself.
 
-- Replace the single "New Service Cable (BoQ)" row with a Mains Extension block driven by `effectiveCableLengthM > 25`:
-  - **Yes**: shows two lines — `Service: 25 m × 35mm² concentric CNE` and `Mains Extension: Xm × 185mm² 4c XLPE/SWA`
-  - **No**: shows one line — `Service: Xm × 35mm² concentric CNE`
-- Add a small badge: "Mains Extension Required" (amber) or "Standard Service" (neutral)
+### 3. Mains-extension split inside the BoQ
+Pass `effectiveCableLengthM`, `serviceCableLengthM`, `mainsExtensionLengthM`, and `needsMainsExtension` into `runCommercialEngine` (extend `SiteInput` or add a `routeOverrides` arg). Update `generateSplitBoq` / `generateBom` so the cable line items reflect:
+- 25 m × 35 mm² CNE service, plus
+- (effective − 25) m × 185 mm² 4c XLPE/SWA mains extension,
+mirroring exactly what the DNO Rules Validator already shows.
 
-**Route Distance card** (line 653):
+### 4. UI reconciliation
+- Commercial "Estimated Cost Range", `Total` (Client / Installer views), Engineering BOQ, and Budget Estimate `Estimated Total` will now all derive from the same cable length and unit rates → totals will agree (within the ±15/+25 % range bands the Commercial card already shows).
+- Add a tiny caption under the Commercial total: *"Based on effective cable length: {effectiveCableLengthM} m ({serviceCableLengthM} m service + {mainsExtensionLengthM} m mains extension)"* so the alignment is auditable at a glance.
 
-- When a POC is found, change the headline to `effectiveCableLengthM` and add a sub-line: `21 m drawn + 50 m spur to existing LV main`
-- When no POC found yet, current behaviour preserved
+### 5. Verify against the screenshot
+After the fix, with route ≈ 47 m + spur ≈ 41 m → 88 m effective, both panels should converge near the £18 k figure (the Budget Estimate is the engineering-grade number). The £6 k value was the stale "pin-to-substation" estimate from before the route was drawn.
 
-**Functional Proposal PDF** (`src/lib/generateAssessmentPdf.ts`):
+## Files to change
 
-- In the **Connection Cable & Upstream Headroom** block, add three rows:
-  - Total New Cable Length: `Xm` (drawn + spur breakdown)
-  - Mains Extension Triggered: `Yes / No` with the 25m DNO threshold cited
-  - Cable Composition: the two-cable split when triggered, single cable otherwise
-- BoQ table picks up the new lengths automatically (reads from cost engine output, no template changes needed)
+- `src/components/map/AssessmentPanel.tsx` — build `effectiveDistances`, post-route `runCommercialEngine` re-run, pass route overrides, update saved payload and PDF inputs, add reconciliation caption.
+- `src/lib/gridwise/commercialEngine.ts` — accept optional `routeOverrides` ({ effective_length_m, service_length_m, extension_length_m, needs_mains_extension }) and forward to `estimateConnectionCost` / `generateBom` / `generateSplitBoq`.
+- `src/lib/gridwise/types.ts` — extend `SiteInput` (or a new arg type) with the route overrides.
+- `src/lib/connectionCosts.ts` — honour `effective_length_m` and the service/extension split when present, instead of recomputing from `distances`.
+- `src/lib/evHub/boqGenerator.ts` (`generateSplitBoq`) — emit the two cable line items when `needs_mains_extension`.
+- `src/lib/generateAssessmentPdf.ts` — already updated for the cable split; confirm it now reads from the unified Commercial pack, not the local re-estimate, so the PDF and UI agree.
 
-### Files touched
+## Out of scope (call out only)
 
-- `supabase/migrations/<new>.sql` — updated RPC accepting LineString
-- `src/lib/lvMainSearch.ts` (or wherever `findNearestLvMain` lives) — pass route GeoJSON instead of single point
-- `src/components/map/AssessmentPanel.tsx` — `effectiveCableLengthM`, panel surfacing, route-card sub-line
-- `src/lib/generateAssessmentPdf.ts` — Mains Extension block in Connection Cable section
-
-### Out of scope (deliberately)
-
-- Not changing the 25 m threshold — already DNO-configurable via `unit_rates.ln_threshold_m`
-- Not auto-extending the user's drawn polyline to the main — engineer keeps control of the trench alignment
-- Not changing the 35mm² CNE / 185mm² XLPE cable choices — they match NPG v3.0 standard practice
-
-### Verification (after build)
-
-End-to-end check on the Starbeck test site:
-1. Re-draw the same 21 m route → POC lookup → confirm spur ≈ 50 m, total ≈ 71 m, **mains extension triggered**, BoQ shows 25 m of 35mm² CNE + 46 m of 185mm² 4c XLPE/SWA + 2 terminations
-2. Re-draw a route that intentionally crosses the LV main → POC lookup → confirm spur ≈ 0 m, no double-counting, mains extension still fires because route itself > 25 m
-3. Re-draw a short 10 m route directly onto the main → confirm spur = 0, no mains extension, single 10 m service cable in BoQ
-4. Generate PDF → confirm Connection Cable section shows split, BoQ matches panel
+- Re-architecting the Asset engine to be route-aware end-to-end (option A above) — defer to a follow-up.
+- Changing unit rates or margin policy — none of that needs to move to fix the divergence.
