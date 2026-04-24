@@ -2622,7 +2622,6 @@ export type Database = {
           parsed_size_unit: string
           parsed_size_value: number
           score: number
-          snap_distance_m: number
           snap_lat: number
           snap_lon: number
           source_site_name: string
