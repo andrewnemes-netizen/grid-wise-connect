@@ -2627,6 +2627,34 @@ export type Database = {
           source_site_name: string
         }[]
       }
+      find_nearest_compatible_lv_main_route: {
+        Args: { p_route_geojson: Json; p_search_m?: number }
+        Returns: {
+          asset_id: string
+          cable_id: string
+          conducting_section_type: string
+          direct_kva: number
+          distance_m: number
+          ducted_kva: number
+          ev_compatible: boolean
+          feeder_name: string
+          green_compatible: boolean
+          is_main_like: boolean
+          is_service_like: boolean
+          is_unknown: boolean
+          parsed_construction: string
+          parsed_family: string
+          parsed_material: string
+          parsed_size_unit: string
+          parsed_size_value: number
+          route_snap_lat: number
+          route_snap_lon: number
+          score: number
+          snap_lat: number
+          snap_lon: number
+          source_site_name: string
+        }[]
+      }
       find_nearest_hv_asset: {
         Args: {
           p_lat: number
