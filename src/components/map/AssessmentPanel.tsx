@@ -495,6 +495,13 @@ export function AssessmentPanel({
         connectingOntoDistanceM: lvCableMatch?.distanceM ?? null,
         connectingOntoEvCompatible: lvCableMatch?.evCompatible ?? null,
         connectingOntoDirectKva: lvCableMatch?.directKva ?? null,
+        // ── True installed cable length & DNO mains-extension trigger ──
+        drawnRouteLengthM: hasDrawnRoute ? routeDistanceM : null,
+        totalCableLengthM: hasDrawnRoute ? effectiveCableLengthM : null,
+        mainsExtensionRequired: hasDrawnRoute ? needsMainsExtension : null,
+        mainsExtensionThresholdM: mainsExtensionThresholdM,
+        serviceCableLengthM: hasDrawnRoute ? serviceCableLengthM : null,
+        mainsExtensionLengthM: hasDrawnRoute ? mainsExtensionLengthM : null,
         totalDemandKva: sizing?.total_demand_kva ?? null,
         upstreamCapacityKw: sub?.capacity_kw ?? null,
         upstreamUtilisationPct: sub?.utilisation_pct ?? null,
