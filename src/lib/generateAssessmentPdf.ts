@@ -152,6 +152,18 @@ interface PdfInput {
   connectingOntoEvCompatible?: boolean | null;
   /** Direct-buried capacity of the existing LV main (kVA) */
   connectingOntoDirectKva?: number | null;
+  /** Total drawn route length on the map (m) */
+  drawnRouteLengthM?: number | null;
+  /** Total installed cable length = drawn route + spur to existing LV main (m) */
+  totalCableLengthM?: number | null;
+  /** Whether the connection requires a mains extension (cable > threshold) */
+  mainsExtensionRequired?: boolean | null;
+  /** DNO mains-extension threshold (m), typically 25 m for NPG/standard ICP */
+  mainsExtensionThresholdM?: number | null;
+  /** Service portion length when mains extension applies (m) */
+  serviceCableLengthM?: number | null;
+  /** Mains extension portion length (m) */
+  mainsExtensionLengthM?: number | null;
   /** Total diversified demand (kVA) */
   totalDemandKva?: number | null;
   /** Upstream substation / source headroom (kW) */
