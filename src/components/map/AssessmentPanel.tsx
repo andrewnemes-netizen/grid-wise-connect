@@ -401,6 +401,77 @@ export function AssessmentPanel({
     }
   }, [project, user, orgId, toast]);
 
+  // ── Generate PDF (Functional Proposal) ──
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const handleGeneratePdf = useCallback(async () => {
+    if (!project) return;
+    setGeneratingPdf(true);
+    try {
+      let mapScreenshot: string | undefined;
+      if (onCaptureScreenshot) {
+        try { mapScreenshot = (await onCaptureScreenshot()) ?? undefined; } catch {}
+      }
+
+      const sub = project.assets.nearest_substation;
+      const sizing = project.electrical?.sizing;
+      const headroomKw = sourceHeadroomKw ?? sub?.headroom_kw ?? null;
+      const proposedKwRounded = Math.round(proposedKw);
+      const headroomAdequate = headroomKw != null
+        ? headroomKw >= proposedKwRounded
+        : null;
+
+      generateAssessmentPdf({
+        siteName: project.site.site_name,
+        postcode: project.site.postcode ?? undefined,
+        proposedKw: proposedKwRounded,
+        lat,
+        lng,
+        score: project.feasibility.viability_band,
+        reasons: project.audit.reason_codes ?? [],
+        nextSteps: project.commercial?.recommended_next_steps ?? [],
+        distances: project.assets.distances,
+        constraints: {
+          capacity_flag: project.assets.constraints.capacity_flag,
+          ndp_intersect: project.assets.constraints.ndp_intersect,
+          wayleave_intersect: project.assets.constraints.wayleave_intersect,
+          min_footway_m: project.assets.constraints.min_footway_m,
+          min_carriageway_m: project.assets.constraints.min_carriageway_m,
+        },
+        mapScreenshot,
+        electricalResult: project.electrical?.validation ?? null,
+        designElements: designElements?.map(d => ({ type: d.label, count: d.count })),
+        unitRates: unitRates ?? undefined,
+        voltageOverride,
+        nearestHeadroomKw: headroomKw ?? undefined,
+        streetViewCaptures,
+        // Scoring & intelligence
+        gridViabilityIndex: project.feasibility.viability_index,
+        deploymentClass: project.feasibility.deployment_class,
+        gridReadiness: project.feasibility.grid_readiness,
+        reinforcementProbability: project.feasibility.reinforcement_probability,
+        bestPoc: sub?.name ?? null,
+        recommendedVoltage: project.feasibility?.cable_selection ? "LV" : null,
+        cableLengthEst: project.route?.route_quantities?.total_length_m ?? null,
+        // ── Engineering sizing & headroom ──
+        recommendedServiceCable: sizing?.service_cable ?? null,
+        recommendedLvMainCable: sizing?.lv_main_cable ?? null,
+        totalDemandKva: sizing?.total_demand_kva ?? null,
+        upstreamCapacityKw: sub?.capacity_kw ?? null,
+        upstreamUtilisationPct: sub?.utilisation_pct ?? null,
+        upstreamHeadroomKw: headroomKw,
+        headroomAdequate,
+        reinforcementTrigger: sizing?.reinforcement_trigger ?? null,
+        feasibilityState: project.feasibility.feasibility_state ?? null,
+        engineeringReasonCodes: sizing?.reason_codes ?? [],
+      });
+      toast({ title: "PDF generated", description: "Functional Proposal downloaded." });
+    } catch (err: any) {
+      toast({ title: "PDF generation failed", description: err.message, variant: "destructive" });
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }, [project, lat, lng, proposedKw, sourceHeadroomKw, onCaptureScreenshot, designElements, unitRates, voltageOverride, streetViewCaptures, toast]);
+
   // ── Convert to Design ──
   const handleConvertToDesign = useCallback(async () => {
     if (!onConvertToDesign) return;
@@ -1125,6 +1196,20 @@ export function AssessmentPanel({
                   </div>
                 )}
               </div>
+
+              {/* Generate Functional Proposal PDF */}
+              <Button
+                variant="default"
+                className="w-full"
+                onClick={handleGeneratePdf}
+                disabled={generatingPdf}
+              >
+                {generatingPdf ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating PDF…</>
+                ) : (
+                  <><FileText className="mr-2 h-4 w-4" />Generate Functional Proposal (PDF)</>
+                )}
+              </Button>
 
               {/* Save option for comparison */}
               <Button variant="secondary" className="w-full" onClick={handleSaveOption}>
