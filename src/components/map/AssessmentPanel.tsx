@@ -1106,7 +1106,7 @@ export function AssessmentPanel({
                       try {
                         const optRes = runLvOptimiser({
                           proposed_kw: proposedKw,
-                          route_length_m: hasDrawnRoute ? routeDistanceM : (project?.route?.route_quantities?.total_length_m ?? 100),
+                          route_length_m: hasDrawnRoute ? effectiveCableLengthM : (project?.route?.route_quantities?.total_length_m ?? 100),
                           catalogue: cableCatalogue,
                           unit_rates: unitRates,
                         });
@@ -1173,7 +1173,7 @@ export function AssessmentPanel({
                       try {
                         const res = runVoltageComparison({
                           proposed_kw: proposedKw,
-                          route_length_m: hasDrawnRoute ? routeDistanceM : (project?.route?.route_quantities?.total_length_m ?? 100),
+                          route_length_m: hasDrawnRoute ? effectiveCableLengthM : (project?.route?.route_quantities?.total_length_m ?? 100),
                           catalogue: cableCatalogue,
                           unit_rates: unitRates,
                         });
