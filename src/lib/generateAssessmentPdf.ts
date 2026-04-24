@@ -756,6 +756,133 @@ export function generateAssessmentPdf(input: PdfInput): jsPDF {
     y += 4;
   }
 
+  // ── ENGINEERING SIZING & HEADROOM (Gridwise / EV Hub) ──
+  {
+    const hasSizing =
+      input.recommendedServiceCable ||
+      input.recommendedLvMainCable ||
+      input.totalDemandKva != null ||
+      input.upstreamHeadroomKw != null ||
+      input.headroomAdequate != null ||
+      input.feasibilityState;
+    if (hasSizing) {
+      checkPage(60);
+      doc.setTextColor(BRAND.black);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.text("Engineering Sizing & Upstream Headroom", margin, y);
+
+      // Verdict badge for headroom adequacy
+      if (input.headroomAdequate != null) {
+        const adColor = input.headroomAdequate ? BRAND.green : BRAND.red;
+        const adLabel = input.headroomAdequate ? "SUITABLE" : "INSUFFICIENT";
+        doc.setFillColor(adColor);
+        const adW = doc.getTextWidth(adLabel) + 6;
+        doc.roundedRect(pageW - margin - adW - 2, y - 4, adW + 2, 6, 1, 1, "F");
+        doc.setTextColor(BRAND.white);
+        doc.setFontSize(7);
+        doc.text(adLabel, pageW - margin - adW / 2 - 1, y, { align: "center" });
+      }
+
+      y += 6;
+      drawLine(y);
+      y += 4;
+
+      // Cable sizing block
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.grey);
+      doc.text("RECOMMENDED CABLE SIZES", margin + 2, y);
+      y += 5;
+
+      if (input.recommendedServiceCable) {
+        metricRow("Service Cable", input.recommendedServiceCable);
+      }
+      if (input.recommendedLvMainCable) {
+        metricRow("LV Main Cable", input.recommendedLvMainCable);
+      }
+      if (input.totalDemandKva != null) {
+        metricRow("Total Demand", `${input.totalDemandKva.toFixed(1)} kVA`);
+      }
+
+      y += 3;
+
+      // Upstream substation headroom block
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(BRAND.grey);
+      doc.text("UPSTREAM SUBSTATION HEADROOM", margin + 2, y);
+      y += 5;
+
+      if (input.upstreamCapacityKw != null) {
+        metricRow("Firm Capacity", `${input.upstreamCapacityKw.toLocaleString()} kW`);
+      }
+      if (input.upstreamUtilisationPct != null) {
+        metricRow("Current Utilisation", `${input.upstreamUtilisationPct}%`);
+      }
+      if (input.upstreamHeadroomKw != null) {
+        metricRow("Available Headroom", `${input.upstreamHeadroomKw.toLocaleString()} kW`);
+      }
+      if (input.proposedKw > 0) {
+        metricRow("Proposed New Load", `${input.proposedKw.toLocaleString()} kW`);
+      }
+
+      // Adequacy statement
+      if (input.upstreamHeadroomKw != null && input.proposedKw > 0) {
+        const surplus = input.upstreamHeadroomKw - input.proposedKw;
+        const adequate = input.headroomAdequate ?? surplus >= 0;
+        y += 2;
+        const boxColor = adequate ? BRAND.greenLight : "#fee2e2";
+        const txtColor = adequate ? BRAND.darkGreen : BRAND.red;
+        doc.setFillColor(boxColor);
+        doc.roundedRect(margin, y, contentW, 14, 2, 2, "F");
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(txtColor);
+        const verdict = adequate
+          ? `SUITABLE — Headroom of ${input.upstreamHeadroomKw.toLocaleString()} kW exceeds new load of ${Math.round(input.proposedKw).toLocaleString()} kW (surplus ${Math.round(surplus).toLocaleString()} kW)`
+          : `INSUFFICIENT — New load of ${Math.round(input.proposedKw).toLocaleString()} kW exceeds available headroom of ${input.upstreamHeadroomKw.toLocaleString()} kW (shortfall ${Math.round(Math.abs(surplus)).toLocaleString()} kW). Reinforcement likely required.`;
+        const vLines = doc.splitTextToSize(verdict, contentW - 6);
+        let vy = y + 5;
+        vLines.forEach((l: string) => {
+          doc.text(l, margin + 3, vy);
+          vy += 4;
+        });
+        y += Math.max(14, vLines.length * 4 + 6);
+      }
+
+      // Feasibility / reinforcement summary
+      if (input.feasibilityState || input.reinforcementTrigger != null) {
+        y += 2;
+        if (input.feasibilityState) {
+          metricRow("Feasibility State", input.feasibilityState.replace(/_/g, " "));
+        }
+        if (input.reinforcementTrigger != null) {
+          metricRow("Reinforcement Trigger", input.reinforcementTrigger ? "Yes" : "No");
+        }
+      }
+
+      // Reason codes
+      if (input.engineeringReasonCodes && input.engineeringReasonCodes.length > 0) {
+        y += 2;
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(BRAND.grey);
+        doc.text("ENGINEERING REASON CODES", margin + 2, y);
+        y += 4;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(BRAND.black);
+        input.engineeringReasonCodes.forEach((code) => {
+          checkPage(5);
+          doc.text(`• ${code}`, margin + 4, y);
+          y += 3.5;
+        });
+      }
+
+      y += 4;
+    }
+  }
+
   // ── BUDGET ESTIMATE ──
   let estimate: CostEstimate | null = null;
   let bom: BomItem[] = [];
