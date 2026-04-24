@@ -506,7 +506,14 @@ export function AssessmentPanel({
         score: project.feasibility.viability_band,
         reasons: project.audit.reason_codes ?? [],
         nextSteps: project.audit?.warnings ?? [],
-        distances: project.assets.distances,
+        distances: hasDrawnRoute
+          ? {
+              ...project.assets.distances,
+              primary_m: effectiveCableLengthM,
+              feeder_m: effectiveCableLengthM,
+              capacity_segment_m: effectiveCableLengthM,
+            }
+          : project.assets.distances,
         constraints: {
           capacity_flag: project.assets.constraints.capacity_flag,
           ndp_intersect: project.assets.constraints.ndp_intersect,
