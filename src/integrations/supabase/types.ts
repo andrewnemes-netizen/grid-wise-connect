@@ -2601,60 +2601,33 @@ export type Database = {
         Returns: number
       }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
-      find_nearest_compatible_lv_main:
-        | {
-            Args: { p_lat: number; p_lon: number; p_search_m?: number }
-            Returns: {
-              asset_id: string
-              cable_id: string
-              conducting_section_type: string
-              direct_kva: number
-              distance_m: number
-              ducted_kva: number
-              ev_compatible: boolean
-              feeder_name: string
-              green_compatible: boolean
-              is_main_like: boolean
-              is_service_like: boolean
-              is_unknown: boolean
-              parsed_construction: string
-              parsed_family: string
-              parsed_material: string
-              parsed_size_unit: string
-              parsed_size_value: number
-              score: number
-              snap_distance_m: number
-              snap_lat: number
-              snap_lon: number
-              source_site_name: string
-            }[]
-          }
-        | {
-            Args: { p_lat: number; p_lon: number; p_search_m?: number }
-            Returns: {
-              asset_id: string
-              cable_id: string
-              conducting_section_type: string
-              direct_kva: number
-              distance_m: number
-              ducted_kva: number
-              ev_compatible: boolean
-              feeder_name: string
-              green_compatible: boolean
-              is_main_like: boolean
-              is_service_like: boolean
-              is_unknown: boolean
-              parsed_construction: string
-              parsed_family: string
-              parsed_material: string
-              parsed_size_unit: string
-              parsed_size_value: number
-              score: number
-              snap_lat: number
-              snap_lon: number
-              source_site_name: string
-            }[]
-          }
+      find_nearest_compatible_lv_main: {
+        Args: { p_lat: number; p_lon: number; p_search_m?: number }
+        Returns: {
+          asset_id: string
+          cable_id: string
+          conducting_section_type: string
+          direct_kva: number
+          distance_m: number
+          ducted_kva: number
+          ev_compatible: boolean
+          feeder_name: string
+          green_compatible: boolean
+          is_main_like: boolean
+          is_service_like: boolean
+          is_unknown: boolean
+          parsed_construction: string
+          parsed_family: string
+          parsed_material: string
+          parsed_size_unit: string
+          parsed_size_value: number
+          score: number
+          snap_distance_m: number
+          snap_lat: number
+          snap_lon: number
+          source_site_name: string
+        }[]
+      }
       find_nearest_hv_asset: {
         Args: {
           p_lat: number
