@@ -1086,6 +1086,20 @@ export function AssessmentPanel({
                 </CollapsibleContent>
               </Collapsible>
 
+              {/* ── DNO Rules Validator (between Electrical and Commercial) ── */}
+              {hasDrawnRoute && (
+                <DnoRulesValidatorPanel
+                  drawnRouteM={routeDistanceM}
+                  spurToPocM={lvCableMatch?.distanceM ?? null}
+                  thresholdM={mainsExtensionThresholdM}
+                  proposedKw={proposedKw}
+                  existingMainType={lvCableMatch?.conductingSectionType ?? null}
+                  existingMainEvCompatible={lvCableMatch?.evCompatible ?? null}
+                  existingMainDirectKva={lvCableMatch?.directKva ?? null}
+                  dno={resolvedDnoLookup ?? null}
+                />
+              )}
+
               {/* ── Engine 5: Commercial ── */}
               <Collapsible open={commercialOpen} onOpenChange={setCommercialOpen}>
                 <CollapsibleTrigger asChild>
