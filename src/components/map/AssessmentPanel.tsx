@@ -290,23 +290,44 @@ export function AssessmentPanel({
 
   // Distances for cost estimate (from score-site or drawn route)
   const distances = useMemo(() => {
+    // Single source of truth for the *installed* cable length:
+    // drawn route + the spur from the nearest existing LV main (if found).
+    // The route-aware POC lookup returns 0 m when the drawn route already
+    // touches the main, so this never double-counts.
+    const effective = routeDistanceM + (lvCableMatch?.distanceM ?? 0);
     if (scoreResult?.distances) {
       return {
         ...scoreResult.distances,
-        primary_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.primary_m,
-        feeder_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.feeder_m,
-        capacity_segment_m: hasDrawnRoute ? routeDistanceM : scoreResult.distances.capacity_segment_m,
+        primary_m: hasDrawnRoute ? effective : scoreResult.distances.primary_m,
+        feeder_m: hasDrawnRoute ? effective : scoreResult.distances.feeder_m,
+        capacity_segment_m: hasDrawnRoute ? effective : scoreResult.distances.capacity_segment_m,
       };
     }
     if (project?.assets?.distances) {
       return {
-        primary_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.primary_m,
-        feeder_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.feeder_m,
-        capacity_segment_m: hasDrawnRoute ? routeDistanceM : project.assets.distances.capacity_segment_m,
+        primary_m: hasDrawnRoute ? effective : project.assets.distances.primary_m,
+        feeder_m: hasDrawnRoute ? effective : project.assets.distances.feeder_m,
+        capacity_segment_m: hasDrawnRoute ? effective : project.assets.distances.capacity_segment_m,
       };
     }
-    return { primary_m: routeDistanceM, feeder_m: routeDistanceM, capacity_segment_m: routeDistanceM };
-  }, [scoreResult, project, routeDistanceM, hasDrawnRoute]);
+    return { primary_m: effective, feeder_m: effective, capacity_segment_m: effective };
+  }, [scoreResult, project, routeDistanceM, hasDrawnRoute, lvCableMatch]);
+
+  // ── Mains extension status (NPG / standard ICP rule: > 25 m) ──
+  // Used by both the side panel and the PDF to show the cable composition.
+  const mainsExtensionThresholdM = unitRates?.ln_threshold_m ?? 25;
+  const effectiveCableLengthM = useMemo(
+    () => routeDistanceM + (lvCableMatch?.distanceM ?? 0),
+    [routeDistanceM, lvCableMatch],
+  );
+  const needsMainsExtension =
+    hasDrawnRoute && effectiveCableLengthM > mainsExtensionThresholdM;
+  const serviceCableLengthM = needsMainsExtension
+    ? mainsExtensionThresholdM
+    : effectiveCableLengthM;
+  const mainsExtensionLengthM = needsMainsExtension
+    ? Math.max(0, effectiveCableLengthM - mainsExtensionThresholdM)
+    : 0;
 
   // ── Run Gridwise Pipeline ──
   const handleRunPipeline = useCallback(async () => {
