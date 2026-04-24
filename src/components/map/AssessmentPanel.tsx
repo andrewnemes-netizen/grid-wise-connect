@@ -452,9 +452,14 @@ export function AssessmentPanel({
         bestPoc: sub?.name ?? null,
         recommendedVoltage: project.feasibility?.cable_selection ? "LV" : null,
         cableLengthEst: project.route?.route_quantities?.total_length_m ?? null,
-        // ── Engineering sizing & headroom ──
-        recommendedServiceCable: sizing?.service_cable ?? null,
-        recommendedLvMainCable: sizing?.lv_main_cable ?? null,
+        // ── Connection cable details (matches BoQ) ──
+        // Service cable in the BoQ is always 35mm² CNE for LV connections.
+        serviceCableUsed: "35mm² concentric CNE",
+        // Existing LV main we're tapping into — sourced from the spatial POC lookup, not the EV Hub sizing engine.
+        connectingOntoCable: lvCableMatch?.conductingSectionType ?? null,
+        connectingOntoDistanceM: lvCableMatch?.distanceM ?? null,
+        connectingOntoEvCompatible: lvCableMatch?.evCompatible ?? null,
+        connectingOntoDirectKva: lvCableMatch?.directKva ?? null,
         totalDemandKva: sizing?.total_demand_kva ?? null,
         upstreamCapacityKw: sub?.capacity_kw ?? null,
         upstreamUtilisationPct: sub?.utilisation_pct ?? null,
@@ -470,7 +475,7 @@ export function AssessmentPanel({
     } finally {
       setGeneratingPdf(false);
     }
-  }, [project, lat, lng, proposedKw, sourceHeadroomKw, onCaptureScreenshot, designElements, unitRates, voltageOverride, streetViewCaptures, toast]);
+  }, [project, lat, lng, proposedKw, sourceHeadroomKw, onCaptureScreenshot, designElements, unitRates, voltageOverride, streetViewCaptures, toast, lvCableMatch]);
 
   // ── Convert to Design ──
   const handleConvertToDesign = useCallback(async () => {
