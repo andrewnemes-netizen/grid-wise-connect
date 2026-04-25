@@ -30,7 +30,9 @@ import { UnifiedIntelligencePanel, type ConnectionLine } from "@/components/map/
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { AssessmentPanel } from "@/components/map/AssessmentPanel";
 import { DesignModePanel } from "@/components/map/DesignModePanel";
-import { DesignLiveTotalsBar } from "@/components/map/DesignLiveTotalsBar";
+import { DesignLiveStatusCard } from "@/components/map/DesignLiveStatusCard";
+import { DesignCableLabels } from "@/components/map/DesignCableLabels";
+import { DesignCableInteractions } from "@/components/map/DesignCableInteractions";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 
@@ -518,15 +520,28 @@ const MapView = () => {
 
       {/* Live designer totals bar — only while Design Mode is active */}
       {activeTool === "design" && activeStudy.study && (
-        <div className="absolute top-12 left-0 right-0 z-30 flex justify-center pointer-events-none">
-          <div className="pointer-events-auto">
-            <DesignLiveTotalsBar
-              elements={design.elements}
-              cables={design.cables}
-              isLive={!!dragDrop.draggingType || !!dragDrop.draggingElementId}
-            />
-          </div>
+        <div className="absolute top-12 left-3 z-30 pointer-events-auto">
+          <DesignLiveStatusCard
+            elements={design.elements}
+            cables={design.cables}
+            isLive={!!dragDrop.draggingType || !!dragDrop.draggingElementId}
+          />
         </div>
+      )}
+
+      {/* FlowEmo-style midpoint distance pills + click-to-edit interactions */}
+      {activeTool === "design" && activeStudy.study && (
+        <>
+          <DesignCableLabels map={map} cables={design.cables} elements={design.elements} />
+          <DesignCableInteractions
+            map={map}
+            cables={design.cables}
+            elements={design.elements}
+            active={activeTool === "design"}
+            onRemoveCable={design.removeCable}
+            onUpdateCableProperties={design.updateCableProperties}
+          />
+        </>
       )}
 
       {mapLoaded && (
