@@ -20,6 +20,13 @@ export const DEFAULT_LOAD_KVA: Record<EquipmentType, number> = {
   pole: 0,
 };
 
+/**
+ * Default phase-current draw for a single EVCP at 400 V three-phase, used by
+ * the cable editor when the user hasn't set an explicit `needed_amps` value.
+ *   I = S / (√3 · V) = 55 000 VA / (1.732 · 400 V) ≈ 79.4 A
+ */
+export const EVCP_DEFAULT_AMPS = 80;
+
 /** Resolve the effective kVA for a single design element. */
 export function elementKva(el: DesignElement): number {
   const override = (el.properties_json as { kva?: number } | null | undefined)?.kva;

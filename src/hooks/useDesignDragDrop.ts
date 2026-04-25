@@ -7,7 +7,12 @@ import type {
   EquipmentType,
 } from "@/hooks/useDesignMode";
 import { EQUIPMENT_CONFIG } from "@/hooks/useDesignMode";
-import { findNearestPoc, straightCableTo } from "@/lib/designAutoCable";
+import {
+  findNearestPoc,
+  findNearestFeederPillar,
+  straightCableTo,
+} from "@/lib/designAutoCable";
+import { toast } from "sonner";
 
 const DRAG_MIME = "application/x-gridwise-equipment";
 
@@ -26,7 +31,8 @@ interface UseDesignDragDropArgs {
   insertAutoCable: (
     type: CableType,
     coordinates: [number, number][],
-    label?: string
+    label?: string,
+    properties_json?: Record<string, unknown>
   ) => Promise<DesignCable | null>;
   updateElementPosition: (id: string, lng: number, lat: number) => Promise<void>;
   updateCableCoordinates: (id: string, coords: [number, number][]) => Promise<void>;
@@ -86,6 +92,41 @@ export function useDesignDragDrop({
     setDraggingType(null);
     setGhostCoord(null);
   }, []);
+
+  /**
+   * Auto-cable a freshly-dropped EV charger.
+   *
+   * Strategy:
+   *   1. Prefer the nearest Feeder Pillar (within 250 m).
+   *   2. Fall back to any Transformer / RMU / Cutout (within 1 km) if no
+   *      feeder is on the map yet — and warn the user.
+   *   3. If nothing is in range, leave the charger un-cabled.
+   */
+  const runAutoCableForEvcp = useCallback(
+    async (drop: [number, number], inserted: DesignElement) => {
+      const feeder = findNearestFeederPillar(drop, elements);
+      const target = feeder ?? findNearestPoc(drop, elements, {
+        allowedTypes: ["transformer", "rmu", "cutout"],
+      });
+      if (!target) {
+        toast.warning("No POC nearby — drop a Feeder Pillar to enable auto-cabling.");
+        return;
+      }
+      const coords = straightCableTo(drop, target.element);
+      const label = `${target.element.label ?? target.element.element_type} → ${inserted.label ?? "EVCP"}`;
+      await insertAutoCable("lv_service", coords, label, {
+        from_id: target.element.id,
+        from_type: target.element.element_type,
+        to_id: inserted.id,
+        to_type: inserted.element_type,
+        leg: feeder ? "feeder_to_evcp" : "poc_to_evcp",
+      });
+      if (!feeder) {
+        toast.info(`Cabled to ${target.element.element_type.replace("_", " ")} — add a Feeder Pillar for a tidier design.`);
+      }
+    },
+    [elements, insertAutoCable]
+  );
 
   /**
    * Pointer-based drag start (primary mechanism). Tracks pointermove on the
@@ -155,11 +196,7 @@ export function useDesignDragDrop({
         const ll = map.unproject([ev.clientX - rect.left, ev.clientY - rect.top]);
         const inserted = await dropElement(dragType, ll.lng, ll.lat);
         if (inserted && autoCable && dragType === "ev_charger") {
-          const poc = findNearestPoc([ll.lng, ll.lat], elements);
-          if (poc) {
-            const coords = straightCableTo([ll.lng, ll.lat], poc.element);
-            await insertAutoCable("lv_service", coords, `Auto-service ${inserted.label ?? ""}`.trim());
-          }
+          await runAutoCableForEvcp([ll.lng, ll.lat], inserted);
         }
       };
 
@@ -208,11 +245,7 @@ export function useDesignDragDrop({
       const ll = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
       const inserted = await dropElement(type as EquipmentType, ll.lng, ll.lat);
       if (inserted && autoCable && type === "ev_charger") {
-        const poc = findNearestPoc([ll.lng, ll.lat], elements);
-        if (poc) {
-          const coords = straightCableTo([ll.lng, ll.lat], poc.element);
-          await insertAutoCable("lv_service", coords, `Auto-service ${inserted.label ?? ""}`.trim());
-        }
+        await runAutoCableForEvcp([ll.lng, ll.lat], inserted);
       }
     };
 
