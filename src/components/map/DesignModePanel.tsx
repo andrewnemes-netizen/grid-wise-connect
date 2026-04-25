@@ -353,6 +353,19 @@ export function DesignModePanel({
               </div>
             </>
           )}
+
+          {/* Live validation + export packs (only when workflow is wired) */}
+          {workflow && (
+            <>
+              <Separator />
+              <LiveValidationSummaryPanel workflow={workflow} />
+              <ExportPackSelector
+                workflow={workflow}
+                onExport={onExportPack}
+                disabled={elements.length === 0}
+              />
+            </>
+          )}
         </div>
       </ScrollArea>
     </div>
