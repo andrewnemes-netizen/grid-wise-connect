@@ -156,14 +156,38 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
         background: ${cfg.color}; border: 2px solid #fff;
         box-shadow: 0 2px 6px rgba(0,0,0,0.4);
         display: flex; align-items: center; justify-content: center;
-        font-size: 11px; font-weight: 700; color: #fff; cursor: pointer;
+        font-size: 11px; font-weight: 700; color: #fff; cursor: grab;
       `;
       markerEl.textContent = cfg.symbol;
       markerEl.title = el.label || cfg.label;
 
-      const marker = new maplibregl.Marker({ element: markerEl })
+      const marker = new maplibregl.Marker({ element: markerEl, draggable: true })
         .setLngLat([el.lng, el.lat])
         .addTo(map);
+
+      marker.on("dragstart", () => {
+        markerEl.style.cursor = "grabbing";
+        // Notify any subscribers (live totals bar uses this to pulse).
+        window.dispatchEvent(new CustomEvent("design:element-dragstart", { detail: { id: el.id } }));
+      });
+      marker.on("drag", () => {
+        const ll = marker.getLngLat();
+        // Live patch in-memory for cable rubber-banding & live totals.
+        window.dispatchEvent(
+          new CustomEvent("design:element-drag", {
+            detail: { id: el.id, lng: ll.lng, lat: ll.lat },
+          })
+        );
+      });
+      marker.on("dragend", () => {
+        markerEl.style.cursor = "grab";
+        const ll = marker.getLngLat();
+        window.dispatchEvent(
+          new CustomEvent("design:element-dragend", {
+            detail: { id: el.id, lng: ll.lng, lat: ll.lat },
+          })
+        );
+      });
       markersRef.current.set(el.id, marker);
     });
   }, [map, elements]);
@@ -443,6 +467,142 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
   );
 
   /**
+   * Persist a new position for an existing element (used by the live
+   * drag-and-drop designer when the user drags a placed marker).
+   */
+  const updateElementPosition = useCallback(
+    async (id: string, lng: number, lat: number) => {
+      // Optimistic local update so the UI ticks immediately.
+      setElements((prev) => prev.map((e) => (e.id === id ? { ...e, lng, lat } : e)));
+      const { error } = await supabase
+        .from("design_elements")
+        .update({ lng, lat })
+        .eq("id", id);
+      if (error) {
+        toast.error("Failed to save new position");
+        console.error(error);
+      }
+    },
+    []
+  );
+
+  /**
+   * Persist a fresh coordinate path + recomputed length for an existing cable.
+   * Used by rubber-band updates while a connected element is being dragged.
+   */
+  const updateCableCoordinates = useCallback(
+    async (id: string, coordinates: [number, number][]) => {
+      const length_m = Math.round(haversineDistance(coordinates) * 10) / 10;
+      setCables((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, coordinates, length_m } : c))
+      );
+      // Refresh the on-map line immediately.
+      if (map) {
+        const srcId = `design-cable-${id}`;
+        const src = map.getSource(srcId) as maplibregl.GeoJSONSource | undefined;
+        if (src) {
+          src.setData({
+            type: "Feature",
+            properties: { length_m },
+            geometry: { type: "LineString", coordinates },
+          });
+        }
+      }
+      const { error } = await supabase
+        .from("design_cables")
+        .update({ coordinates: coordinates as any, length_m })
+        .eq("id", id);
+      if (error) {
+        toast.error("Failed to save cable");
+        console.error(error);
+      }
+    },
+    [map]
+  );
+
+  /**
+   * Drop a new equipment item from a drag-and-drop palette (no `placingType`
+   * pre-selection required) and return the inserted row so callers can chain
+   * an auto-cable insert.
+   */
+  const dropElement = useCallback(
+    async (
+      type: EquipmentType,
+      lng: number,
+      lat: number
+    ): Promise<DesignElement | null> => {
+      if (!studyId) {
+        toast.error("Open a study first to design");
+        return null;
+      }
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        toast.error("You must be logged in");
+        return null;
+      }
+      const cfg = EQUIPMENT_CONFIG[type];
+      const label = `${cfg.label} ${elements.filter((e) => e.element_type === type).length + 1}`;
+      const { data, error } = await supabase
+        .from("design_elements")
+        .insert({
+          study_id: studyId,
+          element_type: type,
+          label,
+          lng,
+          lat,
+          created_by: user.user.id,
+        })
+        .select()
+        .single();
+      if (error || !data) {
+        toast.error("Failed to drop equipment");
+        console.error(error);
+        return null;
+      }
+      const inserted = data as DesignElement;
+      setElements((prev) => [...prev, inserted]);
+      toast.success(`Dropped ${label}`);
+      return inserted;
+    },
+    [studyId, elements]
+  );
+
+  /** Insert an auto-routed cable (used by drag-and-drop auto-cable on drop). */
+  const insertAutoCable = useCallback(
+    async (
+      type: CableType,
+      coordinates: [number, number][],
+      label?: string
+    ): Promise<DesignCable | null> => {
+      if (!studyId || coordinates.length < 2) return null;
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
+      const cfg = CABLE_CONFIG[type];
+      const length_m = Math.round(haversineDistance(coordinates) * 10) / 10;
+      const { data, error } = await supabase
+        .from("design_cables")
+        .insert({
+          study_id: studyId,
+          cable_type: type,
+          label: label || `${cfg.label} ${cables.filter((c) => c.cable_type === type).length + 1}`,
+          coordinates: coordinates as any,
+          length_m,
+          created_by: user.user.id,
+        } as any)
+        .select()
+        .single();
+      if (error || !data) {
+        console.error(error);
+        return null;
+      }
+      const inserted = data as unknown as DesignCable;
+      setCables((prev) => [...prev, inserted]);
+      return inserted;
+    },
+    [studyId, cables]
+  );
+
+  /**
    * Bulk-insert elements and cables from an external source (e.g. Gridwise Connect bridge).
    * Returns the number of items successfully created.
    */
@@ -530,6 +690,11 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     undoCableVertex,
     finishCable,
     removeCable,
+    // Live drag-and-drop API
+    updateElementPosition,
+    updateCableCoordinates,
+    dropElement,
+    insertAutoCable,
     // Bulk API (for Connect → Design bridge)
     bulkInsert,
   };
