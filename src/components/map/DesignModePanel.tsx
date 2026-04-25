@@ -80,6 +80,13 @@ export function DesignModePanel({
   onPalettePointerDragStart,
   autoCable,
   onAutoCableChange,
+  workflow,
+  templateAnchor,
+  onApplyTemplate,
+  scenarios,
+  onActivateScenario,
+  onCreateScenario,
+  onExportPack,
 }: DesignModePanelProps) {
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-80 border-l bg-background shadow-xl flex flex-col">
