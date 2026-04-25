@@ -94,6 +94,41 @@ export function useDesignDragDrop({
   }, []);
 
   /**
+   * Auto-cable a freshly-dropped EV charger.
+   *
+   * Strategy:
+   *   1. Prefer the nearest Feeder Pillar (within 250 m).
+   *   2. Fall back to any Transformer / RMU / Cutout (within 1 km) if no
+   *      feeder is on the map yet — and warn the user.
+   *   3. If nothing is in range, leave the charger un-cabled.
+   */
+  const runAutoCableForEvcp = useCallback(
+    async (drop: [number, number], inserted: DesignElement) => {
+      const feeder = findNearestFeederPillar(drop, elements);
+      const target = feeder ?? findNearestPoc(drop, elements, {
+        allowedTypes: ["transformer", "rmu", "cutout"],
+      });
+      if (!target) {
+        toast.warning("No POC nearby — drop a Feeder Pillar to enable auto-cabling.");
+        return;
+      }
+      const coords = straightCableTo(drop, target.element);
+      const label = `${target.element.label ?? target.element.element_type} → ${inserted.label ?? "EVCP"}`;
+      await insertAutoCable("lv_service", coords, label, {
+        from_id: target.element.id,
+        from_type: target.element.element_type,
+        to_id: inserted.id,
+        to_type: inserted.element_type,
+        leg: feeder ? "feeder_to_evcp" : "poc_to_evcp",
+      });
+      if (!feeder) {
+        toast.info(`Cabled to ${target.element.element_type.replace("_", " ")} — add a Feeder Pillar for a tidier design.`);
+      }
+    },
+    [elements, insertAutoCable]
+  );
+
+  /**
    * Pointer-based drag start (primary mechanism). Tracks pointermove on the
    * window and ends with pointerup; if the pointer is over the map container
    * at release, we drop the equipment there.
