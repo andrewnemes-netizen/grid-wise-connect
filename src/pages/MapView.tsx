@@ -33,6 +33,8 @@ import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { DesignLiveStatusCard } from "@/components/map/DesignLiveStatusCard";
 import { DesignCableLabels } from "@/components/map/DesignCableLabels";
 import { DesignCableInteractions } from "@/components/map/DesignCableInteractions";
+import { useVisualWorkflow } from "@/hooks/useVisualWorkflow";
+import type { Scenario } from "@/components/map/workflow/ScenarioManagerPanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 
@@ -119,6 +121,30 @@ const MapView = () => {
     updateElementPosition: design.updateElementPosition,
     updateCableCoordinates: design.updateCableCoordinates,
   });
+
+  // ── Visual Design Workflow (FlowEmo overlay) ──
+  const workflow = useVisualWorkflow({
+    studyId: activeStudy.studyId,
+    hasSiteLocation: !!activeStudy.study,
+    hasBoundary: !!activeStudy.study?.boundary_geojson,
+    elements: design.elements,
+    cables: design.cables,
+  });
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [templateAnchor, setTemplateAnchor] = useState<{ lng: number; lat: number } | null>(null);
+
+  // Track map centre as the template anchor (refresh on moveend).
+  useEffect(() => {
+    if (!map) return;
+    const update = () => {
+      const c = map.getCenter();
+      setTemplateAnchor({ lng: c.lng, lat: c.lat });
+    };
+    update();
+    map.on("moveend", update);
+    return () => { map.off("moveend", update); };
+  }, [map]);
+
   const planning = usePlanningLayers();
   const landRegistry = useLandRegistryLayers();
   const osOpen = useOsOpenLayers();
@@ -738,6 +764,37 @@ const MapView = () => {
               onPalettePointerDragStart={dragDrop.onPalettePointerDragStart}
               autoCable={autoCable}
               onAutoCableChange={setAutoCable}
+              workflow={workflow}
+              templateAnchor={templateAnchor}
+              onApplyTemplate={async (items, name) => {
+                const elementSpecs = items.map((it) => ({
+                  element_type: it.type as any,
+                  label: it.label ?? "",
+                  lng: it.lng,
+                  lat: it.lat,
+                  properties_json: { source: "template", template: name },
+                }));
+                await design.bulkInsert(elementSpecs, []);
+                await workflow.logEvent("template_applied", name, { count: items.length });
+              }}
+              scenarios={scenarios}
+              onActivateScenario={(id) =>
+                setScenarios((prev) =>
+                  prev.map((s) => ({ ...s, isActive: s.id === id }))
+                )
+              }
+              onCreateScenario={(name) => {
+                const id = `scn-${Date.now().toString(36)}`;
+                setScenarios((prev) => [
+                  ...prev.map((s) => ({ ...s, isActive: false })),
+                  { id, name, isActive: true },
+                ]);
+                workflow.logEvent("scenario_created", name);
+              }}
+              onExportPack={async (audience) => {
+                workflow.setFlag("packExported", true);
+                workflow.setFlag("costGenerated", true);
+              }}
             />
           )}
 

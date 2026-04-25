@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import type { EquipmentType, DesignElement, CableType, DesignCable } from "@/hooks/useDesignMode";
 import { EQUIPMENT_CONFIG, CABLE_CONFIG } from "@/hooks/useDesignMode";
 import { DraggableEquipmentCard } from "@/components/map/DraggableEquipmentCard";
+import { VisualWorkflowChecklistPanel } from "@/components/map/workflow/VisualWorkflowChecklistPanel";
+import { ScenarioManagerPanel, type Scenario } from "@/components/map/workflow/ScenarioManagerPanel";
+import { DesignTemplatePicker } from "@/components/map/workflow/DesignTemplatePicker";
+import { LiveValidationSummaryPanel } from "@/components/map/workflow/LiveValidationSummaryPanel";
+import { ExportPackSelector } from "@/components/map/workflow/ExportPackSelector";
+import type { VisualWorkflowState } from "@/hooks/useVisualWorkflow";
 
 interface DesignModePanelProps {
   studyName: string;
@@ -30,6 +36,17 @@ interface DesignModePanelProps {
   onPalettePointerDragStart: (type: EquipmentType, e: React.PointerEvent) => void;
   autoCable: boolean;
   onAutoCableChange: (value: boolean) => void;
+  // Workflow layer (all optional — panel still works without it)
+  workflow?: VisualWorkflowState;
+  templateAnchor?: { lng: number; lat: number } | null;
+  onApplyTemplate?: (
+    items: Array<{ type: string; lng: number; lat: number; label?: string }>,
+    templateName: string
+  ) => Promise<void> | void;
+  scenarios?: Scenario[];
+  onActivateScenario?: (id: string) => void;
+  onCreateScenario?: (name: string) => void;
+  onExportPack?: (audience: "client" | "dno" | "installer") => Promise<void> | void;
 }
 
 const equipmentTypes: EquipmentType[] = [
@@ -63,6 +80,13 @@ export function DesignModePanel({
   onPalettePointerDragStart,
   autoCable,
   onAutoCableChange,
+  workflow,
+  templateAnchor,
+  onApplyTemplate,
+  scenarios,
+  onActivateScenario,
+  onCreateScenario,
+  onExportPack,
 }: DesignModePanelProps) {
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-80 border-l bg-background shadow-xl flex flex-col">
@@ -84,6 +108,23 @@ export function DesignModePanel({
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Active Study</p>
             <p className="text-sm font-semibold">{studyName}</p>
           </div>
+
+          {/* Workflow checklist (top of panel) */}
+          {workflow && <VisualWorkflowChecklistPanel workflow={workflow} />}
+
+          {/* Scenarios */}
+          {workflow && scenarios && onActivateScenario && onCreateScenario && (
+            <ScenarioManagerPanel
+              scenarios={scenarios}
+              onActivate={onActivateScenario}
+              onCreate={onCreateScenario}
+            />
+          )}
+
+          {/* Templates */}
+          {onApplyTemplate && (
+            <DesignTemplatePicker anchor={templateAnchor ?? null} onApply={onApplyTemplate} />
+          )}
 
           {/* Equipment palette */}
           <div className="space-y-2">
@@ -310,6 +351,19 @@ export function DesignModePanel({
                   })}
                 </div>
               </div>
+            </>
+          )}
+
+          {/* Live validation + export packs (only when workflow is wired) */}
+          {workflow && (
+            <>
+              <Separator />
+              <LiveValidationSummaryPanel workflow={workflow} />
+              <ExportPackSelector
+                workflow={workflow}
+                onExport={onExportPack}
+                disabled={elements.length === 0}
+              />
             </>
           )}
         </div>
