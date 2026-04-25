@@ -352,7 +352,9 @@ async function performIngest(
   // Self-continue if more partitions remain
   if (hasMore && !syncError && authHeader) {
     console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}…`);
-    await sleep(1000);
+    // Give the edge runtime breathing room before self-continuation to avoid
+    // 503 "Service is temporarily unavailable" from worker contention.
+    await sleep(3000);
     try {
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       await fetch(`${supabaseUrl}/functions/v1/npg-dataset-ingest`, {
