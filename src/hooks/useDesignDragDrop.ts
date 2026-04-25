@@ -370,6 +370,7 @@ export function useDesignDragDrop({
     draggingType,
     onPaletteDragStart,
     onPaletteDragEnd,
+    onPalettePointerDragStart,
     draggingElementId,
     livePosition,
   };
