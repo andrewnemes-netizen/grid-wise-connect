@@ -42,9 +42,9 @@ export function DesignLiveTotalsBar({ elements, cables, isLive }: DesignLiveTota
           },
           rates
         );
-        costMid = est.total;
-        costLow = Math.round(est.total * 0.85);
-        costHigh = Math.round(est.total * 1.2);
+        costMid = est.total_estimate;
+        costLow = Math.round(est.total_estimate * 0.85);
+        costHigh = Math.round(est.total_estimate * 1.2);
       } catch (e) {
         // If the engine throws (e.g. extreme inputs), keep the bar visible
         // but suppress the cost segment.
