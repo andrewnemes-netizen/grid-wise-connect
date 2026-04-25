@@ -516,6 +516,19 @@ const MapView = () => {
         </div>
       )}
 
+      {/* Live designer totals bar — only while Design Mode is active */}
+      {activeTool === "design" && activeStudy.study && (
+        <div className={activeStudy.study ? "absolute top-12 left-0 right-0 z-30 flex justify-center pointer-events-none" : ""}>
+          <div className="pointer-events-auto">
+            <DesignLiveTotalsBar
+              elements={design.elements}
+              cables={design.cables}
+              isLive={!!dragDrop.draggingType || !!dragDrop.draggingElementId}
+            />
+          </div>
+        </div>
+      )}
+
       {mapLoaded && (
         <>
           <PostcodeSearch onResult={handleSearchResult} />
