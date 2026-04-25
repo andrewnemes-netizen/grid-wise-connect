@@ -203,6 +203,7 @@ export type Database = {
           label: string | null
           length_m: number
           properties_json: Json
+          scenario_id: string | null
           study_id: string
         }
         Insert: {
@@ -214,6 +215,7 @@ export type Database = {
           label?: string | null
           length_m?: number
           properties_json?: Json
+          scenario_id?: string | null
           study_id: string
         }
         Update: {
@@ -225,6 +227,7 @@ export type Database = {
           label?: string | null
           length_m?: number
           properties_json?: Json
+          scenario_id?: string | null
           study_id?: string
         }
         Relationships: [
@@ -247,6 +250,7 @@ export type Database = {
           lat: number
           lng: number
           properties_json: Json
+          scenario_id: string | null
           study_id: string
           updated_at: string
         }
@@ -259,6 +263,7 @@ export type Database = {
           lat: number
           lng: number
           properties_json?: Json
+          scenario_id?: string | null
           study_id: string
           updated_at?: string
         }
@@ -271,6 +276,7 @@ export type Database = {
           lat?: number
           lng?: number
           properties_json?: Json
+          scenario_id?: string | null
           study_id?: string
           updated_at?: string
         }
@@ -283,6 +289,105 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      design_scenarios: {
+        Row: {
+          cost_high: number | null
+          cost_low: number | null
+          cost_mid: number | null
+          created_at: string
+          created_by: string
+          demand_kva: number | null
+          demand_kw: number | null
+          dno: string | null
+          id: string
+          is_active: boolean
+          name: string
+          option_type: string | null
+          recommendation: string | null
+          risk_rating: string | null
+          score: number | null
+          status: string
+          study_id: string
+          updated_at: string
+          voltage_level: string | null
+        }
+        Insert: {
+          cost_high?: number | null
+          cost_low?: number | null
+          cost_mid?: number | null
+          created_at?: string
+          created_by: string
+          demand_kva?: number | null
+          demand_kw?: number | null
+          dno?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          option_type?: string | null
+          recommendation?: string | null
+          risk_rating?: string | null
+          score?: number | null
+          status?: string
+          study_id: string
+          updated_at?: string
+          voltage_level?: string | null
+        }
+        Update: {
+          cost_high?: number | null
+          cost_low?: number | null
+          cost_mid?: number | null
+          created_at?: string
+          created_by?: string
+          demand_kva?: number | null
+          demand_kw?: number | null
+          dno?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          option_type?: string | null
+          recommendation?: string | null
+          risk_rating?: string | null
+          score?: number | null
+          status?: string
+          study_id?: string
+          updated_at?: string
+          voltage_level?: string | null
+        }
+        Relationships: []
+      }
+      design_workflow_events: {
+        Row: {
+          created_at: string
+          created_by: string
+          event_label: string | null
+          event_type: string
+          id: string
+          metadata_json: Json
+          scenario_id: string | null
+          study_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          event_label?: string | null
+          event_type: string
+          id?: string
+          metadata_json?: Json
+          scenario_id?: string | null
+          study_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          event_label?: string | null
+          event_type?: string
+          id?: string
+          metadata_json?: Json
+          scenario_id?: string | null
+          study_id?: string
+        }
+        Relationships: []
       }
       dno_dataset_registry: {
         Row: {
@@ -1984,6 +2089,7 @@ export type Database = {
           study_name: string
           updated_at: string
           voltage_level: string | null
+          workflow_status: string
         }
         Insert: {
           bom_json?: Json | null
@@ -2005,6 +2111,7 @@ export type Database = {
           study_name: string
           updated_at?: string
           voltage_level?: string | null
+          workflow_status?: string
         }
         Update: {
           bom_json?: Json | null
@@ -2026,6 +2133,7 @@ export type Database = {
           study_name?: string
           updated_at?: string
           voltage_level?: string | null
+          workflow_status?: string
         }
         Relationships: [
           {
