@@ -572,7 +572,8 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     async (
       type: CableType,
       coordinates: [number, number][],
-      label?: string
+      label?: string,
+      properties_json?: Record<string, unknown>
     ): Promise<DesignCable | null> => {
       if (!studyId || coordinates.length < 2) return null;
       const { data: user } = await supabase.auth.getUser();
@@ -587,6 +588,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
           label: label || `${cfg.label} ${cables.filter((c) => c.cable_type === type).length + 1}`,
           coordinates: coordinates as any,
           length_m,
+          properties_json: (properties_json ?? {}) as any,
           created_by: user.user.id,
         } as any)
         .select()
@@ -600,6 +602,30 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
       return inserted;
     },
     [studyId, cables]
+  );
+
+  /**
+   * Patch the `properties_json` of an existing design cable. Used by the
+   * inline cable editor (FlowEmo-style) to persist sizing / material choices.
+   */
+  const updateCableProperties = useCallback(
+    async (id: string, patch: Record<string, unknown>) => {
+      const current = cables.find((c) => c.id === id);
+      const next = { ...(current?.properties_json ?? {}), ...patch };
+      // Optimistic local update.
+      setCables((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, properties_json: next } : c))
+      );
+      const { error } = await supabase
+        .from("design_cables")
+        .update({ properties_json: next as any })
+        .eq("id", id);
+      if (error) {
+        toast.error("Failed to save cable settings");
+        console.error(error);
+      }
+    },
+    [cables]
   );
 
   /**
@@ -695,6 +721,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
     updateCableCoordinates,
     dropElement,
     insertAutoCable,
+    updateCableProperties,
     // Bulk API (for Connect → Design bridge)
     bulkInsert,
   };
