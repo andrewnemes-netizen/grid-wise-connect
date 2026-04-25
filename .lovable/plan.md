@@ -1,109 +1,205 @@
-## Goal
+# Gridwise Visual Design Workflow (FlowEmo overlay)
 
-We've already got the **POC → Feeder Pillar** leg working. Now we add the second leg of the FlowEmo-style designer: **Feeder Pillar → EV Charger (EVCP)**, with everything you saw in the FlowEmo screenshots — distance labels on each cable, click-to-edit cable specs, a hierarchical "Live Status" totals card and a per-cable BoM that flows into the PDF proposal.
+This plan layers a guided FlowEmo-style workflow on top of the existing Design Mode. **Nothing existing is rebuilt or replaced** — drag/drop, auto-cable, midpoint labels, cable editing, live status, cost/BOQ, DNO rules, electrical validation and PDF export all stay exactly as-is. We add a thin orchestration layer that gives users a structured 10-step delivery process, scenario comparison and triggered re-validation.
 
-## What changes for the user
+---
 
-When Design Mode is active and at least one Feeder Pillar exists on the map:
+## What stays untouched
 
-1. **Drop an EV Charger** anywhere — it auto-cables to the **nearest Feeder Pillar** (not just any POC). If no Feeder exists, it falls back to the existing POC priority (Transformer → RMU → Cutout) and shows a warning chip.
-2. Each auto-drawn cable shows a floating **"12.89 m" pill** at its midpoint — exactly like the FlowEmo screenshots.
-3. **Click a cable** → small popover opens with: from/to labels, length, calculated **needed amps**, recommended cable spec (e.g. `4×240 mm² Al / XLPE`), and an "Edit" button.
-4. **Edit cable** → side sheet with: Name, Cable Type (dropdown driven by `selectCableForLoad`), Extra Length, Material (Cu/Al), Power Circuits, Cable Type in Soil, Isolation Type. Saves to `design_cables.properties_json`.
-5. **Drag a Feeder Pillar or EVCP** → all its cables rubber-band live (already works) and the live-totals bar ticks.
-6. The existing **DesignLiveTotalsBar** is upgraded to a FlowEmo-style "Live Status" card with:
-   - Counts per asset type (POC / Feeder / EVCP)
-   - Hierarchical lengths: `POC → Feeder-1 / Feeder-1 → EVCP-1 …`
-   - Cable BoM grouped by spec (e.g. `4×240 mm² Al / XLPE — 68 m`)
-   - Hardware + cables + total project cost (using `estimateConnectionCost`)
-7. The whole card exports straight into the existing PDF proposal as a new "Site Design" page.
+`useDesignDragDrop`, `useDesignMode`, `DesignModePanel`, `DraggableEquipmentCard`, `DesignCableLabels`, `DesignCableInteractions`, `DesignLiveStatusCard`, `designAutoCable`, `designLoadCalc`, `commercialEngine`, `connectionCosts`, `boqGenerator`, `apply-dno-rules`, `routeEngine`, `roadRoute`, `generateAssessmentPdf`, `studies`, `StudyDetail`, `MapView`.
 
-## Technical changes
+These are wired into the new layer via existing hooks/exports — no edits beyond minimal prop additions.
 
-### 1. Targeted auto-cable for EVCP → Feeder
+---
 
-`src/lib/designAutoCable.ts`
-- Add `findNearestFeederPillar(drop, elements)` — scoped to `feeder_pillar` only with a 250 m max default.
-- Refactor `findNearestPoc` to take an `allowedTypes` option so we can reuse it.
+## 1. Database additions (migration)
 
-`src/hooks/useDesignDragDrop.ts`
-- In the EVCP drop handler, prefer `findNearestFeederPillar`; only fall back to `findNearestPoc` (Transformer / RMU / Cutout) if no feeder exists. Toast a warning when falling back.
-- Same logic in the HTML5 `handleDrop` path.
-- Stamp the inserted cable's `properties_json` with `{ from_id, to_id, leg: "feeder_to_evcp" }` so the totals card can build the hierarchy.
+Two new tables. **No existing tables are altered destructively** — `design_elements` and `design_cables` get one nullable `scenario_id` column so legacy data keeps working.
 
-`src/hooks/useDesignMode.ts`
-- Extend `insertAutoCable` to accept an optional `properties_json` payload and persist it.
+```sql
+-- workflow status on studies
+ALTER TABLE studies
+  ADD COLUMN IF NOT EXISTS workflow_status text NOT NULL DEFAULT 'draft';
+  -- enum-like: draft | site_selected | boundary_drawn | assets_placed
+  --           | routes_connected | validated | costed | approved | exported
 
-### 2. Distance pills on every cable
+-- scenarios: A/B/C options inside a single study
+CREATE TABLE design_scenarios (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  study_id uuid NOT NULL,
+  name text NOT NULL,
+  option_type text,          -- 'existing_supply' | 'new_lv' | 'lv_extension' | '11kv' | 'ev_bess'
+  status text NOT NULL DEFAULT 'draft',
+  is_active boolean NOT NULL DEFAULT false,
+  demand_kw numeric, demand_kva numeric,
+  dno text, voltage_level text,
+  score numeric, risk_rating text,
+  cost_low numeric, cost_mid numeric, cost_high numeric,
+  recommendation text,
+  created_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 
-New file `src/components/map/DesignCableLabels.tsx`
-- Subscribes to `design.cables` and renders a `maplibregl.Marker` at each cable's midpoint containing a small white pill: `12.89 m`.
-- Re-projects on `map.move`/`zoom` and on the `design:element-drag` custom event (so labels track the rubber-band live).
-- Mounted from `MapView.tsx` only when `activeTool === "design"`.
+-- workflow event log (audit + checklist progression)
+CREATE TABLE design_workflow_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  study_id uuid NOT NULL,
+  scenario_id uuid,
+  event_type text NOT NULL,   -- 'step_completed' | 'recalculated' | 'template_applied' | ...
+  event_label text,
+  metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-### 3. Click-to-edit cable popover + edit sheet
+-- bind existing design rows to a scenario (nullable = legacy / default scenario)
+ALTER TABLE design_elements ADD COLUMN IF NOT EXISTS scenario_id uuid;
+ALTER TABLE design_cables   ADD COLUMN IF NOT EXISTS scenario_id uuid;
+```
 
-New file `src/components/map/DesignCablePopover.tsx`
-- Wires `map.on("click", layerId)` for every `design-cable-*` layer.
-- Shows a Radix Popover anchored at click point: `LVC-1 → DCU-4 — AC · 924.00 A`, plus **Edit** and **Delete** buttons.
-- Opens `DesignCableEditor.tsx` (Sheet) when Edit is clicked.
+RLS on both new tables follows the existing `design_elements` pattern (owner via `studies.created_by`, admin-all, engineer-read).
 
-New file `src/components/map/DesignCableEditor.tsx`
-- Form bound to `design_cables.properties_json` with the FlowEmo fields:
-  - Name, Cable Type (options from `selectCableForLoad` for the calculated load)
-  - Extra Length (m), Extra Pips
-  - Material, Power Circuits, Separation Distance, Thermal Resistance, Cable Type in Soil, Cable Isolation Type
-- Live-recomputes "Needed Ampere" from the connected EVCP's kVA (default 55 kVA = 80 A @ 400 V 3φ, configurable).
-- Saves via a new `updateCablePropertiesFn` in `useDesignMode`.
+---
 
-### 4. FlowEmo-style "Live Status" totals card
+## 2. New files (small, additive)
 
-Replace `src/components/map/DesignLiveTotalsBar.tsx` with `DesignLiveStatusCard.tsx`:
-- Top strip: `● LIVE STATUS` + 4 coloured count tiles (POC / Feeder / DCU / EVCP).
-- "Total length" tree built by walking `properties_json.from_id → to_id` edges, e.g.:
-  ```text
-  POC → Feeder-1                5.62 m
-   └─ Feeder-1 → EVCP-1        16.83 m
-   └─ Feeder-1 → EVCP-2        13.16 m
-  ```
-- "Cable total length" grouped by spec string from `properties_json.cable_spec`.
-- "Total Project Cost" from `estimateConnectionCost` (already used today) split into Hardware vs Cables.
-- Collapses to a small chip on small viewports.
+```
+src/hooks/useVisualWorkflow.ts          // workflow state machine + event logger
+src/hooks/useDesignScenarios.ts         // CRUD + active-scenario selection
+src/lib/designWorkflow/steps.ts         // 10-step definitions + completion predicates
+src/lib/designWorkflow/templates.ts     // asset template definitions (bulk place specs)
+src/lib/designWorkflow/recalcBus.ts     // debounced trigger that fans design changes
+                                        // out to existing engines
 
-Mount in `MapView.tsx` in the same slot as today's bar.
+src/components/map/workflow/VisualWorkflowChecklistPanel.tsx
+src/components/map/workflow/ScenarioManagerPanel.tsx
+src/components/map/workflow/DesignTemplatePicker.tsx
+src/components/map/workflow/LiveValidationSummaryPanel.tsx
+src/components/map/workflow/ExportPackSelector.tsx
+```
 
-### 5. PDF proposal hook-in
+That's it. No new map component, no new drag system, no new cable engine.
 
-`src/lib/generateAssessmentPdf.ts`
-- Add an optional `siteDesign` section that takes a snapshot of the live status card (HTML → canvas via the existing `useMapScreenshot` pattern) and embeds it as a new page after the cable-route page. No new infra — it reuses the existing screenshot pipeline.
+---
 
-### 6. Defaults / tuning
+## 3. The 10-step workflow (`steps.ts`)
 
-`src/lib/designLoadCalc.ts`
-- Add `EVCP_DEFAULT_AMPS = 80` (55 kVA / 400 V / √3 ≈ 79.4 A) used by the cable editor when no override is set.
+| # | Step                  | Auto-completes when…                                  |
+|---|-----------------------|--------------------------------------------------------|
+| 1 | Site selected         | study has lat/lng                                      |
+| 2 | Boundary drawn        | study.boundary_geojson present                         |
+| 3 | POC selected          | ≥1 element of type transformer/rmu/cutout              |
+| 4 | Feeder pillar placed  | ≥1 `feeder_pillar` element                             |
+| 5 | Chargers placed       | ≥1 `ev_charger` element                                |
+| 6 | Cable route connected | every charger has a path back to a POC via cables      |
+| 7 | DNO rules passed      | last `apply-dno-rules` run returned no blockers        |
+| 8 | Electrical validated  | `electricalEngine` returned `pass`                     |
+| 9 | Cost generated        | `commercialEngine` returned a cost_range               |
+| 10| Pack exported         | a successful `generateAssessmentPdf` event exists      |
 
-## Files
+Predicates run from current in-memory state (no extra fetches). `workflow_status` on `studies` is updated whenever the highest contiguous completed step changes.
 
-**New**
-- `src/components/map/DesignCableLabels.tsx`
-- `src/components/map/DesignCablePopover.tsx`
-- `src/components/map/DesignCableEditor.tsx`
-- `src/components/map/DesignLiveStatusCard.tsx`
+---
 
-**Edited**
-- `src/lib/designAutoCable.ts` — add `findNearestFeederPillar`, refactor POC scoring
-- `src/lib/designLoadCalc.ts` — add EVCP amps default
-- `src/hooks/useDesignDragDrop.ts` — prefer feeder for EVCP drops, stamp edges
-- `src/hooks/useDesignMode.ts` — accept `properties_json` on insert + new `updateCableProperties`
-- `src/pages/MapView.tsx` — mount labels, popover, status card; remove old totals bar
-- `src/components/map/DesignModePanel.tsx` — small copy tweak ("Drag an EVCP near a Feeder Pillar to auto-cable")
-- `src/lib/generateAssessmentPdf.ts` — optional Site Design page
+## 4. Asset templates (`templates.ts`)
 
-**Removed**
-- `src/components/map/DesignLiveTotalsBar.tsx` (superseded by the status card)
+Templates are pure data: an array of `{element_type, offset_lat, offset_lng, label}` plus optional default cable connections. They're bulk-placed by reusing the existing `useDesignMode.placeElement` / `insertAutoCable` paths in a loop — no new persistence code.
 
-## Out of scope (next iteration)
+Initial set:
 
-- Multi-EVCP daisy-chain off one feeder pillar circuit (today each EVCP gets its own service cable)
-- Voltage-drop / fault-level validation on the feeder leg
-- "Split connection" tool from the FlowEmo popover
+- 4-Socket On-Street Layout
+- 6-Socket On-Street Layout
+- 47kW DC Micro Hub
+- Feeder Pillar + 2 Chargers
+- Feeder Pillar + 4 Chargers
+- Building Supply Split
+- New DNO Connection
+
+`DesignTemplatePicker` shows them as cards inside `DesignModePanel` (one new section, above the existing palette).
+
+---
+
+## 5. Scenario layer (`useDesignScenarios.ts` + `ScenarioManagerPanel.tsx`)
+
+- One study can hold many `design_scenarios` (A/B/C/…).
+- Exactly one is `is_active` at a time. The MapView's existing queries for `design_elements` / `design_cables` are filtered by `scenario_id = activeScenarioId OR scenario_id IS NULL` (legacy fallback).
+- Switching scenarios swaps the visible elements/cables; nothing else changes.
+- A "Compare scenarios" view shows a small table: demand, cost low/mid/high, score, risk, recommendation — pulled from the cached fields on each `design_scenarios` row, populated by the recalc bus.
+
+---
+
+## 6. Live re-validation (`recalcBus.ts`)
+
+A single debounced bus that listens to existing events already emitted by `useDesignMode`:
+
+- `design:element-dragend`
+- element added / removed
+- cable added / removed / coordinates updated
+- cable properties patched
+
+On any change → 350ms debounce → run, in order:
+
+1. Route length / surface segmentation (existing `routeSegmentation` helpers)
+2. `apply-dno-rules` edge function
+3. `electricalEngine` sizing
+4. `commercialEngine` cost + BOQ
+5. Persist summary onto the active `design_scenarios` row
+6. Push a `design_workflow_events` row (`recalculated`)
+7. Re-evaluate the 10-step checklist
+
+This is the single missing piece that makes the experience feel "live" end-to-end — every existing engine is reused as-is.
+
+---
+
+## 7. UI placement
+
+```text
+MapView
+ ├─ existing map
+ ├─ existing DesignLiveStatusCard            (untouched — bottom-left)
+ ├─ existing DesignCableLabels / Interactions (untouched)
+ └─ existing DesignModePanel                 (right side, gains 2 small sections)
+     ├─ NEW: VisualWorkflowChecklistPanel    (top, collapsible — 10 steps)
+     ├─ NEW: ScenarioManagerPanel            (under checklist — A/B/C tabs)
+     ├─ NEW: DesignTemplatePicker            (above existing palette)
+     ├─ existing equipment palette
+     ├─ existing cable palette
+     ├─ existing placed/cables lists
+     ├─ NEW: LiveValidationSummaryPanel      (DNO/electrical/cost status pills)
+     └─ NEW: ExportPackSelector              (Client / DNO / Installer → existing PDF)
+```
+
+Each new panel is collapsible. Power users can collapse them all and the panel looks identical to today.
+
+---
+
+## 8. Export packs (`ExportPackSelector.tsx`)
+
+Reuses `generateAssessmentPdf` and the existing `filterPackForAudience` from `commercialEngine` (already in the codebase). Three buttons:
+
+- **Client pack** — pricing, no margin, no install detail
+- **DNO pack** — engineering data, no pricing
+- **Installer pack** — full BOQ, install sequence, pricing
+
+On success → log `design_workflow_events` (`exported`) → set `workflow_status = 'exported'`.
+
+---
+
+## Out of scope for this iteration
+
+- No new map drawing primitives
+- No new cable algorithm
+- No changes to existing engines' signatures
+- No changes to PDF generator internals (only inputs we already pass)
+- No new icons added to the equipment palette (templates handle bulk placement instead)
+
+---
+
+## Acceptance
+
+1. Open a study → checklist shows current step; previous design loads as the default scenario.
+2. Pick "Feeder Pillar + 4 Chargers" template → 5 elements + 4 auto-cables appear in one click.
+3. Drag a charger → live status updates immediately, recalc bus fires once after 350ms, DNO/electrical/cost pills refresh, scenario row updates.
+4. Create Scenario B as "11kV option" → independent elements/cables; comparison table shows both.
+5. Click "Export — Installer pack" → existing PDF generated, workflow status = `exported`.
