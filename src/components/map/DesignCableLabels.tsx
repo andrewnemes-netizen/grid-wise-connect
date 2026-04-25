@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
-import type { DesignCable } from "@/hooks/useDesignMode";
+import type { DesignCable, DesignElement } from "@/hooks/useDesignMode";
 
 interface DesignCableLabelsProps {
   map: maplibregl.Map | null;
   cables: DesignCable[];
+  elements: DesignElement[];
   /** While true the bar's "live" pulse highlights the labels. */
   isLive?: boolean;
 }
@@ -63,15 +64,19 @@ function makeLabelEl(text: string): HTMLDivElement {
  * Uses MapLibre Markers so labels track pan/zoom for free, and listens for
  * the `design:element-drag` custom event so they follow rubber-band moves.
  */
-export function DesignCableLabels({ map, cables }: DesignCableLabelsProps) {
+export function DesignCableLabels({ map, cables, elements }: DesignCableLabelsProps) {
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
-  // Keep a copy of the latest coords per cable so the rubber-band handler can
-  // mutate them without going through React state.
+  // Latest in-memory coords per cable so we can update labels mid-drag without
+  // round-tripping through React state.
   const liveCoordsRef = useRef<Map<string, [number, number][]>>(new Map());
+  // Live element positions (updated by the design:element-drag event).
+  const elementPosRef = useRef<Map<string, [number, number]>>(new Map());
 
   // Sync markers whenever the cable list changes.
   useEffect(() => {
     if (!map) return;
+    // Refresh the element-position cache.
+    elementPosRef.current = new Map(elements.map((el) => [el.id, [el.lng, el.lat] as [number, number]]));
     const ids = new Set(cables.map((c) => c.id));
     // Remove markers whose cable is gone.
     markersRef.current.forEach((m, id) => {
@@ -99,77 +104,31 @@ export function DesignCableLabels({ map, cables }: DesignCableLabelsProps) {
         .addTo(map);
       markersRef.current.set(cable.id, marker);
     });
-  }, [map, cables]);
+  }, [map, cables, elements]);
 
   // Rubber-band: when an element moves, recompute the pill position for any
-  // cable whose endpoint matched the original location of that element.
+  // cable whose `from_id` / `to_id` matches the element. We use the metadata
+  // stamped on auto-cables (and any user-routed cable that adopts the same
+  // convention) so this stays robust against multiple chargers stacked at
+  // identical coords.
   useEffect(() => {
     if (!map) return;
     const onDrag = (e: Event) => {
-      const detail = (e as CustomEvent<{ id: string; lng: number; lat: number }>).detail;
+      const { id: elementId, lng, lat } = (e as CustomEvent<{ id: string; lng: number; lat: number }>).detail;
+      elementPosRef.current.set(elementId, [lng, lat]);
       cables.forEach((cable) => {
-        const live = liveCoordsRef.current.get(cable.id);
-        if (!live) return;
-        // Two endpoints to check: index 0 and last.
-        const orig = cable.coordinates;
-        let touched = false;
-        const next: [number, number][] = orig.map((pt, i) => {
-          // Endpoints only — auto-cables are 2-point lines today.
-          if (i !== 0 && i !== orig.length - 1) return live[i] ?? pt;
-          // Match on the last-known live coord (handles successive drags).
-          const cmp = live[i] ?? pt;
-          if (
-            Math.abs(cmp[0] - (orig[i][0])) < 1e-7 &&
-            Math.abs(cmp[1] - (orig[i][1])) < 1e-7 &&
-            i === (orig.length - 1)
-              ? false
-              : false
-          ) {
-            // (placeholder — rubber-band uses event-driven matching below)
-          }
-          return cmp;
-        });
-        // The actual rubber-band match: if either endpoint of the cable was the
-        // dragged element, replace it with the new lng/lat.
-        for (let i = 0; i < next.length; i++) {
-          if (i !== 0 && i !== next.length - 1) continue;
-          const original = orig[i];
-          if (
-            Math.abs(original[0] - (live[i]?.[0] ?? original[0])) < 1e-7 &&
-            Math.abs(original[1] - (live[i]?.[1] ?? original[1])) < 1e-7
-          ) {
-            // No-op; we don't know which endpoint corresponds to the element
-            // without extra metadata, so we update both possibilities below.
-          }
-        }
-        // Simpler: always test both endpoints against the current live anchor.
-        const tryUpdate = (i: number) => {
-          const cur = live[i];
-          if (!cur) return;
-          // We can't know the element ID per endpoint without metadata, so
-          // accept any endpoint within ~1m of the previous live coord and move
-          // it. The cable rubber-band in useDesignDragDrop already constrains
-          // this to endpoints connected to the dragged marker.
-          const dragLng = detail.lng;
-          const dragLat = detail.lat;
-          // Heuristic: nudge whichever endpoint is currently closest to the
-          // drag pointer's previous frame.
-          // (For 2-point auto-cables, only one endpoint will match.)
-          const dx = cur[0] - dragLng;
-          const dy = cur[1] - dragLat;
-          if (Math.hypot(dx, dy) < 1e-3) {
-            next[i] = [dragLng, dragLat];
-            touched = true;
-          }
-        };
-        tryUpdate(0);
-        tryUpdate(next.length - 1);
-        if (!touched) return;
+        const props = (cable.properties_json ?? {}) as { from_id?: string; to_id?: string };
+        const fromId = props.from_id;
+        const toId = props.to_id;
+        if (fromId !== elementId && toId !== elementId) return;
+        const baseCoords = liveCoordsRef.current.get(cable.id) ?? cable.coordinates;
+        const next: [number, number][] = [...baseCoords];
+        if (fromId === elementId) next[0] = [lng, lat];
+        if (toId === elementId) next[next.length - 1] = [lng, lat];
         liveCoordsRef.current.set(cable.id, next);
         const m = markersRef.current.get(cable.id);
         if (!m) return;
         m.setLngLat(midpoint(next));
-        // Recompute length on the fly for the pill.
         let total = 0;
         for (let i = 1; i < next.length; i++) {
           const [lon1, lat1] = next[i - 1];
