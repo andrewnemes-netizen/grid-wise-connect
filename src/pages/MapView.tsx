@@ -125,7 +125,7 @@ const MapView = () => {
   // ── Visual Design Workflow (FlowEmo overlay) ──
   const workflow = useVisualWorkflow({
     studyId: activeStudy.studyId,
-    hasSiteLocation: !!activeStudy.study?.lat && !!activeStudy.study?.lng,
+    hasSiteLocation: !!activeStudy.study,
     hasBoundary: !!activeStudy.study?.boundary_geojson,
     elements: design.elements,
     cables: design.cables,
