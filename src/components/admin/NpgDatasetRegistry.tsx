@@ -445,7 +445,9 @@ export function NpgDatasetRegistry() {
             }
           );
         } catch { /* fire and forget */ }
-        await new Promise(r => setTimeout(r, 1500));
+        // Spacing between dispatches: prevents edge-runtime 503s from too many
+        // concurrent ingest workers booting at once.
+        await new Promise(r => setTimeout(r, 4000));
       }
 
       startBatchPoll();
