@@ -1,10 +1,13 @@
-import { X, Trash2, PencilRuler, Cable } from "lucide-react";
+import { X, Trash2, PencilRuler, Cable, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import type { EquipmentType, DesignElement, CableType, DesignCable } from "@/hooks/useDesignMode";
 import { EQUIPMENT_CONFIG, CABLE_CONFIG } from "@/hooks/useDesignMode";
+import { DraggableEquipmentCard } from "@/components/map/DraggableEquipmentCard";
 
 interface DesignModePanelProps {
   studyName: string;
@@ -20,6 +23,12 @@ interface DesignModePanelProps {
   onSelectCableType: (type: CableType | null) => void;
   cableVertexCount: number;
   onRemoveCable: (id: string) => void;
+  // Drag-and-drop palette
+  draggingType: EquipmentType | null;
+  onPaletteDragStart: (type: EquipmentType, e: React.DragEvent) => void;
+  onPaletteDragEnd: () => void;
+  autoCable: boolean;
+  onAutoCableChange: (value: boolean) => void;
 }
 
 const equipmentTypes: EquipmentType[] = [
@@ -47,6 +56,11 @@ export function DesignModePanel({
   onSelectCableType,
   cableVertexCount,
   onRemoveCable,
+  draggingType,
+  onPaletteDragStart,
+  onPaletteDragEnd,
+  autoCable,
+  onAutoCableChange,
 }: DesignModePanelProps) {
   return (
     <div className="absolute top-0 right-0 z-20 h-full w-80 border-l bg-background shadow-xl flex flex-col">
@@ -75,32 +89,43 @@ export function DesignModePanel({
               Place Equipment
             </p>
             <p className="text-[10px] text-muted-foreground">
-              {placingType
-                ? `Click on the map to place a ${EQUIPMENT_CONFIG[placingType].label}. Click again to deselect.`
-                : "Select equipment type, then click on the map to place it."}
+              {draggingType
+                ? `Drop on the map to place a ${EQUIPMENT_CONFIG[draggingType].label}. Press Esc to cancel.`
+                : placingType
+                ? `Click on the map to place a ${EQUIPMENT_CONFIG[placingType].label}, or just drag a card.`
+                : "Drag a part onto the map. (Or click a card, then click the map.)"}
             </p>
             <div className="grid grid-cols-2 gap-1.5">
-              {equipmentTypes.map((type) => {
-                const cfg = EQUIPMENT_CONFIG[type];
-                const isActive = placingType === type;
-                return (
-                  <button
-                    key={type}
-                    onClick={() => onSelectType(isActive ? null : type)}
-                    className={`flex items-center gap-2 rounded-md border p-2 text-left transition-colors text-xs
-                      ${isActive ? "border-primary bg-primary/10 ring-1 ring-primary" : "hover:bg-muted/50"}`}
-                  >
-                    <span
-                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
-                      style={{ backgroundColor: cfg.color }}
-                    >
-                      {cfg.symbol}
-                    </span>
-                    <span className="font-medium">{cfg.label}</span>
-                  </button>
-                );
-              })}
+              {equipmentTypes.map((type) => (
+                <DraggableEquipmentCard
+                  key={type}
+                  type={type}
+                  isDragging={draggingType === type}
+                  onDragStart={onPaletteDragStart}
+                  onDragEnd={onPaletteDragEnd}
+                  isClickActive={placingType === type}
+                  onClickFallback={(t) => onSelectType(placingType === t ? null : t)}
+                />
+              ))}
             </div>
+
+            {/* Auto-cable toggle */}
+            <div className="flex items-center justify-between rounded-md border bg-muted/20 px-2 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3 text-primary" />
+                <Label htmlFor="auto-cable-toggle" className="text-[11px] font-medium cursor-pointer">
+                  Auto-cable on drop
+                </Label>
+              </div>
+              <Switch
+                id="auto-cable-toggle"
+                checked={autoCable}
+                onCheckedChange={onAutoCableChange}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground -mt-1">
+              When on, dropping an EV Charger auto-draws an LV service cable to the nearest POC.
+            </p>
           </div>
 
           <Separator />
