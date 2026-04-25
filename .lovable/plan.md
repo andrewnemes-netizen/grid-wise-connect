@@ -1,71 +1,104 @@
-# Why the Commercial total (£6,371) and Budget Estimate (£18,581) disagree
+# FlowEmo-style Live Site Designer (built into Design Mode)
 
-## Root cause
+Replace the current click-to-place workflow in Design Mode with a true drag-and-drop designer, like the video shows: drag a charger/transformer/RMU chip from the palette and drop it onto the map, the platform auto-draws the cheapest cable to the nearest point of connection, and a sticky bar at the top of the map ticks live totals (kVA, cable metres, £ estimate) as you design.
 
-The two panels are powered by **two independent calculations** that receive **different cable lengths**:
+Everything is additive — the existing click-to-place, manual cable drawing, save-to-study, and Connect → Design bridge keep working. Nothing in the assessment / Connect / cost engines changes.
 
-1. **Commercial section — £6,371**
-   Comes from `project.commercial.cost_range` and `filteredPack.total_shown`, produced by `runCommercialEngine` inside `runGridwiseProject`. It uses `assets.distances` — the distances the Asset engine measured from the destination pin to the nearest substation **at the moment the orchestrator ran**. This number does not know about the drawn route or the spur-to-POC measured by the new `findNearestLvMainForRoute` lookup.
+---
 
-2. **Budget Estimate — £18,581**
-   Computed locally inside `CostEstimatePanel` by `estimateConnectionCost(...)`, fed by the panel's `distances` memo (`AssessmentPanel.tsx` lines 293–314), which **overrides** primary/feeder/capacity to the new `effectiveCableLengthM = routeDistanceM + spurToPocM` (~88 m in your screenshot).
+## What you'll be able to do
 
-Same pricing function, different inputs → different totals. The Commercial pack also doesn't see the 25 m service / 185mm² mains-extension split, so its BoQ is internally inconsistent with the DNO Rules Validator.
+1. **Drag from a redesigned palette.** The right-hand Design Mode panel becomes a "parts shelf" — each equipment type (Transformer, RMU, Feeder Pillar, Cutout, Joint, Pole, EV Charger) is a draggable card with its colour, symbol, and default kVA. Grab a card and drag it onto the map.
+2. **See a ghost cursor while dragging.** A semi-transparent marker follows the cursor on the map; nearest existing equipment / drawn cable highlights so you know what it will snap to. Drop = marker created and saved.
+3. **Auto-cable on drop.** When you drop an EV Charger or load, the designer automatically draws an LV service cable from the new asset to the nearest valid POC (existing transformer / feeder pillar / RMU, or the route POC if one exists). You can disable auto-cable per-drop with a toggle in the palette.
+4. **Drag already-placed items.** Existing equipment markers become draggable on the map. While dragging, attached cables rubber-band with the cursor and length / cost recalculate live.
+5. **Sticky live totals bar.** A slim strip pinned to the top of the map (only while Design Mode is on) shows: total connected load (kVA), total cable length (m), live cost estimate (£ low / mid / high) using the existing `estimateConnectionCost` engine and unit rates. Numbers tick in real time during drag.
+6. **Auto-save with debounce.** Drag-end persists the new position to `design_elements` / `design_cables`, exactly the same tables Design Mode already uses, so saved designs and the Connect → Design bridge keep working unchanged.
+
+---
+
+## Layout
 
 ```text
-runGridwiseProject ──► assets.distances (pin → nearest substation)
-        │                       │
-        │                       ▼
-        │              runCommercialEngine ──► cost_range £6,371   ◄── stale
-        │
-        ▼
-project (state)
-
-[user draws route, lvCableMatch resolved AFTER orchestrator]
-        │
-        ▼
-AssessmentPanel.distances  (effectiveCableLengthM = route + spur, ~88 m)
-        │
-        ▼
-CostEstimatePanel.estimateConnectionCost ──► £18,581             ◄── current
+┌────────────────────── Map ──────────────────────────┐┌─ Parts Shelf ─┐
+│ ▓▓ Live Totals: 220 kVA · 184 m · £14.2k–£18.6k  ▓▓ ││ [drag chips]  │
+│                                                     ││  ⚡ EV Charger │
+│              (map with markers & cables)            ││  T  Transformer│
+│                                                     ││  R  RMU        │
+│              ↳ ghost marker follows cursor          ││  F  Feeder     │
+│                                                     ││  …             │
+│                                                     ││ ── Cables ─── │
+│                                                     ││ [LV main] etc │
+└─────────────────────────────────────────────────────┘└────────────────┘
 ```
 
-## Plan — one source of truth, route-aware
+---
 
-### 1. Centralise effective distances
-In `AssessmentPanel.tsx`, build a single `effectiveDistances` object derived from `effectiveCableLengthM` (route + spur, capped/split by the mains-extension threshold). Use it everywhere a cost engine is invoked: the inline `CostEstimatePanel`, `runLvOptimiser`, the saved-assessment payload, and the new orchestrator re-run below.
+## Plan
 
-### 2. Re-run the Commercial engine after the route is known
-Two options, pick whichever the user prefers:
+### 1. New drag-from-palette hook + components
+- New hook `useDesignDragDrop(map, studyId)` that wraps `useDesignMode`. Adds:
+  - `draggingType` state (the equipment type being dragged from the palette)
+  - HTML5 drag events on palette cards (`onDragStart` sets a typed payload)
+  - Map-side `dragenter` / `dragover` / `drop` listeners on the map container (not MapLibre native — just the wrapper `<div>`) to convert the cursor pixel to lng/lat via `map.unproject`
+  - Ghost marker (`maplibregl.Marker` with a CSS pulse halo) that tracks the cursor while a drag is in progress
+  - Snap helper: finds nearest existing element or POC within ~30 m and highlights it
+- New component `DraggableEquipmentCard` for the palette chip (HTML5 draggable, shows icon, label, kVA pill).
+- Update `DesignModePanel.tsx` so the "Place Equipment" section uses the new draggable cards instead of click-to-toggle buttons. Keep the click-to-place fallback for keyboard / accessibility (clicking the chip still works the old way).
 
-- **A. Re-run `runGridwiseProject` once `lvCableMatch` resolves**, passing the route + spur so the Asset engine reports `assets.distances` with `effectiveCableLengthM`. Cleanest, but doubles work.
-- **B. Lighter patch**: keep one orchestrator run, then call `runCommercialEngine` again locally with overridden `assets.distances` and update `project.commercial`. Faster, smaller blast radius.
+### 2. Drag already-placed markers
+- Make each equipment marker draggable using MapLibre's built-in `marker.setDraggable(true)`.
+- On `dragstart` capture connected cable IDs (cables whose first or last vertex is within 1 m of the marker).
+- On `drag`: update those cables' end-vertex live in the map source — recompute `length_m` on the fly, push into the `cables` state via a lightweight in-memory patch (no DB write).
+- On `dragend`: persist the new lng/lat (`design_elements`) and updated cable coordinates / length (`design_cables`) in a single batched update, with optimistic UI + toast.
 
-Recommendation: **B** for now (fast, accurate), with a follow-up to fold route-awareness into the Asset engine itself.
+### 3. Auto-cable to nearest POC
+- New helper `findNearestPoc(lngLat, elements, routePoc)` that scores transformers > RMUs > feeder pillars > drawn route POC by haversine distance.
+- On EV charger drop, if "Auto-cable" toggle is on, immediately insert an LV service cable from the new charger to the nearest POC (straight line for now; the existing manual cable tool already covers road-followed routes).
+- Toggle lives at the top of the parts shelf, default ON.
 
-### 3. Mains-extension split inside the BoQ
-Pass `effectiveCableLengthM`, `serviceCableLengthM`, `mainsExtensionLengthM`, and `needsMainsExtension` into `runCommercialEngine` (extend `SiteInput` or add a `routeOverrides` arg). Update `generateSplitBoq` / `generateBom` so the cable line items reflect:
-- 25 m × 35 mm² CNE service, plus
-- (effective − 25) m × 185 mm² 4c XLPE/SWA mains extension,
-mirroring exactly what the DNO Rules Validator already shows.
+### 4. Sticky live totals bar
+- New component `DesignLiveTotalsBar` rendered at the top of `MapView` only when Design Mode is active.
+- Computes:
+  - **Load (kVA):** sum of `kva` from each element's `properties_json` (fall back to defaults per type — EV charger 55 kVA, transformer 500 kVA, etc.).
+  - **Cable length (m):** sum of `length_m` across all `cables`, plus the in-flight rubber-band length while dragging.
+  - **£ estimate:** call `estimateConnectionCost` with the aggregate cable length, voltage tier inferred from cable types, and the user's saved unit rates (`useUnitRates`). Display low / mid / high.
+- Updates on every `elements` / `cables` change and on the in-memory patches during drag, so the numbers tick smoothly.
 
-### 4. UI reconciliation
-- Commercial "Estimated Cost Range", `Total` (Client / Installer views), Engineering BOQ, and Budget Estimate `Estimated Total` will now all derive from the same cable length and unit rates → totals will agree (within the ±15/+25 % range bands the Commercial card already shows).
-- Add a tiny caption under the Commercial total: *"Based on effective cable length: {effectiveCableLengthM} m ({serviceCableLengthM} m service + {mainsExtensionLengthM} m mains extension)"* so the alignment is auditable at a glance.
+### 5. Persistence + safety
+- All drag-end writes go through the existing `design_elements` / `design_cables` tables — no schema changes, no migration needed.
+- Optimistic update first, then DB write; on failure, toast + revert from last known DB state (re-fetch by `study_id`).
+- 250 ms debounce on rapid drag-end fires (e.g. user dragging back and forth) to avoid spamming inserts.
+- All edits are gated by an active `studyId`, exactly like today.
 
-### 5. Verify against the screenshot
-After the fix, with route ≈ 47 m + spur ≈ 41 m → 88 m effective, both panels should converge near the £18 k figure (the Budget Estimate is the engineering-grade number). The £6 k value was the stale "pin-to-substation" estimate from before the route was drawn.
+### 6. Polish
+- Empty-state coaching: when Design Mode opens with zero elements, show a one-line tip in the totals bar: "Drag a part from the right onto the map to begin."
+- Keyboard: `Esc` cancels an in-flight drag and removes the ghost.
+- Touch fallback: keep click-to-place active so the existing flow still works on tablets where HTML5 drag is flaky.
 
-## Files to change
+---
 
-- `src/components/map/AssessmentPanel.tsx` — build `effectiveDistances`, post-route `runCommercialEngine` re-run, pass route overrides, update saved payload and PDF inputs, add reconciliation caption.
-- `src/lib/gridwise/commercialEngine.ts` — accept optional `routeOverrides` ({ effective_length_m, service_length_m, extension_length_m, needs_mains_extension }) and forward to `estimateConnectionCost` / `generateBom` / `generateSplitBoq`.
-- `src/lib/gridwise/types.ts` — extend `SiteInput` (or a new arg type) with the route overrides.
-- `src/lib/connectionCosts.ts` — honour `effective_length_m` and the service/extension split when present, instead of recomputing from `distances`.
-- `src/lib/evHub/boqGenerator.ts` (`generateSplitBoq`) — emit the two cable line items when `needs_mains_extension`.
-- `src/lib/generateAssessmentPdf.ts` — already updated for the cable split; confirm it now reads from the unified Commercial pack, not the local re-estimate, so the PDF and UI agree.
+## Files
 
-## Out of scope (call out only)
+**New**
+- `src/hooks/useDesignDragDrop.ts` — drag-from-palette + ghost cursor + snap + auto-cable
+- `src/components/map/DraggableEquipmentCard.tsx` — palette chip with HTML5 drag handlers
+- `src/components/map/DesignLiveTotalsBar.tsx` — sticky kVA / m / £ bar
+- `src/lib/designAutoCable.ts` — `findNearestPoc()` + straight-line cable factory
+- `src/lib/designLoadCalc.ts` — kVA defaults per equipment type + aggregator
 
-- Re-architecting the Asset engine to be route-aware end-to-end (option A above) — defer to a follow-up.
-- Changing unit rates or margin policy — none of that needs to move to fix the divergence.
+**Edited**
+- `src/components/map/DesignModePanel.tsx` — swap click-to-place buttons for `DraggableEquipmentCard`s, add Auto-cable toggle
+- `src/hooks/useDesignMode.ts` — expose an `updateElementPosition(id, lng, lat)` and `updateCableCoordinates(id, coords)` for drag-end persistence; mark markers draggable
+- `src/pages/MapView.tsx` — render `DesignLiveTotalsBar` while Design Mode is active; mount drop-zone listeners on the map container
+
+**Untouched (verified)**
+- `connectionCosts.ts`, `useUnitRates.ts`, Connect orchestrator / engines, assessment, Studies — purely consumed, never modified.
+
+---
+
+## Out of scope (call out so we don't surprise you)
+- Road-following cable on auto-drop (uses straight line; manual road-followed routing is still available via the existing cable tool).
+- Multi-select / box-drag of multiple markers.
+- Undo/redo stack — we keep the existing per-action remove/clear controls.
+- New marketing landing page (your earlier "build like FlowEmo" is now scoped to this in-app designer).
