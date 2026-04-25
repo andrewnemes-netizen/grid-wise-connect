@@ -764,6 +764,37 @@ const MapView = () => {
               onPalettePointerDragStart={dragDrop.onPalettePointerDragStart}
               autoCable={autoCable}
               onAutoCableChange={setAutoCable}
+              workflow={workflow}
+              templateAnchor={templateAnchor}
+              onApplyTemplate={async (items, name) => {
+                const elementSpecs = items.map((it) => ({
+                  element_type: it.type as any,
+                  label: it.label ?? "",
+                  lng: it.lng,
+                  lat: it.lat,
+                  properties_json: { source: "template", template: name },
+                }));
+                await design.bulkInsert(elementSpecs, []);
+                await workflow.logEvent("template_applied", name, { count: items.length });
+              }}
+              scenarios={scenarios}
+              onActivateScenario={(id) =>
+                setScenarios((prev) =>
+                  prev.map((s) => ({ ...s, isActive: s.id === id }))
+                )
+              }
+              onCreateScenario={(name) => {
+                const id = `scn-${Date.now().toString(36)}`;
+                setScenarios((prev) => [
+                  ...prev.map((s) => ({ ...s, isActive: false })),
+                  { id, name, isActive: true },
+                ]);
+                workflow.logEvent("scenario_created", name);
+              }}
+              onExportPack={async (audience) => {
+                workflow.setFlag("packExported", true);
+                workflow.setFlag("costGenerated", true);
+              }}
             />
           )}
 
