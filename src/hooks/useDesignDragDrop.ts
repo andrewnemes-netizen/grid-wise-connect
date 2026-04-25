@@ -7,7 +7,12 @@ import type {
   EquipmentType,
 } from "@/hooks/useDesignMode";
 import { EQUIPMENT_CONFIG } from "@/hooks/useDesignMode";
-import { findNearestPoc, straightCableTo } from "@/lib/designAutoCable";
+import {
+  findNearestPoc,
+  findNearestFeederPillar,
+  straightCableTo,
+} from "@/lib/designAutoCable";
+import { toast } from "sonner";
 
 const DRAG_MIME = "application/x-gridwise-equipment";
 
@@ -26,7 +31,8 @@ interface UseDesignDragDropArgs {
   insertAutoCable: (
     type: CableType,
     coordinates: [number, number][],
-    label?: string
+    label?: string,
+    properties_json?: Record<string, unknown>
   ) => Promise<DesignCable | null>;
   updateElementPosition: (id: string, lng: number, lat: number) => Promise<void>;
   updateCableCoordinates: (id: string, coords: [number, number][]) => Promise<void>;
@@ -155,11 +161,7 @@ export function useDesignDragDrop({
         const ll = map.unproject([ev.clientX - rect.left, ev.clientY - rect.top]);
         const inserted = await dropElement(dragType, ll.lng, ll.lat);
         if (inserted && autoCable && dragType === "ev_charger") {
-          const poc = findNearestPoc([ll.lng, ll.lat], elements);
-          if (poc) {
-            const coords = straightCableTo([ll.lng, ll.lat], poc.element);
-            await insertAutoCable("lv_service", coords, `Auto-service ${inserted.label ?? ""}`.trim());
-          }
+          await runAutoCableForEvcp([ll.lng, ll.lat], inserted);
         }
       };
 
@@ -208,11 +210,7 @@ export function useDesignDragDrop({
       const ll = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
       const inserted = await dropElement(type as EquipmentType, ll.lng, ll.lat);
       if (inserted && autoCable && type === "ev_charger") {
-        const poc = findNearestPoc([ll.lng, ll.lat], elements);
-        if (poc) {
-          const coords = straightCableTo([ll.lng, ll.lat], poc.element);
-          await insertAutoCable("lv_service", coords, `Auto-service ${inserted.label ?? ""}`.trim());
-        }
+        await runAutoCableForEvcp([ll.lng, ll.lat], inserted);
       }
     };
 
