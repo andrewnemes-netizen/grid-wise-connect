@@ -59,7 +59,7 @@ export function DesignLiveTotalsBar({ elements, cables, isLive }: DesignLiveTota
 
   return (
     <div
-      className={`absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-full border bg-background/95 backdrop-blur shadow-lg px-4 py-2 text-xs ${
+      className={`flex items-center gap-3 rounded-full border bg-background/95 backdrop-blur shadow-lg px-4 py-2 text-xs ${
         isLive ? "ring-2 ring-primary/60" : ""
       }`}
       aria-live="polite"
