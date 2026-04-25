@@ -720,6 +720,7 @@ const MapView = () => {
               draggingType={dragDrop.draggingType}
               onPaletteDragStart={dragDrop.onPaletteDragStart}
               onPaletteDragEnd={dragDrop.onPaletteDragEnd}
+              onPalettePointerDragStart={dragDrop.onPalettePointerDragStart}
               autoCable={autoCable}
               onAutoCableChange={setAutoCable}
             />

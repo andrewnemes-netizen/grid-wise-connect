@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type { EquipmentType } from "@/hooks/useDesignMode";
 import { EQUIPMENT_CONFIG } from "@/hooks/useDesignMode";
 import { DEFAULT_LOAD_KVA } from "@/lib/designLoadCalc";
@@ -6,8 +7,11 @@ import { GripVertical } from "lucide-react";
 interface DraggableEquipmentCardProps {
   type: EquipmentType;
   isDragging: boolean;
+  /** HTML5 drag start (fallback for desktop browsers that support it). */
   onDragStart: (type: EquipmentType, e: React.DragEvent) => void;
   onDragEnd: () => void;
+  /** Pointer-based drag start — primary path, works on touch + desktop. */
+  onPointerDragStart: (type: EquipmentType, e: React.PointerEvent) => void;
   /** Optional click-to-toggle fallback for keyboards / touch. */
   onClickFallback: (type: EquipmentType) => void;
   isClickActive: boolean;
@@ -16,24 +20,35 @@ interface DraggableEquipmentCardProps {
 /**
  * A FlowEmo-style draggable parts-shelf card.
  *
- * Drag → drop on map = create a new equipment marker at the drop point.
- * Click = falls back to the legacy click-to-place flow (keyboard / tablet).
+ * Primary: pointerdown starts a custom drag tracked by useDesignDragDrop.
+ * Fallback: HTML5 drag-and-drop (also wired) for screen reader / a11y users.
+ * Click  : toggles the legacy click-to-place flow.
  */
-export function DraggableEquipmentCard({
-  type,
-  isDragging,
-  onDragStart,
-  onDragEnd,
-  onClickFallback,
-  isClickActive,
-}: DraggableEquipmentCardProps) {
+export const DraggableEquipmentCard = forwardRef<HTMLDivElement, DraggableEquipmentCardProps>(function DraggableEquipmentCard(
+  {
+    type,
+    isDragging,
+    onDragStart,
+    onDragEnd,
+    onPointerDragStart,
+    onClickFallback,
+    isClickActive,
+  },
+  ref,
+) {
   const cfg = EQUIPMENT_CONFIG[type];
   const kva = DEFAULT_LOAD_KVA[type] ?? 0;
   return (
     <div
+      ref={ref}
       draggable
       onDragStart={(e) => onDragStart(type, e)}
       onDragEnd={onDragEnd}
+      onPointerDown={(e) => {
+        // Only left-click / primary touch starts a pointer drag.
+        if (e.button !== 0 && e.pointerType === "mouse") return;
+        onPointerDragStart(type, e);
+      }}
       onClick={() => onClickFallback(type)}
       role="button"
       tabIndex={0}
@@ -58,4 +73,4 @@ export function DraggableEquipmentCard({
       )}
     </div>
   );
-}
+});

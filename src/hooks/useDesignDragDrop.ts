@@ -56,6 +56,13 @@ export function useDesignDragDrop({
   const [draggingType, setDraggingType] = useState<EquipmentType | null>(null);
   const [ghostCoord, setGhostCoord] = useState<[number, number] | null>(null);
   const ghostElRef = useRef<HTMLDivElement | null>(null);
+  // Pointer-drag (touch/pen + mouse) is the primary mechanism. We track the
+  // drag in a ref so handlers attached to window stay stable.
+  const pointerDragRef = useRef<{
+    type: EquipmentType;
+    pointerId: number;
+    moved: boolean;
+  } | null>(null);
 
   // Live drag of an existing marker — track which element is being dragged so
  // the totals bar can show "live" delta and we can patch attached cables.
@@ -79,6 +86,96 @@ export function useDesignDragDrop({
     setDraggingType(null);
     setGhostCoord(null);
   }, []);
+
+  /**
+   * Pointer-based drag start (primary mechanism). Tracks pointermove on the
+   * window and ends with pointerup; if the pointer is over the map container
+   * at release, we drop the equipment there.
+   *
+   * This works on touch devices and avoids the brittleness of HTML5 native
+   * drag-and-drop (which loses dataTransfer in some embeds + iframes).
+   */
+  const onPalettePointerDragStart = useCallback(
+    (type: EquipmentType, e: React.PointerEvent) => {
+      if (!map) return;
+      // Only react in design mode (the hook only mounts listeners when active).
+      pointerDragRef.current = { type, pointerId: e.pointerId, moved: false };
+      setDraggingType(type);
+
+      const node = containerRef.current;
+
+      const updateGhost = (clientX: number, clientY: number) => {
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        // If the pointer is inside the map container, project to lng/lat.
+        const insideMap =
+          clientX >= rect.left &&
+          clientX <= rect.right &&
+          clientY >= rect.top &&
+          clientY <= rect.bottom;
+        if (!insideMap) {
+          setGhostCoord(null);
+          return;
+        }
+        const ll = map.unproject([clientX - rect.left, clientY - rect.top]);
+        setGhostCoord([ll.lng, ll.lat]);
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        if (!pointerDragRef.current || ev.pointerId !== pointerDragRef.current.pointerId) return;
+        pointerDragRef.current.moved = true;
+        updateGhost(ev.clientX, ev.clientY);
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onCancel);
+      };
+
+      const onUp = async (ev: PointerEvent) => {
+        if (!pointerDragRef.current || ev.pointerId !== pointerDragRef.current.pointerId) return;
+        const { type: dragType, moved } = pointerDragRef.current;
+        cleanup();
+        pointerDragRef.current = null;
+        setDraggingType(null);
+        setGhostCoord(null);
+
+        // No drag movement → treat as a click (handled by onClickFallback).
+        if (!moved || !node) return;
+
+        const rect = node.getBoundingClientRect();
+        const inside =
+          ev.clientX >= rect.left &&
+          ev.clientX <= rect.right &&
+          ev.clientY >= rect.top &&
+          ev.clientY <= rect.bottom;
+        if (!inside) return;
+
+        const ll = map.unproject([ev.clientX - rect.left, ev.clientY - rect.top]);
+        const inserted = await dropElement(dragType, ll.lng, ll.lat);
+        if (inserted && autoCable && dragType === "ev_charger") {
+          const poc = findNearestPoc([ll.lng, ll.lat], elements);
+          if (poc) {
+            const coords = straightCableTo([ll.lng, ll.lat], poc.element);
+            await insertAutoCable("lv_service", coords, `Auto-service ${inserted.label ?? ""}`.trim());
+          }
+        }
+      };
+
+      const onCancel = () => {
+        cleanup();
+        pointerDragRef.current = null;
+        setDraggingType(null);
+        setGhostCoord(null);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onCancel);
+    },
+    [map, containerRef, dropElement, autoCable, elements, insertAutoCable]
+  );
 
   // ── Map drop zone ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -273,6 +370,7 @@ export function useDesignDragDrop({
     draggingType,
     onPaletteDragStart,
     onPaletteDragEnd,
+    onPalettePointerDragStart,
     draggingElementId,
     livePosition,
   };
