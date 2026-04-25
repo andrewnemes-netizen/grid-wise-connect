@@ -704,6 +704,11 @@ const MapView = () => {
               onSelectCableType={design.setDrawingCableType}
               cableVertexCount={design.cableVertices.length}
               onRemoveCable={design.removeCable}
+              draggingType={dragDrop.draggingType}
+              onPaletteDragStart={dragDrop.onPaletteDragStart}
+              onPaletteDragEnd={dragDrop.onPaletteDragEnd}
+              autoCable={autoCable}
+              onAutoCableChange={setAutoCable}
             />
           )}
 
