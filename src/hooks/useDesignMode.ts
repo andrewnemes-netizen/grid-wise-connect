@@ -130,7 +130,7 @@ export function useDesignMode(map: maplibregl.Map | null, studyId: string | null
       if (elemResult.error) console.error("Failed to load design elements", elemResult.error);
       if (cableResult.error) console.error("Failed to load design cables", cableResult.error);
       setElements((elemResult.data as DesignElement[]) || []);
-      setCables((cableResult.data as DesignCable[]) || []);
+      setCables(((cableResult.data as unknown) as DesignCable[]) || []);
       setLoading(false);
     });
   }, [studyId]);
