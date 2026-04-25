@@ -33,6 +33,8 @@ import { DesignModePanel } from "@/components/map/DesignModePanel";
 import { DesignLiveStatusCard } from "@/components/map/DesignLiveStatusCard";
 import { DesignCableLabels } from "@/components/map/DesignCableLabels";
 import { DesignCableInteractions } from "@/components/map/DesignCableInteractions";
+import { useVisualWorkflow } from "@/hooks/useVisualWorkflow";
+import type { Scenario } from "@/components/map/workflow/ScenarioManagerPanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 
@@ -119,6 +121,30 @@ const MapView = () => {
     updateElementPosition: design.updateElementPosition,
     updateCableCoordinates: design.updateCableCoordinates,
   });
+
+  // ── Visual Design Workflow (FlowEmo overlay) ──
+  const workflow = useVisualWorkflow({
+    studyId: activeStudy.studyId,
+    hasSiteLocation: !!activeStudy.study?.lat && !!activeStudy.study?.lng,
+    hasBoundary: !!activeStudy.study?.boundary_geojson,
+    elements: design.elements,
+    cables: design.cables,
+  });
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [templateAnchor, setTemplateAnchor] = useState<{ lng: number; lat: number } | null>(null);
+
+  // Track map centre as the template anchor (refresh on moveend).
+  useEffect(() => {
+    if (!map) return;
+    const update = () => {
+      const c = map.getCenter();
+      setTemplateAnchor({ lng: c.lng, lat: c.lat });
+    };
+    update();
+    map.on("moveend", update);
+    return () => { map.off("moveend", update); };
+  }, [map]);
+
   const planning = usePlanningLayers();
   const landRegistry = useLandRegistryLayers();
   const osOpen = useOsOpenLayers();
