@@ -8,6 +8,10 @@
 
 import type { DesignElement, EquipmentType } from "@/hooks/useDesignMode";
 
+/**
+ * Default priority of POC types when no explicit allow-list is supplied.
+ * Higher = preferred when distances are otherwise comparable.
+ */
 const POC_PRIORITY: Partial<Record<EquipmentType, number>> = {
   transformer: 4,
   rmu: 3,
@@ -40,11 +44,13 @@ export interface NearestPoc {
 export function findNearestPoc(
   drop: [number, number],
   elements: DesignElement[],
-  options?: { maxDistanceM?: number }
+  options?: { maxDistanceM?: number; allowedTypes?: EquipmentType[] }
 ): NearestPoc | null {
   const max = options?.maxDistanceM ?? 1000;
+  const allowed = options?.allowedTypes ? new Set(options.allowedTypes) : null;
   let best: NearestPoc | null = null;
   for (const el of elements) {
+    if (allowed && !allowed.has(el.element_type)) continue;
     const priority = POC_PRIORITY[el.element_type] ?? 0;
     if (priority === 0) continue;
     const d = haversineMeters(drop, [el.lng, el.lat]);
@@ -59,6 +65,22 @@ export function findNearestPoc(
     }
   }
   return best;
+}
+
+/**
+ * Find the nearest Feeder Pillar to a drop point. Used as the primary POC
+ * for EV-charger drops — every EVCP service cable should land on a feeder
+ * pillar if one exists within the search radius (default 250 m).
+ */
+export function findNearestFeederPillar(
+  drop: [number, number],
+  elements: DesignElement[],
+  options?: { maxDistanceM?: number }
+): NearestPoc | null {
+  return findNearestPoc(drop, elements, {
+    maxDistanceM: options?.maxDistanceM ?? 250,
+    allowedTypes: ["feeder_pillar"],
+  });
 }
 
 /** Build straight-line coordinates from a drop point to a POC. */
