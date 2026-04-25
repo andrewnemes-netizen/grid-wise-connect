@@ -19,6 +19,7 @@ import { useBoundaryDraw } from "@/hooks/useBoundaryDraw";
 import { useMeasure } from "@/hooks/useMeasure";
 import { useActiveStudy } from "@/hooks/useActiveStudy";
 import { useDesignMode } from "@/hooks/useDesignMode";
+import { useDesignDragDrop } from "@/hooks/useDesignDragDrop";
 import { BasemapSwitcher, type BasemapId } from "@/components/map/BasemapSwitcher";
 import { PostcodeSearch } from "@/components/map/PostcodeSearch";
 import { LayerTogglePanel } from "@/components/map/LayerTogglePanel";
@@ -29,6 +30,7 @@ import { UnifiedIntelligencePanel, type ConnectionLine } from "@/components/map/
 import { PolygonSearchResults } from "@/components/map/PolygonSearchResults";
 import { AssessmentPanel } from "@/components/map/AssessmentPanel";
 import { DesignModePanel } from "@/components/map/DesignModePanel";
+import { DesignLiveTotalsBar } from "@/components/map/DesignLiveTotalsBar";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
 
@@ -102,6 +104,19 @@ const MapView = () => {
   const { clearMeasure } = useMeasure(map, activeTool === "measure");
   const activeStudy = useActiveStudy();
   const design = useDesignMode(map, activeStudy.studyId);
+  const [autoCable, setAutoCable] = useState(true);
+  const dragDrop = useDesignDragDrop({
+    map,
+    containerRef,
+    elements: design.elements,
+    cables: design.cables,
+    active: activeTool === "design",
+    autoCable,
+    dropElement: design.dropElement,
+    insertAutoCable: design.insertAutoCable,
+    updateElementPosition: design.updateElementPosition,
+    updateCableCoordinates: design.updateCableCoordinates,
+  });
   const planning = usePlanningLayers();
   const landRegistry = useLandRegistryLayers();
   const osOpen = useOsOpenLayers();
