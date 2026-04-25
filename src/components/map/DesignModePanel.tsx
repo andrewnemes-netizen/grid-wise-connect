@@ -27,6 +27,7 @@ interface DesignModePanelProps {
   draggingType: EquipmentType | null;
   onPaletteDragStart: (type: EquipmentType, e: React.DragEvent) => void;
   onPaletteDragEnd: () => void;
+  onPalettePointerDragStart: (type: EquipmentType, e: React.PointerEvent) => void;
   autoCable: boolean;
   onAutoCableChange: (value: boolean) => void;
 }
@@ -59,6 +60,7 @@ export function DesignModePanel({
   draggingType,
   onPaletteDragStart,
   onPaletteDragEnd,
+  onPalettePointerDragStart,
   autoCable,
   onAutoCableChange,
 }: DesignModePanelProps) {
@@ -103,6 +105,7 @@ export function DesignModePanel({
                   isDragging={draggingType === type}
                   onDragStart={onPaletteDragStart}
                   onDragEnd={onPaletteDragEnd}
+                  onPointerDragStart={onPalettePointerDragStart}
                   isClickActive={placingType === type}
                   onClickFallback={(t) => onSelectType(placingType === t ? null : t)}
                 />
