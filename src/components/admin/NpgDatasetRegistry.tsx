@@ -71,6 +71,7 @@ export function NpgDatasetRegistry() {
     SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com" },
     NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk" },
     UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com" },
+    SSEN: { label: "Scottish & Southern Electricity Networks", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com" },
   };
 
   // Reset page when filters change
