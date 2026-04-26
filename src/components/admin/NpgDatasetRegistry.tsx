@@ -59,23 +59,28 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN">("NPG");
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN" | "SSEN" | "SSEN_DX">("NPG");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
   const [page, setPage] = useState(0);
   const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
-    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
-    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com" },
-    SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com" },
-    NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk" },
-    UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com" },
-    SSEN: { label: "Scottish & Southern Electricity Networks", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com" },
+  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string; dnoFilter: string }> = {
+    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com", dnoFilter: "NPG" },
+    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com", dnoFilter: "ENWL" },
+    SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com", dnoFilter: "SPEN" },
+    NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk", dnoFilter: "NGED" },
+    UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com", dnoFilter: "UKPN" },
+    SSEN: { label: "SSEN — Transmission", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com", dnoFilter: "SSEN" },
+    SSEN_DX: { label: "SSEN — Distribution", crawler: "ssen-distribution-crawler", portalUrl: "data.ssen.co.uk", dnoFilter: "SSEN" },
   };
 
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [selectedDno, search, filterGeo]);
+
+  // The selector key may differ from the underlying dno column value
+  // (e.g. SSEN_DX vs SSEN). Use this for any DB filter on the dno column.
+  const dnoFilter = dnoConfig[selectedDno].dnoFilter;
 
   // Cleanup batch poll on unmount
   useEffect(() => () => { if (batchPollRef.current) clearInterval(batchPollRef.current); }, []);
@@ -87,8 +92,16 @@ export function NpgDatasetRegistry() {
       let query = supabase
         .from("dno_dataset_registry")
         .select(LIGHT_COLUMNS, { count: "exact" })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .order("title");
+
+      // SSEN is split across two crawlers but stored under one dno key.
+      // Distribution rows have dataset_id starting with "dx-".
+      if (selectedDno === "SSEN_DX") {
+        query = query.like("dataset_id", "dx-%");
+      } else if (selectedDno === "SSEN") {
+        query = query.not("dataset_id", "like", "dx-%");
+      }
 
       if (search) {
         query = query.or(`title.ilike.%${search}%,dataset_id.ilike.%${search}%`);
@@ -117,7 +130,7 @@ export function NpgDatasetRegistry() {
       const { data, error } = await supabase
         .from("dno_dataset_registry")
         .select("is_geospatial,active,last_sync_status,last_sync_rows", { count: "exact" })
-        .eq("dno", selectedDno);
+        .eq("dno", dnoFilter);
       if (error) throw error;
       const all = data ?? [];
       return {
@@ -153,7 +166,7 @@ export function NpgDatasetRegistry() {
       const { count, error } = await supabase
         .from("dno_dataset_registry")
         .select("id", { count: "exact", head: true })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("active", true)
         .not("linked_layer_id", "is", null);
       if (error) throw error;
@@ -176,19 +189,19 @@ export function NpgDatasetRegistry() {
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing")
         .lt("last_sync_at", staleCutoffIso),
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing")
         .is("last_sync_at", null),
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "partial")
         .lt("last_sync_at", staleCutoffIso),
     ]);
@@ -372,7 +385,7 @@ export function NpgDatasetRegistry() {
     setAutoLinkResult(null);
     try {
       const { data, error } = await supabase.rpc('auto_create_dno_layers', {
-        p_dno: selectedDno,
+        p_dno: dnoFilter,
         p_force: false,
       });
       if (error) throw error;
@@ -413,7 +426,7 @@ export function NpgDatasetRegistry() {
       const { data: syncable } = await supabase
         .from("dno_dataset_registry")
         .select("id,title,is_geospatial,endpoint_export_csv,endpoint_export_geojson,endpoint_records")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("active", true)
         .not("linked_layer_id", "is", null)
         .eq("is_geospatial", true);
@@ -468,7 +481,7 @@ export function NpgDatasetRegistry() {
       const { count } = await supabase
         .from("dno_dataset_registry")
         .select("id", { count: "exact", head: true })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing");
 
       if ((count ?? 0) === 0 || pollCount > 120) {
@@ -504,7 +517,7 @@ export function NpgDatasetRegistry() {
                   DNO Dataset Registry — {dnoConfig[selectedDno].label}
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
-                  Auto-discovered from {dnoConfig[selectedDno].portalUrl} — Explore API v2.1
+                  Auto-discovered from {dnoConfig[selectedDno].portalUrl}
                 </CardDescription>
               </div>
               <Select value={selectedDno} onValueChange={(v: any) => setSelectedDno(v)}>

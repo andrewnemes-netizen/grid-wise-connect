@@ -1,205 +1,51 @@
-# Gridwise Visual Design Workflow (FlowEmo overlay)
+# Add SSEN Distribution Crawler (CKAN)
 
-This plan layers a guided FlowEmo-style workflow on top of the existing Design Mode. **Nothing existing is rebuilt or replaced** — drag/drop, auto-cable, midpoint labels, cable editing, live status, cost/BOQ, DNO rules, electrical validation and PDF export all stay exactly as-is. We add a thin orchestration layer that gives users a structured 10-step delivery process, scenario comparison and triggered re-validation.
+## What you saw
 
----
+The portal in your screenshot is **`data.ssen.co.uk`** — SSEN **Distribution**'s data hub. It's a Datopian Portal.js frontend backed by a standard **CKAN** API at `https://ckan-prod.sse.datopian.com`. This is *different* from the existing `ssen-catalog-crawler`, which only targets `ssentransmission.opendatasoft.com` (Transmission, ~handful of datasets, Opendatasoft API).
 
-## What stays untouched
+So today we're missing the bulk of SSEN's distribution data: substations, overhead lines, underground cables, transformer details, etc.
 
-`useDesignDragDrop`, `useDesignMode`, `DesignModePanel`, `DraggableEquipmentCard`, `DesignCableLabels`, `DesignCableInteractions`, `DesignLiveStatusCard`, `designAutoCable`, `designLoadCalc`, `commercialEngine`, `connectionCosts`, `boqGenerator`, `apply-dno-rules`, `routeEngine`, `roadRoute`, `generateAssessmentPdf`, `studies`, `StudyDetail`, `MapView`.
+## Yes, the CKAN docs are useful
 
-These are wired into the new layer via existing hooks/exports — no edits beyond minimal prop additions.
+The CKAN Action API (`/api/3/action/...`) maps cleanly onto what we already do for NGED/SPEN. Verified working:
 
----
+- `GET /api/3/action/package_search?rows=1000&start=0` — list/page all datasets
+- `GET /api/3/action/package_show?id=<slug>` — full dataset incl. resources (download URLs, formats, last_modified)
+- `GET /api/3/action/organization_show?id=ssen-distribution` — confirm publisher
+- DCAT export per dataset: `/dataset/<slug>.jsonld` (the JSON-LD button in your screenshot)
 
-## 1. Database additions (migration)
+Resources inside each `package_show` give us direct download URLs (CSV / SHP / GeoJSON / GeoPackage) we can wire straight into the existing ingest pipeline.
 
-Two new tables. **No existing tables are altered destructively** — `design_elements` and `design_cables` get one nullable `scenario_id` column so legacy data keeps working.
+## What I'll build
 
-```sql
--- workflow status on studies
-ALTER TABLE studies
-  ADD COLUMN IF NOT EXISTS workflow_status text NOT NULL DEFAULT 'draft';
-  -- enum-like: draft | site_selected | boundary_drawn | assets_placed
-  --           | routes_connected | validated | costed | approved | exported
+1. **New edge function `ssen-distribution-crawler`**
+   - Paginates `package_search` against `https://ckan-prod.sse.datopian.com/api/3/action/`
+   - For each package, normalises into `dno_dataset_registry` rows under DNO key `SSEN` (sub-key/source field `ssen-distribution` to distinguish from Transmission)
+   - Picks the best resource per dataset for ingestion (priority: GeoPackage > Shapefile > GeoJSON > CSV)
+   - Detects geospatial vs tabular, sets `geometry_type` and `storage_table` using the same logic as the Opendatasoft crawler
+   - Same admin auth, audit_log, and exponential-backoff retry as the existing crawler
 
--- scenarios: A/B/C options inside a single study
-CREATE TABLE design_scenarios (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  study_id uuid NOT NULL,
-  name text NOT NULL,
-  option_type text,          -- 'existing_supply' | 'new_lv' | 'lv_extension' | '11kv' | 'ev_bess'
-  status text NOT NULL DEFAULT 'draft',
-  is_active boolean NOT NULL DEFAULT false,
-  demand_kw numeric, demand_kva numeric,
-  dno text, voltage_level text,
-  score numeric, risk_rating text,
-  cost_low numeric, cost_mid numeric, cost_high numeric,
-  recommendation text,
-  created_by uuid NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+2. **Rename existing crawler conceptually**
+   - Keep `ssen-catalog-crawler` (Transmission) as-is — no breaking changes
+   - Tag rows it produces with a `source: 'ssen-transmission'` marker in `meta_json` so Distribution and Transmission don't collide on `(dno, dataset_id)`. If we hit a slug clash, prefix Transmission `dataset_id` with `tx-`.
 
--- workflow event log (audit + checklist progression)
-CREATE TABLE design_workflow_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  study_id uuid NOT NULL,
-  scenario_id uuid,
-  event_type text NOT NULL,   -- 'step_completed' | 'recalculated' | 'template_applied' | ...
-  event_label text,
-  metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_by uuid NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+3. **Update `NpgDatasetRegistry.tsx` (DNO dropdown)**
+   - SSEN entry now lists **two** crawlers in a small sub-menu: "Transmission" → `ssen-catalog-crawler`, "Distribution" → `ssen-distribution-crawler`
+   - Portal URL field shows whichever was last run
 
--- bind existing design rows to a scenario (nullable = legacy / default scenario)
-ALTER TABLE design_elements ADD COLUMN IF NOT EXISTS scenario_id uuid;
-ALTER TABLE design_cables   ADD COLUMN IF NOT EXISTS scenario_id uuid;
-```
+4. **Extend `auto_create_dno_layers` SQL function**
+   - Add Distribution-flavoured match patterns (HV/LV substations, primary substations, 33kV/11kV/LV OHL & UG cables, distribution transformers, etc.) on top of the Transmission ones already added in the last migration
 
-RLS on both new tables follows the existing `design_elements` pattern (owner via `studies.created_by`, admin-all, engineer-read).
+## Technical notes
 
----
+- CKAN endpoint is fully public — no API key, no auth header needed
+- `package_search` returns `result.results[]` and `result.count`; loop until `start + rows >= count`
+- Resource URL for a typical SSEN dataset looks like `https://ckan-prod.sse.datopian.com/dataset/<slug>/resource/<uuid>/download/<filename>.gpkg`
+- These can be passed to the existing `ingest-geo-features` / `npg-dataset-ingest` pipelines without change
+- Rate limit: 200 ms between pages, retry on 429 (same pattern as today)
 
-## 2. New files (small, additive)
+## Out of scope
 
-```
-src/hooks/useVisualWorkflow.ts          // workflow state machine + event logger
-src/hooks/useDesignScenarios.ts         // CRUD + active-scenario selection
-src/lib/designWorkflow/steps.ts         // 10-step definitions + completion predicates
-src/lib/designWorkflow/templates.ts     // asset template definitions (bulk place specs)
-src/lib/designWorkflow/recalcBus.ts     // debounced trigger that fans design changes
-                                        // out to existing engines
-
-src/components/map/workflow/VisualWorkflowChecklistPanel.tsx
-src/components/map/workflow/ScenarioManagerPanel.tsx
-src/components/map/workflow/DesignTemplatePicker.tsx
-src/components/map/workflow/LiveValidationSummaryPanel.tsx
-src/components/map/workflow/ExportPackSelector.tsx
-```
-
-That's it. No new map component, no new drag system, no new cable engine.
-
----
-
-## 3. The 10-step workflow (`steps.ts`)
-
-| # | Step                  | Auto-completes when…                                  |
-|---|-----------------------|--------------------------------------------------------|
-| 1 | Site selected         | study has lat/lng                                      |
-| 2 | Boundary drawn        | study.boundary_geojson present                         |
-| 3 | POC selected          | ≥1 element of type transformer/rmu/cutout              |
-| 4 | Feeder pillar placed  | ≥1 `feeder_pillar` element                             |
-| 5 | Chargers placed       | ≥1 `ev_charger` element                                |
-| 6 | Cable route connected | every charger has a path back to a POC via cables      |
-| 7 | DNO rules passed      | last `apply-dno-rules` run returned no blockers        |
-| 8 | Electrical validated  | `electricalEngine` returned `pass`                     |
-| 9 | Cost generated        | `commercialEngine` returned a cost_range               |
-| 10| Pack exported         | a successful `generateAssessmentPdf` event exists      |
-
-Predicates run from current in-memory state (no extra fetches). `workflow_status` on `studies` is updated whenever the highest contiguous completed step changes.
-
----
-
-## 4. Asset templates (`templates.ts`)
-
-Templates are pure data: an array of `{element_type, offset_lat, offset_lng, label}` plus optional default cable connections. They're bulk-placed by reusing the existing `useDesignMode.placeElement` / `insertAutoCable` paths in a loop — no new persistence code.
-
-Initial set:
-
-- 4-Socket On-Street Layout
-- 6-Socket On-Street Layout
-- 47kW DC Micro Hub
-- Feeder Pillar + 2 Chargers
-- Feeder Pillar + 4 Chargers
-- Building Supply Split
-- New DNO Connection
-
-`DesignTemplatePicker` shows them as cards inside `DesignModePanel` (one new section, above the existing palette).
-
----
-
-## 5. Scenario layer (`useDesignScenarios.ts` + `ScenarioManagerPanel.tsx`)
-
-- One study can hold many `design_scenarios` (A/B/C/…).
-- Exactly one is `is_active` at a time. The MapView's existing queries for `design_elements` / `design_cables` are filtered by `scenario_id = activeScenarioId OR scenario_id IS NULL` (legacy fallback).
-- Switching scenarios swaps the visible elements/cables; nothing else changes.
-- A "Compare scenarios" view shows a small table: demand, cost low/mid/high, score, risk, recommendation — pulled from the cached fields on each `design_scenarios` row, populated by the recalc bus.
-
----
-
-## 6. Live re-validation (`recalcBus.ts`)
-
-A single debounced bus that listens to existing events already emitted by `useDesignMode`:
-
-- `design:element-dragend`
-- element added / removed
-- cable added / removed / coordinates updated
-- cable properties patched
-
-On any change → 350ms debounce → run, in order:
-
-1. Route length / surface segmentation (existing `routeSegmentation` helpers)
-2. `apply-dno-rules` edge function
-3. `electricalEngine` sizing
-4. `commercialEngine` cost + BOQ
-5. Persist summary onto the active `design_scenarios` row
-6. Push a `design_workflow_events` row (`recalculated`)
-7. Re-evaluate the 10-step checklist
-
-This is the single missing piece that makes the experience feel "live" end-to-end — every existing engine is reused as-is.
-
----
-
-## 7. UI placement
-
-```text
-MapView
- ├─ existing map
- ├─ existing DesignLiveStatusCard            (untouched — bottom-left)
- ├─ existing DesignCableLabels / Interactions (untouched)
- └─ existing DesignModePanel                 (right side, gains 2 small sections)
-     ├─ NEW: VisualWorkflowChecklistPanel    (top, collapsible — 10 steps)
-     ├─ NEW: ScenarioManagerPanel            (under checklist — A/B/C tabs)
-     ├─ NEW: DesignTemplatePicker            (above existing palette)
-     ├─ existing equipment palette
-     ├─ existing cable palette
-     ├─ existing placed/cables lists
-     ├─ NEW: LiveValidationSummaryPanel      (DNO/electrical/cost status pills)
-     └─ NEW: ExportPackSelector              (Client / DNO / Installer → existing PDF)
-```
-
-Each new panel is collapsible. Power users can collapse them all and the panel looks identical to today.
-
----
-
-## 8. Export packs (`ExportPackSelector.tsx`)
-
-Reuses `generateAssessmentPdf` and the existing `filterPackForAudience` from `commercialEngine` (already in the codebase). Three buttons:
-
-- **Client pack** — pricing, no margin, no install detail
-- **DNO pack** — engineering data, no pricing
-- **Installer pack** — full BOQ, install sequence, pricing
-
-On success → log `design_workflow_events` (`exported`) → set `workflow_status = 'exported'`.
-
----
-
-## Out of scope for this iteration
-
-- No new map drawing primitives
-- No new cable algorithm
-- No changes to existing engines' signatures
-- No changes to PDF generator internals (only inputs we already pass)
-- No new icons added to the equipment palette (templates handle bulk placement instead)
-
----
-
-## Acceptance
-
-1. Open a study → checklist shows current step; previous design loads as the default scenario.
-2. Pick "Feeder Pillar + 4 Chargers" template → 5 elements + 4 auto-cables appear in one click.
-3. Drag a charger → live status updates immediately, recalc bus fires once after 350ms, DNO/electrical/cost pills refresh, scenario row updates.
-4. Create Scenario B as "11kV option" → independent elements/cables; comparison table shows both.
-5. Click "Export — Installer pack" → existing PDF generated, workflow status = `exported`.
+- Ingesting the data itself (this PR only registers datasets; the existing "Auto-Create & Link Layers" + ingest buttons handle the rest)
+- ArcGIS Hub fallback for legacy `ssen.co.uk` URLs (not needed — everything we want is in CKAN)
