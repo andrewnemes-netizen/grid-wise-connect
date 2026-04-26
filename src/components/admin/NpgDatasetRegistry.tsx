@@ -399,7 +399,7 @@ export function NpgDatasetRegistry() {
       setAutoLinkResult(result);
       const unmatchedCount = result.unmatched?.length || 0;
       toast.success(
-        `${result.layers_created} layers created, ${result.layers_reused} reused, ${result.datasets_linked} datasets linked` +
+        `${result.layers_created ?? 0} layers created, ${result.layers_reused ?? 0} reused, ${result.datasets_linked ?? 0} datasets linked` +
         (unmatchedCount > 0 ? ` — ${unmatchedCount} unmatched` : '')
       );
       invalidateAll();
