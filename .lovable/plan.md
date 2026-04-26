@@ -1,51 +1,53 @@
-# Add SSEN Distribution Crawler (CKAN)
+## Why you see "0 layers created, undefined reused, 0 datasets linked"
 
-## What you saw
+Two separate problems combine into that single confusing toast:
 
-The portal in your screenshot is **`data.ssen.co.uk`** — SSEN **Distribution**'s data hub. It's a Datopian Portal.js frontend backed by a standard **CKAN** API at `https://ckan-prod.sse.datopian.com`. This is *different* from the existing `ssen-catalog-crawler`, which only targets `ssentransmission.opendatasoft.com` (Transmission, ~handful of datasets, Opendatasoft API).
+### 1. `undefined reused` — frontend bug
+The toast reads `result.layers_reused`, but the SQL function `auto_create_dno_layers` only returns `layers_created` and `datasets_linked`. The "reused" field was never added, so JavaScript prints `undefined`.
 
-So today we're missing the bulk of SSEN's distribution data: substations, overhead lines, underground cables, transformer details, etc.
+### 2. `0 layers created, 0 datasets linked` — pattern matching missed everything
+You actually have **94 SSEN Distribution datasets** in the catalogue (Discover All Datasets worked fine — the "0 Total Rows" counter on screen only counts *synced* rows, not catalogue entries).
 
-## Yes, the CKAN docs are useful
+The auto-link function runs `ILIKE` patterns against the dataset titles, but the patterns I added in the last migration don't match what SSEN actually publishes. For example, SSEN's titles look like:
+- `[SHARED DATA] GIS Network Line Data`
+- `Primary Substation Electricity Supply Areas`
+- `Secondary Substation Electricity Supply Areas`
+- `Smart Meter LV Feeder Usage`
+- `SSEN Distribution Licence Area Boundaries`
+- `Embedded Capacity Register`
+- `NaFIRS HV Faults` / `NaFIRS LV Faults`
 
-The CKAN Action API (`/api/3/action/...`) maps cleanly onto what we already do for NGED/SPEN. Verified working:
+But my migration looked for things like `'%hv cable%'`, `'%lv overhead%'`, `'%distribution transformer%'` — none of which appear in SSEN's titles. SSEN publishes mostly **reports, registers and supply-area boundaries**, not raw asset geometry layers like NPG does.
 
-- `GET /api/3/action/package_search?rows=1000&start=0` — list/page all datasets
-- `GET /api/3/action/package_show?id=<slug>` — full dataset incl. resources (download URLs, formats, last_modified)
-- `GET /api/3/action/organization_show?id=ssen-distribution` — confirm publisher
-- DCAT export per dataset: `/dataset/<slug>.jsonld` (the JSON-LD button in your screenshot)
+## The fix
 
-Resources inside each `package_show` give us direct download URLs (CSV / SHP / GeoJSON / GeoPackage) we can wire straight into the existing ingest pipeline.
+### A. Update the toast (small UI fix)
+In `src/components/admin/NpgDatasetRegistry.tsx`, change the toast string to drop `layers_reused` (or default it to `0`) so it stops showing "undefined".
 
-## What I'll build
+### B. Rewrite the SSEN match patterns (SQL migration)
+Replace the SSEN-section patterns inside `auto_create_dno_layers` with ones that actually hit SSEN's catalogue:
 
-1. **New edge function `ssen-distribution-crawler`**
-   - Paginates `package_search` against `https://ckan-prod.sse.datopian.com/api/3/action/`
-   - For each package, normalises into `dno_dataset_registry` rows under DNO key `SSEN` (sub-key/source field `ssen-distribution` to distinguish from Transmission)
-   - Picks the best resource per dataset for ingestion (priority: GeoPackage > Shapefile > GeoJSON > CSV)
-   - Detects geospatial vs tabular, sets `geometry_type` and `storage_table` using the same logic as the Opendatasoft crawler
-   - Same admin auth, audit_log, and exponential-backoff retry as the existing crawler
+| Layer key | Match (ILIKE on title) |
+|---|---|
+| `ssen_dx_gis_network_lines` | `%gis network line%` |
+| `ssen_dx_primary_supply_areas` | `%primary substation%supply area%` |
+| `ssen_dx_secondary_supply_areas` | `%secondary substation%supply area%` |
+| `ssen_dx_gsp_bsp_supply_areas` | `%grid supply point%supply area%` |
+| `ssen_dx_licence_area` | `%licence area boundaries%` |
+| `ssen_dx_smart_meter_lv_feeder` | `%smart meter%lv feeder%` |
+| `ssen_dx_embedded_capacity_register` | `%embedded capacity register%` |
+| `ssen_dx_nafirs_hv_faults` | `%nafirs hv faults%` |
+| `ssen_dx_nafirs_lv_faults` | `%nafirs lv faults%` |
+| `ssen_dx_low_carbon_connections` | `%low carbon technolog%connection%` |
+| `ssen_dx_generation_availability` | `%generation availability%network capacity%` |
+| `ssen_dx_realtime_outages` | `%real time outage%` |
 
-2. **Rename existing crawler conceptually**
-   - Keep `ssen-catalog-crawler` (Transmission) as-is — no breaking changes
-   - Tag rows it produces with a `source: 'ssen-transmission'` marker in `meta_json` so Distribution and Transmission don't collide on `(dno, dataset_id)`. If we hit a slug clash, prefix Transmission `dataset_id` with `tx-`.
+(Reports without geometry — Long Term Development Statement, Flexibility bidding, etc. — will deliberately not become map layers.)
 
-3. **Update `NpgDatasetRegistry.tsx` (DNO dropdown)**
-   - SSEN entry now lists **two** crawlers in a small sub-menu: "Transmission" → `ssen-catalog-crawler`, "Distribution" → `ssen-distribution-crawler`
-   - Portal URL field shows whichever was last run
+### C. Also return `layers_reused` from the SQL function
+So the toast can show a real number going forward. Default it to `0` for now since the function doesn't yet detect reuse.
 
-4. **Extend `auto_create_dno_layers` SQL function**
-   - Add Distribution-flavoured match patterns (HV/LV substations, primary substations, 33kV/11kV/LV OHL & UG cables, distribution transformers, etc.) on top of the Transmission ones already added in the last migration
+## What you'll see after
 
-## Technical notes
-
-- CKAN endpoint is fully public — no API key, no auth header needed
-- `package_search` returns `result.results[]` and `result.count`; loop until `start + rows >= count`
-- Resource URL for a typical SSEN dataset looks like `https://ckan-prod.sse.datopian.com/dataset/<slug>/resource/<uuid>/download/<filename>.gpkg`
-- These can be passed to the existing `ingest-geo-features` / `npg-dataset-ingest` pipelines without change
-- Rate limit: 200 ms between pages, retry on 429 (same pattern as today)
-
-## Out of scope
-
-- Ingesting the data itself (this PR only registers datasets; the existing "Auto-Create & Link Layers" + ingest buttons handle the rest)
-- ArcGIS Hub fallback for legacy `ssen.co.uk` URLs (not needed — everything we want is in CKAN)
+Click **Auto-Create & Link Layers** again and the toast will read something like  
+`"8 layers created, 0 reused, 12 datasets linked"`, and the new SSEN Distribution layers will appear in the map's layer panel ready to sync.
