@@ -95,6 +95,14 @@ export function NpgDatasetRegistry() {
         .eq("dno", dnoFilter)
         .order("title");
 
+      // SSEN is split across two crawlers but stored under one dno key.
+      // Distribution rows have dataset_id starting with "dx-".
+      if (selectedDno === "SSEN_DX") {
+        query = query.like("dataset_id", "dx-%");
+      } else if (selectedDno === "SSEN") {
+        query = query.not("dataset_id", "like", "dx-%");
+      }
+
       if (search) {
         query = query.or(`title.ilike.%${search}%,dataset_id.ilike.%${search}%`);
       }
