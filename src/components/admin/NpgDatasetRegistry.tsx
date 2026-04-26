@@ -517,7 +517,7 @@ export function NpgDatasetRegistry() {
                   DNO Dataset Registry — {dnoConfig[selectedDno].label}
                 </CardTitle>
                 <CardDescription className="text-xs mt-1">
-                  Auto-discovered from {dnoConfig[selectedDno].portalUrl} — Explore API v2.1
+                  Auto-discovered from {dnoConfig[selectedDno].portalUrl}
                 </CardDescription>
               </div>
               <Select value={selectedDno} onValueChange={(v: any) => setSelectedDno(v)}>
