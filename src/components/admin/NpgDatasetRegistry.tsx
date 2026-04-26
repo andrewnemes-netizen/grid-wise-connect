@@ -92,7 +92,7 @@ export function NpgDatasetRegistry() {
       let query = supabase
         .from("dno_dataset_registry")
         .select(LIGHT_COLUMNS, { count: "exact" })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .order("title");
 
       if (search) {
@@ -122,7 +122,7 @@ export function NpgDatasetRegistry() {
       const { data, error } = await supabase
         .from("dno_dataset_registry")
         .select("is_geospatial,active,last_sync_status,last_sync_rows", { count: "exact" })
-        .eq("dno", selectedDno);
+        .eq("dno", dnoFilter);
       if (error) throw error;
       const all = data ?? [];
       return {
@@ -158,7 +158,7 @@ export function NpgDatasetRegistry() {
       const { count, error } = await supabase
         .from("dno_dataset_registry")
         .select("id", { count: "exact", head: true })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("active", true)
         .not("linked_layer_id", "is", null);
       if (error) throw error;
@@ -181,19 +181,19 @@ export function NpgDatasetRegistry() {
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing")
         .lt("last_sync_at", staleCutoffIso),
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing")
         .is("last_sync_at", null),
       supabase
         .from("dno_dataset_registry")
         .select("id")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "partial")
         .lt("last_sync_at", staleCutoffIso),
     ]);
@@ -377,7 +377,7 @@ export function NpgDatasetRegistry() {
     setAutoLinkResult(null);
     try {
       const { data, error } = await supabase.rpc('auto_create_dno_layers', {
-        p_dno: selectedDno,
+        p_dno: dnoFilter,
         p_force: false,
       });
       if (error) throw error;
@@ -418,7 +418,7 @@ export function NpgDatasetRegistry() {
       const { data: syncable } = await supabase
         .from("dno_dataset_registry")
         .select("id,title,is_geospatial,endpoint_export_csv,endpoint_export_geojson,endpoint_records")
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("active", true)
         .not("linked_layer_id", "is", null)
         .eq("is_geospatial", true);
@@ -473,7 +473,7 @@ export function NpgDatasetRegistry() {
       const { count } = await supabase
         .from("dno_dataset_registry")
         .select("id", { count: "exact", head: true })
-        .eq("dno", selectedDno)
+        .eq("dno", dnoFilter)
         .eq("last_sync_status", "processing");
 
       if ((count ?? 0) === 0 || pollCount > 120) {
