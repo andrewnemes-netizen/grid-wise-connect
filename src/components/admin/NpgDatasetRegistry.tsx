@@ -78,6 +78,10 @@ export function NpgDatasetRegistry() {
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [selectedDno, search, filterGeo]);
 
+  // The selector key may differ from the underlying dno column value
+  // (e.g. SSEN_DX vs SSEN). Use this for any DB filter on the dno column.
+  const dnoFilter = dnoConfig[selectedDno].dnoFilter;
+
   // Cleanup batch poll on unmount
   useEffect(() => () => { if (batchPollRef.current) clearInterval(batchPollRef.current); }, []);
 
