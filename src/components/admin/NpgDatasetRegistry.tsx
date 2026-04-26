@@ -59,19 +59,20 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN">("NPG");
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN" | "SSEN" | "SSEN_DX">("NPG");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
   const [page, setPage] = useState(0);
   const batchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string }> = {
-    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com" },
-    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com" },
-    SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com" },
-    NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk" },
-    UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com" },
-    SSEN: { label: "Scottish & Southern Electricity Networks", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com" },
+  const dnoConfig: Record<string, { label: string; crawler: string; portalUrl: string; dnoFilter: string }> = {
+    NPG: { label: "Northern Powergrid", crawler: "npg-catalog-crawler", portalUrl: "northernpowergrid.opendatasoft.com", dnoFilter: "NPG" },
+    ENWL: { label: "Electricity North West", crawler: "enwl-catalog-crawler", portalUrl: "electricitynorthwest.opendatasoft.com", dnoFilter: "ENWL" },
+    SPEN: { label: "SP Energy Networks", crawler: "spen-catalog-crawler", portalUrl: "spenergynetworks.opendatasoft.com", dnoFilter: "SPEN" },
+    NGED: { label: "National Grid (NGED)", crawler: "nged-catalog-crawler", portalUrl: "connecteddata.nationalgrid.co.uk", dnoFilter: "NGED" },
+    UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com", dnoFilter: "UKPN" },
+    SSEN: { label: "SSEN — Transmission", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com", dnoFilter: "SSEN" },
+    SSEN_DX: { label: "SSEN — Distribution", crawler: "ssen-distribution-crawler", portalUrl: "data.ssen.co.uk", dnoFilter: "SSEN" },
   };
 
   // Reset page when filters change
