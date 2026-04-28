@@ -710,6 +710,10 @@ async function ingestViaRecords(
 async function ingestViaCkan(
   supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
 ): Promise<{ inserted: number; skipped: number }> {
+  const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
+  const recordsUrl = String(entry.endpoint_records || "");
+  const hasDatastoreRecordsUrl = !!recordsUrl && (recordsUrl.includes("datastore_search") || recordsUrl.includes("/api/3/action/"));
+
   if (entry.endpoint_export_geojson) {
     console.log(`[ingest] CKAN: Using GeoJSON resource for ${entry.dataset_id}`);
     try {
@@ -719,7 +723,7 @@ async function ingestViaCkan(
     }
   }
 
-  if (entry.endpoint_records) {
+  if (entry.endpoint_records && (!isSsenDistribution || hasDatastoreRecordsUrl)) {
     console.log(`[ingest] CKAN: Using datastore_search for ${entry.dataset_id}`);
     try {
       return await ingestViaCkanDatastore(supabase, entry, layerRow, storageTable, apiKey);
