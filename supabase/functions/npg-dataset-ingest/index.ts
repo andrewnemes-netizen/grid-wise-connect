@@ -248,7 +248,8 @@ async function performIngest(
   let nextPartitionStart = 0;
 
   try {
-    const isCkan = entry.dno === "NGED";
+    const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
+    const isCkan = entry.dno === "NGED" || isSsenDistribution;
     const recordCount = entry.record_count ?? 0;
     const isLargeDataset = recordCount > 5000;
     const isVeryLargeDataset = recordCount > 10000;
