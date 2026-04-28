@@ -1,53 +1,45 @@
-## Why you see "0 layers created, undefined reused, 0 datasets linked"
+I found the issue: SSEN Distribution auto-linking is only processing datasets where `active = true`. In your current data there are 34 SSEN Distribution datasets, but only 1 is active, so the function reuses the 23 existing layer definitions and links nothing new. That is why the toast says: `0 layers created, 23 reused, 0 datasets linked`.
 
-Two separate problems combine into that single confusing toast:
+Plan to fix it:
 
-### 1. `undefined reused` — frontend bug
-The toast reads `result.layers_reused`, but the SQL function `auto_create_dno_layers` only returns `layers_created` and `datasets_linked`. The "reused" field was never added, so JavaScript prints `undefined`.
+1. Update the database auto-link function
+   - Change `auto_create_dno_layers` so it does not require SSEN Distribution datasets to already be active before linking.
+   - For matched datasets, set:
+     - `linked_layer_id`
+     - `active = true`
+     - `geometry_type` from the matched layer rule
+     - `storage_table` from the matched layer rule
+     - `updated_at = now()`
+   - Keep the existing behavior for already-linked rows unless forced.
 
-### 2. `0 layers created, 0 datasets linked` — pattern matching missed everything
-You actually have **94 SSEN Distribution datasets** in the catalogue (Discover All Datasets worked fine — the "0 Total Rows" counter on screen only counts *synced* rows, not catalogue entries).
+2. Restrict SSEN Distribution matching to Distribution datasets
+   - Because SSEN Transmission and SSEN Distribution both use `dno = 'SSEN'`, add logic so Distribution rules only apply to `dataset_id LIKE 'dx-%'`.
+   - Preserve Transmission rule matching for non-`dx-` SSEN datasets.
 
-The auto-link function runs `ILIKE` patterns against the dataset titles, but the patterns I added in the last migration don't match what SSEN actually publishes. For example, SSEN's titles look like:
-- `[SHARED DATA] GIS Network Line Data`
-- `Primary Substation Electricity Supply Areas`
-- `Secondary Substation Electricity Supply Areas`
-- `Smart Meter LV Feeder Usage`
-- `SSEN Distribution Licence Area Boundaries`
-- `Embedded Capacity Register`
-- `NaFIRS HV Faults` / `NaFIRS LV Faults`
+3. Improve the SSEN Distribution rules
+   - Keep the existing SSEN Distribution dataset slug matching.
+   - Add/adjust rules for the actual discovered dataset IDs, including:
+     - `dx-primary-substation-boundaries`
+     - `dx-secondary-substation-esa`
+     - `dx-grid-supply-point-gsp-bulk-supply-point-bsp-electricity-supply-area-datasets`
+     - `dx-ssen_smart_meter_prod_lv_feeder`
+     - `dx-ssen-distribution-licence-area-boundaries`
+     - `dx-generation-availability-and-network-capacity`
+     - `dx-embedded_capacity_register`
+     - `dx-nafirs-hv-faults`
+     - `dx-nafirs-lv-faults`
+     - `dx-realtime_outage_dataset`
+     - `dx-technicallimits`
+     - `dx-low_carbon_technologies`
+     - `dx-isle_of_wight_active_network_management`
+     - `dx-orkney_active_network_management`
 
-But my migration looked for things like `'%hv cable%'`, `'%lv overhead%'`, `'%distribution transformer%'` — none of which appear in SSEN's titles. SSEN publishes mostly **reports, registers and supply-area boundaries**, not raw asset geometry layers like NPG does.
+4. Return useful debug output to the UI
+   - Include `unmatched` in the result again so the admin panel can show which datasets did not auto-match.
+   - Keep `layers_created`, `layers_reused`, `datasets_linked`, and `datasets_skipped` stable.
 
-## The fix
+5. Patch the frontend call for SSEN Distribution
+   - Pass a selector/source value such as `SSEN_DX` (or equivalent) into the RPC so it can safely distinguish Distribution from Transmission.
+   - Keep the UI label and toast behavior as-is, but ensure the result panel never displays undefined values.
 
-### A. Update the toast (small UI fix)
-In `src/components/admin/NpgDatasetRegistry.tsx`, change the toast string to drop `layers_reused` (or default it to `0`) so it stops showing "undefined".
-
-### B. Rewrite the SSEN match patterns (SQL migration)
-Replace the SSEN-section patterns inside `auto_create_dno_layers` with ones that actually hit SSEN's catalogue:
-
-| Layer key | Match (ILIKE on title) |
-|---|---|
-| `ssen_dx_gis_network_lines` | `%gis network line%` |
-| `ssen_dx_primary_supply_areas` | `%primary substation%supply area%` |
-| `ssen_dx_secondary_supply_areas` | `%secondary substation%supply area%` |
-| `ssen_dx_gsp_bsp_supply_areas` | `%grid supply point%supply area%` |
-| `ssen_dx_licence_area` | `%licence area boundaries%` |
-| `ssen_dx_smart_meter_lv_feeder` | `%smart meter%lv feeder%` |
-| `ssen_dx_embedded_capacity_register` | `%embedded capacity register%` |
-| `ssen_dx_nafirs_hv_faults` | `%nafirs hv faults%` |
-| `ssen_dx_nafirs_lv_faults` | `%nafirs lv faults%` |
-| `ssen_dx_low_carbon_connections` | `%low carbon technolog%connection%` |
-| `ssen_dx_generation_availability` | `%generation availability%network capacity%` |
-| `ssen_dx_realtime_outages` | `%real time outage%` |
-
-(Reports without geometry — Long Term Development Statement, Flexibility bidding, etc. — will deliberately not become map layers.)
-
-### C. Also return `layers_reused` from the SQL function
-So the toast can show a real number going forward. Default it to `0` for now since the function doesn't yet detect reuse.
-
-## What you'll see after
-
-Click **Auto-Create & Link Layers** again and the toast will read something like  
-`"8 layers created, 0 reused, 12 datasets linked"`, and the new SSEN Distribution layers will appear in the map's layer panel ready to sync.
+Expected result after approval: clicking Auto-Create & Link Layers on `SSEN — Distribution` should reuse the existing layer definitions and link/activate the matched Distribution datasets instead of reporting 0 linked.
