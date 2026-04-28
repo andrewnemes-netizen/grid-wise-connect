@@ -1012,6 +1012,9 @@ function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: s
 function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
 
+  const easting = parseNum(row.easting || row.Easting || row.EASTING || row.x || row.X || row["Location (X-coordinate):\nEastings (where data is held)"] || row["Location (X-coordinate): Eastings (where data is held)"]);
+  const northing = parseNum(row.northing || row.Northing || row.NORTHING || row.y || row.Y || row["Location (y-coordinate):\nNorthings (where data is held)"] || row["Location (y-coordinate): Northings (where data is held)"]);
+
   if (row.geo_point_2d) {
     const parts = String(row.geo_point_2d).split(",").map((s: string) => Number(s.trim()));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -1021,6 +1024,11 @@ function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: s
     geom = { type: "Point", coordinates: [Number(row.lon), Number(row.lat)] };
   } else if (row.latitude && row.longitude) {
     geom = { type: "Point", coordinates: [Number(row.longitude), Number(row.latitude)] };
+  } else if (row["Location Latitude"] && row["Location Longitude"]) {
+    geom = { type: "Point", coordinates: [Number(row["Location Longitude"]), Number(row["Location Latitude"])] };
+  } else if (easting != null && northing != null) {
+    const wgs = bngToWgs84Approx(easting, northing);
+    if (wgs) geom = { type: "Point", coordinates: [wgs.lon, wgs.lat] };
   }
 
   if (!geom) return null;
@@ -1031,15 +1039,15 @@ function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: s
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
     dno: entry.dno,
-    name: row.name || row.site_name || row.psp_name || null,
-    asset_id: row.asset_id || row.site_id || null,
+    name: row.name || row.site_name || row.psp_name || row.Substation || row.Primary || row.GSP || row["Customer Site "] || null,
+    asset_id: row.asset_id || row.site_id || row.AssetID || row["Export MPAN / MSID"] || row["Import MPAN / MSID"] || null,
     attrs_json: row,
     status: row.status || "active",
-    capacity_kw: parseNum(row.firm_capacity_kw || row.capacity_kw),
-    demand_kw: parseNum(row.max_demand_kw || row.demand_kw),
-    headroom_kw: parseNum(row.headroom_kw),
+    capacity_kw: parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"]) != null ? parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"])! * (row["Connected Generation (MW)"] ? 1000 : 1) : null,
+    demand_kw: parseNum(row.max_demand_kw || row.demand_kw || row["Maximum Observed Gross Demand (MVA)"]) != null ? parseNum(row.max_demand_kw || row.demand_kw || row["Maximum Observed Gross Demand (MVA)"])! * (row["Maximum Observed Gross Demand (MVA)"] ? 1000 : 1) : null,
+    headroom_kw: parseNum(row.headroom_kw || row["Estimated Demand Headroom (MVA)"]) != null ? parseNum(row.headroom_kw || row["Estimated Demand Headroom (MVA)"])! * (row["Estimated Demand Headroom (MVA)"] ? 1000 : 1) : null,
     utilisation_pct: parseNum(row.utilisation_pct),
-    voltage_kv: parseNum(row.voltage_kv),
+    voltage_kv: parseNum(row.voltage_kv || row["Voltage (kV)"] || row["Point of Connection (POC)\nVoltage (kV)"] || row["Point of Connection (POC) Voltage (kV)"]),
     feeder_ref: row.feeder_ref || null,
     capacity_value: parseNum(row.capacity_value),
     capacity_unit: row.capacity_unit || null,
