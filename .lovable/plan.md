@@ -1,48 +1,31 @@
-## Problem
+I agree the three screenshots show a repeatable 3–6 m discrepancy. The most likely issue is not just the visible marker size: the currently loaded dataset still has the older coordinates and does not contain the original Easting/Northing values, so I cannot apply a correction in-place from the database. I also want to make the map rendering more suitable for street-light QA at high zoom.
 
-The street-lighting points are offset by ~3 metres from their true positions. This is the **expected error** of the current conversion method — the Helmert 7-parameter transform with OS-published parameters is only accurate to ~3–5 m across the UK.
+Plan:
 
-The Ordnance Survey's own definitive transformation, **OSTN15**, is a grid-shift file that achieves sub-metre (typically ±0.1 m) accuracy. It's the only way to get the points sitting on the actual lampposts.
+1. Validate the coordinate transform implementation
+   - Add focused tests for the high-precision BNG → WGS84 conversion using Leeds-area coordinates.
+   - Compare the current Helmert conversion against the OSTN15 conversion so we can prove the old systematic ~3 m shift is gone.
+   - Fix the OSTN15 helper if the test exposes a sign, grid-origin, rounding, or axis-order issue.
 
-## Plan
+2. Improve the Leeds re-ingestion flow
+   - Keep storing the original `easting` and `northing` values on every point so future corrections can be done without asking for the CSV again.
+   - Make the CSV parsing more robust than simple `split(',')`, so quoted fields or embedded commas cannot silently shift columns and create bad coordinates.
+   - Add clear status messaging in Admin that existing rows without Easting/Northing are legacy rows and must be replaced by a fresh upload.
 
-### 1. Add OSTN15 grid-shift transformation
+3. Add a bulk coordinate correction path for existing data
+   - Because the existing 108,448 database rows currently have no persisted Easting/Northing, a true mathematical reprojection still requires re-uploading the source Leeds CSV once.
+   - After re-upload, the stored Easting/Northing values will allow future automated recalculation without re-upload.
+   - I will keep the layer clear/re-upload process intact but make it harder to accidentally append duplicate/legacy rows.
 
-- Add the **OSTN15 grid** (a ~3 MB binary file of east/north shift values on a 1 km grid covering GB) to the project under `public/ostn15/`.
-- Create `src/lib/ostn15.ts`:
-  - Loads the OSTN15 grid lazily (fetched once, cached in memory).
-  - Performs bilinear interpolation of the shifts at the input easting/northing.
-  - Returns precise WGS84 lat/lng (sub-metre accuracy).
-- Update `src/lib/bngToWgs84.ts` to:
-  - Export an async `bngToWgs84Precise(e, n)` that uses OSTN15.
-  - Keep the existing Helmert version as a synchronous fallback (used only if grid load fails).
+4. Make the map marker accurate at street-level zoom
+   - Add Leeds-specific map styling so street-light points render as a smaller precision marker at high zoom rather than a large orange dot that can appear offset by several metres.
+   - Use the layer’s existing style configuration where possible so the database-defined `circle-radius: 2.5` is actually respected instead of the generic default radius.
+   - Keep the marker visible enough at normal zooms, but reduce visual ambiguity when zoomed in to lamp-post/kerb level.
 
-### 2. Update Local Authority ingest UI
+5. Verify the loaded data after re-ingestion support is in place
+   - Query the database to confirm the layer contains Easting/Northing on the new rows.
+   - Check a Leeds-area sample to confirm the coordinates are using the precise transform and are no longer legacy rows.
+   - If you still see a consistent offset after this, I will add a small admin QA tool to compare selected lamp IDs against measured ground-truth positions and derive whether the council dataset itself has a local survey offset.
 
-- Update `src/components/admin/LocalAuthorityDatasets.tsx` to:
-  - Pre-load the OSTN15 grid before parsing the CSV.
-  - Use `bngToWgs84Precise` for every row.
-  - Show a small progress note "Loading OS national grid…" on first run.
-
-### 3. Re-ingest the Leeds street lighting dataset
-
-- Add a "Re-ingest with precise coordinates" button that:
-  - Clears the existing 108k rows for layer `leeds-street-lighting-unmetered`.
-  - Re-uploads the same CSV through the new precise pipeline.
-- Alternatively (faster): a one-shot SQL migration is **not** possible because OSTN15 interpolation needs the original easting/northing values, which we did not persist. So a re-upload from the CSV is required.
-  - Optional improvement: store original `easting`/`northing` in `attrs_json` going forward so we can re-project in-database later if needed.
-
-### 4. Apply the same upgrade to other BNG consumers
-
-- `src/lib/gpkgParser.ts` and `src/lib/gmlParser.ts` and `src/components/admin/GeoFileUploader.tsx` also use the imprecise Helmert version. Switch them to the new precise function so all future BNG ingests are accurate.
-
-## Technical details
-
-- **OSTN15 source**: Ordnance Survey publishes OSTN15 as a free open dataset (`OSTN15_NTv2_OSGBtoETRS.gsb` ~3 MB, or as ASCII text). We will host a compact JSON/binary version in `public/ostn15/`.
-- **Algorithm**: For a point at (E, N): find the four surrounding 1 km grid nodes, look up their (ΔE, ΔN, ΔH) shifts, bilinearly interpolate, then add the interpolated shifts to (E, N) to get ETRS89 eastings/northings — which we then run through the standard projection inverse. ETRS89 ≈ WGS84 to within a few cm for GB.
-- **Performance**: ~3 MB one-time fetch, cached. Interpolation per point is ~10 µs — 108k points complete in ~1 second.
-- **Backwards compatibility**: existing data already in `geo_points` for other DNO layers is unaffected unless re-ingested.
-
-## Out of scope
-
-- Re-projecting historical data in other layers (we'll only re-ingest Leeds street lighting now; other layers can be re-ingested on request).
+Important note:
+The screenshots are being compared against aerial/street imagery. Those image layers can themselves be offset by a few metres, especially on mobile/tilted imagery and at high zoom. The correct engineering fix is to ensure the council BNG coordinates are transformed precisely and that the symbol is rendered precisely; then any remaining discrepancy is likely source-data or imagery alignment rather than Gridwise conversion error.

@@ -375,7 +375,28 @@ export async function addRegistryLayerToMap(
   try {
     if (renderType === "circle") {
       let circleColor: any = color;
-      let circleRadius: any = 6;
+      // Default radius scales with zoom so that close-zoom QA (lamp posts,
+      // poles, etc.) shows a small precision marker rather than a 6 px dot
+      // that visually appears 3–5 m offset from the underlying asset.
+      let circleRadius: any = [
+        "interpolate", ["linear"], ["zoom"],
+        10, 2,
+        14, 3,
+        17, 4,
+        20, 5,
+      ];
+      let circleStrokeColor: any = "#fff";
+      let circleStrokeWidth: any = 1.5;
+      let circleOpacity: any = 0.9;
+
+      // Honour explicit style_json from the registry when present.
+      const styleJson: any = (layer as any).style_json || {};
+      const paint: any = styleJson.paint || {};
+      if (paint["circle-color"] !== undefined) circleColor = paint["circle-color"];
+      if (paint["circle-radius"] !== undefined) circleRadius = paint["circle-radius"];
+      if (paint["circle-stroke-color"] !== undefined) circleStrokeColor = paint["circle-stroke-color"];
+      if (paint["circle-stroke-width"] !== undefined) circleStrokeWidth = paint["circle-stroke-width"];
+      if (paint["circle-opacity"] !== undefined) circleOpacity = paint["circle-opacity"];
 
       if (layer.slug === "npg_hv_substations_utilisation") {
         circleColor = [
@@ -448,9 +469,9 @@ export async function addRegistryLayerToMap(
         paint: {
           "circle-radius": circleRadius,
           "circle-color": circleColor,
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1.5,
-          "circle-opacity": 0.9,
+          "circle-stroke-color": circleStrokeColor,
+          "circle-stroke-width": circleStrokeWidth,
+          "circle-opacity": circleOpacity,
         },
       });
     } else if (renderType === "line") {
