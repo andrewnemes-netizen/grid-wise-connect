@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Upload, Loader2, CheckCircle, AlertCircle, Lightbulb, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { bngToWgs84 } from "@/lib/bngToWgs84";
+import { bngToWgs84Precise, preloadOstn15 } from "@/lib/ostn15";
 
 const LEEDS_LIGHTING_SLUG = "leeds-street-lighting-unmetered";
 
@@ -27,7 +27,7 @@ interface LayerRow {
  * Headers: Operational Area, Road Name, Road Ref., Unit ID, Unit Ref, Unit Type,
  *          Unit Location, Easting, Northing, Lamps Per Lantern
  */
-function parseLeedsCsv(text: string): GeoJSON.Feature[] {
+async function parseLeedsCsv(text: string): Promise<GeoJSON.Feature[]> {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
   const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
@@ -60,7 +60,7 @@ function parseLeedsCsv(text: string): GeoJSON.Feature[] {
     const northing = parseFloat(cols[iN]);
     if (!isFinite(easting) || !isFinite(northing)) continue;
 
-    const { lat, lng } = bngToWgs84(easting, northing);
+    const { lat, lng } = await bngToWgs84Precise(easting, northing);
     if (!isFinite(lat) || !isFinite(lng)) continue;
 
     const unitId = cols[iUnitId]?.trim();
@@ -82,6 +82,8 @@ function parseLeedsCsv(text: string): GeoJSON.Feature[] {
         road_ref: cols[iRoadRef]?.trim(),
         lamps_per_lantern: parseInt(cols[iLamps]) || 1,
         source: "Leeds City Council",
+        easting,
+        northing,
       },
     });
   }
@@ -124,8 +126,10 @@ export function LocalAuthorityDatasets() {
 
     try {
       const text = await file.text();
-      setStatus("Parsing rows & converting BNG → WGS84…");
-      const features = parseLeedsCsv(text);
+      setStatus("Loading OS national grid (OSTN15)…");
+      await preloadOstn15();
+      setStatus("Parsing rows & converting BNG → WGS84 (sub-metre precision)…");
+      const features = await parseLeedsCsv(text);
       if (features.length === 0) throw new Error("No valid rows parsed");
 
       setStatus(`Parsed ${features.length.toLocaleString()} lights. Preparing upload…`);
