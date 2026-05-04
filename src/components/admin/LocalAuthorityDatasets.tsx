@@ -13,6 +13,28 @@ import { bngToWgs84Precise, preloadOstn15 } from "@/lib/ostn15";
 
 const LEEDS_LIGHTING_SLUG = "leeds-street-lighting-unmetered";
 
+/** RFC-4180-style CSV row split: handles quoted fields with embedded commas. */
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += ch;
+    } else {
+      if (ch === ',') { out.push(cur); cur = ""; }
+      else if (ch === '"') inQuotes = true;
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
 interface LayerRow {
   id: string;
   slug: string;
@@ -30,7 +52,7 @@ interface LayerRow {
 async function parseLeedsCsv(text: string): Promise<GeoJSON.Feature[]> {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
-  const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
 
   const idx = (name: string) => header.indexOf(name);
   const iArea = idx("operational area");
@@ -52,8 +74,7 @@ async function parseLeedsCsv(text: string): Promise<GeoJSON.Feature[]> {
   for (let r = 1; r < lines.length; r++) {
     const raw = lines[r];
     if (!raw) continue;
-    // Naive CSV split — Leeds dataset has no embedded quotes/commas in observed sample.
-    const cols = raw.split(",");
+    const cols = splitCsvLine(raw);
     if (cols.length < header.length) continue;
 
     const easting = parseFloat(cols[iE]);
