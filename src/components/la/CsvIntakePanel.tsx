@@ -30,6 +30,8 @@ const normalizeHeader = (h: string): string => {
   const aliases: Record<string, string> = {
     name: "site_name", site: "site_name", location: "site_name",
     name_and_location: "site_name", site_name: "site_name",
+    site_description: "site_name", description: "site_name",
+    address: "address", street_address: "address",
     post_code: "postcode", zip: "postcode", postcode: "postcode",
     kw: "proposed_kw", capacity: "proposed_kw", power: "proposed_kw",
     capacity_kw: "proposed_kw", proposed_kw: "proposed_kw",
@@ -37,6 +39,11 @@ const normalizeHeader = (h: string): string => {
     on_street_off_street: "site_type",
     longitude: "longitude", lng: "longitude", long: "longitude", x: "longitude",
     latitude: "latitude", lat: "latitude", y: "latitude",
+    easting: "easting", northing: "northing",
+    "01_lsoa_code": "lsoa_code", lsoa_code: "lsoa_code",
+    "02_ward_name": "ward_name", ward_name: "ward_name", ward: "ward_name",
+    "03_dno_operator": "dno", dno_operator: "dno", dno: "dno",
+    la: "local_authority", local_authority: "local_authority",
     district: "district",
     archetype: "archetype",
   };
@@ -79,6 +86,10 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
   const [errors, setErrors] = useState<string[]>([]);
   const [fileName, setFileName] = useState("");
   const [hasCoords, setHasCoords] = useState(false);
+  const [defaultChargerCount, setDefaultChargerCount] = useState(4);
+  const [defaultChargerKw, setDefaultChargerKw] = useState(7);
+  const [defaultsAppliedCount, setDefaultsAppliedCount] = useState(0);
+  const defaultKwPerSite = Math.max(0, defaultChargerCount * defaultChargerKw);
 
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -132,16 +143,14 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
           return;
         }
 
-        // Must have either proposed_kw or charger count columns
-        if (!hasProposedKw && !hasChargerCols) {
-          setErrors(["Missing capacity column. Provide 'proposed_kw' (or 'capacity_kw') or charger count columns."]);
-          return;
-        }
+        // kW is no longer mandatory — if absent, fall back to the default capacity control.
+        const useDefaultKw = !hasProposedKw && !hasChargerCols;
 
         setHasCoords(hasLat && hasLng);
 
         const errs: string[] = [];
         const parsed: SiteRow[] = [];
+        let defaultsApplied = 0;
 
         raw.forEach((r, i) => {
           // Build mapped row with both normalized and raw keys
@@ -152,7 +161,13 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
             mapped[k] = v;
           });
 
-          const siteName = String(mapped.site_name || "").trim();
+          const rawSiteName = String(mapped.site_name || "").trim();
+          const address = String(mapped.address || "").trim();
+          // If site_name looks like a short ID code (e.g. SC_004) and we have an address, show both.
+          const looksLikeIdCode = /^[A-Z]{1,4}[_-]?\d+$/i.test(rawSiteName);
+          const siteName = rawSiteName
+            ? (looksLikeIdCode && address ? `${rawSiteName} — ${address}` : rawSiteName)
+            : address;
           if (!siteName) { errs.push(`Row ${i + 2}: missing site_name`); return; }
 
           // Resolve location: prefer lat/lng, fallback to postcode, extract from name
@@ -197,9 +212,13 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
             // Try estimating from charger columns
             kw = estimateKwFromChargers(mapped);
           }
-          if (kw < 0) {
-            kw = 0;
+          if (!kw || kw <= 0) {
+            if (useDefaultKw && defaultKwPerSite > 0) {
+              kw = defaultKwPerSite;
+              defaultsApplied += 1;
+            }
           }
+          if (kw < 0) kw = 0;
 
           // Resolve site_type
           let siteType = String(mapped.site_type || mapped.archetype || "other").trim();
@@ -224,12 +243,13 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
 
         setErrors(errs);
         setRows(parsed.slice(0, 500));
+        setDefaultsAppliedCount(defaultsApplied);
       } catch (err) {
         setErrors(["Could not parse file. Ensure it's a valid CSV or Excel file."]);
       }
     };
     reader.readAsArrayBuffer(file);
-  }, []);
+  }, [defaultKwPerSite, defaultChargerCount, defaultChargerKw]);
 
   return (
     <Card>
@@ -240,6 +260,34 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-end gap-2 text-xs border rounded-md p-3 bg-muted/30">
+          <div className="flex flex-col gap-1">
+            <label className="text-muted-foreground">Default chargers/site</label>
+            <input
+              type="number"
+              min={0}
+              value={defaultChargerCount}
+              onChange={(e) => setDefaultChargerCount(Math.max(0, Number(e.target.value) || 0))}
+              className="w-16 h-8 px-2 rounded border bg-background"
+            />
+          </div>
+          <span className="pb-1.5">×</span>
+          <div className="flex flex-col gap-1">
+            <label className="text-muted-foreground">kW each</label>
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={defaultChargerKw}
+              onChange={(e) => setDefaultChargerKw(Math.max(0, Number(e.target.value) || 0))}
+              className="w-20 h-8 px-2 rounded border bg-background"
+            />
+          </div>
+          <span className="pb-1.5 text-muted-foreground">
+            = <strong className="text-foreground">{defaultKwPerSite} kW</strong>/site when missing
+          </span>
+        </div>
+
         <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
           <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-2">
@@ -269,6 +317,14 @@ export function CsvIntakePanel({ onSubmit, isProcessing }: Props) {
 
         {rows.length > 0 && (
           <>
+            {defaultsAppliedCount > 0 && (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-xs">
+                  Using default {defaultKwPerSite} kW ({defaultChargerCount} × {defaultChargerKw} kW) for {defaultsAppliedCount} site{defaultsAppliedCount === 1 ? "" : "s"} with no capacity column.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className="gap-1">

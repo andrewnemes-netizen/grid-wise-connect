@@ -1,31 +1,48 @@
-I agree the three screenshots show a repeatable 3–6 m discrepancy. The most likely issue is not just the visible marker size: the currently loaded dataset still has the older coordinates and does not contain the original Easting/Northing values, so I cannot apply a correction in-place from the database. I also want to make the map rendering more suitable for street-light QA at high zoom.
+## Problem
 
-Plan:
+The Cambridge file (`ECO power cambridge (1).xlsx`, 50 sites) uses headers:
 
-1. Validate the coordinate transform implementation
-   - Add focused tests for the high-precision BNG → WGS84 conversion using Leeds-area coordinates.
-   - Compare the current Helmert conversion against the OSTN15 conversion so we can prove the old systematic ~3 m shift is gone.
-   - Fix the OSTN15 helper if the test exposes a sign, grid-origin, rounding, or axis-order issue.
+`Site Description, Address, Postcode, Latitude, Longitude, Easting, Northing, Status, Google Maps Link, 01 Lsoa Code, 02 Ward Name, 03 Dno Operator, LA`
 
-2. Improve the Leeds re-ingestion flow
-   - Keep storing the original `easting` and `northing` values on every point so future corrections can be done without asking for the CSV again.
-   - Make the CSV parsing more robust than simple `split(',')`, so quoted fields or embedded commas cannot silently shift columns and create bad coordinates.
-   - Add clear status messaging in Admin that existing rows without Easting/Northing are legacy rows and must be replaced by a fresh upload.
+It has **no kW column and no charger counts**, so the current LA Programme intake rejects it with "Missing capacity column". It also doesn't alias `Site Description` to `site_name`.
 
-3. Add a bulk coordinate correction path for existing data
-   - Because the existing 108,448 database rows currently have no persisted Easting/Northing, a true mathematical reprojection still requires re-uploading the source Leeds CSV once.
-   - After re-upload, the stored Easting/Northing values will allow future automated recalculation without re-upload.
-   - I will keep the layer clear/re-upload process intact but make it harder to accidentally append duplicate/legacy rows.
+## What I'll change
 
-4. Make the map marker accurate at street-level zoom
-   - Add Leeds-specific map styling so street-light points render as a smaller precision marker at high zoom rather than a large orange dot that can appear offset by several metres.
-   - Use the layer’s existing style configuration where possible so the database-defined `circle-radius: 2.5` is actually respected instead of the generic default radius.
-   - Keep the marker visible enough at normal zooms, but reduce visual ambiguity when zoomed in to lamp-post/kerb level.
+Edit only `src/components/la/CsvIntakePanel.tsx` (presentation/intake — no scoring engine changes).
 
-5. Verify the loaded data after re-ingestion support is in place
-   - Query the database to confirm the layer contains Easting/Northing on the new rows.
-   - Check a Leeds-area sample to confirm the coordinates are using the precise transform and are no longer legacy rows.
-   - If you still see a consistent offset after this, I will add a small admin QA tool to compare selected lamp IDs against measured ground-truth positions and derive whether the council dataset itself has a local survey offset.
+### 1. Header aliases
+Add to the alias map so the Cambridge headers map cleanly:
+- `site_description` → `site_name`
+- `address` → `address` (kept as metadata, appended to display name if site_name is just an ID like `SC_004`)
+- `easting`, `northing` → recognised but ignored (lat/lng already present)
+- `01_lsoa_code` → `lsoa_code`, `02_ward_name` → `ward_name`, `03_dno_operator` → `dno`, `la` → `local_authority`
 
-Important note:
-The screenshots are being compared against aerial/street imagery. Those image layers can themselves be offset by a few metres, especially on mobile/tilted imagery and at high zoom. The correct engineering fix is to ensure the council BNG coordinates are transformed precisely and that the symbol is rendered precisely; then any remaining discrepancy is likely source-data or imagery alignment rather than Gridwise conversion error.
+### 2. Default capacity (your answer: 4 × 7 kW = 28 kW)
+Add a small control above the file picker:
+
+```
+Default capacity when missing:  [ 4 ] chargers × [ 7 ] kW  = 28 kW/site
+```
+
+- Two numeric inputs, defaulting to **4** and **7** (= 28 kW), persisted in component state.
+- When a row has no `proposed_kw` and no charger-count columns, use `count × kW` as the fallback instead of erroring.
+- Validation rule relaxed: kW column is no longer mandatory — if absent, the defaults are applied and a single info banner shows "Using default 28 kW (4 × 7 kW) for N sites".
+
+### 3. Site name fallback
+If `site_name` is something like `SC_004` and an `address` column exists, display as `SC_004 — 7 Denson Close` so the scored output is human-readable. The underlying `site_name` field stays as the unique ID.
+
+### 4. 500-row cap
+Cambridge file is 50 rows — well within the existing cap, no change needed.
+
+## What stays the same
+
+- Scoring engine (`score-sites-batch` edge function), `ProgrammeDashboard`, and `SiteRow` shape — unchanged. We still emit `{ site_name, postcode, proposed_kw, site_type, lat, lng }`.
+- Lat/Lng path already exists and will be used directly (Easting/Northing ignored since WGS84 is provided).
+- `site_type` defaults to `"other"` (Cambridge file has no type column).
+
+## Verification
+
+After build:
+1. Upload `ECO power cambridge (1).xlsx` on `/la-programme`.
+2. Expect: 50 rows parsed, "Using default 28 kW" banner, lat/lng badge shown.
+3. Click "Score 50 Sites" → existing batch scorer runs unchanged.
