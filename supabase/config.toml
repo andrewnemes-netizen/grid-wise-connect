@@ -63,6 +63,9 @@ verify_jwt = false
 [functions.ukpn-ltds-ingest]
 verify_jwt = false
 
+[functions.ukpn-circuit-monthly-ingest]
+verify_jwt = false
+
 verify_jwt = true
 
 [functions.send-transactional-email]

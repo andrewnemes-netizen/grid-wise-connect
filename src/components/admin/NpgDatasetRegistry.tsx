@@ -308,8 +308,13 @@ export function NpgDatasetRegistry() {
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const isLtds = entry.dno === "UKPN" && /^ltds-table-(2a|2b|3a|3b|4a|4b)\b/.test(entry.dataset_id);
-      const fnName = isLtds ? "ukpn-ltds-ingest" : "npg-dataset-ingest";
-      const fnBody = isLtds
+      const isCircuitMonthly = entry.dno === "UKPN" && /^ukpn-(132|33)kv-circuit-operational-data-monthly$/.test(entry.dataset_id);
+      const fnName = isLtds
+        ? "ukpn-ltds-ingest"
+        : isCircuitMonthly
+        ? "ukpn-circuit-monthly-ingest"
+        : "npg-dataset-ingest";
+      const fnBody = isLtds || isCircuitMonthly
         ? { registry_id: entry.id, dataset_id: entry.dataset_id }
         : { registry_id: entry.id, mode };
       const resp = await fetch(
