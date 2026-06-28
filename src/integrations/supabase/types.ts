@@ -1406,57 +1406,6 @@ export type Database = {
           },
         ]
       }
-      npg_circuit_monthly: {
-        Row: {
-          circuit_id: string
-          created_at: string
-          licence_area: string | null
-          month: number
-          peak_amps: number | null
-          peak_mva: number | null
-          peak_mvar: number | null
-          peak_mw: number | null
-          rating_mva: number | null
-          raw_json: Json | null
-          updated_at: string
-          utilisation_pct: number | null
-          voltage_kv: number
-          year: number
-        }
-        Insert: {
-          circuit_id: string
-          created_at?: string
-          licence_area?: string | null
-          month: number
-          peak_amps?: number | null
-          peak_mva?: number | null
-          peak_mvar?: number | null
-          peak_mw?: number | null
-          rating_mva?: number | null
-          raw_json?: Json | null
-          updated_at?: string
-          utilisation_pct?: number | null
-          voltage_kv: number
-          year: number
-        }
-        Update: {
-          circuit_id?: string
-          created_at?: string
-          licence_area?: string | null
-          month?: number
-          peak_amps?: number | null
-          peak_mva?: number | null
-          peak_mvar?: number | null
-          peak_mw?: number | null
-          rating_mva?: number | null
-          raw_json?: Json | null
-          updated_at?: string
-          utilisation_pct?: number | null
-          voltage_kv?: number
-          year?: number
-        }
-        Relationships: []
-      }
       org_members: {
         Row: {
           created_at: string
@@ -2366,6 +2315,57 @@ export type Database = {
         }
         Relationships: []
       }
+      ukpn_circuit_monthly: {
+        Row: {
+          circuit_id: string
+          created_at: string
+          licence_area: string | null
+          month: number
+          peak_amps: number | null
+          peak_mva: number | null
+          peak_mvar: number | null
+          peak_mw: number | null
+          rating_mva: number | null
+          raw_json: Json | null
+          updated_at: string
+          utilisation_pct: number | null
+          voltage_kv: number
+          year: number
+        }
+        Insert: {
+          circuit_id: string
+          created_at?: string
+          licence_area?: string | null
+          month: number
+          peak_amps?: number | null
+          peak_mva?: number | null
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          rating_mva?: number | null
+          raw_json?: Json | null
+          updated_at?: string
+          utilisation_pct?: number | null
+          voltage_kv: number
+          year: number
+        }
+        Update: {
+          circuit_id?: string
+          created_at?: string
+          licence_area?: string | null
+          month?: number
+          peak_amps?: number | null
+          peak_mva?: number | null
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          rating_mva?: number | null
+          raw_json?: Json | null
+          updated_at?: string
+          utilisation_pct?: number | null
+          voltage_kv?: number
+          year?: number
+        }
+        Relationships: []
+      }
       ukpn_ltds_fault_3ph: {
         Row: {
           created_at: string
@@ -2809,13 +2809,13 @@ export type Database = {
         }
         Relationships: []
       }
-      npg_circuit_latest_utilisation: {
+      ukpn_circuit_latest_utilisation: {
         Row: {
           circuit_id: string | null
           licence_area: string | null
           month: number | null
+          peak_12mo_mw: number | null
           peak_amps: number | null
-          peak_mva: number | null
           peak_mw: number | null
           rating_mva: number | null
           utilisation_pct: number | null
@@ -3237,22 +3237,6 @@ export type Database = {
           distance_m: number
           id: string
           name: string
-        }[]
-      }
-      npg_circuits_for_substation: {
-        Args: { p_name: string }
-        Returns: {
-          circuit_id: string
-          feeder_description: string
-          from_node: string
-          grid_supply_point: string
-          latest_month: number
-          latest_year: number
-          months_12_peak_mw: number
-          peak_amps: number
-          peak_mw: number
-          to_node: string
-          voltage_kv: number
         }[]
       }
       populate_geometry_columns:
@@ -3940,6 +3924,22 @@ export type Database = {
       st_wrapx: {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
+      }
+      ukpn_circuits_for_substation: {
+        Args: { p_name: string }
+        Returns: {
+          circuit_id: string
+          feeder_description: string
+          from_node: string
+          grid_supply_point: string
+          latest_month: number
+          latest_year: number
+          months_12_peak_mw: number
+          peak_amps: number
+          peak_mw: number
+          to_node: string
+          voltage_kv: number
+        }[]
       }
       ukpn_substation_capacity_lookup: {
         Args: { _sfl: string }

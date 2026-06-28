@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     for (let i = 0; i < deduped.length; i += batchSize) {
       const batch = deduped.slice(i, i + batchSize);
       const { error } = await admin
-        .from("npg_circuit_monthly")
+        .from("ukpn_circuit_monthly")
         .upsert(batch, { onConflict: "circuit_id,voltage_kv,year,month" });
       if (error) {
         console.error("[circuit-monthly] upsert error:", error);
