@@ -738,7 +738,19 @@ export function NpgDatasetRegistry() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <span className="text-xs font-mono">{(ds.record_count || 0).toLocaleString()}</span>
+                            {(() => {
+                              const ingested = ds.last_sync_rows || 0;
+                              const source = ds.record_count || 0;
+                              const shown = ingested || source;
+                              return (
+                                <div className="flex flex-col leading-tight">
+                                  <span className="text-xs font-mono">{shown.toLocaleString()}</span>
+                                  {ingested > 0 && source === 0 && (
+                                    <span className="text-[10px] text-muted-foreground">ingested</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-0.5">
