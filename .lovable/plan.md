@@ -1,48 +1,72 @@
-## Problem
+## Goal
 
-The Cambridge file (`ECO power cambridge (1).xlsx`, 50 sites) uses headers:
+Ingest the six UKPN LTDS tables so every Grid & Primary substation on the map carries firm capacity, peak demand, derived headroom, and fault levels — the same enrichment pattern already used for NPG live data.
 
-`Site Description, Address, Postcode, Latitude, Longitude, Easting, Northing, Status, Google Maps Link, 01 Lsoa Code, 02 Ward Name, 03 Dno Operator, LA`
+## Datasets
 
-It has **no kW column and no charger counts**, so the current LA Programme intake rejects it with "Missing capacity column". It also doesn't alias `Site Description` to `site_name`.
+| Dataset ID | Records | Role |
+|---|---|---|
+| `ltds-table-2a-transformer-2w` | 2,175 | 2-winding transformer ratings (firm/cyclic MVA) |
+| `ltds-table-2b-transformer-data-3w` | 142 | 3-winding transformer ratings |
+| `ltds-table-3a-load-data-observed` | 1,964 | Observed peak demand (MW/MVAr) |
+| `ltds-table-3b-load-data-true` | 1,964 | True (weather-corrected) peak demand |
+| `ltds-table-4a-3ph-fault-level` | 2,037 | 3-phase fault levels (kA) |
+| `ltds-table-4b-earth-fault-level` | 2,037 | Earth fault levels (kA) |
 
-## What I'll change
+All are non-geospatial tabular data on UKPN's Opendatasoft portal, joined to substations via the `sitefunctionallocation` (SFL) site code.
 
-Edit only `src/components/la/CsvIntakePanel.tsx` (presentation/intake — no scoring engine changes).
+## Plan
 
-### 1. Header aliases
-Add to the alias map so the Cambridge headers map cleanly:
-- `site_description` → `site_name`
-- `address` → `address` (kept as metadata, appended to display name if site_name is just an ID like `SC_004`)
-- `easting`, `northing` → recognised but ignored (lat/lng already present)
-- `01_lsoa_code` → `lsoa_code`, `02_ward_name` → `ward_name`, `03_dno_operator` → `dno`, `la` → `local_authority`
+### 1. Schema — one table per LTDS table
 
-### 2. Default capacity (your answer: 4 × 7 kW = 28 kW)
-Add a small control above the file picker:
+Six new tables in `public.ukpn_ltds_*` (matching DNO style of existing `feeders_*` and `primary_substations_*`):
 
+- `ukpn_ltds_transformers_2w` — sfl, site_name, voltage_kv, firm_capacity_mva, cyclic_rating_mva, nameplate_mva, year, raw_json
+- `ukpn_ltds_transformers_3w` — same shape, plus tertiary winding fields
+- `ukpn_ltds_peak_demand_observed` — sfl, site_name, voltage_kv, peak_mw, peak_mvar, year, season
+- `ukpn_ltds_peak_demand_true` — same shape
+- `ukpn_ltds_fault_3ph` — sfl, site_name, voltage_kv, fault_level_ka, x_r_ratio, year
+- `ukpn_ltds_fault_earth` — sfl, site_name, voltage_kv, fault_level_ka, year
+
+Each table:
+- Index on `sitefunctionallocation` (join key) and `(site_name, voltage_kv)`.
+- RLS on, `GRANT SELECT TO authenticated, anon`, `GRANT ALL TO service_role`.
+
+### 2. Ingestion edge function — `ukpn-ltds-ingest`
+
+One function, six modes (`?table=2a|2b|3a|3b|4a|4b`):
+
+- Auth: `getUser()` + `has_role(admin)` (dual-client pattern).
+- Pulls full dataset from `https://ukpowernetworks.opendatasoft.com/api/explore/v2.1/catalog/datasets/{id}/exports/json` using `UKPN_API_KEY`.
+- Maps Opendatasoft field names → schema columns (per-table mapping object).
+- Batched upsert (1k rows) on `(sitefunctionallocation, voltage_kv, year)`.
+- Self-continues on timeout, same pattern as `npg-dataset-ingest`.
+
+### 3. RPC — `ukpn_substation_capacity_lookup(_sfl text)`
+
+Returns a single row joining all six tables for one SFL:
 ```
-Default capacity when missing:  [ 4 ] chargers × [ 7 ] kW  = 28 kW/site
+firm_capacity_mva, cyclic_mva, peak_observed_mw, peak_true_mw,
+headroom_observed_mva, headroom_true_mva,
+fault_3ph_ka, fault_earth_ka, year
 ```
+`headroom_*` derived as `firm_capacity_mva − peak_*` (MVA basis, configurable pf in code if needed).
 
-- Two numeric inputs, defaulting to **4** and **7** (= 28 kW), persisted in component state.
-- When a row has no `proposed_kw` and no charger-count columns, use `count × kW` as the fallback instead of erroring.
-- Validation rule relaxed: kW column is no longer mandatory — if absent, the defaults are applied and a single info banner shows "Using default 28 kW (4 × 7 kW) for N sites".
+### 4. UI wiring
 
-### 3. Site name fallback
-If `site_name` is something like `SC_004` and an `address` column exists, display as `SC_004 — 7 Denson Close` so the scored output is human-readable. The underlying `site_name` field stays as the unique ID.
+- **Admin → DNO Datasets**: add "Ingest LTDS" action on each of the six rows in `NpgDatasetRegistry.tsx` calling `ukpn-ltds-ingest` with the right `table` param.
+- **Map → FeatureInfoPanel**: when a UKPN Grid/Primary substation is clicked, if the feature carries an SFL, fetch `ukpn_substation_capacity_lookup` and render a new "LTDS Capacity & Headroom" block (firm MVA, peak MW, derived headroom, fault levels, year).
+- **NetworkVisibilityPanel**: when nearby substations are UKPN, prefer LTDS-derived headroom over the generic `transformer_headroom_kw` field already shown.
 
-### 4. 500-row cap
-Cambridge file is 50 rows — well within the existing cap, no change needed.
+### 5. Out of scope (deliberately)
 
-## What stays the same
+- DFES NSHR + Secondary Site Utilisation (we'll do these in a follow-up — confirmed earlier).
+- Historic half-hourly power-flow datasets (tens of millions of rows; needs a different storage strategy).
+- Embedded Capacity Register (generation, not network headroom).
 
-- Scoring engine (`score-sites-batch` edge function), `ProgrammeDashboard`, and `SiteRow` shape — unchanged. We still emit `{ site_name, postcode, proposed_kw, site_type, lat, lng }`.
-- Lat/Lng path already exists and will be used directly (Easting/Northing ignored since WGS84 is provided).
-- `site_type` defaults to `"other"` (Cambridge file has no type column).
+## Technical notes
 
-## Verification
-
-After build:
-1. Upload `ECO power cambridge (1).xlsx` on `/la-programme`.
-2. Expect: 50 rows parsed, "Using default 28 kW" banner, lat/lng badge shown.
-3. Click "Score 50 Sites" → existing batch scorer runs unchanged.
+- LTDS uses **MVA**, not kW — keep MVA in storage; convert to kW only at the UI edge if needed, alongside existing kW fields.
+- Join key is `sitefunctionallocation`; existing `geo_substations` rows for UKPN already include this in `attrs_json` from the catalog crawler — confirm before ingest and patch the crawler mapping if not.
+- Year column is critical (multiple years per site); always select `MAX(year)` in the lookup RPC.
+- Six small tabular datasets → total ~10k rows; ingest runs in seconds, no partitioning needed.
