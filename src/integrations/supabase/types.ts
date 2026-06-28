@@ -2068,6 +2068,111 @@ export type Database = {
         }
         Relationships: []
       }
+      ssen_ltds_demand: {
+        Row: {
+          created_at: string
+          firm_capacity_mva: number | null
+          forecast_json: Json | null
+          gsp_group: string | null
+          id: string
+          power_factor: number | null
+          raw_json: Json | null
+          recorded_demand_mva: number | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date: string | null
+          updated_at: string
+          voltage_kv: number | null
+        }
+        Insert: {
+          created_at?: string
+          firm_capacity_mva?: number | null
+          forecast_json?: Json | null
+          gsp_group?: string | null
+          id?: string
+          power_factor?: number | null
+          raw_json?: Json | null
+          recorded_demand_mva?: number | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date?: string | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Update: {
+          created_at?: string
+          firm_capacity_mva?: number | null
+          forecast_json?: Json | null
+          gsp_group?: string | null
+          id?: string
+          power_factor?: number | null
+          raw_json?: Json | null
+          recorded_demand_mva?: number | null
+          region?: string
+          site_name?: string
+          site_name_normalised?: string
+          source_date?: string | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Relationships: []
+      }
+      ssen_ltds_fault: {
+        Row: {
+          cb_break_ka: number | null
+          cb_make_ka: number | null
+          created_at: string
+          fault_eq_mva: number | null
+          gsp_group: string | null
+          id: string
+          raw_json: Json | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date: string | null
+          three_phase_break_ka: number | null
+          three_phase_peak_make_ka: number | null
+          updated_at: string
+          voltage_kv: number | null
+        }
+        Insert: {
+          cb_break_ka?: number | null
+          cb_make_ka?: number | null
+          created_at?: string
+          fault_eq_mva?: number | null
+          gsp_group?: string | null
+          id?: string
+          raw_json?: Json | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date?: string | null
+          three_phase_break_ka?: number | null
+          three_phase_peak_make_ka?: number | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Update: {
+          cb_break_ka?: number | null
+          cb_make_ka?: number | null
+          created_at?: string
+          fault_eq_mva?: number | null
+          gsp_group?: string | null
+          id?: string
+          raw_json?: Json | null
+          region?: string
+          site_name?: string
+          site_name_normalised?: string
+          source_date?: string | null
+          three_phase_break_ka?: number | null
+          three_phase_peak_make_ka?: number | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Relationships: []
+      }
       studies: {
         Row: {
           bom_json: Json | null
