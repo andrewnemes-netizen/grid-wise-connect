@@ -1359,7 +1359,7 @@ function parseWktPolygon(wkt: string): any | null {
 function parseWktMultiPolygon(wkt: string): any | null {
   const inner = extractFirstParen(wkt);
   const polygons = splitTopLevelGroups(inner)
-    .map((group) => parsePolygonBody(stripOuterParens(group)))
+    .map((group) => parsePolygonBody(stripSingleOuterParens(group)))
     .filter((poly) => poly.length);
   return polygons.length ? { type: "MultiPolygon", coordinates: polygons } : null;
 }
@@ -1391,6 +1391,11 @@ function stripOuterParens(text: string): string {
     out = out.slice(1, -1).trim();
   }
   return out;
+}
+
+function stripSingleOuterParens(text: string): string {
+  const out = text.trim();
+  return out.startsWith("(") && out.endsWith(")") ? out.slice(1, -1).trim() : out;
 }
 
 function splitTopLevelGroups(text: string): string[] {
