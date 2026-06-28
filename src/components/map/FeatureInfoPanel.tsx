@@ -629,6 +629,34 @@ function UkpnSecondaryCard({ summary }: { summary: SecondarySummary }) {
     KIOSK: "Kiosk",
   };
   const dKey = (summary.design ?? "").toUpperCase();
+
+  // Typical UKPN secondary transformer ratings (kVA) by design type
+  const typicalKva: Record<string, number> = { GMT: 500, KIOSK: 315, PMT: 100 };
+  const assumedKva = typicalKva[dKey] ?? 500;
+  const n = summary.transformers ?? 1;
+  const installedKva = n * assumedKva;
+  const installedMva = installedKva / 1000;
+
+  // Estimate spare MVA from headroom band; fall back to (100 − utilisation) when headroom missing.
+  let spareLowPct: number | null = null;
+  let spareHighPct: number | null = null;
+  const hbMatch = summary.headroomBand ? String(summary.headroomBand).match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)/i) : null;
+  if (hbMatch) {
+    spareLowPct = Number(hbMatch[1]);
+    spareHighPct = Number(hbMatch[2]);
+  } else if (summary.utilBand) {
+    const ubMatch = String(summary.utilBand).match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)/i);
+    if (ubMatch) {
+      spareLowPct = 100 - Number(ubMatch[2]);
+      spareHighPct = 100 - Number(ubMatch[1]);
+    }
+  }
+  const spareMinMva = spareLowPct != null ? (installedMva * spareLowPct) / 100 : null;
+  const spareMaxMva = spareHighPct != null ? (installedMva * spareHighPct) / 100 : null;
+
+  const fmtMva = (n: number | null) => n == null ? "—" : `${n.toFixed(2)} MVA`;
+  const fmtKw = (mva: number | null) => mva == null ? "—" : `${Math.round(mva * 1000 * 0.95).toLocaleString()} kW`; // 0.95 pf
+
   return (
     <div className="rounded-md border bg-primary/5 p-3 space-y-2">
       <div className="flex items-center justify-between">
@@ -661,6 +689,31 @@ function UkpnSecondaryCard({ summary }: { summary: SecondarySummary }) {
         {summary.transformers != null && <Badge variant="secondary" className="text-[10px]">{summary.transformers} transformer{summary.transformers === 1 ? "" : "s"}</Badge>}
         {summary.design && <Badge variant="secondary" className="text-[10px]">{designLabel[dKey] ?? summary.design}</Badge>}
       </div>
+
+      {/* Estimated spare MVA — formula box */}
+      <div className="rounded border bg-background p-2 space-y-1.5">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Estimated spare capacity</p>
+        <div className="text-sm font-semibold text-emerald-600">
+          {spareMinMva != null && spareMaxMva != null
+            ? `≈ ${fmtMva(spareMinMva)} – ${fmtMva(spareMaxMva)}`
+            : "—"}
+        </div>
+        {spareMinMva != null && spareMaxMva != null && (
+          <p className="text-[10px] text-muted-foreground">≈ {fmtKw(spareMinMva)} – {fmtKw(spareMaxMva)} at 0.95 pf</p>
+        )}
+        <div className="border-t pt-1.5 mt-1 space-y-0.5">
+          <p className="text-[10px] text-muted-foreground font-mono">
+            Installed ≈ {n} × {assumedKva} kVA = <span className="font-semibold text-foreground">{installedMva.toFixed(2)} MVA</span>
+          </p>
+          <p className="text-[10px] text-muted-foreground font-mono">
+            Spare = Installed × Headroom% {spareLowPct != null && spareHighPct != null ? `= ${installedMva.toFixed(2)} × ${spareLowPct}–${spareHighPct}%` : ""}
+          </p>
+        </div>
+        <p className="text-[10px] text-muted-foreground italic">
+          Indicative only — assumes typical {designLabel[dKey] ?? "secondary"} rating of {assumedKva} kVA per transformer. Actual nameplate rating may differ; confirm with UKPN before commitment.
+        </p>
+      </div>
+
       <p className="text-[10px] text-muted-foreground">
         Source: UKPN Secondary Sites register. Headroom bands are UKPN-published thermal ratings; for exact MVA figures use the LV Capacity Map.
       </p>
