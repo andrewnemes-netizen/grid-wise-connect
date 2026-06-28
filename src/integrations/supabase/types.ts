@@ -3239,6 +3239,22 @@ export type Database = {
           name: string
         }[]
       }
+      npg_circuits_for_substation: {
+        Args: { p_name: string }
+        Returns: {
+          circuit_id: string
+          feeder_description: string
+          from_node: string
+          grid_supply_point: string
+          latest_month: number
+          latest_year: number
+          months_12_peak_mw: number
+          peak_amps: number
+          peak_mw: number
+          to_node: string
+          voltage_kv: number
+        }[]
+      }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
         | { Args: { use_typmod?: boolean }; Returns: string }
