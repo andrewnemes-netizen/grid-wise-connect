@@ -643,8 +643,9 @@ async function ingestViaGeoJsonExport(
 // ─── CSV Export Ingestion (Streaming) ───────────────────────────────────────
 
 async function ingestViaCsvExport(
-  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
-): Promise<{ inserted: number; skipped: number }> {
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
+  options: { skipFeatures?: number; maxFeatures?: number } = {},
+): Promise<IngestResult> {
   const url = entry.endpoint_export_csv;
   console.log(`[ingest] Fetching CSV export (streaming): ${url}`);
 
@@ -656,6 +657,11 @@ async function ingestViaCsvExport(
   let totalInserted = 0;
   let totalSkipped = 0;
   let batch: any[] = [];
+  const skipFeatures = Math.max(0, Number(options.skipFeatures || 0));
+  const maxFeatures = Math.max(0, Number(options.maxFeatures || 0));
+  let dataRowIndex = 0;
+  let processedRows = 0;
+  let hitLimit = false;
 
   for await (const values of streamCsvRows(resp)) {
     if (values.length === 0 || values.every((v) => !String(v || "").trim())) continue;
@@ -663,6 +669,14 @@ async function ingestViaCsvExport(
       headers = values.map(cleanHeader);
       continue;
     }
+
+    dataRowIndex++;
+    if (dataRowIndex <= skipFeatures) continue;
+    if (maxFeatures > 0 && processedRows >= maxFeatures) {
+      hitLimit = true;
+      break;
+    }
+    processedRows++;
 
     const row: Record<string, string> = {};
     headers.forEach((h, idx) => { row[h] = values[idx] || ""; });
@@ -687,8 +701,15 @@ async function ingestViaCsvExport(
     totalInserted += inserted ?? batch.length;
   }
 
-  console.log(`[ingest] CSV streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
-  return { inserted: totalInserted, skipped: totalSkipped };
+  console.log(`[ingest] CSV streaming done: ${totalInserted} inserted, ${totalSkipped} skipped, processed ${processedRows}, hasMore=${hitLimit}`);
+  return {
+    inserted: totalInserted,
+    skipped: totalSkipped,
+    hasMore: hitLimit,
+    nextSkipFeatures: skipFeatures + processedRows,
+    consumedRows: skipFeatures + processedRows,
+    processedRows,
+  };
 }
 
 async function* streamCsvRows(resp: Response): AsyncGenerator<string[]> {
