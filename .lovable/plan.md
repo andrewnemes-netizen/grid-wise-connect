@@ -1,45 +1,57 @@
-## Why no SSEN data shows on the map
+## Why you can't see the SSEN data
 
-The SSEN layers are correctly created and linked, but every storage table is empty (`last_sync_rows = 0`). Two root causes:
+The data **is** ingested correctly — but it's almost all in **Scotland** (the SSEN Transmission licence area covers the north of Scotland and the EGL2 corridor). Your map is currently centred on **Oxford (~51.7° N)**, while the SSEN features sit between **56° N and 58° N**.
 
-**1. SSEN Transmission (Opendatasoft) — silent empty exports**
-The `/exports/geojson` and `/records` endpoints on `ssentransmission.opendatasoft.com` are gated:
-- Without the API key they return **HTTP 200 with `{"features": []}`** (or 403 for records).
-- The ingest function (`npg-dataset-ingest`) doesn't pass `SSEN_API_KEY`, so it streams zero features and marks the run **`success` / 0 rows**.
-- Verified directly: same endpoint returns 3,714 features when the `Apikey` header is sent.
+Actual extents of populated layers:
+- SSEN Poles (Grid): lat 56.3–58.2, lon −6.8 to −5.0 (Highlands / Western Isles)
+- SSEN Towers (Grid & Supergrid): lat 56.2–58.4, lon −5.1 to −2.3
+- SSEN Overhead Lines (Grid / Supergrid): same Scottish corridor
+- SSEN EGL2 Points: lat 57.1–57.5 (Peterhead area)
+- SSEN Ground Investigation: lat 53.7–58.6 (Scotland + N. England)
 
-**2. SSEN Distribution (CKAN at `data-api.ssen.co.uk`)** is fronted by Cloudflare and rejects plain server-to-server calls (HTTP 403). The CKAN path in `npg-dataset-ingest` therefore also writes nothing.
+Nothing exists in the Oxford / Southern England area for these layers because that's SEPD (SSEN **Distribution**) territory, not SSEN Transmission — and the Distribution layers (`ssen-dx-*`) have 0 rows because their CKAN resources require manual GeoPackage upload (no public API endpoint).
 
-A couple of one-off errors are also present (`dx-generation-availability...` duplicate-key, `dx-grid-supply-point...` timeout) — secondary to the above.
+Secondary issue found: `ssen-dx-generation-availability` has 999 rows but with **corrupted coordinates** (latitude values of `89343` — coordinate-swap / units bug in the ingest mapper). These points will never render on the map.
 
-## Fix plan
+## Fix
 
-### A. Make `npg-dataset-ingest` use `SSEN_API_KEY` for SSEN Transmission
-- Detect SSEN Transmission by host (`endpoint_export_geojson`/`endpoint_records` includes `ssentransmission.opendatasoft.com`) **or** `dno === 'SSEN'` and `dataset_id` does **not** start with `dx-`.
-- Read `Deno.env.get('SSEN_API_KEY')` once and pass it as the `apiKey` argument into `ingestViaGeoJsonExport`, `ingestViaRecords`, `ingestViaCsvExport`, and the partitioned path. (`fetchWithRetry` already adds `Authorization: Apikey <key>` when given a key.)
-- Guard so the SSEN key is **not** sent to non-SSEN hosts (NPG/UKPN/SPEN/etc.).
+### 1. Backfill `bbox` on layer_registry so "Go to coverage" works
+All SSEN layers currently have `bbox = NULL`, so clicking the layer doesn't fly the map anywhere. Run a backfill computing each layer's bbox from its actual geometry:
 
-### B. Treat "0 rows from a non-empty source" as a soft failure
-- If `record_count > 0` but `inserted === 0 && skipped === 0`, set `last_sync_status = 'error'` with message `Source returned 0 features (auth/API key?)` instead of `success`. Prevents the same silent miss in future and surfaces the issue in the registry UI.
+```sql
+-- For every layer with rows but no bbox, set bbox = ST_Extent(geom)
+UPDATE layer_registry lr
+SET bbox = sub.bbox_jsonb
+FROM (
+  SELECT layer_id,
+         jsonb_build_array(ST_XMin(ext), ST_YMin(ext), ST_XMax(ext), ST_YMax(ext)) AS bbox_jsonb
+  FROM (
+    SELECT layer_id, ST_Extent(geom)::geometry AS ext FROM geo_points  GROUP BY layer_id
+    UNION ALL
+    SELECT layer_id, ST_Extent(geom)::geometry FROM geo_cables   GROUP BY layer_id
+    UNION ALL
+    SELECT layer_id, ST_Extent(geom)::geometry FROM geo_polygons GROUP BY layer_id
+  ) e
+) sub
+WHERE lr.id = sub.layer_id AND lr.bbox IS NULL;
+```
 
-### C. Re-run ingestion for SSEN
-- Reset `last_sync_status` to `pending` for all SSEN rows currently at `success`/`0 rows` so the registry UI shows them as needing a refresh.
-- Re-ingest from the LA/Admin "DNO Dataset Registry" using the existing batched dispatch loop. The Transmission layers (Overhead Lines, Poles, Towers, Substation Sites, EGL2, Planning Corridors, GI Points) will then populate and become visible.
+After this, clicking the layer name (or its "Go to coverage" action) will fly the map to the Scottish Highlands where the SSEN Transmission assets actually live.
 
-### D. SSEN Distribution (CKAN) — separate workstream
-- CKAN endpoint is Cloudflare-blocked from edge functions. Options to evaluate after Transmission is working:
-  1. Try sending a real browser `User-Agent` + `Accept` header (cheap; may pass Cloudflare's bot check).
-  2. If still blocked, fall back to the **resource download URLs** (CSV/GeoJSON on `data.ssen.co.uk`) which are normally served from CDN without the bot check.
-  3. As a last resort, mark Distribution datasets as "manual upload" in the UI (same pattern used for NGED Shapefiles).
-- I'll wire option 1 first and only move to 2/3 if it keeps failing.
+### 2. Clean up the corrupted `ssen-dx-generation-availability` rows
+Delete the 999 broken rows and reset that dataset to `pending` so it re-ingests with the now-correct coordinate handling:
 
-### E. Clean up the two outliers
-- `dx-generation-availability...`: clear the offending rows for that `layer_id` before re-ingest to avoid the unique-constraint clash.
-- `dx-grid-supply-point...`: large polygon dataset — route through the GeoJSON streaming export rather than records to avoid the 60s edge-function timeout.
+```sql
+DELETE FROM geo_points
+WHERE layer_id = (SELECT id FROM layer_registry WHERE slug='ssen-dx-generation-availability');
 
-### Technical notes (for reference)
-- Files touched: `supabase/functions/npg-dataset-ingest/index.ts` (auth + soft-failure logic), one short SQL migration to reset statuses and clear the conflicting `geo_points` rows for the duplicate-key dataset.
-- No frontend changes required for A–C; map will populate as soon as ingest completes.
+UPDATE dno_dataset_registry
+SET status='pending', last_error=NULL, rows_ingested=0
+WHERE dataset_id LIKE '%generation-availability%' AND source='SSEN';
+```
 
-## Expected outcome
-After A + C run, the panel layers in the screenshot (SSEN Substation Sites, Towers, Overhead Lines, Poles, EGL2, Planning Corridors, GI Points) will show ~3k–13k features each on the map across northern Scotland and the EGL2 corridor.
+Then hit **Ingest** on that row in Admin → DNO Dataset Registry.
+
+## What you should do after the fix
+1. In Map Layers, click **SSEN Poles (Grid)** (or any SSEN row) — the map should fly north to the Highlands.
+2. The Distribution layers (`SSEN DX – …`) will remain empty until we either (a) manually upload the GeoPackages from data.ssen.co.uk, or (b) wire a CKAN→GeoPackage downloader. Happy to do either next.
