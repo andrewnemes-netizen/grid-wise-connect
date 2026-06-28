@@ -264,6 +264,36 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
           <p className="text-[10px] text-muted-foreground">Source: UKPN LTDS Tables 2a–4b</p>
         </div>
       )}
+
+      {/* NPG Monthly Circuit Loading */}
+      {circuits && circuits.length > 0 && (
+        <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Activity className="h-3 w-3 text-primary" /> Connected Circuits — Monthly Peak
+            </p>
+            <Badge variant="outline" className="text-[10px]">{circuits.length}</Badge>
+          </div>
+          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+            {circuits.slice(0, 8).map((c, i) => (
+              <div key={i} className="rounded-md border bg-background p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">{c.circuit_id} <span className="text-muted-foreground font-normal">· {c.voltage_kv} kV</span></span>
+                  <span className="font-mono text-[11px]">{c.peak_mw != null ? `${Number(c.peak_mw).toFixed(1)} MW` : "—"}</span>
+                </div>
+                {c.feeder_description && (
+                  <div className="text-[10px] text-muted-foreground truncate">{c.feeder_description}</div>
+                )}
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>{c.from_node} → {c.to_node}</span>
+                  <span>12-mo peak: {c.months_12_peak_mw != null ? `${Number(c.months_12_peak_mw).toFixed(1)} MW` : "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Source: NPG monthly circuit operational data (132/33 kV)</p>
+        </div>
+      )}
     </div>
   );
 }
