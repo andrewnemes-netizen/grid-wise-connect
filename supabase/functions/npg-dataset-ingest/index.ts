@@ -409,6 +409,13 @@ async function performIngest(
     effectiveError =
       `Read ${totalSkipped.toLocaleString()} source rows but could not map any geometry. ` +
       `Likely cause: unsupported coordinate/geometry columns for ${entry.dataset_id}.`;
+  } else if (
+    !syncError && !hasMore && cumulativeInserted === 0 && totalSkipped === 0 && sourceCount === 0
+  ) {
+    effectiveStatus = "skipped";
+    effectiveError =
+      `No ingestible API resource found for ${entry.dataset_id} ` +
+      `(source only exposes PDF/zip/non-tabular files).`;
   }
 
   await supabase.from(registryTable).update({
