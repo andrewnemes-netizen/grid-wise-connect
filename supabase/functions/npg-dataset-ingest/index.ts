@@ -982,6 +982,8 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
 
   const props = feature.properties || {};
 
+  const datasetId = String(entry.dataset_id || "").toLowerCase();
+
   return {
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
@@ -1218,7 +1220,9 @@ function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: s
     layer_id: entry.linked_layer_id,
     dno: entry.dno,
     name: firstText(row, "name", "site_name", "psp_name", "Substation", "Primary", "PRIMARY_NAME_2025", "GSP_NAME", "Customer Site ", "locality", "number") || null,
-    asset_id: firstText(row, "asset_id", "site_id", "AssetID", "number", "Unique ID", "Export MPAN / MSID", "Import MPAN / MSID") || null,
+    asset_id: datasetId === "dx-ssen-substation-data"
+      ? null
+      : firstText(row, "asset_id", "site_id", "AssetID", "number", "Unique ID", "Export MPAN / MSID", "Import MPAN / MSID") || null,
     attrs_json: row,
     status: firstText(row, "status", "Status", "Connection Status ") || "active",
     capacity_kw: parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"]) != null ? parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"])! * (row["Connected Generation (MW)"] ? 1000 : 1) : null,
