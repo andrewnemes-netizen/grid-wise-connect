@@ -137,21 +137,21 @@ function LayerRow({
   return (
     <div className={`space-y-0.5 pl-4 ${isEmpty ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-2 py-0.5">
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto scrollbar-none">
+        <div className="flex items-start gap-2 flex-1 min-w-0">
           {isLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+            <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0 mt-0.5" />
           ) : (
-            <div className="h-3 w-3 rounded-sm shrink-0 border border-border" style={{ backgroundColor: color }} />
+            <div className="h-3 w-3 rounded-sm shrink-0 border border-border mt-0.5" style={{ backgroundColor: color }} />
           )}
-          <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal whitespace-nowrap cursor-pointer">
+          <Label htmlFor={`layer-${layer.id}`} className="text-xs font-normal leading-tight cursor-pointer break-words flex-1 min-w-0">
             {layer.display_name}
           </Label>
           {isEmpty ? (
-            <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0 text-muted-foreground border-dashed">
+            <Badge variant="outline" className="text-[8px] h-3.5 px-1 shrink-0 text-muted-foreground border-dashed mt-0.5">
               No data
             </Badge>
           ) : (
-            <span className="text-[9px] text-muted-foreground tabular-nums shrink-0">
+            <span className="text-[9px] text-muted-foreground tabular-nums shrink-0 mt-0.5">
               {layer.feature_count > 999 ? `${(layer.feature_count / 1000).toFixed(1)}k` : layer.feature_count}
             </span>
           )}
