@@ -100,7 +100,7 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
     setCircuits(null);
     if (!lookupName || lookupName.length < 3) return;
     (async () => {
-      const { data, error } = await supabase.rpc("npg_circuits_for_substation", { p_name: lookupName });
+      const { data, error } = await supabase.rpc("ukpn_circuits_for_substation", { p_name: lookupName });
       if (!alive || error) return;
       if (Array.isArray(data) && data.length > 0) setCircuits(data);
     })();
