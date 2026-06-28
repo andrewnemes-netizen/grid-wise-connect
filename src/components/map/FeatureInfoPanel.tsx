@@ -74,6 +74,19 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
   const gspName = (feature.gsp_name ?? null) as string | null;
   const faultLevelPct = (feature.fault_level_ ?? null) as number | null;
 
+  // SSEN Distribution open-data attributes (rich descriptive fields, no capacity/headroom published)
+  const ssenOwner = (feature["owner name"] ?? feature.owner_name ?? null) as string | null;
+  const ssenNumber = (feature.number ?? null) as string | null;
+  const ssenType = (feature.type ?? null) as string | null;
+  const ssenClass = (feature.class ?? null) as string | null;
+  const ssenStatus = (feature.status ?? null) as string | null;
+  const ssenFence = (feature["fence type"] ?? feature.fence_type ?? null) as string | null;
+  const ssenLocality = (feature.locality ?? null) as string | null;
+  const ssenOpArea = (feature["operating area"] ?? feature.operating_area ?? null) as string | null;
+  const ssenConfidence = (feature["data confidence"] ?? feature.data_confidence ?? null) as string | null;
+  const isSsen = !!(ssenOwner && (String(ssenOwner).toUpperCase() === "SEPD" || String(ssenOwner).toUpperCase() === "SHEPD"))
+    || (!!ssenNumber && !!ssenClass && !siteName && firmCapRaw === null);
+
   // LTDS capacity/headroom lookup for UKPN substations
   const sfl = (feature.sitefunctionallocation ?? feature.functionallocation ?? null) as string | null;
   const [ltds, setLtds] = useState<any | null>(null);
@@ -117,6 +130,33 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
           {threePhase === "Y" && <Badge variant="outline" className="text-[10px]">3-Phase</Badge>}
         </div>
       </div>
+
+      {/* SSEN Distribution attribute card (open dataset does not publish capacity/headroom) */}
+      {isSsen && (
+        <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Zap className="h-3 w-3 text-primary" /> SSEN Substation
+            </p>
+            {ssenStatus && <Badge variant="outline" className="text-[10px]">{ssenStatus}</Badge>}
+          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {ssenNumber && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Asset Number</td><td className="py-1 font-medium">{ssenNumber}</td></tr>)}
+              {ssenClass && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Voltage Class</td><td className="py-1 font-medium">{ssenClass}</td></tr>)}
+              {ssenType && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Type</td><td className="py-1 font-medium">{ssenType}</td></tr>)}
+              {ssenOwner && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Licence Area</td><td className="py-1 font-medium">{ssenOwner === "SEPD" ? "SEPD (Southern)" : ssenOwner === "SHEPD" ? "SHEPD (Scottish Hydro)" : String(ssenOwner)}</td></tr>)}
+              {ssenFence && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Enclosure</td><td className="py-1 font-medium">{ssenFence}</td></tr>)}
+              {ssenLocality && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Locality</td><td className="py-1 font-medium">{ssenLocality}</td></tr>)}
+              {ssenOpArea && (<tr className="border-b"><td className="text-muted-foreground py-1 pr-2">Operating Area</td><td className="py-1 font-medium">{ssenOpArea}</td></tr>)}
+              {ssenConfidence && (<tr><td className="text-muted-foreground py-1 pr-2">Data Confidence</td><td className="py-1 font-medium">{ssenConfidence}</td></tr>)}
+            </tbody>
+          </table>
+          <p className="text-[10px] text-muted-foreground italic leading-snug">
+            SSEN's open substation register does not publish firm capacity, demand or headroom. For capacity figures request an SSEN Budget / Network Capacity quote, or use the SSEN LTDS tables when available.
+          </p>
+        </div>
+      )}
 
       {/* Utilisation gauge */}
       {utilPct !== null && (
