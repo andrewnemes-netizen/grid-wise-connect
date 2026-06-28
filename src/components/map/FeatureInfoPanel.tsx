@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FeatureInfoPanelProps {
   feature: Record<string, unknown> | null;
@@ -71,6 +73,24 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
   const voltageKv = (feature.voltage_kv ?? feature.pvoltage ?? null) as number | null;
   const gspName = (feature.gsp_name ?? null) as string | null;
   const faultLevelPct = (feature.fault_level_ ?? null) as number | null;
+
+  // LTDS capacity/headroom lookup for UKPN substations
+  const sfl = (feature.sitefunctionallocation ?? feature.functionallocation ?? null) as string | null;
+  const [ltds, setLtds] = useState<any | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setLtds(null);
+    if (!sfl) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("ukpn_substation_capacity_lookup", { _sfl: sfl });
+      if (!alive || error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && (row.firm_capacity_mva != null || row.peak_mw != null || row.fault_level_ka != null)) {
+        setLtds(row);
+      }
+    })();
+    return () => { alive = false; };
+  }, [sfl]);
 
   return (
     <div className="space-y-3">
@@ -186,6 +206,47 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
               <p className={`text-xs font-semibold ${demConstraint.toLowerCase().includes('red') ? 'text-red-500' : demConstraint.toLowerCase().includes('amber') ? 'text-amber-500' : 'text-emerald-500'}`}>{demConstraint}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* LTDS Capacity & Headroom (UKPN) */}
+      {ltds && (
+        <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Zap className="h-3 w-3 text-primary" /> LTDS Capacity & Headroom
+            </p>
+            {ltds.year && <Badge variant="outline" className="text-[10px]">{ltds.year}</Badge>}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {ltds.firm_capacity_mva != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Firm Capacity</p>
+                <p className="text-sm font-semibold">{Number(ltds.firm_capacity_mva).toLocaleString()} MVA</p>
+              </div>
+            )}
+            {ltds.peak_mw != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Peak Demand</p>
+                <p className="text-sm font-semibold">{Number(ltds.peak_mw).toLocaleString()} MW</p>
+              </div>
+            )}
+            {ltds.headroom_mw != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Headroom</p>
+                <p className={`text-sm font-semibold ${Number(ltds.headroom_mw) <= 0 ? "text-red-500" : "text-emerald-600"}`}>
+                  {Number(ltds.headroom_mw).toLocaleString()} MW
+                </p>
+              </div>
+            )}
+            {ltds.fault_level_ka != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Fault Level (3ph)</p>
+                <p className="text-sm font-semibold">{Number(ltds.fault_level_ka).toLocaleString()} kA</p>
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Source: UKPN LTDS Tables 2a–4b</p>
         </div>
       )}
     </div>
