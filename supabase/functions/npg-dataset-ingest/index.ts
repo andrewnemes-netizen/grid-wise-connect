@@ -337,6 +337,17 @@ async function performIngest(
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
       }
+    } else if (entry.endpoint_export_csv && !entry.is_geospatial) {
+      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
         const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
