@@ -550,6 +550,8 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   let inFeatures = false;
   let depth = 0;
   let featureStart = -1;
+  let inString = false;
+  let escape = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -568,12 +570,21 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
       buffer = buffer.slice(bracketIdx + 1);
       depth = 0;
       featureStart = -1;
+      inString = false;
+      escape = false;
     }
 
     let i = 0;
     while (i < buffer.length) {
       const ch = buffer[i];
-      if (ch === "{") {
+      if (escape) {
+        escape = false;
+      } else if (inString) {
+        if (ch === "\\") escape = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') {
+        inString = true;
+      } else if (ch === "{") {
         if (depth === 0) featureStart = i;
         depth++;
       } else if (ch === "}") {
