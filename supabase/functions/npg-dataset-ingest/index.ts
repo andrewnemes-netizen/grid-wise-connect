@@ -902,27 +902,19 @@ async function ingestViaCkan(
 
   if (entry.endpoint_records && (!isSsenDistribution || hasDatastoreRecordsUrl)) {
     console.log(`[ingest] CKAN: Using datastore_search for ${entry.dataset_id}`);
-    try {
-      return await ingestViaCkanDatastore(supabase, entry, layerRow, storageTable, apiKey);
-    } catch (err) {
-      console.warn(`[ingest] CKAN datastore failed: ${err}, trying CSV...`);
-    }
+    return await ingestViaCkanDatastore(supabase, entry, layerRow, storageTable, apiKey);
   }
 
-  if (entry.endpoint_export_csv) {
-    return await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
-  }
-
-  console.log(`[ingest] CKAN: No usable endpoint for ${entry.dataset_id} — marking as skipped`);
+  console.log(`[ingest] CKAN: No JSON/GeoJSON endpoint for ${entry.dataset_id} — marking as skipped (API-only mode)`);
   await supabase.from("dno_dataset_registry").update({
     last_sync_status: "skipped",
-    last_sync_error: "No API/CSV/GeoJSON endpoint available",
+    last_sync_error: "No JSON/GeoJSON API endpoint available (CSV ingestion disabled)",
     last_sync_at: new Date().toISOString(),
   }).eq("id", entry.id);
   return { inserted: 0, skipped: 0 };
 }
 
-function getSsenDistributionResourceUrls(entry: any, storageTable: string): Array<{ type: "geojson" | "csv"; url: string }> {
+function getSsenDistributionResourceUrls(entry: any, storageTable: string): Array<{ type: "geojson"; url: string }> {
   const resources = Array.isArray(entry.fields_json) ? entry.fields_json : [];
   const candidates = resources
     .map((r: any) => ({
