@@ -847,8 +847,9 @@ async function ingestViaRecords(
 // ─── CKAN (NGED) Ingestion ───────────────────────────────────────────────────
 
 async function ingestViaCkan(
-  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
-): Promise<{ inserted: number; skipped: number }> {
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
+  options: { skipFeatures?: number; maxFeatures?: number } = {},
+): Promise<IngestResult> {
   const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
   const recordsUrl = String(entry.endpoint_records || "");
   const hasDatastoreRecordsUrl = !!recordsUrl && (recordsUrl.includes("datastore_search") || recordsUrl.includes("/api/3/action/"));
@@ -858,8 +859,20 @@ async function ingestViaCkan(
     if (resourceUrls.length > 0) {
       let inserted = 0;
       let skipped = 0;
+      let remainingSkip = Math.max(0, Number(options.skipFeatures || 0));
+      const maxFeatures = Math.max(0, Number(options.maxFeatures || 0));
+      let processedRows = 0;
       console.log(`[ingest] CKAN: Using ${resourceUrls.length} SSEN Distribution resource(s) for ${entry.dataset_id}`);
       for (const resource of resourceUrls) {
+        if (maxFeatures > 0 && processedRows >= maxFeatures) {
+          return {
+            inserted,
+            skipped,
+            hasMore: true,
+            nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows,
+            processedRows,
+          };
+        }
         const scopedEntry = {
           ...entry,
           endpoint_export_geojson: resource.type === "geojson" ? resource.url : null,
@@ -867,11 +880,25 @@ async function ingestViaCkan(
         };
         const result = resource.type === "geojson"
           ? await ingestViaCkanGeoJson(supabase, scopedEntry, layerRow, storageTable, apiKey)
-          : await ingestViaCsvExport(supabase, scopedEntry, layerRow, storageTable, apiKey);
+          : await ingestViaCsvExport(supabase, scopedEntry, layerRow, storageTable, apiKey, {
+            skipFeatures: remainingSkip,
+            maxFeatures: maxFeatures > 0 ? maxFeatures - processedRows : 0,
+          });
         inserted += result.inserted;
         skipped += result.skipped;
+        processedRows += result.processedRows ?? (result.inserted + result.skipped);
+        remainingSkip = Math.max(0, remainingSkip - (result.consumedRows ?? 0));
+        if (result.hasMore) {
+          return {
+            inserted,
+            skipped,
+            hasMore: true,
+            nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows,
+            processedRows,
+          };
+        }
       }
-      return { inserted, skipped };
+      return { inserted, skipped, hasMore: false, nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows, processedRows };
     }
   }
 
