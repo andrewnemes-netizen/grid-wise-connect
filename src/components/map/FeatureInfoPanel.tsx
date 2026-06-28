@@ -105,8 +105,16 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
     return () => { alive = false; };
   }, [sfl]);
 
-  // SSEN LTDS capacity/headroom lookup (matches by site name / locality)
-  const ssenLookupName = (siteName ?? (feature.name as string | undefined) ?? ssenLocality ?? null) as string | null;
+  // SSEN LTDS capacity/headroom lookup — only for primary/grid sites (33kV+).
+  // Distribution (11kV/LV) substations have no LTDS row; never fall back to locality
+  // or every LV sub in a town would inherit the primary's headroom.
+  const ssenClassUpper = (ssenClass ?? "").toUpperCase();
+  const ssenIsPrimaryOrGrid =
+    /\b(33|66|132)\s*KV\b/.test(ssenClassUpper) ||
+    /PRIMARY|GRID|BULK|EHV/.test(ssenClassUpper);
+  const ssenFeatureName = (feature.name as string | undefined) ?? null;
+  const ssenLookupName =
+    ssenIsPrimaryOrGrid ? (siteName ?? ssenFeatureName ?? null) : null;
   const [ssenLtds, setSsenLtds] = useState<any | null>(null);
   useEffect(() => {
     let alive = true;
