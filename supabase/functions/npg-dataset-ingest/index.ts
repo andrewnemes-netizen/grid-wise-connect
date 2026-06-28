@@ -982,8 +982,6 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
 
   const props = feature.properties || {};
 
-  const datasetId = String(entry.dataset_id || "").toLowerCase();
-
   return {
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
@@ -1170,6 +1168,7 @@ function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: s
 
 function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
+  const datasetId = String(entry.dataset_id || "").toLowerCase();
 
   const easting = firstNum(row,
     "easting", "eastings", "Easting", "EASTING", "x", "X", "location_x_m",
