@@ -445,6 +445,11 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
     feature.transratingwinter != null || feature.transratingsummer != null;
   const capacitySummary = isUkpnGridPrimary ? computeUkpnCapacity(feature) : null;
 
+  // UKPN Secondary Sites — surface a headroom-band summary
+  const isUkpnSecondary = /secondary\s*site/i.test(layerLabel) ||
+    feature.substationalias != null || feature.substationdesign != null;
+  const secondarySummary = !capacitySummary && isUkpnSecondary ? computeSecondarySummary(feature) : null;
+
   const PRIORITY = [
     "name", "asset_id", "circuit_id", "feeder_ref",
     "status", "voltage_kv", "voltage", "voltage_v",
@@ -476,6 +481,7 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
   return (
     <div className="space-y-3">
       {capacitySummary && <UkpnCapacityCard summary={capacitySummary} />}
+      {secondarySummary && <UkpnSecondaryCard summary={secondarySummary} />}
       <div className="rounded-md border overflow-hidden">
       <table className="w-full text-xs">
         <tbody>
@@ -565,6 +571,101 @@ function ragColor(util: number | null): { text: string; bg: string; label: strin
   if (util >= 90) return { text: "text-red-600", bg: "bg-red-500", label: "Red" };
   if (util >= 70) return { text: "text-amber-600", bg: "bg-amber-500", label: "Amber" };
   return { text: "text-emerald-600", bg: "bg-emerald-500", label: "Green" };
+}
+
+interface SecondarySummary {
+  utilBand: string | null;
+  headroomBand: string | null;
+  utilMidPct: number | null;
+  headroomMidPct: number | null;
+  voltageKv: string | null;
+  transformers: number | null;
+  design: string | null;
+  rag: { text: string; bg: string; label: string };
+  ragSource: "utilisation" | "headroom" | null;
+}
+
+/** Parse a band like "0-20%" or "80-100%" → midpoint number. */
+function bandMidpoint(band: unknown): number | null {
+  if (band == null) return null;
+  const m = String(band).match(/(\d+(?:\.\d+)?)\s*[-–to]+\s*(\d+(?:\.\d+)?)/i);
+  if (!m) {
+    const single = String(band).match(/(\d+(?:\.\d+)?)/);
+    return single ? Number(single[1]) : null;
+  }
+  return (Number(m[1]) + Number(m[2])) / 2;
+}
+
+function computeSecondarySummary(feature: Record<string, unknown>): SecondarySummary | null {
+  const utilBand = (feature.utilisation_band ?? feature.utilisationband ?? feature["utilisation band"] ?? null) as string | null;
+  const headroomBand = (feature.demand_headroom ?? feature.demandheadroom ?? feature["demand headroom"] ?? null) as string | null;
+  const voltageKv = (feature.substationvoltage ?? feature.voltage_kv ?? null) as string | null;
+  const transformers = feature.numberoftransformers != null ? Number(feature.numberoftransformers) : null;
+  const design = (feature.substationdesign ?? null) as string | null;
+
+  if (!utilBand && !headroomBand && !voltageKv && transformers == null) return null;
+
+  const utilMidPct = bandMidpoint(utilBand);
+  const headroomMidPct = bandMidpoint(headroomBand);
+
+  // Prefer utilisation for RAG; otherwise infer from headroom band (high headroom = low util).
+  let rag = ragColor(null);
+  let ragSource: "utilisation" | "headroom" | null = null;
+  if (utilMidPct != null) {
+    rag = ragColor(utilMidPct);
+    ragSource = "utilisation";
+  } else if (headroomMidPct != null) {
+    rag = ragColor(100 - headroomMidPct);
+    ragSource = "headroom";
+  }
+
+  return { utilBand, headroomBand, utilMidPct, headroomMidPct, voltageKv: voltageKv ? String(voltageKv) : null, transformers, design, rag, ragSource };
+}
+
+function UkpnSecondaryCard({ summary }: { summary: SecondarySummary }) {
+  const designLabel: Record<string, string> = {
+    GMT: "Ground-Mounted",
+    PMT: "Pole-Mounted",
+    KIOSK: "Kiosk",
+  };
+  const dKey = (summary.design ?? "").toUpperCase();
+  return (
+    <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold flex items-center gap-1">
+          <Zap className="h-3 w-3 text-primary" /> Headroom Summary
+        </p>
+        <Badge variant="outline" className="text-[10px]">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${summary.rag.bg}`} />
+          {summary.rag.label}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        {summary.headroomBand && (
+          <div className="rounded border bg-background p-2">
+            <p className="text-[10px] text-muted-foreground">Demand headroom</p>
+            <p className="text-sm font-semibold text-emerald-600">{summary.headroomBand}</p>
+            <p className="text-[10px] text-muted-foreground">spare capacity remaining</p>
+          </div>
+        )}
+        {summary.utilBand && (
+          <div className="rounded border bg-background p-2">
+            <p className="text-[10px] text-muted-foreground">Utilisation</p>
+            <p className="text-sm font-semibold">{summary.utilBand}</p>
+            <p className="text-[10px] text-muted-foreground">of firm rating</p>
+          </div>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {summary.voltageKv && <Badge variant="secondary" className="text-[10px]">{summary.voltageKv}</Badge>}
+        {summary.transformers != null && <Badge variant="secondary" className="text-[10px]">{summary.transformers} transformer{summary.transformers === 1 ? "" : "s"}</Badge>}
+        {summary.design && <Badge variant="secondary" className="text-[10px]">{designLabel[dKey] ?? summary.design}</Badge>}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Source: UKPN Secondary Sites register. Headroom bands are UKPN-published thermal ratings; for exact MVA figures use the LV Capacity Map.
+      </p>
+    </div>
+  );
 }
 
 function UkpnCapacityCard({ summary }: { summary: UkpnCapacity }) {
