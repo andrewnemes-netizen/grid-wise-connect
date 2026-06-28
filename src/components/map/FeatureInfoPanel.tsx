@@ -445,6 +445,11 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
     feature.transratingwinter != null || feature.transratingsummer != null;
   const capacitySummary = isUkpnGridPrimary ? computeUkpnCapacity(feature) : null;
 
+  // UKPN Secondary Sites — surface a headroom-band summary
+  const isUkpnSecondary = /secondary\s*site/i.test(layerLabel) ||
+    feature.substationalias != null || feature.substationdesign != null;
+  const secondarySummary = !capacitySummary && isUkpnSecondary ? computeSecondarySummary(feature) : null;
+
   const PRIORITY = [
     "name", "asset_id", "circuit_id", "feeder_ref",
     "status", "voltage_kv", "voltage", "voltage_v",
@@ -476,6 +481,7 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
   return (
     <div className="space-y-3">
       {capacitySummary && <UkpnCapacityCard summary={capacitySummary} />}
+      {secondarySummary && <UkpnSecondaryCard summary={secondarySummary} />}
       <div className="rounded-md border overflow-hidden">
       <table className="w-full text-xs">
         <tbody>
