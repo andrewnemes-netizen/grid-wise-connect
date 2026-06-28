@@ -1,33 +1,27 @@
+## Goal
+Make it instantly obvious how much spare capacity (headroom) a UKPN Grid/Primary substation has, with proper units.
 
-## Context
+## Changes (frontend only — `src/components/map/FeatureInfoPanel.tsx`)
 
-The monthly circuit operational data we ingested is UKPN data (licence area SPN — South Eastern Power Networks, one of UKPN's three areas, alongside EPN and LPN). The popup lookup wired to UKPN substations is therefore correct.
+1. **Add a "Capacity & Headroom" summary card** at the top of the UKPN Grid & Primary Sites popup, computed from the feature's own attributes (no extra fetch):
 
-The only issue is naming: the storage table and RPC were created under an `npg_` prefix from an earlier draft. That makes the schema misleading and risks the same confusion recurring later (and blocks ever adding real NPG circuit data alongside it).
+   - **Firm capacity (N-1)**: sum of transformer ratings minus the largest one (standard DNO N-1 rule). Shown for both summer and winter.
+   - **Peak demand**: `Maxdemandsummer` / `Maxdemandwinter` in MVA.
+   - **Headroom (MVA)**: Firm capacity − Peak demand, per season.
+   - **Utilisation (%)**: Peak demand ÷ Firm capacity.
+   - **RAG badge**: Green <70%, Amber 70–90%, Red >90% (winter, worst case).
 
-## What changes
+   Example for the screenshot site (4× 69.8 MVA winter, peak 47.6 MVA):
+   Firm = 3 × 69.8 = 209.4 MVA · Headroom = 161.8 MVA · Utilisation = 23% → Green.
 
-Rename only — no data loss, no behaviour change.
+2. **Add unit labels to the generic attribute table** so raw fields are self-explanatory:
+   - `maxdemandsummer`, `maxdemandwinter`, `transratingsummer`, `transratingwinter` → suffix **MVA**
+   - `assessmentdate`, `next_assessmentdate` → formatted date
+   - `siteclassification` → tooltip "UKPN asset condition (Cold = low risk)"
+   - Repeating rating lists ("69.8, 69.8, 69.8, 69.8") → render as "4 × 69.8 MVA"
 
-1. **Database**
-   - Rename table `public.npg_circuit_monthly` → `public.ukpn_circuit_monthly`.
-   - Rename view `public.npg_circuit_latest_utilisation` → `public.ukpn_circuit_latest_utilisation` (recreate against new table).
-   - Replace RPC `public.npg_circuits_for_substation(text)` with `public.ukpn_circuits_for_substation(text)` pointing at the new table. Drop the old one.
-   - Re-apply GRANTs and RLS policies on the renamed objects.
-
-2. **Edge function**
-   - Rename `supabase/functions/ukpn-circuit-monthly-ingest` is already correctly named; update its internal `from("npg_circuit_monthly")` references to `ukpn_circuit_monthly`.
-
-3. **Frontend**
-   - `src/components/map/FeatureInfoPanel.tsx`: swap RPC name from `npg_circuits_for_substation` to `ukpn_circuits_for_substation`, and update the source caption to "UKPN monthly circuit operational data (132 / 33 kV)".
+3. **Keep existing LTDS + Connected Circuits sections** below the new summary — no changes to data, RPCs, or ingestion.
 
 ## Out of scope
-
-- No re-ingest — existing rows are kept as-is.
-- No change to LTDS tables or to the substation popup layout.
-- No actual NPG (Northern Powergrid) ingest yet; if you want NPG circuits later, that's a separate task with its own table.
-
-## Technical notes
-
-- Postgres `ALTER TABLE ... RENAME TO` preserves data, indexes, constraints, and RLS, so the rename is safe.
-- Views and functions reference the old name by parse-time resolution, so the view and RPC must be dropped and recreated against the new table in the same migration.
+- No schema changes, no edge function changes, no new data sources.
+- Secondary substations popup unchanged (no transformer rating fields available).

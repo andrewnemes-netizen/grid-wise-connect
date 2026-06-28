@@ -396,6 +396,25 @@ function prettyLabel(key: string): string {
 function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "—";
   const k = key.toLowerCase();
+  // UKPN Grid & Primary Sites raw fields — all MVA
+  if (k === "maxdemandsummer" || k === "maxdemandwinter") {
+    const n = Number(value);
+    return Number.isNaN(n) ? String(value) : `${n.toLocaleString()} MVA`;
+  }
+  if (k === "transratingsummer" || k === "transratingwinter") {
+    // Repeating "69.8, 69.8, 69.8, 69.8" → "4 × 69.8 MVA"
+    const parts = String(value).split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    const nums = parts.map(Number).filter(n => !Number.isNaN(n));
+    if (nums.length > 1 && nums.every(n => n === nums[0])) {
+      return `${nums.length} × ${nums[0]} MVA`;
+    }
+    if (nums.length >= 1) return `${nums.map(n => n.toLocaleString()).join(", ")} MVA`;
+    return String(value);
+  }
+  if (k === "assessmentdate" || k === "next_assessmentdate" || k === "nextassessmentdate") {
+    const d = new Date(String(value));
+    if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  }
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isNaN(num) && typeof value !== "boolean") {
     if (k.includes("length") || k === "shape_length" || k.endsWith("_m")) {
@@ -421,6 +440,11 @@ function voltageClassFromLabel(label: string): string | null {
 }
 
 function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>; layerLabel: string }) {
+  // UKPN Grid & Primary Sites — surface a Capacity & Headroom summary at the top
+  const isUkpnGridPrimary = /grid\s*and\s*primary/i.test(layerLabel) ||
+    feature.transratingwinter != null || feature.transratingsummer != null;
+  const capacitySummary = isUkpnGridPrimary ? computeUkpnCapacity(feature) : null;
+
   const PRIORITY = [
     "name", "asset_id", "circuit_id", "feeder_ref",
     "status", "voltage_kv", "voltage", "voltage_v",
@@ -450,7 +474,9 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
   }
 
   return (
-    <div className="rounded-md border overflow-hidden">
+    <div className="space-y-3">
+      {capacitySummary && <UkpnCapacityCard summary={capacitySummary} />}
+      <div className="rounded-md border overflow-hidden">
       <table className="w-full text-xs">
         <tbody>
           {voltageClass && !hasExplicitVoltage && (
@@ -467,6 +493,118 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
           ))}
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+/** Parse a transformer rating string like "69.8, 69.8, 69.8, 69.8" into an array of MVA numbers. */
+function parseRatings(value: unknown): number[] {
+  if (value == null) return [];
+  return String(value)
+    .split(/[,\s]+/)
+    .map(s => Number(s.trim()))
+    .filter(n => !Number.isNaN(n) && n > 0);
+}
+
+interface UkpnCapacity {
+  ratingsSummer: number[];
+  ratingsWinter: number[];
+  firmSummer: number | null;
+  firmWinter: number | null;
+  peakSummer: number | null;
+  peakWinter: number | null;
+  headroomSummer: number | null;
+  headroomWinter: number | null;
+  utilSummer: number | null;
+  utilWinter: number | null;
+  worstUtil: number | null;
+}
+
+function computeUkpnCapacity(feature: Record<string, unknown>): UkpnCapacity | null {
+  const ratingsSummer = parseRatings(feature.transratingsummer);
+  const ratingsWinter = parseRatings(feature.transratingwinter);
+  const peakSummer = feature.maxdemandsummer != null ? Number(feature.maxdemandsummer) : null;
+  const peakWinter = feature.maxdemandwinter != null ? Number(feature.maxdemandwinter) : null;
+
+  if (ratingsSummer.length === 0 && ratingsWinter.length === 0 && peakSummer == null && peakWinter == null) {
+    return null;
+  }
+
+  // Firm capacity (N-1): sum minus largest. If only one transformer, firm = 0.
+  const firm = (arr: number[]): number | null => {
+    if (arr.length === 0) return null;
+    if (arr.length === 1) return 0;
+    const max = Math.max(...arr);
+    return arr.reduce((a, b) => a + b, 0) - max;
+  };
+  const firmSummer = firm(ratingsSummer);
+  const firmWinter = firm(ratingsWinter);
+
+  const headroom = (f: number | null, p: number | null) => (f != null && p != null ? f - p : null);
+  const util = (p: number | null, f: number | null) => (p != null && f != null && f > 0 ? (p / f) * 100 : null);
+
+  const headroomSummer = headroom(firmSummer, peakSummer);
+  const headroomWinter = headroom(firmWinter, peakWinter);
+  const utilSummer = util(peakSummer, firmSummer);
+  const utilWinter = util(peakWinter, firmWinter);
+  const worstUtil = Math.max(utilSummer ?? 0, utilWinter ?? 0) || (utilSummer ?? utilWinter);
+
+  return {
+    ratingsSummer, ratingsWinter,
+    firmSummer, firmWinter,
+    peakSummer, peakWinter,
+    headroomSummer, headroomWinter,
+    utilSummer, utilWinter,
+    worstUtil,
+  };
+}
+
+function ragColor(util: number | null): { text: string; bg: string; label: string } {
+  if (util == null) return { text: "text-muted-foreground", bg: "bg-muted", label: "—" };
+  if (util >= 90) return { text: "text-red-600", bg: "bg-red-500", label: "Red" };
+  if (util >= 70) return { text: "text-amber-600", bg: "bg-amber-500", label: "Amber" };
+  return { text: "text-emerald-600", bg: "bg-emerald-500", label: "Green" };
+}
+
+function UkpnCapacityCard({ summary }: { summary: UkpnCapacity }) {
+  const fmt = (n: number | null, suffix = " MVA") => n == null ? "—" : `${n.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`;
+  const rag = ragColor(summary.worstUtil);
+  return (
+    <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold flex items-center gap-1">
+          <Zap className="h-3 w-3 text-primary" /> Capacity & Headroom (N-1)
+        </p>
+        <Badge variant="outline" className="text-[10px]">
+          <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1 ${rag.bg}`} />
+          {rag.label}{summary.worstUtil != null ? ` · ${summary.worstUtil.toFixed(0)}%` : ""}
+        </Badge>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div />
+        <div className="text-[10px] text-muted-foreground text-center">Summer</div>
+        <div className="text-[10px] text-muted-foreground text-center">Winter</div>
+
+        <div className="text-[10px] text-muted-foreground self-center">Firm capacity</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{fmt(summary.firmSummer)}</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{fmt(summary.firmWinter)}</div>
+
+        <div className="text-[10px] text-muted-foreground self-center">Peak demand</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{fmt(summary.peakSummer)}</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{fmt(summary.peakWinter)}</div>
+
+        <div className="text-[10px] text-muted-foreground self-center">Headroom</div>
+        <div className={`rounded border bg-background p-1.5 text-center font-semibold ${summary.headroomSummer != null && summary.headroomSummer <= 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(summary.headroomSummer)}</div>
+        <div className={`rounded border bg-background p-1.5 text-center font-semibold ${summary.headroomWinter != null && summary.headroomWinter <= 0 ? "text-red-600" : "text-emerald-600"}`}>{fmt(summary.headroomWinter)}</div>
+
+        <div className="text-[10px] text-muted-foreground self-center">Utilisation</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{summary.utilSummer != null ? `${summary.utilSummer.toFixed(0)}%` : "—"}</div>
+        <div className="rounded border bg-background p-1.5 text-center font-semibold">{summary.utilWinter != null ? `${summary.utilWinter.toFixed(0)}%` : "—"}</div>
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Firm = N-1 (sum of transformer ratings − largest). Values in MVA. Source: UKPN Grid & Primary Sites register.
+      </p>
     </div>
   );
 }
