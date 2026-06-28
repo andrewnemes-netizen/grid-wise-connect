@@ -105,6 +105,24 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
     return () => { alive = false; };
   }, [sfl]);
 
+  // SSEN LTDS capacity/headroom lookup (matches by site name / locality)
+  const ssenLookupName = (siteName ?? (feature.name as string | undefined) ?? ssenLocality ?? null) as string | null;
+  const [ssenLtds, setSsenLtds] = useState<any | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setSsenLtds(null);
+    if (!isSsen || !ssenLookupName || ssenLookupName.length < 3) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("ssen_substation_capacity_lookup", { _name: ssenLookupName });
+      if (!alive || error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && (row.firm_capacity_mva != null || row.recorded_demand_mva != null)) {
+        setSsenLtds(row);
+      }
+    })();
+    return () => { alive = false; };
+  }, [isSsen, ssenLookupName]);
+
   // NPG monthly circuit utilisation lookup for connected circuits
   const lookupName = (siteName ?? upstream ?? gspName ?? null) as string | null;
   const [circuits, setCircuits] = useState<any[] | null>(null);
