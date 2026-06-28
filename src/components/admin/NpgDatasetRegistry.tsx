@@ -307,15 +307,20 @@ export function NpgDatasetRegistry() {
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const isLtds = entry.dno === "UKPN" && entry.dataset_id.startsWith("ltds-table-");
+      const fnName = isLtds ? "ukpn-ltds-ingest" : "npg-dataset-ingest";
+      const fnBody = isLtds
+        ? { registry_id: entry.id, dataset_id: entry.dataset_id }
+        : { registry_id: entry.id, mode };
       const resp = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/npg-dataset-ingest`,
+        `https://${projectId}.supabase.co/functions/v1/${fnName}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ registry_id: entry.id, mode }),
+          body: JSON.stringify(fnBody),
         }
       );
 
