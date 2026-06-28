@@ -409,6 +409,13 @@ async function performIngest(
     effectiveError =
       `Read ${totalSkipped.toLocaleString()} source rows but could not map any geometry. ` +
       `Likely cause: unsupported coordinate/geometry columns for ${entry.dataset_id}.`;
+  } else if (
+    !syncError && !hasMore && cumulativeInserted === 0 && totalSkipped === 0 && sourceCount === 0
+  ) {
+    effectiveStatus = "skipped";
+    effectiveError =
+      `No ingestible API resource found for ${entry.dataset_id} ` +
+      `(source only exposes PDF/zip/non-tabular files).`;
   }
 
   await supabase.from(registryTable).update({
@@ -550,6 +557,8 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
   let inFeatures = false;
   let depth = 0;
   let featureStart = -1;
+  let inString = false;
+  let escape = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -568,12 +577,21 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
       buffer = buffer.slice(bracketIdx + 1);
       depth = 0;
       featureStart = -1;
+      inString = false;
+      escape = false;
     }
 
     let i = 0;
     while (i < buffer.length) {
       const ch = buffer[i];
-      if (ch === "{") {
+      if (escape) {
+        escape = false;
+      } else if (inString) {
+        if (ch === "\\") escape = true;
+        else if (ch === '"') inString = false;
+      } else if (ch === '"') {
+        inString = true;
+      } else if (ch === "{") {
         if (depth === 0) featureStart = i;
         depth++;
       } else if (ch === "}") {
