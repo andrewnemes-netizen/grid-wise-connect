@@ -3449,6 +3449,22 @@ export type Database = {
           utilisation_pct: number
         }[]
       }
+      ssen_substation_capacity_lookup: {
+        Args: { _name: string }
+        Returns: {
+          fault_break_ka: number
+          fault_make_ka: number
+          firm_capacity_mva: number
+          forecast_json: Json
+          headroom_mva: number
+          power_factor: number
+          recorded_demand_mva: number
+          region: string
+          site_name: string
+          source_date: string
+          voltage_kv: number
+        }[]
+      }
       st_3dclosestpoint: {
         Args: { geom1: unknown; geom2: unknown }
         Returns: unknown
