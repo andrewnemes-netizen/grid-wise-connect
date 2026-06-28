@@ -933,21 +933,13 @@ function getSsenDistributionResourceUrls(entry: any, storageTable: string): Arra
     .filter((r) => r.url.startsWith("https://data-api.ssen.co.uk/"));
 
   const datasetId = String(entry.dataset_id || "").toLowerCase();
-  const wantsPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
-  const usableType = wantsPolygon ? "geojson" : "csv";
-  let matches = candidates.filter((r) => r.type === usableType);
+  // API-only mode: only GeoJSON resources are supported. CSV resources are ignored.
+  let matches = candidates.filter((r) => r.type === "geojson");
 
   // The SSEN ESA datasets keep older and current-year resources in one package.
   // Prefer the current 2025 licence-area resources, and take both SEPD + SHEPD.
   if (datasetId.includes("substation") && matches.some((r) => /2025/.test(r.label + r.url))) {
     matches = matches.filter((r) => /2025/.test(r.label + r.url));
-  }
-
-  if (matches.length === 0 && !wantsPolygon) {
-    matches = candidates.filter((r) => r.type === "geojson");
-  }
-  if (matches.length === 0 && wantsPolygon) {
-    matches = candidates.filter((r) => r.type === "csv");
   }
 
   const seen = new Set<string>();
@@ -958,7 +950,7 @@ function getSsenDistributionResourceUrls(entry: any, storageTable: string): Arra
       return true;
     })
     .slice(0, 4)
-    .map((r) => ({ type: r.type === "geojson" ? "geojson" : "csv", url: r.url }));
+    .map((r) => ({ type: "geojson" as const, url: r.url }));
 }
 
 async function ingestViaCkanGeoJson(
