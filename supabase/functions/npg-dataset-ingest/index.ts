@@ -20,6 +20,15 @@ for (let i = 0; i < 256; i++) HEX_PREFIXES.push(i.toString(16).padStart(2, "0"))
 const ACTIVE_SYNC_STATUSES = new Set(["processing", "partial"]);
 const STALE_INGEST_MS = 5 * 60 * 1000;
 
+type IngestResult = {
+  inserted: number;
+  skipped: number;
+  hasMore?: boolean;
+  nextSkipFeatures?: number;
+  consumedRows?: number;
+  processedRows?: number;
+};
+
 function hasFreshIngestLock(lastSyncAt?: string | null) {
   const lastMs = lastSyncAt ? Date.parse(lastSyncAt) : Number.NaN;
   return Number.isFinite(lastMs) && Date.now() - lastMs < STALE_INGEST_MS;
@@ -188,6 +197,7 @@ Deno.serve(async (req) => {
       last_sync_status: "processing",
       last_sync_error: null,
       last_sync_at: now,
+      last_sync_rows: isContinuation ? (entry.last_sync_rows || 0) : 0,
       updated_at: now,
     }).eq("id", registry_id);
 
@@ -256,18 +266,38 @@ async function performIngest(
   let syncError: string | null = null;
   let hasMore = false;
   let nextPartitionStart = 0;
+  let nextSkipFeatures = 0;
 
   try {
+    const isContinuation = partitionStart > 0 || skipFeatures > 0;
     const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
     const isCkan = entry.dno === "NGED" || isSsenDistribution;
     const recordCount = entry.record_count ?? 0;
     const isLargeDataset = recordCount > 5000;
     const isVeryLargeDataset = recordCount > 10000;
 
+    // SSEN Distribution exports can be restarted after edge timeouts.  On a new
+    // run, replace the layer contents so a failed partial run cannot leave
+    // duplicate map features behind (especially point datasets with null IDs).
+    if (isSsenDistribution && !isContinuation) {
+      const { error: clearError } = await supabase
+        .from(storageTable)
+        .delete()
+        .eq("layer_id", entry.linked_layer_id);
+      if (clearError) throw new Error(`Failed to clear existing SSEN layer rows: ${clearError.message}`);
+    }
+
     if (isCkan) {
-      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
+      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (isVeryLargeDataset && entry.endpoint_records) {
       // ── PARTITIONED RECORDS API ──
       // Use recordid prefix partitioning to stay under the 10k offset+limit cap.
@@ -308,9 +338,16 @@ async function performIngest(
         totalSkipped = result.skipped;
       }
     } else if (entry.endpoint_export_csv && !entry.is_geospatial) {
-      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
+      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
         const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
@@ -348,7 +385,7 @@ async function performIngest(
 
   // Final status
   const finalStatus = syncError ? "error" : (hasMore ? "partial" : "success");
-  const prevRows = partitionStart > 0 ? (entry.last_sync_rows || 0) : 0;
+  const prevRows = (partitionStart > 0 || skipFeatures > 0) ? (entry.last_sync_rows || 0) : 0;
   const cumulativeInserted = prevRows + totalInserted;
 
   const finalTs = new Date().toISOString();
@@ -384,7 +421,7 @@ async function performIngest(
 
   // Self-continue if more partitions remain
   if (hasMore && !syncError && authHeader) {
-    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}…`);
+    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}, skip ${nextSkipFeatures}…`);
     // Give the edge runtime breathing room before self-continuation to avoid
     // 503 "Service is temporarily unavailable" from worker contention.
     await sleep(3000);
@@ -393,9 +430,15 @@ async function performIngest(
       await fetch(`${supabaseUrl}/functions/v1/npg-dataset-ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ registry_id: registryId, mode: "export", partition_start: nextPartitionStart }),
+        body: JSON.stringify({
+          registry_id: registryId,
+          mode: "export",
+          partition_start: nextPartitionStart,
+          skip_features: nextSkipFeatures,
+          chunk_size: chunkSize || getDefaultChunkRowLimit(storageTable),
+        }),
       });
-      console.log(`[ingest] Self-continuation dispatched for partition_start=${nextPartitionStart}`);
+      console.log(`[ingest] Self-continuation dispatched for partition_start=${nextPartitionStart}, skip_features=${nextSkipFeatures}`);
     } catch (e) {
       console.error(`[ingest] Self-continuation failed:`, e);
     }
