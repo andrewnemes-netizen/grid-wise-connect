@@ -1571,6 +1571,19 @@ function getBatchSize(storageTable: string): number {
   }
 }
 
+function getDefaultChunkRowLimit(storageTable: string): number {
+  switch (storageTable) {
+    case "geo_polygons":
+    case "geo_constraints":
+      return 750;
+    case "geo_feeders":
+    case "geo_cables":
+      return 2000;
+    default:
+      return 5000;
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
