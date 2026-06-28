@@ -18,7 +18,16 @@ const corsHeaders = {
 const HEX_PREFIXES: string[] = [];
 for (let i = 0; i < 256; i++) HEX_PREFIXES.push(i.toString(16).padStart(2, "0"));
 const ACTIVE_SYNC_STATUSES = new Set(["processing", "partial"]);
-const STALE_INGEST_MS = 2 * 60 * 1000;
+const STALE_INGEST_MS = 5 * 60 * 1000;
+
+type IngestResult = {
+  inserted: number;
+  skipped: number;
+  hasMore?: boolean;
+  nextSkipFeatures?: number;
+  consumedRows?: number;
+  processedRows?: number;
+};
 
 function hasFreshIngestLock(lastSyncAt?: string | null) {
   const lastMs = lastSyncAt ? Date.parse(lastSyncAt) : Number.NaN;
@@ -188,6 +197,7 @@ Deno.serve(async (req) => {
       last_sync_status: "processing",
       last_sync_error: null,
       last_sync_at: now,
+      last_sync_rows: isContinuation ? (entry.last_sync_rows || 0) : 0,
       updated_at: now,
     }).eq("id", registry_id);
 
@@ -216,7 +226,7 @@ Deno.serve(async (req) => {
       Promise.race([
         performIngest(supabase, entry, layerRow, storageTable, apiKey, user.id, registry_id, mode,
           { where, select: selectFields, order_by }, registryTable, authHeader, partition_start, skip_features, chunk_size),
-        new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Background timeout 120s")), 120000)),
+        new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Background timeout 240s")), 240000)),
       ]).catch(async (err) => {
         console.error(`[ingest] Background crash for ${entry.dataset_id}:`, err);
         await supabase.from(registryTable).update({
@@ -256,18 +266,38 @@ async function performIngest(
   let syncError: string | null = null;
   let hasMore = false;
   let nextPartitionStart = 0;
+  let nextSkipFeatures = 0;
 
   try {
+    const isContinuation = partitionStart > 0 || skipFeatures > 0;
     const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
     const isCkan = entry.dno === "NGED" || isSsenDistribution;
     const recordCount = entry.record_count ?? 0;
     const isLargeDataset = recordCount > 5000;
     const isVeryLargeDataset = recordCount > 10000;
 
+    // SSEN Distribution exports can be restarted after edge timeouts.  On a new
+    // run, replace the layer contents so a failed partial run cannot leave
+    // duplicate map features behind (especially point datasets with null IDs).
+    if (isSsenDistribution && !isContinuation) {
+      const { error: clearError } = await supabase
+        .from(storageTable)
+        .delete()
+        .eq("layer_id", entry.linked_layer_id);
+      if (clearError) throw new Error(`Failed to clear existing SSEN layer rows: ${clearError.message}`);
+    }
+
     if (isCkan) {
-      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey);
+      const result = await ingestViaCkan(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (isVeryLargeDataset && entry.endpoint_records) {
       // ── PARTITIONED RECORDS API ──
       // Use recordid prefix partitioning to stay under the 10k offset+limit cap.
@@ -308,9 +338,16 @@ async function performIngest(
         totalSkipped = result.skipped;
       }
     } else if (entry.endpoint_export_csv && !entry.is_geospatial) {
-      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey);
+      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
       totalInserted = result.inserted;
       totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
         const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
@@ -348,7 +385,7 @@ async function performIngest(
 
   // Final status
   const finalStatus = syncError ? "error" : (hasMore ? "partial" : "success");
-  const prevRows = partitionStart > 0 ? (entry.last_sync_rows || 0) : 0;
+  const prevRows = (partitionStart > 0 || skipFeatures > 0) ? (entry.last_sync_rows || 0) : 0;
   const cumulativeInserted = prevRows + totalInserted;
 
   const finalTs = new Date().toISOString();
@@ -365,6 +402,13 @@ async function performIngest(
     effectiveError =
       `Source returned 0 features but record_count=${sourceCount}. ` +
       `Likely cause: missing/invalid API key for ${entry.dno} or the export endpoint is gated.`;
+  } else if (
+    !syncError && !hasMore && cumulativeInserted === 0 && totalSkipped > 0
+  ) {
+    effectiveStatus = "error";
+    effectiveError =
+      `Read ${totalSkipped.toLocaleString()} source rows but could not map any geometry. ` +
+      `Likely cause: unsupported coordinate/geometry columns for ${entry.dataset_id}.`;
   }
 
   await supabase.from(registryTable).update({
@@ -377,7 +421,7 @@ async function performIngest(
 
   // Self-continue if more partitions remain
   if (hasMore && !syncError && authHeader) {
-    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}…`);
+    console.log(`[ingest] Partial complete (${cumulativeInserted} cumulative). Continuing from partition ${nextPartitionStart}, skip ${nextSkipFeatures}…`);
     // Give the edge runtime breathing room before self-continuation to avoid
     // 503 "Service is temporarily unavailable" from worker contention.
     await sleep(3000);
@@ -386,9 +430,15 @@ async function performIngest(
       await fetch(`${supabaseUrl}/functions/v1/npg-dataset-ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": authHeader },
-        body: JSON.stringify({ registry_id: registryId, mode: "export", partition_start: nextPartitionStart }),
+        body: JSON.stringify({
+          registry_id: registryId,
+          mode: "export",
+          partition_start: nextPartitionStart,
+          skip_features: nextSkipFeatures,
+          chunk_size: chunkSize || getDefaultChunkRowLimit(storageTable),
+        }),
       });
-      console.log(`[ingest] Self-continuation dispatched for partition_start=${nextPartitionStart}`);
+      console.log(`[ingest] Self-continuation dispatched for partition_start=${nextPartitionStart}, skip_features=${nextSkipFeatures}`);
     } catch (e) {
       console.error(`[ingest] Self-continuation failed:`, e);
     }
@@ -593,60 +643,54 @@ async function ingestViaGeoJsonExport(
 // ─── CSV Export Ingestion (Streaming) ───────────────────────────────────────
 
 async function ingestViaCsvExport(
-  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
-): Promise<{ inserted: number; skipped: number }> {
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
+  options: { skipFeatures?: number; maxFeatures?: number } = {},
+): Promise<IngestResult> {
   const url = entry.endpoint_export_csv;
   console.log(`[ingest] Fetching CSV export (streaming): ${url}`);
 
   const resp = await fetchWithRetry(url, apiKey);
   if (!resp.ok) throw new Error(`CSV export failed: HTTP ${resp.status}`);
 
-  const reader = resp.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
   let headers: string[] | null = null;
   const batchSize = getBatchSize(storageTable);
   let totalInserted = 0;
   let totalSkipped = 0;
   let batch: any[] = [];
+  const skipFeatures = Math.max(0, Number(options.skipFeatures || 0));
+  const maxFeatures = Math.max(0, Number(options.maxFeatures || 0));
+  let dataRowIndex = 0;
+  let processedRows = 0;
+  let hitLimit = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      if (!headers) { headers = parseCSVLine(trimmed); continue; }
-
-      const values = parseCSVLine(trimmed);
-      const row: Record<string, string> = {};
-      headers.forEach((h, idx) => { row[h.trim()] = values[idx] || ""; });
-
-      const mapped = mapCsvRowToFeature(row, entry, layerRow, storageTable);
-      if (mapped) batch.push(mapped); else totalSkipped++;
-
-      if (batch.length >= batchSize) {
-        const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
-          _table_name: storageTable, _features_json: JSON.stringify(batch),
-        });
-        if (error) throw new Error(`Batch insert error: ${error.message}`);
-        totalInserted += inserted ?? batch.length;
-        batch = [];
-      }
+  for await (const values of streamCsvRows(resp)) {
+    if (values.length === 0 || values.every((v) => !String(v || "").trim())) continue;
+    if (!headers) {
+      headers = values.map(cleanHeader);
+      continue;
     }
-  }
 
-  if (buffer.trim() && headers) {
-    const values = parseCSVLine(buffer.trim());
+    dataRowIndex++;
+    if (dataRowIndex <= skipFeatures) continue;
+    if (maxFeatures > 0 && processedRows >= maxFeatures) {
+      hitLimit = true;
+      break;
+    }
+    processedRows++;
+
     const row: Record<string, string> = {};
-    headers.forEach((h, idx) => { row[h.trim()] = values[idx] || ""; });
+    headers.forEach((h, idx) => { row[h] = values[idx] || ""; });
     const mapped = mapCsvRowToFeature(row, entry, layerRow, storageTable);
     if (mapped) batch.push(mapped); else totalSkipped++;
+
+    if (batch.length >= batchSize) {
+      const { data: inserted, error } = await supabase.rpc("batch_insert_geo_features", {
+        _table_name: storageTable, _features_json: JSON.stringify(batch),
+      });
+      if (error) throw new Error(`Batch insert error: ${error.message}`);
+      totalInserted += inserted ?? batch.length;
+      batch = [];
+    }
   }
 
   if (batch.length > 0) {
@@ -657,8 +701,78 @@ async function ingestViaCsvExport(
     totalInserted += inserted ?? batch.length;
   }
 
-  console.log(`[ingest] CSV streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
-  return { inserted: totalInserted, skipped: totalSkipped };
+  console.log(`[ingest] CSV streaming done: ${totalInserted} inserted, ${totalSkipped} skipped, processed ${processedRows}, hasMore=${hitLimit}`);
+  return {
+    inserted: totalInserted,
+    skipped: totalSkipped,
+    hasMore: hitLimit,
+    nextSkipFeatures: skipFeatures + processedRows,
+    consumedRows: dataRowIndex,
+    processedRows,
+  };
+}
+
+async function* streamCsvRows(resp: Response): AsyncGenerator<string[]> {
+  const reader = resp.body!.getReader();
+  const decoder = new TextDecoder();
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+  let pendingQuote = false;
+
+  const emitField = () => {
+    row.push(field);
+    field = "";
+  };
+
+  const emitRow = () => {
+    emitField();
+    const out = row;
+    row = [];
+    return out;
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    const chunk = done ? "" : decoder.decode(value, { stream: true });
+
+    for (let i = 0; i < chunk.length; i++) {
+      const ch = chunk[i];
+
+      if (pendingQuote) {
+        pendingQuote = false;
+        if (ch === '"') {
+          field += '"';
+          continue;
+        }
+        inQuotes = false;
+      }
+
+      if (inQuotes) {
+        if (ch === '"') pendingQuote = true;
+        else field += ch;
+        continue;
+      }
+
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === "," || ch === ";") {
+        emitField();
+      } else if (ch === "\n") {
+        yield emitRow();
+      } else if (ch !== "\r") {
+        field += ch;
+      }
+    }
+
+    if (done) break;
+  }
+
+  if (pendingQuote) {
+    pendingQuote = false;
+    inQuotes = false;
+  }
+  if (field.length > 0 || row.length > 0) yield emitRow();
 }
 
 // ─── Paginated Records Ingestion (for small datasets <10k) ──────────────────
@@ -733,11 +847,60 @@ async function ingestViaRecords(
 // ─── CKAN (NGED) Ingestion ───────────────────────────────────────────────────
 
 async function ingestViaCkan(
-  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
-): Promise<{ inserted: number; skipped: number }> {
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
+  options: { skipFeatures?: number; maxFeatures?: number } = {},
+): Promise<IngestResult> {
   const isSsenDistribution = entry.dno === "SSEN" && String(entry.dataset_id || "").startsWith("dx-");
   const recordsUrl = String(entry.endpoint_records || "");
   const hasDatastoreRecordsUrl = !!recordsUrl && (recordsUrl.includes("datastore_search") || recordsUrl.includes("/api/3/action/"));
+
+  if (isSsenDistribution) {
+    const resourceUrls = getSsenDistributionResourceUrls(entry, storageTable);
+    if (resourceUrls.length > 0) {
+      let inserted = 0;
+      let skipped = 0;
+      let remainingSkip = Math.max(0, Number(options.skipFeatures || 0));
+      const maxFeatures = Math.max(0, Number(options.maxFeatures || 0));
+      let processedRows = 0;
+      console.log(`[ingest] CKAN: Using ${resourceUrls.length} SSEN Distribution resource(s) for ${entry.dataset_id}`);
+      for (const resource of resourceUrls) {
+        if (maxFeatures > 0 && processedRows >= maxFeatures) {
+          return {
+            inserted,
+            skipped,
+            hasMore: true,
+            nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows,
+            processedRows,
+          };
+        }
+        const scopedEntry = {
+          ...entry,
+          endpoint_export_geojson: resource.type === "geojson" ? resource.url : null,
+          endpoint_export_csv: resource.type === "csv" ? resource.url : null,
+        };
+        const result = resource.type === "geojson"
+          ? await ingestViaCkanGeoJson(supabase, scopedEntry, layerRow, storageTable, apiKey)
+          : await ingestViaCsvExport(supabase, scopedEntry, layerRow, storageTable, apiKey, {
+            skipFeatures: remainingSkip,
+            maxFeatures: maxFeatures > 0 ? maxFeatures - processedRows : 0,
+          });
+        inserted += result.inserted;
+        skipped += result.skipped;
+        processedRows += result.processedRows ?? (result.inserted + result.skipped);
+        remainingSkip = Math.max(0, remainingSkip - (result.consumedRows ?? 0));
+        if (result.hasMore) {
+          return {
+            inserted,
+            skipped,
+            hasMore: true,
+            nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows,
+            processedRows,
+          };
+        }
+      }
+      return { inserted, skipped, hasMore: false, nextSkipFeatures: Math.max(0, Number(options.skipFeatures || 0)) + processedRows, processedRows };
+    }
+  }
 
   if (entry.endpoint_export_geojson) {
     console.log(`[ingest] CKAN: Using GeoJSON resource for ${entry.dataset_id}`);
@@ -768,6 +931,45 @@ async function ingestViaCkan(
     last_sync_at: new Date().toISOString(),
   }).eq("id", entry.id);
   return { inserted: 0, skipped: 0 };
+}
+
+function getSsenDistributionResourceUrls(entry: any, storageTable: string): Array<{ type: "geojson" | "csv"; url: string }> {
+  const resources = Array.isArray(entry.fields_json) ? entry.fields_json : [];
+  const candidates = resources
+    .map((r: any) => ({
+      type: String(r.type || "").toLowerCase(),
+      url: String(r.url || ""),
+      label: String(r.label || r.name || ""),
+    }))
+    .filter((r) => r.url.startsWith("https://data-api.ssen.co.uk/"));
+
+  const datasetId = String(entry.dataset_id || "").toLowerCase();
+  const wantsPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
+  const usableType = wantsPolygon ? "geojson" : "csv";
+  let matches = candidates.filter((r) => r.type === usableType);
+
+  // The SSEN ESA datasets keep older and current-year resources in one package.
+  // Prefer the current 2025 licence-area resources, and take both SEPD + SHEPD.
+  if (datasetId.includes("substation") && matches.some((r) => /2025/.test(r.label + r.url))) {
+    matches = matches.filter((r) => /2025/.test(r.label + r.url));
+  }
+
+  if (matches.length === 0 && !wantsPolygon) {
+    matches = candidates.filter((r) => r.type === "geojson");
+  }
+  if (matches.length === 0 && wantsPolygon) {
+    matches = candidates.filter((r) => r.type === "csv");
+  }
+
+  const seen = new Set<string>();
+  return matches
+    .filter((r) => {
+      if (!r.url || seen.has(r.url)) return false;
+      seen.add(r.url);
+      return true;
+    })
+    .slice(0, 4)
+    .map((r) => ({ type: r.type === "geojson" ? "geojson" : "csv", url: r.url }));
 }
 
 async function ingestViaCkanGeoJson(
@@ -1057,22 +1259,44 @@ function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: s
 
 function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: string): any | null {
   let geom: any = null;
+  const datasetId = String(entry.dataset_id || "").toLowerCase();
 
-  const easting = parseNum(row.easting || row.Easting || row.EASTING || row.x || row.X || row["Location (X-coordinate):\nEastings (where data is held)"] || row["Location (X-coordinate): Eastings (where data is held)"]);
-  const northing = parseNum(row.northing || row.Northing || row.NORTHING || row.y || row.Y || row["Location (y-coordinate):\nNorthings (where data is held)"] || row["Location (y-coordinate): Northings (where data is held)"]);
+  const easting = firstNum(row,
+    "easting", "eastings", "Easting", "EASTING", "x", "X", "location_x_m",
+    "Location (X-coordinate):\nEastings (where data is held)",
+    "Location (X-coordinate): Eastings (where data is held)"
+  ) ?? (() => {
+    const mm = firstNum(row, "location_x_mm");
+    return mm != null ? mm / 1000 : null;
+  })();
+  const northing = firstNum(row,
+    "northing", "northings", "Northing", "NORTHING", "y", "Y", "location_y_m",
+    "Location (y-coordinate):\nNorthings (where data is held)",
+    "Location (y-coordinate): Northings (where data is held)"
+  ) ?? (() => {
+    const mm = firstNum(row, "location_y_mm");
+    return mm != null ? mm / 1000 : null;
+  })();
 
-  if (row.geo_point_2d) {
-    const parts = String(row.geo_point_2d).split(",").map((s: string) => Number(s.trim()));
+  const geoPoint = firstText(row, "geo_point_2d");
+  const lat = firstNum(row, "lat", "latitude", "Latitude", "LATITUDE", "Location Latitude");
+  const lon = firstNum(row, "lon", "lng", "longitude", "Longitude", "LONGITUDE", "Location Longitude");
+  const geometryText = firstText(row, "geometry", "Geometry", "GEOMETRY", "geojson", "GeoJSON");
+
+  if (geometryText) {
+    geom = parseGeometryText(geometryText);
+  }
+
+  if (!geom && geoPoint) {
+    const parts = String(geoPoint).split(",").map((s: string) => Number(s.trim()));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
       geom = { type: "Point", coordinates: [parts[1], parts[0]] };
     }
-  } else if (row.lat && row.lon) {
-    geom = { type: "Point", coordinates: [Number(row.lon), Number(row.lat)] };
-  } else if (row.latitude && row.longitude) {
-    geom = { type: "Point", coordinates: [Number(row.longitude), Number(row.latitude)] };
-  } else if (row["Location Latitude"] && row["Location Longitude"]) {
-    geom = { type: "Point", coordinates: [Number(row["Location Longitude"]), Number(row["Location Latitude"])] };
-  } else if (easting != null && northing != null) {
+  } else if (lat != null && lon != null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+    geom = { type: "Point", coordinates: [lon, lat] };
+  }
+
+  if (!geom && easting != null && northing != null) {
     const wgs = bngToWgs84Approx(easting, northing);
     if (wgs) geom = { type: "Point", coordinates: [wgs.lon, wgs.lat] };
   }
@@ -1085,10 +1309,12 @@ function mapCsvRowToFeature(row: any, entry: any, layerRow: any, storageTable: s
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
     dno: entry.dno,
-    name: row.name || row.site_name || row.psp_name || row.Substation || row.Primary || row.GSP || row["Customer Site "] || null,
-    asset_id: row.asset_id || row.site_id || row.AssetID || row["Export MPAN / MSID"] || row["Import MPAN / MSID"] || null,
+    name: firstText(row, "name", "site_name", "psp_name", "Substation", "Primary", "PRIMARY_NAME_2025", "GSP_NAME", "Customer Site ", "locality", "number") || null,
+    asset_id: datasetId === "dx-ssen-substation-data"
+      ? null
+      : firstText(row, "asset_id", "site_id", "AssetID", "number", "Unique ID", "Export MPAN / MSID", "Import MPAN / MSID") || null,
     attrs_json: row,
-    status: row.status || "active",
+    status: firstText(row, "status", "Status", "Connection Status ") || "active",
     capacity_kw: parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"]) != null ? parseNum(row.firm_capacity_kw || row.capacity_kw || row["Connected Generation (MW)"])! * (row["Connected Generation (MW)"] ? 1000 : 1) : null,
     demand_kw: parseNum(row.max_demand_kw || row.demand_kw || row["Maximum Observed Gross Demand (MVA)"]) != null ? parseNum(row.max_demand_kw || row.demand_kw || row["Maximum Observed Gross Demand (MVA)"])! * (row["Maximum Observed Gross Demand (MVA)"] ? 1000 : 1) : null,
     headroom_kw: parseNum(row.headroom_kw || row["Estimated Demand Headroom (MVA)"]) != null ? parseNum(row.headroom_kw || row["Estimated Demand Headroom (MVA)"])! * (row["Estimated Demand Headroom (MVA)"] ? 1000 : 1) : null,
@@ -1152,8 +1378,151 @@ function bngToWgs84Approx(e: number, n: number): { lat: number; lon: number } | 
 
 function parseNum(v: any): number | null {
   if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
+  const n = Number(String(v).replace(/,/g, "").trim());
   return isNaN(n) ? null : n;
+}
+
+function cleanHeader(header: string): string {
+  return String(header || "").replace(/^\uFEFF/, "").trim();
+}
+
+function normaliseKey(key: string): string {
+  return cleanHeader(key).toLowerCase().replace(/\s+/g, " ");
+}
+
+function firstText(row: Record<string, any>, ...keys: string[]): string | null {
+  const normalised = new Map<string, any>();
+  for (const [key, value] of Object.entries(row)) normalised.set(normaliseKey(key), value);
+  for (const key of keys) {
+    const direct = row[key];
+    const value = direct ?? normalised.get(normaliseKey(key));
+    if (value !== null && value !== undefined && String(value).trim() !== "") return String(value).trim();
+  }
+  return null;
+}
+
+function firstNum(row: Record<string, any>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const text = firstText(row, key);
+    const num = parseNum(text);
+    if (num != null) return num;
+  }
+  return null;
+}
+
+function parseGeometryText(value: string): any | null {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.type === "Feature") return parsed.geometry || null;
+      if (parsed?.type && parsed?.coordinates) return parsed;
+    } catch {}
+  }
+  if (/^MULTIPOLYGON\s*\(/i.test(text)) return parseWktMultiPolygon(text);
+  if (/^POLYGON\s*\(/i.test(text)) return parseWktPolygon(text);
+  if (/^MULTILINESTRING\s*\(/i.test(text)) return parseWktMultiLineString(text);
+  if (/^LINESTRING\s*\(/i.test(text)) return parseWktLineString(text);
+  if (/^POINT\s*\(/i.test(text)) return parseWktPoint(text);
+  return null;
+}
+
+function parseWktPoint(wkt: string): any | null {
+  const inner = extractFirstParen(wkt);
+  const pair = parseCoordPair(inner);
+  return pair ? { type: "Point", coordinates: pair } : null;
+}
+
+function parseWktLineString(wkt: string): any | null {
+  const line = parseCoordList(extractFirstParen(wkt));
+  return line.length ? { type: "LineString", coordinates: line } : null;
+}
+
+function parseWktMultiLineString(wkt: string): any | null {
+  const inner = extractFirstParen(wkt);
+  const lines = splitTopLevelGroups(inner).map((group) => parseCoordList(stripOuterParens(group))).filter((line) => line.length);
+  return lines.length ? { type: "MultiLineString", coordinates: lines } : null;
+}
+
+function parseWktPolygon(wkt: string): any | null {
+  const rings = parsePolygonBody(extractFirstParen(wkt));
+  return rings.length ? { type: "Polygon", coordinates: rings } : null;
+}
+
+function parseWktMultiPolygon(wkt: string): any | null {
+  const inner = extractFirstParen(wkt);
+  const polygons = splitTopLevelGroups(inner)
+    .map((group) => parsePolygonBody(stripSingleOuterParens(group)))
+    .filter((poly) => poly.length);
+  return polygons.length ? { type: "MultiPolygon", coordinates: polygons } : null;
+}
+
+function parsePolygonBody(body: string): number[][][] {
+  const ringsBody = stripSingleOuterParens(body);
+  return splitTopLevelGroups(ringsBody)
+    .map((ring) => parseCoordList(stripSingleOuterParens(ring)))
+    .filter((ring) => ring.length);
+}
+
+function parseCoordList(text: string): number[][] {
+  return text.split(",").map(parseCoordPair).filter(Boolean) as number[][];
+}
+
+function parseCoordPair(text: string): number[] | null {
+  const parts = String(text || "").trim().split(/\s+/).map(Number);
+  return parts.length >= 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1]) ? [parts[0], parts[1]] : null;
+}
+
+function extractFirstParen(text: string): string {
+  const start = text.indexOf("(");
+  const end = text.lastIndexOf(")");
+  return start >= 0 && end > start ? text.slice(start + 1, end) : "";
+}
+
+function stripOuterParens(text: string): string {
+  let out = text.trim();
+  while (out.startsWith("(") && out.endsWith(")")) {
+    out = out.slice(1, -1).trim();
+  }
+  return out;
+}
+
+function stripSingleOuterParens(text: string): string {
+  const out = text.trim();
+  return outerParensWrapEntireString(out) ? out.slice(1, -1).trim() : out;
+}
+
+function outerParensWrapEntireString(text: string): boolean {
+  if (!text.startsWith("(") || !text.endsWith(")")) return false;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (depth === 0 && i < text.length - 1) return false;
+  }
+  return depth === 0;
+}
+
+function splitTopLevelGroups(text: string): string[] {
+  const groups: string[] = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "(") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === ")") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        groups.push(text.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+  return groups;
 }
 
 async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 3): Promise<Response> {
@@ -1199,6 +1568,19 @@ function getBatchSize(storageTable: string): number {
       return 200;
     default:
       return 500;
+  }
+}
+
+function getDefaultChunkRowLimit(storageTable: string): number {
+  switch (storageTable) {
+    case "geo_polygons":
+    case "geo_constraints":
+      return 750;
+    case "geo_feeders":
+    case "geo_cables":
+      return 2000;
+    default:
+      return 5000;
   }
 }
 
