@@ -85,7 +85,7 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
       const { data, error } = await supabase.rpc("ukpn_substation_capacity_lookup", { _sfl: sfl });
       if (!alive || error) return;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row && (row.firm_capacity_mva != null || row.peak_mw != null || row.fault_level_ka != null)) {
+      if (row && (row.firm_capacity_mva != null || row.peak_true_mw != null || row.peak_observed_mw != null || row.fault_3ph_ka != null)) {
         setLtds(row);
       }
     })();
@@ -225,24 +225,24 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
                 <p className="text-sm font-semibold">{Number(ltds.firm_capacity_mva).toLocaleString()} MVA</p>
               </div>
             )}
-            {ltds.peak_mw != null && (
+            {(ltds.peak_true_mw ?? ltds.peak_observed_mw) != null && (
               <div className="rounded-md border bg-background p-2">
                 <p className="text-[10px] text-muted-foreground">Peak Demand</p>
-                <p className="text-sm font-semibold">{Number(ltds.peak_mw).toLocaleString()} MW</p>
+                <p className="text-sm font-semibold">{Number(ltds.peak_true_mw ?? ltds.peak_observed_mw).toLocaleString()} MW</p>
               </div>
             )}
-            {ltds.headroom_mw != null && (
+            {(ltds.headroom_true_mva ?? ltds.headroom_observed_mva) != null && (
               <div className="rounded-md border bg-background p-2">
                 <p className="text-[10px] text-muted-foreground">Headroom</p>
-                <p className={`text-sm font-semibold ${Number(ltds.headroom_mw) <= 0 ? "text-red-500" : "text-emerald-600"}`}>
-                  {Number(ltds.headroom_mw).toLocaleString()} MW
+                <p className={`text-sm font-semibold ${Number(ltds.headroom_true_mva ?? ltds.headroom_observed_mva) <= 0 ? "text-red-500" : "text-emerald-600"}`}>
+                  {Number(ltds.headroom_true_mva ?? ltds.headroom_observed_mva).toLocaleString()} MVA
                 </p>
               </div>
             )}
-            {ltds.fault_level_ka != null && (
+            {ltds.fault_3ph_ka != null && (
               <div className="rounded-md border bg-background p-2">
                 <p className="text-[10px] text-muted-foreground">Fault Level (3ph)</p>
-                <p className="text-sm font-semibold">{Number(ltds.fault_level_ka).toLocaleString()} kA</p>
+                <p className="text-sm font-semibold">{Number(ltds.fault_3ph_ka).toLocaleString()} kA</p>
               </div>
             )}
           </div>
