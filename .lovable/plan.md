@@ -1,27 +1,52 @@
-## Why the Records column says 0
+## Goal
+Make SSEN substation popups display **firm capacity, peak demand and headroom** — matching the UKPN experience — by ingesting SSEN's LTDS data, which is where this information actually lives.
 
-The "Records" column reads `record_count` — the **source catalog's advertised row count**, populated by the crawler. SSEN Distribution's CKAN crawler can't get a row count from a CSV/GeoJSON file resource (CKAN exposes file links, not a count), so it stores `0` for every `dx-*` entry.
+## What SSEN publishes (confirmed)
+The `dx-sepd_long_term_development_statement` dataset exposes three usable API resources for headroom:
 
-The numbers you actually ingested live in `last_sync_rows` and are already shown under **Last Sync** (e.g. "1,019 rows" on Generation Availability, 234,900 on SSEN Substation Data). So the data is in — the column just isn't showing it.
+1. **LTDS Capacity Heatmap** (GeoJSON, May 2026) — polygons with capacity attributes ready for the map.
+2. **LTDS Tables** (XLSX, Nov 2025) — Tables 1–6: transformer ratings, peak demand, fault levels per primary/grid site.
+3. **LTDS Data Definitions** (CSV) — column dictionary.
 
-DB confirms it:
-- `dx-generation-availability…` → `record_count=0`, `last_sync_rows=1019`, `success`
-- `dx-ssen-substation-data` → `record_count=0`, `last_sync_rows=234900`, `processing`
-- `dx-embedded_capacity_register` → still `processing` (CSV is large, self-continuing)
+`dx-shepd_long_term_development_statement` follows the same pattern for the North-Scotland region.
 
-## Fix
+Everything else in the dataset is PDF/zip CIM — out of scope for V1.
 
-Frontend-only change in `src/components/admin/NpgDatasetRegistry.tsx` (line ~741):
+## What to build
 
-- Render `ds.last_sync_rows || ds.record_count` in the Records column, formatted with thousands separators.
-- When `last_sync_rows > 0` but `record_count === 0` (typical for CKAN/CSV sources), show a small "ingested" hint below the number so it's obvious the count comes from the last sync, not the source catalog.
-- Keep the existing source-count display when the crawler did populate `record_count` (NPG, UKPN, SSEN-T Opendatasoft datasets).
+### 1. New `ssen-ltds-ingest` Edge Function
+Mirrors `ukpn-ltds-ingest`. For each SSEN region (SEPD, SHEPD):
+- Pull the latest XLSX LTDS Tables resource from CKAN.
+- Parse via SheetJS (`xlsx` npm import) — read sheets named like `Table 2 – Transformers`, `Table 3 – Peak Demand`, `Table 4 – Fault Levels`.
+- Normalise rows into the new tables below.
+- Pull the Capacity Heatmap GeoJSON straight into `geo_polygons` under a new layer.
 
-## Also — separate observation, not part of this fix
+### 2. New tables (mirror UKPN LTDS schema)
+- `ssen_ltds_transformers` — site_name, voltage_kv, transformer_id, rating_mva, region (SEPD/SHEPD), source_date
+- `ssen_ltds_peak_demand` — site_name, voltage_kv, winter_peak_mw, summer_peak_mw, year, region
+- `ssen_ltds_fault_levels` — site_name, voltage_kv, three_ph_ka, single_ph_ka, region
+- All with `service_role` full + `authenticated` SELECT grants and RLS.
 
-Several `dx-*` rows show `error` (`dx-realtime_outage_dataset`, `dx-technicallimits`, `dx-shepd_network_development_report`, etc.). Those are real failures and want a follow-up pass once the column fix is in, but they're not what this question was about.
+### 3. New layer: "SSEN LTDS — Capacity Heatmap"
+- `layer_registry` entry → `geo_polygons` storage, SEPD + SHEPD merged, RAG-styled by available capacity.
+- Auto-fly-to behaviour from the existing layer bbox logic.
 
-## Files touched
-- `src/components/admin/NpgDatasetRegistry.tsx` — one cell render.
+### 4. Popup integration (`FeatureInfoPanel.tsx`)
+For any SSEN substation point, look up the LTDS row by **site name + voltage class** (with fuzzy match — SSEN names are inconsistently cased/spaced).
+- If a match is found, render the same **Capacity & Headroom (N-1)** + **Estimated spare capacity** cards used for UKPN sites.
+- Headroom formula: `Σ(transformer ratings) − Σ(largest transformer) − peak demand` (standard N-1).
+- If no LTDS match (typical for LV/pole-mounted), keep the existing "open register does not publish firm capacity" footnote.
 
-No backend, no schema, no edge-function changes.
+### 5. Admin Registry wiring
+- Flip `dx-sepd_long_term_development_statement` and `dx-shepd_long_term_development_statement` from "pending" to routed-through-`ssen-ltds-ingest` (registry entry pointing to the new function instead of `npg-dataset-ingest`).
+
+## Out of scope
+- CIM EQ Profile zips (different ingestion problem; deferred).
+- LV/pole-mounted substations — SSEN does not publish capacity for these anywhere; the existing footnote stays.
+- Embedded Capacity Register cross-referencing (separate dataset, separate ticket).
+
+## Verification
+1. Ingest SEPD LTDS → confirm `ssen_ltds_transformers` rows > 0.
+2. Open a known Primary/Grid site in Oxford (e.g. APPLETON 11kV/LV is LV → won't match; pick a 33kV primary).
+3. Confirm Capacity & Headroom card renders with non-zero MVA.
+4. Toggle the Capacity Heatmap layer → polygons render across SEPD region.
