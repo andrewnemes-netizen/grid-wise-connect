@@ -339,21 +339,89 @@ function PlanningInfo({ feature, layerLabel }: { feature: Record<string, unknown
   );
 }
 
-function GenericInfo({ feature }: { feature: Record<string, unknown> }) {
-  const entries = Object.entries(feature).filter(
-    ([key]) => !HIDDEN_KEYS.includes(key.toLowerCase())
+/** Pretty label formatter: handles abbreviations and snake/kebab case. */
+function prettyLabel(key: string): string {
+  const cleaned = key.replace(/[_-]+/g, " ").trim();
+  return cleaned
+    .replace(/\b([a-z])/g, (_, c) => c.toUpperCase())
+    .replace(/\b(Lv|Hv|Ehv|Dno|Gsp|Bsp|Psp|Id|Url|Mw|Kw|Kv|Kva|Mva|Ka|Pct|Lsoa|Sfl|Ltds|Ev|Ct)\b/gi, m => m.toUpperCase());
+}
+
+/** Format numeric or string values with units where possible. */
+function formatValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const k = key.toLowerCase();
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isNaN(num) && typeof value !== "boolean") {
+    if (k.includes("length") || k === "shape_length" || k.endsWith("_m")) {
+      return num >= 1000 ? `${(num / 1000).toFixed(2)} km` : `${num.toFixed(0)} m`;
+    }
+    if (k.endsWith("_kv") || k === "voltage_kv") return `${num} kV`;
+    if (k.endsWith("_kw")) return `${num.toLocaleString()} kW`;
+    if (k.endsWith("_mw")) return `${num.toLocaleString()} MW`;
+    if (k.endsWith("_mva")) return `${num.toLocaleString()} MVA`;
+    if (k === "voltage_v" || k === "voltage") return num >= 1000 ? `${(num / 1000).toFixed(num >= 10000 ? 0 : 1)} kV` : `${num} V`;
+    if (k.includes("pct") || k.includes("percent")) return `${num}%`;
+  }
+  return String(value);
+}
+
+/** Derive voltage class from a layer label like "UKPN HV Cables". */
+function voltageClassFromLabel(label: string): string | null {
+  const l = label.toLowerCase();
+  if (l.includes("ehv")) return "EHV (33 – 132 kV)";
+  if (/\bhv\b/.test(l) || l.includes("hv cables") || l.includes("hv overhead")) return "HV (6.6 – 22 kV, typ. 11 kV)";
+  if (/\blv\b/.test(l) || l.includes("lv cables") || l.includes("lv overhead")) return "LV (≤ 1 kV, typ. 400 V)";
+  return null;
+}
+
+function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>; layerLabel: string }) {
+  const PRIORITY = [
+    "name", "asset_id", "circuit_id", "feeder_ref",
+    "status", "voltage_kv", "voltage", "voltage_v",
+    "capacity_value", "capacity_unit", "capacity_flag",
+    "line_situation", "conductor", "conductor_type", "material",
+    "length_m", "shape_length",
+    "local_authority", "licence_area", "substation_type", "substation_class",
+    "source_date",
+  ];
+
+  const all = Object.entries(feature).filter(
+    ([key, val]) => !HIDDEN_KEYS.includes(key.toLowerCase()) && val !== null && val !== undefined && val !== ""
   );
 
-  if (entries.length === 0) return <p className="text-xs text-muted-foreground">No attributes available.</p>;
+  const priorityEntries = PRIORITY
+    .map(k => all.find(([key]) => key.toLowerCase() === k))
+    .filter((x): x is [string, unknown] => !!x);
+  const usedKeys = new Set(priorityEntries.map(([k]) => k.toLowerCase()));
+  const otherEntries = all.filter(([k]) => !usedKeys.has(k.toLowerCase()));
+  const ordered = [...priorityEntries, ...otherEntries];
+
+  const voltageClass = voltageClassFromLabel(layerLabel);
+  const hasExplicitVoltage = ordered.some(([k]) => /^voltage($|_)/i.test(k));
+
+  if (ordered.length === 0 && !voltageClass) {
+    return <p className="text-xs text-muted-foreground">No attributes available.</p>;
+  }
 
   return (
-    <div className="space-y-1">
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex justify-between gap-2 text-xs py-0.5">
-          <span className="text-muted-foreground capitalize shrink-0">{key.replace(/_/g, " ")}</span>
-          <span className="text-foreground text-right break-all font-medium">{String(value ?? "—")}</span>
-        </div>
-      ))}
+    <div className="rounded-md border overflow-hidden">
+      <table className="w-full text-xs">
+        <tbody>
+          {voltageClass && !hasExplicitVoltage && (
+            <tr className="border-b">
+              <td className="bg-primary/10 font-semibold px-2 py-1.5 w-2/5">Voltage Class</td>
+              <td className="px-2 py-1.5">{voltageClass}</td>
+            </tr>
+          )}
+          {ordered.map(([key, value]) => (
+            <tr key={key} className="border-b last:border-b-0">
+              <td className="bg-primary/10 font-semibold px-2 py-1.5 w-2/5">{prettyLabel(key)}</td>
+              <td className="px-2 py-1.5 break-all">{formatValue(key, value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -457,7 +525,7 @@ export function FeatureInfoPanel({ feature: rawFeature, layerLabel, onClose }: F
     if (isPlanningData) return <PlanningInfo feature={feature} layerLabel={layerLabel} />;
     if (isSubstationArea) return <SubstationAreaInfo feature={feature} />;
     if (isSubstation) return <SubstationInfo feature={feature} />;
-    return <GenericInfo feature={feature} />;
+    return <GenericInfo feature={feature} layerLabel={layerLabel} />;
   };
 
   return (
