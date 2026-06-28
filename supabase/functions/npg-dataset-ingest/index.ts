@@ -1365,8 +1365,9 @@ function parseWktMultiPolygon(wkt: string): any | null {
 }
 
 function parsePolygonBody(body: string): number[][][] {
-  return splitTopLevelGroups(body)
-    .map((ring) => parseCoordList(stripOuterParens(ring)))
+  const ringsBody = stripSingleOuterParens(body);
+  return splitTopLevelGroups(ringsBody)
+    .map((ring) => parseCoordList(stripSingleOuterParens(ring)))
     .filter((ring) => ring.length);
 }
 
@@ -1395,7 +1396,19 @@ function stripOuterParens(text: string): string {
 
 function stripSingleOuterParens(text: string): string {
   const out = text.trim();
-  return out.startsWith("(") && out.endsWith(")") ? out.slice(1, -1).trim() : out;
+  return outerParensWrapEntireString(out) ? out.slice(1, -1).trim() : out;
+}
+
+function outerParensWrapEntireString(text: string): boolean {
+  if (!text.startsWith("(") || !text.endsWith(")")) return false;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "(") depth++;
+    if (ch === ")") depth--;
+    if (depth === 0 && i < text.length - 1) return false;
+  }
+  return depth === 0;
 }
 
 function splitTopLevelGroups(text: string): string[] {
