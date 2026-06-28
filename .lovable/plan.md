@@ -1,57 +1,27 @@
-## Why you can't see the SSEN data
+## Why the Records column says 0
 
-The data **is** ingested correctly — but it's almost all in **Scotland** (the SSEN Transmission licence area covers the north of Scotland and the EGL2 corridor). Your map is currently centred on **Oxford (~51.7° N)**, while the SSEN features sit between **56° N and 58° N**.
+The "Records" column reads `record_count` — the **source catalog's advertised row count**, populated by the crawler. SSEN Distribution's CKAN crawler can't get a row count from a CSV/GeoJSON file resource (CKAN exposes file links, not a count), so it stores `0` for every `dx-*` entry.
 
-Actual extents of populated layers:
-- SSEN Poles (Grid): lat 56.3–58.2, lon −6.8 to −5.0 (Highlands / Western Isles)
-- SSEN Towers (Grid & Supergrid): lat 56.2–58.4, lon −5.1 to −2.3
-- SSEN Overhead Lines (Grid / Supergrid): same Scottish corridor
-- SSEN EGL2 Points: lat 57.1–57.5 (Peterhead area)
-- SSEN Ground Investigation: lat 53.7–58.6 (Scotland + N. England)
+The numbers you actually ingested live in `last_sync_rows` and are already shown under **Last Sync** (e.g. "1,019 rows" on Generation Availability, 234,900 on SSEN Substation Data). So the data is in — the column just isn't showing it.
 
-Nothing exists in the Oxford / Southern England area for these layers because that's SEPD (SSEN **Distribution**) territory, not SSEN Transmission — and the Distribution layers (`ssen-dx-*`) have 0 rows because their CKAN resources require manual GeoPackage upload (no public API endpoint).
-
-Secondary issue found: `ssen-dx-generation-availability` has 999 rows but with **corrupted coordinates** (latitude values of `89343` — coordinate-swap / units bug in the ingest mapper). These points will never render on the map.
+DB confirms it:
+- `dx-generation-availability…` → `record_count=0`, `last_sync_rows=1019`, `success`
+- `dx-ssen-substation-data` → `record_count=0`, `last_sync_rows=234900`, `processing`
+- `dx-embedded_capacity_register` → still `processing` (CSV is large, self-continuing)
 
 ## Fix
 
-### 1. Backfill `bbox` on layer_registry so "Go to coverage" works
-All SSEN layers currently have `bbox = NULL`, so clicking the layer doesn't fly the map anywhere. Run a backfill computing each layer's bbox from its actual geometry:
+Frontend-only change in `src/components/admin/NpgDatasetRegistry.tsx` (line ~741):
 
-```sql
--- For every layer with rows but no bbox, set bbox = ST_Extent(geom)
-UPDATE layer_registry lr
-SET bbox = sub.bbox_jsonb
-FROM (
-  SELECT layer_id,
-         jsonb_build_array(ST_XMin(ext), ST_YMin(ext), ST_XMax(ext), ST_YMax(ext)) AS bbox_jsonb
-  FROM (
-    SELECT layer_id, ST_Extent(geom)::geometry AS ext FROM geo_points  GROUP BY layer_id
-    UNION ALL
-    SELECT layer_id, ST_Extent(geom)::geometry FROM geo_cables   GROUP BY layer_id
-    UNION ALL
-    SELECT layer_id, ST_Extent(geom)::geometry FROM geo_polygons GROUP BY layer_id
-  ) e
-) sub
-WHERE lr.id = sub.layer_id AND lr.bbox IS NULL;
-```
+- Render `ds.last_sync_rows || ds.record_count` in the Records column, formatted with thousands separators.
+- When `last_sync_rows > 0` but `record_count === 0` (typical for CKAN/CSV sources), show a small "ingested" hint below the number so it's obvious the count comes from the last sync, not the source catalog.
+- Keep the existing source-count display when the crawler did populate `record_count` (NPG, UKPN, SSEN-T Opendatasoft datasets).
 
-After this, clicking the layer name (or its "Go to coverage" action) will fly the map to the Scottish Highlands where the SSEN Transmission assets actually live.
+## Also — separate observation, not part of this fix
 
-### 2. Clean up the corrupted `ssen-dx-generation-availability` rows
-Delete the 999 broken rows and reset that dataset to `pending` so it re-ingests with the now-correct coordinate handling:
+Several `dx-*` rows show `error` (`dx-realtime_outage_dataset`, `dx-technicallimits`, `dx-shepd_network_development_report`, etc.). Those are real failures and want a follow-up pass once the column fix is in, but they're not what this question was about.
 
-```sql
-DELETE FROM geo_points
-WHERE layer_id = (SELECT id FROM layer_registry WHERE slug='ssen-dx-generation-availability');
+## Files touched
+- `src/components/admin/NpgDatasetRegistry.tsx` — one cell render.
 
-UPDATE dno_dataset_registry
-SET status='pending', last_error=NULL, rows_ingested=0
-WHERE dataset_id LIKE '%generation-availability%' AND source='SSEN';
-```
-
-Then hit **Ingest** on that row in Admin → DNO Dataset Registry.
-
-## What you should do after the fix
-1. In Map Layers, click **SSEN Poles (Grid)** (or any SSEN row) — the map should fly north to the Highlands.
-2. The Distribution layers (`SSEN DX – …`) will remain empty until we either (a) manually upload the GeoPackages from data.ssen.co.uk, or (b) wire a CKAN→GeoPackage downloader. Happy to do either next.
+No backend, no schema, no edge-function changes.
