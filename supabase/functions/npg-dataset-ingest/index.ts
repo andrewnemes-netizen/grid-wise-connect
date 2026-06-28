@@ -337,6 +337,17 @@ async function performIngest(
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
       }
+    } else if (entry.endpoint_export_csv && !entry.is_geospatial) {
+      const result = await ingestViaCsvExport(supabase, entry, layerRow, storageTable, apiKey, {
+        skipFeatures,
+        maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+      });
+      totalInserted = result.inserted;
+      totalSkipped = result.skipped;
+      if (result.hasMore) {
+        hasMore = true;
+        nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+      }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
         const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
@@ -914,7 +925,7 @@ async function ingestViaCkan(
   return { inserted: 0, skipped: 0 };
 }
 
-function getSsenDistributionResourceUrls(entry: any, storageTable: string): Array<{ type: "geojson"; url: string }> {
+function getSsenDistributionResourceUrls(entry: any, storageTable: string): Array<{ type: "geojson" | "csv"; url: string }> {
   const resources = Array.isArray(entry.fields_json) ? entry.fields_json : [];
   const candidates = resources
     .map((r: any) => ({
@@ -925,8 +936,13 @@ function getSsenDistributionResourceUrls(entry: any, storageTable: string): Arra
     .filter((r) => r.url.startsWith("https://data-api.ssen.co.uk/"));
 
   const datasetId = String(entry.dataset_id || "").toLowerCase();
-  // API-only mode: only GeoJSON resources are supported. CSV resources are ignored.
+  // SSEN Distribution serves data as HTTP CSV/GeoJSON files from data-api.ssen.co.uk
+  // (this IS their API — no JSON records endpoint exists). Prefer GeoJSON, fall back to CSV.
+  const wantsPolygon = storageTable === "geo_polygons" || storageTable === "geo_constraints";
   let matches = candidates.filter((r) => r.type === "geojson");
+  if (matches.length === 0) {
+    matches = candidates.filter((r) => r.type === "csv");
+  }
 
   // The SSEN ESA datasets keep older and current-year resources in one package.
   // Prefer the current 2025 licence-area resources, and take both SEPD + SHEPD.
@@ -942,7 +958,7 @@ function getSsenDistributionResourceUrls(entry: any, storageTable: string): Arra
       return true;
     })
     .slice(0, 4)
-    .map((r) => ({ type: "geojson" as const, url: r.url }));
+    .map((r) => ({ type: (r.type === "geojson" ? "geojson" : "csv") as "geojson" | "csv", url: r.url }));
 }
 
 async function ingestViaCkanGeoJson(
