@@ -92,6 +92,21 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
     return () => { alive = false; };
   }, [sfl]);
 
+  // NPG monthly circuit utilisation lookup for connected circuits
+  const lookupName = (siteName ?? upstream ?? gspName ?? null) as string | null;
+  const [circuits, setCircuits] = useState<any[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setCircuits(null);
+    if (!lookupName || lookupName.length < 3) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("npg_circuits_for_substation", { p_name: lookupName });
+      if (!alive || error) return;
+      if (Array.isArray(data) && data.length > 0) setCircuits(data);
+    })();
+    return () => { alive = false; };
+  }, [lookupName]);
+
   return (
     <div className="space-y-3">
       {/* Header */}
