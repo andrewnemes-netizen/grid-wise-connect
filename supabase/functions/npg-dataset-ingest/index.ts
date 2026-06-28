@@ -195,9 +195,19 @@ Deno.serve(async (req) => {
     const dnoApiKeyMap: Record<string, string> = {
       NPG: "NPG_API_KEY", ENWL: "ENWL_API_KEY", SPEN: "SPEN_API_KEY",
       NGED: "NGED_API_KEY", UKPN: "UKPN_API_KEY", CADENT: "CADENT_API_KEY",
+      SSEN: "SSEN_API_KEY",
     };
     const apiKeyEnvName = dnoApiKeyMap[entry.dno] || null;
-    const apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
+    let apiKey = apiKeyEnvName ? (Deno.env.get(apiKeyEnvName) || null) : null;
+
+    // Safety: only forward the SSEN key to SSEN-owned hosts (Opendatasoft / data-api.ssen.co.uk)
+    if (entry.dno === "SSEN" && apiKey) {
+      const probeUrl = String(
+        entry.endpoint_export_geojson || entry.endpoint_records || entry.endpoint_export_csv || ""
+      );
+      const isSsenHost = /ssentransmission\.opendatasoft\.com|data-api\.ssen\.co\.uk|data\.ssen\.co\.uk/i.test(probeUrl);
+      if (!isSsenHost) apiKey = null;
+    }
 
     console.log(`[ingest] Starting ${mode} ingest for ${entry.dataset_id} → ${storageTable} (partition_start=${partition_start})`);
 
@@ -342,11 +352,26 @@ async function performIngest(
   const cumulativeInserted = prevRows + totalInserted;
 
   const finalTs = new Date().toISOString();
+  // Soft-failure: if the source advertises records but we ingested zero, surface as an error
+  // so silent auth/empty-export issues stop masquerading as successes.
+  let effectiveStatus = finalStatus;
+  let effectiveError = syncError;
+  const sourceCount = Number(entry.record_count || 0);
+  if (
+    !syncError && !hasMore && sourceCount > 0 &&
+    cumulativeInserted === 0 && totalSkipped === 0
+  ) {
+    effectiveStatus = "error";
+    effectiveError =
+      `Source returned 0 features but record_count=${sourceCount}. ` +
+      `Likely cause: missing/invalid API key for ${entry.dno} or the export endpoint is gated.`;
+  }
+
   await supabase.from(registryTable).update({
     last_sync_at: finalTs,
-    last_sync_status: finalStatus,
+    last_sync_status: effectiveStatus,
     last_sync_rows: cumulativeInserted,
-    last_sync_error: syncError,
+    last_sync_error: effectiveError,
     updated_at: finalTs,
   }).eq("id", registryId);
 
