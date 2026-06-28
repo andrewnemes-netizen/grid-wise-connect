@@ -49,7 +49,7 @@ interface DatasetEntry {
 
 const LIGHT_COLUMNS = "id,dno,dataset_id,title,description,portal_url,is_geospatial,geometry_type,record_count,endpoint_export_csv,endpoint_export_geojson,endpoint_export_parquet,export_formats,active,linked_layer_id,storage_table,last_sync_at,last_sync_status,last_sync_rows,last_sync_error,schema_hash,refresh_strategy,updated_at_source,created_at";
 const PAGE_SIZE = 50;
-const STALE_PROCESSING_MS = 2 * 60 * 1000;
+const STALE_PROCESSING_MS = 5 * 60 * 1000;
 
 export function NpgDatasetRegistry() {
   const queryClient = useQueryClient();
@@ -127,10 +127,18 @@ export function NpgDatasetRegistry() {
   const { data: stats } = useQuery({
     queryKey: ["dno-stats", selectedDno],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("dno_dataset_registry")
         .select("is_geospatial,active,last_sync_status,last_sync_rows", { count: "exact" })
         .eq("dno", dnoFilter);
+
+      if (selectedDno === "SSEN_DX") {
+        query = query.like("dataset_id", "dx-%");
+      } else if (selectedDno === "SSEN") {
+        query = query.not("dataset_id", "like", "dx-%");
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       const all = data ?? [];
       return {
@@ -163,12 +171,20 @@ export function NpgDatasetRegistry() {
   const { data: activeLinkedCount = 0 } = useQuery({
     queryKey: ["dno-active-linked-count", selectedDno],
     queryFn: async () => {
-      const { count, error } = await supabase
+      let query = supabase
         .from("dno_dataset_registry")
         .select("id", { count: "exact", head: true })
         .eq("dno", dnoFilter)
         .eq("active", true)
         .not("linked_layer_id", "is", null);
+
+      if (selectedDno === "SSEN_DX") {
+        query = query.like("dataset_id", "dx-%");
+      } else if (selectedDno === "SSEN") {
+        query = query.not("dataset_id", "like", "dx-%");
+      }
+
+      const { count, error } = await query;
       if (error) throw error;
       return count ?? 0;
     },
