@@ -1406,6 +1406,57 @@ export type Database = {
           },
         ]
       }
+      npg_circuit_monthly: {
+        Row: {
+          circuit_id: string
+          created_at: string
+          licence_area: string | null
+          month: number
+          peak_amps: number | null
+          peak_mva: number | null
+          peak_mvar: number | null
+          peak_mw: number | null
+          rating_mva: number | null
+          raw_json: Json | null
+          updated_at: string
+          utilisation_pct: number | null
+          voltage_kv: number
+          year: number
+        }
+        Insert: {
+          circuit_id: string
+          created_at?: string
+          licence_area?: string | null
+          month: number
+          peak_amps?: number | null
+          peak_mva?: number | null
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          rating_mva?: number | null
+          raw_json?: Json | null
+          updated_at?: string
+          utilisation_pct?: number | null
+          voltage_kv: number
+          year: number
+        }
+        Update: {
+          circuit_id?: string
+          created_at?: string
+          licence_area?: string | null
+          month?: number
+          peak_amps?: number | null
+          peak_mva?: number | null
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          rating_mva?: number | null
+          raw_json?: Json | null
+          updated_at?: string
+          utilisation_pct?: number | null
+          voltage_kv?: number
+          year?: number
+        }
+        Relationships: []
+      }
       org_members: {
         Row: {
           created_at: string
@@ -2755,6 +2806,21 @@ export type Database = {
           f_table_schema?: unknown
           srid?: number | null
           type?: string | null
+        }
+        Relationships: []
+      }
+      npg_circuit_latest_utilisation: {
+        Row: {
+          circuit_id: string | null
+          licence_area: string | null
+          month: number | null
+          peak_amps: number | null
+          peak_mva: number | null
+          peak_mw: number | null
+          rating_mva: number | null
+          utilisation_pct: number | null
+          voltage_kv: number | null
+          year: number | null
         }
         Relationships: []
       }
