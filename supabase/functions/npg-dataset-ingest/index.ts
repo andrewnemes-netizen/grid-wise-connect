@@ -707,7 +707,7 @@ async function ingestViaCsvExport(
     skipped: totalSkipped,
     hasMore: hitLimit,
     nextSkipFeatures: skipFeatures + processedRows,
-    consumedRows: skipFeatures + processedRows,
+    consumedRows: dataRowIndex,
     processedRows,
   };
 }
