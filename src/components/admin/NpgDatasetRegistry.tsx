@@ -307,7 +307,7 @@ export function NpgDatasetRegistry() {
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const isLtds = entry.dno === "UKPN" && entry.dataset_id.startsWith("ltds-table-");
+      const isLtds = entry.dno === "UKPN" && /^ltds-table-(2a|2b|3a|3b|4a|4b)\b/.test(entry.dataset_id);
       const fnName = isLtds ? "ukpn-ltds-ingest" : "npg-dataset-ingest";
       const fnBody = isLtds
         ? { registry_id: entry.id, dataset_id: entry.dataset_id }
