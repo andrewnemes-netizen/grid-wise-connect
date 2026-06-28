@@ -2315,6 +2315,237 @@ export type Database = {
         }
         Relationships: []
       }
+      ukpn_ltds_fault_3ph: {
+        Row: {
+          created_at: string
+          fault_level_ka: number | null
+          id: string
+          raw_json: Json | null
+          site_name: string | null
+          sitefunctionallocation: string
+          voltage_kv: number | null
+          x_r_ratio: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          fault_level_ka?: number | null
+          id?: string
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          voltage_kv?: number | null
+          x_r_ratio?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          fault_level_ka?: number | null
+          id?: string
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          voltage_kv?: number | null
+          x_r_ratio?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      ukpn_ltds_fault_earth: {
+        Row: {
+          created_at: string
+          fault_level_ka: number | null
+          id: string
+          raw_json: Json | null
+          site_name: string | null
+          sitefunctionallocation: string
+          voltage_kv: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          fault_level_ka?: number | null
+          id?: string
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          fault_level_ka?: number | null
+          id?: string
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      ukpn_ltds_peak_demand_observed: {
+        Row: {
+          created_at: string
+          id: string
+          peak_mvar: number | null
+          peak_mw: number | null
+          raw_json: Json | null
+          season: string | null
+          site_name: string | null
+          sitefunctionallocation: string
+          voltage_kv: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          raw_json?: Json | null
+          season?: string | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          raw_json?: Json | null
+          season?: string | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      ukpn_ltds_peak_demand_true: {
+        Row: {
+          created_at: string
+          id: string
+          peak_mvar: number | null
+          peak_mw: number | null
+          raw_json: Json | null
+          season: string | null
+          site_name: string | null
+          sitefunctionallocation: string
+          voltage_kv: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          raw_json?: Json | null
+          season?: string | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          peak_mvar?: number | null
+          peak_mw?: number | null
+          raw_json?: Json | null
+          season?: string | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      ukpn_ltds_transformers_2w: {
+        Row: {
+          created_at: string
+          cyclic_rating_mva: number | null
+          firm_capacity_mva: number | null
+          id: string
+          nameplate_mva: number | null
+          raw_json: Json | null
+          site_name: string | null
+          sitefunctionallocation: string
+          voltage_kv: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          cyclic_rating_mva?: number | null
+          firm_capacity_mva?: number | null
+          id?: string
+          nameplate_mva?: number | null
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          cyclic_rating_mva?: number | null
+          firm_capacity_mva?: number | null
+          id?: string
+          nameplate_mva?: number | null
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      ukpn_ltds_transformers_3w: {
+        Row: {
+          created_at: string
+          cyclic_rating_mva: number | null
+          firm_capacity_mva: number | null
+          id: string
+          nameplate_mva: number | null
+          raw_json: Json | null
+          site_name: string | null
+          sitefunctionallocation: string
+          tertiary_rating_mva: number | null
+          tertiary_voltage_kv: number | null
+          voltage_kv: number | null
+          year: number | null
+        }
+        Insert: {
+          created_at?: string
+          cyclic_rating_mva?: number | null
+          firm_capacity_mva?: number | null
+          id?: string
+          nameplate_mva?: number | null
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation: string
+          tertiary_rating_mva?: number | null
+          tertiary_voltage_kv?: number | null
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Update: {
+          created_at?: string
+          cyclic_rating_mva?: number | null
+          firm_capacity_mva?: number | null
+          id?: string
+          nameplate_mva?: number | null
+          raw_json?: Json | null
+          site_name?: string | null
+          sitefunctionallocation?: string
+          tertiary_rating_mva?: number | null
+          tertiary_voltage_kv?: number | null
+          voltage_kv?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
       unit_rates: {
         Row: {
           cable_ehv_per_m: number
@@ -3627,6 +3858,22 @@ export type Database = {
       st_wrapx: {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
+      }
+      ukpn_substation_capacity_lookup: {
+        Args: { _sfl: string }
+        Returns: {
+          cyclic_rating_mva: number
+          fault_3ph_ka: number
+          fault_earth_ka: number
+          firm_capacity_mva: number
+          headroom_observed_mva: number
+          headroom_true_mva: number
+          peak_observed_mw: number
+          peak_true_mw: number
+          sitefunctionallocation: string
+          voltage_kv: number
+          year: number
+        }[]
       }
       unlockrows: { Args: { "": string }; Returns: number }
       update_site_utilisation_geom: { Args: never; Returns: undefined }
