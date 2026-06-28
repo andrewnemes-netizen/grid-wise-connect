@@ -450,6 +450,37 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
     feature.substationalias != null || feature.substationdesign != null;
   const secondarySummary = !capacitySummary && isUkpnSecondary ? computeSecondarySummary(feature) : null;
 
+  // LTDS + connected-circuit lookups for UKPN Grid & Primary Sites (uniform with SubstationInfo)
+  const sfl = (feature.sitefunctionallocation ?? feature.functionallocation ?? null) as string | null;
+  const siteName = (feature.sitename ?? feature.site_name ?? feature.name ?? null) as string | null;
+  const [ltds, setLtds] = useState<any | null>(null);
+  const [circuits, setCircuits] = useState<any[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setLtds(null);
+    if (!isUkpnGridPrimary || !sfl) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("ukpn_substation_capacity_lookup", { _sfl: sfl });
+      if (!alive || error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && (row.firm_capacity_mva != null || row.peak_true_mw != null || row.peak_observed_mw != null || row.fault_3ph_ka != null)) {
+        setLtds(row);
+      }
+    })();
+    return () => { alive = false; };
+  }, [isUkpnGridPrimary, sfl]);
+  useEffect(() => {
+    let alive = true;
+    setCircuits(null);
+    if (!isUkpnGridPrimary || !siteName || String(siteName).length < 3) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("ukpn_circuits_for_substation", { p_name: String(siteName) });
+      if (!alive || error) return;
+      if (Array.isArray(data) && data.length > 0) setCircuits(data);
+    })();
+    return () => { alive = false; };
+  }, [isUkpnGridPrimary, siteName]);
+
   const PRIORITY = [
     "name", "asset_id", "circuit_id", "feeder_ref",
     "status", "voltage_kv", "voltage", "voltage_v",
@@ -482,6 +513,73 @@ function GenericInfo({ feature, layerLabel }: { feature: Record<string, unknown>
     <div className="space-y-3">
       {capacitySummary && <UkpnCapacityCard summary={capacitySummary} />}
       {secondarySummary && <UkpnSecondaryCard summary={secondarySummary} />}
+      {ltds && (
+        <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Zap className="h-3 w-3 text-primary" /> LTDS Capacity & Headroom
+            </p>
+            {ltds.year && <Badge variant="outline" className="text-[10px]">{ltds.year}</Badge>}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {ltds.firm_capacity_mva != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Firm Capacity</p>
+                <p className="text-sm font-semibold">{Number(ltds.firm_capacity_mva).toLocaleString()} MVA</p>
+              </div>
+            )}
+            {(ltds.peak_true_mw ?? ltds.peak_observed_mw) != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Peak Demand</p>
+                <p className="text-sm font-semibold">{Number(ltds.peak_true_mw ?? ltds.peak_observed_mw).toLocaleString()} MW</p>
+              </div>
+            )}
+            {(ltds.headroom_true_mva ?? ltds.headroom_observed_mva) != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Headroom</p>
+                <p className={`text-sm font-semibold ${Number(ltds.headroom_true_mva ?? ltds.headroom_observed_mva) <= 0 ? "text-red-500" : "text-emerald-600"}`}>
+                  {Number(ltds.headroom_true_mva ?? ltds.headroom_observed_mva).toLocaleString()} MVA
+                </p>
+              </div>
+            )}
+            {ltds.fault_3ph_ka != null && (
+              <div className="rounded-md border bg-background p-2">
+                <p className="text-[10px] text-muted-foreground">Fault Level (3ph)</p>
+                <p className="text-sm font-semibold">{Number(ltds.fault_3ph_ka).toLocaleString()} kA</p>
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Source: UKPN LTDS Tables 2a–4b</p>
+        </div>
+      )}
+      {circuits && circuits.length > 0 && (
+        <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Activity className="h-3 w-3 text-primary" /> Connected Circuits — Monthly Peak
+            </p>
+            <Badge variant="outline" className="text-[10px]">{circuits.length}</Badge>
+          </div>
+          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+            {circuits.slice(0, 8).map((c, i) => (
+              <div key={i} className="rounded-md border bg-background p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">{c.circuit_id} <span className="text-muted-foreground font-normal">· {c.voltage_kv} kV</span></span>
+                  <span className="font-mono text-[11px]">{c.peak_mw != null ? `${Number(c.peak_mw).toFixed(1)} MW` : "—"}</span>
+                </div>
+                {c.feeder_description && (
+                  <div className="text-[10px] text-muted-foreground truncate">{c.feeder_description}</div>
+                )}
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>{c.from_node} → {c.to_node}</span>
+                  <span>12-mo peak: {c.months_12_peak_mw != null ? `${Number(c.months_12_peak_mw).toFixed(1)} MW` : "—"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">Source: UKPN monthly circuit operational data (132/33 kV)</p>
+        </div>
+      )}
       <div className="rounded-md border overflow-hidden">
       <table className="w-full text-xs">
         <tbody>
