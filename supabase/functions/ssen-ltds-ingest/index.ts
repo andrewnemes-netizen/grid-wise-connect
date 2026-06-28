@@ -232,9 +232,10 @@ Deno.serve(async (req) => {
     const wb = await fetchWorkbook(url);
     console.log(`[ssen-ltds] sheets: ${wb.SheetNames.join(" | ")}`);
 
-    const demandSheet = pickSheet(wb, /demand/i);
-    const fault132Sheet = pickSheet(wb, /4a|132.*fault/i);
-    const fault33Sheet = pickSheet(wb, /4b|66.*fault|33.*fault/i);
+    const demandSheet = pickSheet(wb, /demand\s*data/i) ?? pickSheet(wb, /demand/i);
+    // SEPD splits fault into 4a (132kV) + 4b (66-6.6kV); SHEPD combines into a single Table 4
+    const faultSheetNames = wb.SheetNames.filter((n) => /fault/i.test(n) && !/generation/i.test(n));
+    const faultSheets = faultSheetNames.map((n) => wb.Sheets[n]);
 
     const sourceDate = date ? date.slice(0, 10) : null;
 
@@ -254,7 +255,8 @@ Deno.serve(async (req) => {
     }
 
     let faultInserted = 0;
-    for (const ws of [fault132Sheet, fault33Sheet]) {
+    console.log(`[ssen-ltds] fault sheets: ${faultSheetNames.join(" | ")}`);
+    for (const ws of faultSheets) {
       if (!ws) continue;
       const rows = parseFaultSheet(ws, region).map((r) => ({ ...r, source_date: sourceDate }));
       const deduped = dedupe(rows, ["region", "site_name_normalised", "voltage_kv"]);
