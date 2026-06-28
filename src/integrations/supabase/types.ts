@@ -2068,6 +2068,111 @@ export type Database = {
         }
         Relationships: []
       }
+      ssen_ltds_demand: {
+        Row: {
+          created_at: string
+          firm_capacity_mva: number | null
+          forecast_json: Json | null
+          gsp_group: string | null
+          id: string
+          power_factor: number | null
+          raw_json: Json | null
+          recorded_demand_mva: number | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date: string | null
+          updated_at: string
+          voltage_kv: number | null
+        }
+        Insert: {
+          created_at?: string
+          firm_capacity_mva?: number | null
+          forecast_json?: Json | null
+          gsp_group?: string | null
+          id?: string
+          power_factor?: number | null
+          raw_json?: Json | null
+          recorded_demand_mva?: number | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date?: string | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Update: {
+          created_at?: string
+          firm_capacity_mva?: number | null
+          forecast_json?: Json | null
+          gsp_group?: string | null
+          id?: string
+          power_factor?: number | null
+          raw_json?: Json | null
+          recorded_demand_mva?: number | null
+          region?: string
+          site_name?: string
+          site_name_normalised?: string
+          source_date?: string | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Relationships: []
+      }
+      ssen_ltds_fault: {
+        Row: {
+          cb_break_ka: number | null
+          cb_make_ka: number | null
+          created_at: string
+          fault_eq_mva: number | null
+          gsp_group: string | null
+          id: string
+          raw_json: Json | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date: string | null
+          three_phase_break_ka: number | null
+          three_phase_peak_make_ka: number | null
+          updated_at: string
+          voltage_kv: number | null
+        }
+        Insert: {
+          cb_break_ka?: number | null
+          cb_make_ka?: number | null
+          created_at?: string
+          fault_eq_mva?: number | null
+          gsp_group?: string | null
+          id?: string
+          raw_json?: Json | null
+          region: string
+          site_name: string
+          site_name_normalised: string
+          source_date?: string | null
+          three_phase_break_ka?: number | null
+          three_phase_peak_make_ka?: number | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Update: {
+          cb_break_ka?: number | null
+          cb_make_ka?: number | null
+          created_at?: string
+          fault_eq_mva?: number | null
+          gsp_group?: string | null
+          id?: string
+          raw_json?: Json | null
+          region?: string
+          site_name?: string
+          site_name_normalised?: string
+          source_date?: string | null
+          three_phase_break_ka?: number | null
+          three_phase_peak_make_ka?: number | null
+          updated_at?: string
+          voltage_kv?: number | null
+        }
+        Relationships: []
+      }
       studies: {
         Row: {
           bom_json: Json | null
@@ -3342,6 +3447,22 @@ export type Database = {
           upstream_site: string
           utilisation_band: string
           utilisation_pct: number
+        }[]
+      }
+      ssen_substation_capacity_lookup: {
+        Args: { _name: string }
+        Returns: {
+          fault_break_ka: number
+          fault_make_ka: number
+          firm_capacity_mva: number
+          forecast_json: Json
+          headroom_mva: number
+          power_factor: number
+          recorded_demand_mva: number
+          region: string
+          site_name: string
+          source_date: string
+          voltage_kv: number
         }[]
       }
       st_3dclosestpoint: {

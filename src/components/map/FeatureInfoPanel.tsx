@@ -105,6 +105,24 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
     return () => { alive = false; };
   }, [sfl]);
 
+  // SSEN LTDS capacity/headroom lookup (matches by site name / locality)
+  const ssenLookupName = (siteName ?? (feature.name as string | undefined) ?? ssenLocality ?? null) as string | null;
+  const [ssenLtds, setSsenLtds] = useState<any | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setSsenLtds(null);
+    if (!isSsen || !ssenLookupName || ssenLookupName.length < 3) return;
+    (async () => {
+      const { data, error } = await supabase.rpc("ssen_substation_capacity_lookup", { _name: ssenLookupName });
+      if (!alive || error) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row && (row.firm_capacity_mva != null || row.recorded_demand_mva != null)) {
+        setSsenLtds(row);
+      }
+    })();
+    return () => { alive = false; };
+  }, [isSsen, ssenLookupName]);
+
   // NPG monthly circuit utilisation lookup for connected circuits
   const lookupName = (siteName ?? upstream ?? gspName ?? null) as string | null;
   const [circuits, setCircuits] = useState<any[] | null>(null);
@@ -154,6 +172,58 @@ function SubstationInfo({ feature }: { feature: Record<string, unknown> }) {
           </table>
           <p className="text-[10px] text-muted-foreground italic leading-snug">
             SSEN's open substation register does not publish firm capacity, demand or headroom. For capacity figures request an SSEN Budget / Network Capacity quote, or use the SSEN LTDS tables when available.
+          </p>
+        </div>
+      )}
+
+      {/* SSEN LTDS Capacity & Headroom card (primary / grid sites only) */}
+      {isSsen && ssenLtds && (
+        <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold flex items-center gap-1">
+              <Zap className="h-3 w-3 text-primary" /> LTDS Capacity & Headroom
+            </p>
+            <Badge variant="outline" className="text-[10px]">
+              {ssenLtds.region}{ssenLtds.voltage_kv != null ? ` · ${Number(ssenLtds.voltage_kv)} kV` : ""}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div>
+              <p className="text-[10px] text-muted-foreground">Firm Capacity</p>
+              <p className="text-sm font-semibold">
+                {ssenLtds.firm_capacity_mva != null ? `${Number(ssenLtds.firm_capacity_mva).toLocaleString()} MVA` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Recorded Demand</p>
+              <p className="text-sm font-semibold">
+                {ssenLtds.recorded_demand_mva != null ? `${Number(ssenLtds.recorded_demand_mva).toLocaleString()} MVA` : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground">Headroom</p>
+              <p className={`text-sm font-semibold ${
+                ssenLtds.headroom_mva != null && Number(ssenLtds.headroom_mva) <= 0 ? "text-red-500" : "text-emerald-600"
+              }`}>
+                {ssenLtds.headroom_mva != null ? `${Number(ssenLtds.headroom_mva).toLocaleString()} MVA` : "—"}
+              </p>
+            </div>
+          </div>
+          {(ssenLtds.fault_break_ka != null || ssenLtds.fault_make_ka != null) && (
+            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t">
+              <div>
+                <p className="text-[10px] text-muted-foreground">3φ Break</p>
+                <p className="text-sm font-medium">{ssenLtds.fault_break_ka != null ? `${Number(ssenLtds.fault_break_ka)} kA` : "—"}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">3φ Peak Make</p>
+                <p className="text-sm font-medium">{ssenLtds.fault_make_ka != null ? `${Number(ssenLtds.fault_make_ka)} kA` : "—"}</p>
+              </div>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">
+            Matched: <span className="font-mono">{ssenLtds.site_name}</span>
+            {ssenLtds.source_date ? ` · Source ${ssenLtds.source_date}` : ""} · SSEN LTDS Table 3 / 4a-b
           </p>
         </div>
       )}
