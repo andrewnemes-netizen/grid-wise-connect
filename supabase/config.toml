@@ -60,6 +60,9 @@ verify_jwt = false
 [functions.ssen-catalog-crawler]
 verify_jwt = false
 
+[functions.ukpn-ltds-ingest]
+verify_jwt = false
+
 verify_jwt = true
 
 [functions.send-transactional-email]
