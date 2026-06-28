@@ -940,7 +940,18 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
     demand_kw: parseNum(rec.maxdemand || rec.demand_kw),
     headroom_kw: parseNum(rec.demhr || rec.headroom_kw),
     utilisation_pct: parseNum(rec.fault_level_ || rec.utilisation_pct),
-    voltage_kv: parseNum(rec.pvoltage || rec.voltage_kv),
+    voltage_kv: (() => {
+      const kv = parseNum(rec.voltage_kv || rec.pvoltage || rec.nominal_voltage_kv || rec["voltage_kv"]);
+      if (kv != null) return kv;
+      const v = parseNum(rec.voltage || rec.voltage_v || rec.operating_voltage || rec.nominal_voltage);
+      if (v != null) return v >= 1000 ? v / 1000 : v;
+      // Derive from layer slug (e.g. ukpn-lv-cables / ukpn-hv-cables / ukpn-ehv-cables)
+      const slug = (layerRow?.slug || entry?.dataset_id || "").toLowerCase();
+      if (slug.includes("ehv")) return 33;
+      if (/\bhv\b/.test(slug) || slug.includes("11kv")) return 11;
+      if (/\blv\b/.test(slug)) return 0.4;
+      return null;
+    })(),
     feeder_ref: rec.feeder_ref || rec.circuit_id || null,
     capacity_value: parseNum(rec.capacity_value),
     capacity_unit: rec.capacity_unit || null,
@@ -1000,7 +1011,17 @@ function mapCkanRecordToRow(rec: any, entry: any, layerRow: any, storageTable: s
     demand_kw: parseNum(rec.MaxDemand || rec.max_demand),
     headroom_kw: parseNum(rec.Headroom || rec.headroom),
     utilisation_pct: parseNum(rec.Utilisation || rec.utilisation_pct),
-    voltage_kv: parseNum(rec.Voltage || rec.voltage_kv || rec["Voltage (kV)"]),
+    voltage_kv: (() => {
+      const kv = parseNum(rec.Voltage || rec.voltage_kv || rec["Voltage (kV)"]);
+      if (kv != null) return kv;
+      const v = parseNum(rec.voltage_v || rec["Voltage (V)"] || rec.OperatingVoltage);
+      if (v != null) return v >= 1000 ? v / 1000 : v;
+      const slug = (layerRow?.slug || entry?.dataset_id || "").toLowerCase();
+      if (slug.includes("ehv")) return 33;
+      if (/\bhv\b/.test(slug) || slug.includes("11kv")) return 11;
+      if (/\blv\b/.test(slug)) return 0.4;
+      return null;
+    })(),
     feeder_ref: rec.FeederRef || rec.feeder_ref || rec.CircuitID || null,
     capacity_value: parseNum(rec.capacity_value),
     capacity_unit: rec.capacity_unit || null,
