@@ -52,9 +52,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "ingest") {
-      const { region, layer_base } = body;
+      const { region, layer_base, offset, max_features } = body;
       if (!region || !layer_base) return json({ error: "region and layer_base required" }, 400);
-      const result = await ingestLayer(sb, region, layer_base);
+      const result = await ingestLayer(sb, region, layer_base, offset ?? 0, max_features ?? 4000);
       return json(result);
     }
 
