@@ -3074,6 +3074,15 @@ export type Database = {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
       }
+      create_notification_for_user: {
+        Args: {
+          notification_message: string
+          notification_type: string
+          target_study: string
+          target_user: string
+        }
+        Returns: string
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
