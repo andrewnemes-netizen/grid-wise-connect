@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const {
+    let {
       registry_id,
       mode = "export",
       where,
@@ -150,6 +150,21 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Auto-resume from persisted cursor ──
+    // If the last run left a cursor (was killed mid-way or errored via timeout),
+    // pick up from where it stopped instead of restarting the whole dataset.
+    const explicitContinuation = partition_start > 0 || skip_features > 0;
+    const savedCursor = entry.sync_cursor as { partition_start?: number; skip_features?: number } | null;
+    let autoResumed = false;
+    if (!explicitContinuation && savedCursor &&
+        ["error", "partial", "processing"].includes(entry.last_sync_status) &&
+        ((savedCursor.partition_start ?? 0) > 0 || (savedCursor.skip_features ?? 0) > 0)) {
+      partition_start = savedCursor.partition_start ?? 0;
+      skip_features   = savedCursor.skip_features   ?? 0;
+      autoResumed = true;
+      console.log(`[ingest] Auto-resuming ${entry.dataset_id} from cursor partition_start=${partition_start}, skip_features=${skip_features}`);
+    }
+
     // Skip non-geospatial datasets linked to spatial layers
     const spatialTables = ["geo_polygons", "geo_feeders", "geo_cables", "geo_constraints", "geo_substations", "geo_points"];
     if (!entry.is_geospatial && spatialTables.includes(layerRow.storage_table)) {
@@ -183,8 +198,8 @@ Deno.serve(async (req) => {
       }).eq("id", registry_id).in("last_sync_status", ["processing", "partial"]);
     }
 
-    // Allow continuations from partial state
-    if (isContinuation && !ACTIVE_SYNC_STATUSES.has(entry.last_sync_status)) {
+    // Allow continuations from partial state OR auto-resume from error
+    if (isContinuation && !autoResumed && !ACTIVE_SYNC_STATUSES.has(entry.last_sync_status)) {
       return new Response(JSON.stringify({
         error: "Dataset is not in a partial/processing state for continuation",
         detail: `Current status: ${entry.last_sync_status}`,
@@ -423,6 +438,9 @@ async function performIngest(
     last_sync_status: effectiveStatus,
     last_sync_rows: cumulativeInserted,
     last_sync_error: effectiveError,
+    sync_cursor: hasMore
+      ? { partition_start: nextPartitionStart, skip_features: nextSkipFeatures, saved_at: finalTs }
+      : null,
     updated_at: finalTs,
   }).eq("id", registryId);
 
