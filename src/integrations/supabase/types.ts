@@ -3058,6 +3058,10 @@ export type Database = {
             }
             Returns: string
           }
+      admin_get_profile_phone: {
+        Args: { target_user: string }
+        Returns: string
+      }
       auto_create_dno_layers: {
         Args: { p_dno: string; p_force?: boolean }
         Returns: Json
@@ -3300,6 +3304,27 @@ export type Database = {
       get_layer_geojson: {
         Args: { _bbox_filter?: string; _limit?: number; _table_name: string }
         Returns: Json
+      }
+      get_own_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          company: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          is_approved: boolean
+          is_platform_admin: boolean
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       gettransactionid: { Args: never; Returns: unknown }
