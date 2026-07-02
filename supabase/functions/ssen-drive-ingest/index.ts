@@ -315,7 +315,7 @@ async function ingestLayer(sb: any, region: string, layer_base: string) {
       dno: "SSEN",
       name: (f.props.name || f.props.NAME || f.props.LABEL || f.props.label || null),
       attrs_json: f.props,
-      geom: `SRID=4326;${geomToWkt(f.geom)}`,
+      geom: `SRID=4326;${geomToWkt(promoteMulti(f.geom, reg.storage_table))}`,
     }));
     const { error } = await sb.from(reg.storage_table).insert(chunk);
     if (error) throw new Error(`insert error at ${i}: ${error.message}`);
@@ -367,6 +367,20 @@ function ringWkt(r: number[][]): string {
   return `(${r.map(coordWkt).join(",")})`;
 }
 function geomToWkt(g: any): string {
+  return _geomToWkt(g);
+}
+
+function promoteMulti(g: any, storageTable: string): any {
+  if (storageTable === "geo_cables") {
+    if (g.type === "LineString") return { type: "MultiLineString", coordinates: [g.coordinates] };
+  }
+  if (storageTable === "geo_polygons") {
+    if (g.type === "Polygon") return { type: "MultiPolygon", coordinates: [g.coordinates] };
+  }
+  return g;
+}
+
+function _geomToWkt(g: any): string {
   switch (g.type) {
     case "Point": return `POINT(${coordWkt(g.coordinates)})`;
     case "MultiPoint": return `MULTIPOINT(${g.coordinates.map((c: number[]) => `(${coordWkt(c)})`).join(",")})`;
