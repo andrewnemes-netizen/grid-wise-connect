@@ -40,12 +40,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       lastCheckedUserId.current = user.id;
     }
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("full_name, company, phone, is_approved")
-        .eq("user_id", user.id)
-        .single();
-
+      const { data: rows, error } = await supabase.rpc("get_own_profile");
+      const data = Array.isArray(rows) ? rows[0] : null;
       if (error || !data) {
         setProfileState("incomplete");
         return;
