@@ -56,7 +56,9 @@ export function NpgDatasetRegistry() {
   const [crawling, setCrawling] = useState(false);
   const [syncAllRunning, setSyncAllRunning] = useState(false);
   const [search, setSearch] = useState("");
-  const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("all");
+  // Default to geospatial-only so tabular / no-geometry datasets (which will
+  // never render as a map layer) don't clutter the registry with red errors.
+  const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("geo");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN" | "SSEN" | "SSEN_DX">("NPG");
