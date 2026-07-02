@@ -59,23 +59,36 @@ export function SsenDriveIngest() {
     const key = `${layer.region}/${layer.base}`;
     setBusy(key);
     try {
-      let offset = 0;
+      // Kick off background ingest; the edge function returns immediately.
+      const { data, error } = await supabase.functions.invoke("ssen-drive-ingest", {
+        body: { action: "ingest", region: layer.region, layer_base: layer.base },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Poll layer_registry.feature_count until it stops growing.
+      const slug = `ssen-drive-${layer.base}`.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+      let last = -1;
+      let stableTicks = 0;
       let total = 0;
-      // Loop chunked ingest until the edge function reports done
-      // (each call stays within the CPU-time budget)
-      // Safety cap: 50 iterations = up to ~200k features per layer.
-      for (let i = 0; i < 50; i++) {
-        const { data, error } = await supabase.functions.invoke("ssen-drive-ingest", {
-          body: { action: "ingest", region: layer.region, layer_base: layer.base, offset, max_features: 4000 },
-        });
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-        total = data.features_total ?? total;
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const { data: reg } = await supabase
+          .from("layer_registry")
+          .select("feature_count")
+          .eq("slug", slug)
+          .maybeSingle();
+        total = reg?.feature_count ?? 0;
         setResults((r) => ({ ...r, [key]: { features: total } }));
-        if (data.done) break;
-        offset = data.next_offset;
+        if (total === last) {
+          stableTicks++;
+          if (stableTicks >= 3 && total > 0) break; // ~7.5s no change ⇒ done
+        } else {
+          stableTicks = 0;
+          last = total;
+        }
       }
-      toast.success(`${layer.base}: ${total} features ingested`);
+      toast.success(`${layer.base}: ${total.toLocaleString()} features ingested`);
       registryQ.refetch();
     } catch (e: any) {
       setResults((r) => ({ ...r, [key]: { error: e.message } }));
