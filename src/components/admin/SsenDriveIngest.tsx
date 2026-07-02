@@ -100,6 +100,19 @@ export function SsenDriveIngest() {
 
   const ingestAll = async (region: "SEPD" | "SHEPD") => {
     const layers = (layersQ.data || []).filter((l) => l.region === region && !l.is_annotation);
+    if (layers.length === 0) return;
+    // Ensure every layer has a layer_registry row before ingesting so the
+    // per-layer poller can find it. Safe to call repeatedly — it's idempotent.
+    setBusy("sync");
+    try {
+      await supabase.functions.invoke("ssen-drive-ingest", { body: { action: "sync-registry" } });
+      await registryQ.refetch();
+    } catch (e: any) {
+      toast.error(`Registry sync failed: ${e.message}`);
+      setBusy(null);
+      return;
+    }
+    setBusy(null);
     for (const layer of layers) {
       await runIngest(layer);
     }
@@ -163,7 +176,7 @@ export function SsenDriveIngest() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={!!busy || layer.is_annotation || !reg}
+                      disabled={!!busy || layer.is_annotation}
                       onClick={() => runIngest(layer)}
                     >
                       {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
