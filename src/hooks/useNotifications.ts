@@ -67,11 +67,11 @@ export async function createNotification(params: {
   type: "study_share" | "comment_added" | "status_changed";
   message: string;
 }) {
-  const { error } = await supabase.from("notifications").insert({
-    user_id: params.userId,
-    study_id: params.studyId,
-    type: params.type,
-    message: params.message,
+  const { error } = await supabase.rpc("create_notification_for_user", {
+    target_user: params.userId,
+    target_study: params.studyId,
+    notification_type: params.type,
+    notification_message: params.message,
   });
   if (error) console.error("Failed to create notification:", error);
 }
