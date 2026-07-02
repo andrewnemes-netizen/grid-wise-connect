@@ -52,9 +52,9 @@ Deno.serve(async (req) => {
     }
 
     if (action === "ingest") {
-      const { region, layer_base } = body;
+      const { region, layer_base, offset, max_features } = body;
       if (!region || !layer_base) return json({ error: "region and layer_base required" }, 400);
-      const result = await ingestLayer(sb, region, layer_base);
+      const result = await ingestLayer(sb, region, layer_base, offset ?? 0, max_features ?? 4000);
       return json(result);
     }
 
@@ -264,7 +264,7 @@ async function peekGeometryType(fileId: string): Promise<"Point" | "LineString" 
 
 // ─── Ingestion ────────────────────────────────────────────────────────────────
 
-async function ingestLayer(sb: any, region: string, layer_base: string) {
+async function ingestLayer(sb: any, region: string, layer_base: string, offset: number, maxFeatures: number) {
   const catalogue = await buildCatalogue();
   const entry = catalogue.find((e) => e.region === region && e.base === layer_base);
   if (!entry) throw new Error(`Layer not found in Drive: ${region}/${layer_base}`);
@@ -274,62 +274,92 @@ async function ingestLayer(sb: any, region: string, layer_base: string) {
   }
 
   const cls = classify(layer_base);
-  const { data: reg } = await sb.from("layer_registry").select("id, storage_table, geometry_type").eq("slug", cls.slug).maybeSingle();
+  const { data: reg } = await sb
+    .from("layer_registry")
+    .select("id, storage_table, geometry_type, bbox, feature_count")
+    .eq("slug", cls.slug)
+    .maybeSingle();
   if (!reg) throw new Error(`Registry row missing for ${cls.slug}. Run sync-registry first.`);
 
-  // Download .shp and .dbf
+  // First call: wipe previous rows for this layer
+  if (offset === 0) {
+    await sb.from(reg.storage_table).delete().eq("layer_id", reg.id);
+  }
+
+  // Download .shp and .dbf (small enough — SSEN files are ≤ ~2 MB each)
   const [shp, dbf] = await Promise.all([
     downloadFile(entry.files.shp.id),
     downloadFile(entry.files.dbf.id),
   ]);
 
-  // Parse shapefile via the shapefile npm package
   const source = await shapefile.open(shp, dbf);
-  const features: Array<{ geom: any; props: any }> = [];
-  let minLng = 180, minLat = 90, maxLng = -180, maxLat = -90;
+
+  // Start bbox from what's already stored (so we widen it across calls)
+  let [minLng, minLat, maxLng, maxLat] = (reg.bbox && offset > 0)
+    ? reg.bbox as [number, number, number, number]
+    : [180, 90, -180, -90];
+
+  const CHUNK = 500;
+  let buffer: any[] = [];
+  let readIdx = 0;   // total records read from stream this call (including skipped)
+  let processed = 0; // records inserted this call
+  let done = false;
+
+  const flush = async () => {
+    if (buffer.length === 0) return;
+    const { error } = await sb.from(reg.storage_table).insert(buffer);
+    if (error) throw new Error(`insert error at offset ${offset + processed}: ${error.message}`);
+    processed += buffer.length;
+    buffer = [];
+  };
 
   while (true) {
     const rec = await source.read();
-    if (rec.done) break;
+    if (rec.done) { done = true; break; }
+    // Skip records already handled in previous calls
+    if (readIdx < offset) { readIdx++; continue; }
+    readIdx++;
+
     const g = reproject(rec.value.geometry);
-    if (!g) continue;
-    updateBbox(g, (lng, lat) => {
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-    });
-    features.push({ geom: g, props: rec.value.properties || {} });
+    if (g) {
+      updateBbox(g, (lng, lat) => {
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      });
+      buffer.push({
+        layer_id: reg.id,
+        dno: "SSEN",
+        name: (rec.value.properties?.name || rec.value.properties?.NAME || null),
+        attrs_json: rec.value.properties || {},
+        geom: `SRID=4326;${geomToWkt(promoteMulti(g, reg.storage_table))}`,
+      });
+      if (buffer.length >= CHUNK) await flush();
+    }
+    if (processed + buffer.length >= maxFeatures) break;
   }
+  await flush();
 
-  if (features.length === 0) throw new Error("No features parsed");
+  const totalSoFar = (offset === 0 ? 0 : (reg.feature_count || 0)) + processed;
+  const bbox = (minLng < maxLng && minLat < maxLat)
+    ? [minLng, minLat, maxLng, maxLat]
+    : (reg.bbox || null);
 
-  // Delete existing rows for this layer and re-insert
-  await sb.from(reg.storage_table).delete().eq("layer_id", reg.id);
-
-  const CHUNK = 500;
-  let inserted = 0;
-  for (let i = 0; i < features.length; i += CHUNK) {
-    const chunk = features.slice(i, i + CHUNK).map((f) => ({
-      layer_id: reg.id,
-      dno: "SSEN",
-      name: (f.props.name || f.props.NAME || f.props.LABEL || f.props.label || null),
-      attrs_json: f.props,
-      geom: `SRID=4326;${geomToWkt(promoteMulti(f.geom, reg.storage_table))}`,
-    }));
-    const { error } = await sb.from(reg.storage_table).insert(chunk);
-    if (error) throw new Error(`insert error at ${i}: ${error.message}`);
-    inserted += chunk.length;
-  }
-
-  // Update bbox + feature_count on registry
   await sb.from("layer_registry").update({
-    bbox: [minLng, minLat, maxLng, maxLat],
-    feature_count: inserted,
+    bbox,
+    feature_count: totalSoFar,
     source_date: new Date().toISOString().slice(0, 10),
   }).eq("id", reg.id);
 
-  return { layer_id: reg.id, features: inserted, bbox: [minLng, minLat, maxLng, maxLat] };
+  return {
+    layer_id: reg.id,
+    done,
+    features_this_call: processed,
+    features_total: totalSoFar,
+    next_offset: done ? null : offset + processed,
+    bbox,
+  };
 }
 
 // ─── Geometry helpers ────────────────────────────────────────────────────────

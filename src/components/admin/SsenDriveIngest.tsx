@@ -59,13 +59,23 @@ export function SsenDriveIngest() {
     const key = `${layer.region}/${layer.base}`;
     setBusy(key);
     try {
-      const { data, error } = await supabase.functions.invoke("ssen-drive-ingest", {
-        body: { action: "ingest", region: layer.region, layer_base: layer.base },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setResults((r) => ({ ...r, [key]: { features: data.features } }));
-      toast.success(`${layer.base}: ${data.features} features ingested`);
+      let offset = 0;
+      let total = 0;
+      // Loop chunked ingest until the edge function reports done
+      // (each call stays within the CPU-time budget)
+      // Safety cap: 50 iterations = up to ~200k features per layer.
+      for (let i = 0; i < 50; i++) {
+        const { data, error } = await supabase.functions.invoke("ssen-drive-ingest", {
+          body: { action: "ingest", region: layer.region, layer_base: layer.base, offset, max_features: 4000 },
+        });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        total = data.features_total ?? total;
+        setResults((r) => ({ ...r, [key]: { features: total } }));
+        if (data.done) break;
+        offset = data.next_offset;
+      }
+      toast.success(`${layer.base}: ${total} features ingested`);
       registryQ.refetch();
     } catch (e: any) {
       setResults((r) => ({ ...r, [key]: { error: e.message } }));
