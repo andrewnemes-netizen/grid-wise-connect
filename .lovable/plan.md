@@ -1,52 +1,66 @@
-## Goal
-Make SSEN substation popups display **firm capacity, peak demand and headroom** — matching the UKPN experience — by ingesting SSEN's LTDS data, which is where this information actually lives.
+## What's in the Drive folder
 
-## What SSEN publishes (confirmed)
-The `dx-sepd_long_term_development_statement` dataset exposes three usable API resources for headroom:
+I listed the folder via the Google Drive connector. It is **not 1 GB** — the two subfolders (SEPD + SHEPD) hold **~322 files, ~31 MB total**, all Esri Shapefile sidecars (.shp/.shx/.dbf/.prj/.cpg) in BNG (EPSG:27700). That decodes to **~51 unique GIS layers**:
 
-1. **LTDS Capacity Heatmap** (GeoJSON, May 2026) — polygons with capacity attributes ready for the map.
-2. **LTDS Tables** (XLSX, Nov 2025) — Tables 1–6: transformer ratings, peak demand, fault levels per primary/grid site.
-3. **LTDS Data Definitions** (CSV) — column dictionary.
+**SHEPD (27 layers)** and **SEPD (24 layers)**, grouped by theme:
+- **Wires / overhead lines** — existing + abandoned, EHV / EHVP / HV / LV
+- **Cables** — existing + abandoned, EHV / EHVP / HV / LV
+- **Towers** — locations + label anno
+- **Cabinets** (SHEPD only) — location + label anno
+- **Isolating equipment** — locations + symbols + anno
+- **Ducts** (SHEPD only)
+- **Fibre optic joints** — locations + anno
+- **Service points** (anno only)
+- **`*_sc_anno_annotation_*` / `*_annotation_*`** = pure text labels (skip for map)
 
-`dx-shepd_long_term_development_statement` follows the same pattern for the North-Scotland region.
+Small gaps in the SEPD export (missing existing LV wires/cables, existing HV wires) — I'll flag those in the UI so you can chase SSEN, not silently drop them.
 
-Everything else in the dataset is PDF/zip CIM — out of scope for V1.
+## Plan
 
-## What to build
+### 1. Reusable Drive → GIS pipeline (edge function `ssen-drive-ingest`)
+Input: `{ region: 'SEPD'|'SHEPD', layer_base: '<shapefile-basename>' }`.
+Steps:
+1. Query Google Drive via connector gateway for the 4 sidecar files matching `layer_base.{shp,shx,dbf,prj}` in the region folder (folder IDs already known).
+2. Download each via `?alt=media` into memory.
+3. Parse with `shapefile` npm library (streaming, works in Deno via `npm:` specifier) → features with WKT geometry + `attrs_json`.
+4. Reproject BNG → WGS84 using the existing precise `ostn15` helper (already used for Leeds street lights, sub-metre accuracy).
+5. Bulk insert into `geo_points` / `geo_cables` / `geo_polygons` keyed by `layer_id`.
+6. Auto-populate `layer_registry.bbox` from feature extent.
 
-### 1. New `ssen-ltds-ingest` Edge Function
-Mirrors `ukpn-ltds-ingest`. For each SSEN region (SEPD, SHEPD):
-- Pull the latest XLSX LTDS Tables resource from CKAN.
-- Parse via SheetJS (`xlsx` npm import) — read sheets named like `Table 2 – Transformers`, `Table 3 – Peak Demand`, `Table 4 – Fault Levels`.
-- Normalise rows into the new tables below.
-- Pull the Capacity Heatmap GeoJSON straight into `geo_polygons` under a new layer.
+Skip annotation-only layers by default (checkbox in admin if you ever want them).
 
-### 2. New tables (mirror UKPN LTDS schema)
-- `ssen_ltds_transformers` — site_name, voltage_kv, transformer_id, rating_mva, region (SEPD/SHEPD), source_date
-- `ssen_ltds_peak_demand` — site_name, voltage_kv, winter_peak_mw, summer_peak_mw, year, region
-- `ssen_ltds_fault_levels` — site_name, voltage_kv, three_ph_ka, single_ph_ka, region
-- All with `service_role` full + `authenticated` SELECT grants and RLS.
+### 2. New layer group in `layer_registry`
+Create one registry row per usable shapefile (est. ~30 rows after excluding pure annotation), grouped under two new categories:
+- `SSEN — SEPD (South England)`
+- `SSEN — SHEPD (North Scotland)`
 
-### 3. New layer: "SSEN LTDS — Capacity Heatmap"
-- `layer_registry` entry → `geo_polygons` storage, SEPD + SHEPD merged, RAG-styled by available capacity.
-- Auto-fly-to behaviour from the existing layer bbox logic.
+Sub-grouped in the Layer panel by asset type (Wires, Cables, Towers, Cabinets, Isolating Equipment, Ducts, Fibre). Voltage class encoded as coloured styling (EHV red, HV orange, LV blue; abandoned = dashed / grey).
 
-### 4. Popup integration (`FeatureInfoPanel.tsx`)
-For any SSEN substation point, look up the LTDS row by **site name + voltage class** (with fuzzy match — SSEN names are inconsistently cased/spaced).
-- If a match is found, render the same **Capacity & Headroom (N-1)** + **Estimated spare capacity** cards used for UKPN sites.
-- Headroom formula: `Σ(transformer ratings) − Σ(largest transformer) − peak demand` (standard N-1).
-- If no LTDS match (typical for LV/pole-mounted), keep the existing "open register does not publish firm capacity" footnote.
+### 3. Admin UI: `SsenDriveIngest.tsx`
+New card in **Admin → DNO Datasets** showing all 51 layers with per-row **Ingest** button + status (pending / running / rows loaded / bbox). Bulk "Ingest all SEPD" / "Ingest all SHEPD" buttons that queue ingests sequentially (self-continuing pattern already used for `npg-dataset-ingest` to avoid CPU timeout on the larger cable/wire layers).
 
-### 5. Admin Registry wiring
-- Flip `dx-sepd_long_term_development_statement` and `dx-shepd_long_term_development_statement` from "pending" to routed-through-`ssen-ltds-ingest` (registry entry pointing to the new function instead of `npg-dataset-ingest`).
+### 4. Map integration
+No changes needed in `mapLayers.ts` / `FeatureInfoPanel.tsx` — the existing registry-driven renderer picks these up automatically once rows land in `geo_*` tables and the registry entries exist. Popups will show `attrs_json` fields (voltage, install date, feeder, etc.) via the generic renderer.
+
+### 5. Verification
+1. Ingest a small layer first: `electric_et_tower_location_shepd` (~7 KB, ~90 towers) — confirm points land in Scotland with correct BNG→WGS84 offsets (<1 m).
+2. Ingest a medium wire layer (`electric_eo_wire_segment_inst_route_exi_hv_shepd`) — confirm line features render.
+3. Toggle a layer on/off in the panel; confirm map fly-to uses the auto-computed bbox.
+4. Click a tower feature → popup shows `attrs_json` attributes.
+
+## Technical details
+
+- **Google Drive access**: gateway URL `https://connector-gateway.lovable.dev/google_drive/drive/v3/files/{id}?alt=media`. Connector already linked; secrets `LOVABLE_API_KEY` + `GOOGLE_DRIVE_API_KEY` present.
+- **Shapefile parser**: `npm:shapefile@0.6.6` (pure JS, Deno-compatible). Handles .shp+.dbf streaming.
+- **Projection**: reuse `src/lib/ostn15.ts` but port the minimum needed constants into the edge function (Deno context — no `src/` imports). Same OSTN15 grid-shift already validated for Leeds street lights.
+- **Storage routing**:
+  - Point geometry → `geo_points` (towers, cabinets, isolating equipment, fibre joints)
+  - Line geometry → `geo_cables` (wires, cables, ducts)
+  - Polygon geometry (none expected in this export, but guard anyway) → `geo_polygons`
+- **Annotation layers** (`*_annotation_*`, `*_sc_anno_*`): skipped by default — they're rendered labels, not primary geometry.
+- **File-format guarantee**: I've already inspected the folder — everything is `.shp/.shx/.dbf/.prj/.cpg`. No PDFs, no XLSX, no zips. So the pipeline can be single-purpose (no format detection needed).
 
 ## Out of scope
-- CIM EQ Profile zips (different ingestion problem; deferred).
-- LV/pole-mounted substations — SSEN does not publish capacity for these anywhere; the existing footnote stays.
-- Embedded Capacity Register cross-referencing (separate dataset, separate ticket).
-
-## Verification
-1. Ingest SEPD LTDS → confirm `ssen_ltds_transformers` rows > 0.
-2. Open a known Primary/Grid site in Oxford (e.g. APPLETON 11kV/LV is LV → won't match; pick a 33kV primary).
-3. Confirm Capacity & Headroom card renders with non-zero MVA.
-4. Toggle the Capacity Heatmap layer → polygons render across SEPD region.
+- The LTDS capacity/headroom pipeline (already live for SSEN via `ssen-ltds-ingest`) — untouched.
+- CIM EQ Profile ingestion.
+- Any files added to the Drive folder after ingest (would need re-run, no live sync).
