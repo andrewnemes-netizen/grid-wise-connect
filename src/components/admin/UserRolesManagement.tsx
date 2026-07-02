@@ -51,7 +51,10 @@ export function UserRolesManagement() {
   const { data: profiles = [], isLoading: profilesLoading } = useQuery({
     queryKey: ["admin-profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: true });
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, user_id, full_name, company, avatar_url, created_at, updated_at, is_approved, is_platform_admin")
+        .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
     },

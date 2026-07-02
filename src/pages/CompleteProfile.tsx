@@ -19,12 +19,8 @@ const CompleteProfile = ({ onComplete }: { onComplete: () => void }) => {
   useEffect(() => {
     const loadExistingProfile = async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name, company, phone")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
+      const { data: rows } = await supabase.rpc("get_own_profile");
+      const data = Array.isArray(rows) ? rows[0] : null;
       if (!data) return;
       if (data.full_name?.trim()) setFullName(data.full_name);
       if (data.company?.trim()) setCompany(data.company);
