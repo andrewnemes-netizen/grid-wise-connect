@@ -421,6 +421,7 @@ export type Database = {
           schedule: string | null
           schema_hash: string | null
           storage_table: string | null
+          sync_cursor: Json | null
           title: string | null
           updated_at: string
           updated_at_source: string | null
@@ -456,6 +457,7 @@ export type Database = {
           schedule?: string | null
           schema_hash?: string | null
           storage_table?: string | null
+          sync_cursor?: Json | null
           title?: string | null
           updated_at?: string
           updated_at_source?: string | null
@@ -491,6 +493,7 @@ export type Database = {
           schedule?: string | null
           schema_hash?: string | null
           storage_table?: string | null
+          sync_cursor?: Json | null
           title?: string | null
           updated_at?: string
           updated_at_source?: string | null
