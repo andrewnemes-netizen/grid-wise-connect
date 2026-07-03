@@ -262,7 +262,13 @@ Deno.serve(async (req) => {
     const rows = await fetchAll(spec.dataset_id, apiKey);
     console.log(`[ltds] fetched ${rows.length} raw rows`);
 
-    const mapped = rows.map(spec.map).filter((x): x is Record<string, any> => !!x);
+    const mapped: Record<string, any>[] = [];
+    for (const raw of rows) {
+      const out = spec.map(raw);
+      if (!out) continue;
+      if (Array.isArray(out)) mapped.push(...out);
+      else mapped.push(out);
+    }
     console.log(`[ltds] mapped ${mapped.length} valid rows`);
 
     // Dedupe in-memory on conflict key to avoid upsert "cannot affect row a second time"
