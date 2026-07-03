@@ -325,7 +325,7 @@ export function NpgDatasetRegistry() {
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const isLtds = entry.dno === "UKPN" && /^ltds-table-(2a|2b|3a|3b|4a|4b)\b/.test(entry.dataset_id);
+      const isLtds = entry.dno === "UKPN" && /^(ukpn-)?ltds-table-(2a|2b|3a|3b|4a|4b)\b/.test(entry.dataset_id);
       const isCircuitMonthly = entry.dno === "UKPN" && /^ukpn-(132|33)kv-circuit-operational-data-monthly$/.test(entry.dataset_id);
       const isSsenLtds = /^dx-s(h?)epd_long_term_development_statement$/.test(entry.dataset_id);
       const fnName = isSsenLtds

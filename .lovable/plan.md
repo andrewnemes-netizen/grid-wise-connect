@@ -1,66 +1,43 @@
-## What's in the Drive folder
 
-I listed the folder via the Google Drive connector. It is **not 1 GB** — the two subfolders (SEPD + SHEPD) hold **~322 files, ~31 MB total**, all Esri Shapefile sidecars (.shp/.shx/.dbf/.prj/.cpg) in BNG (EPSG:27700). That decodes to **~51 unique GIS layers**:
+## Findings
 
-**SHEPD (27 layers)** and **SEPD (24 layers)**, grouped by theme:
-- **Wires / overhead lines** — existing + abandoned, EHV / EHVP / HV / LV
-- **Cables** — existing + abandoned, EHV / EHVP / HV / LV
-- **Towers** — locations + label anno
-- **Cabinets** (SHEPD only) — location + label anno
-- **Isolating equipment** — locations + symbols + anno
-- **Ducts** (SHEPD only)
-- **Fibre optic joints** — locations + anno
-- **Service points** (anno only)
-- **`*_sc_anno_annotation_*` / `*_annotation_*`** = pure text labels (skip for map)
+All four UKPN LTDS tables that power substation headroom are **empty**:
 
-Small gaps in the SEPD export (missing existing LV wires/cables, existing HV wires) — I'll flag those in the UI so you can chase SSEN, not silently drop them.
+| Table | Rows | Purpose |
+|---|---|---|
+| `ukpn_ltds_transformers_2w` | 0 | Firm capacity (MVA) — 2-winding |
+| `ukpn_ltds_transformers_3w` | 0 | Firm capacity (MVA) — 3-winding |
+| `ukpn_ltds_peak_demand_observed` | 0 | Observed peak MW/MVAr |
+| `ukpn_ltds_peak_demand_true` | 0 | Weather-corrected peak MW/MVAr |
+
+Registry status shows why:
+- **Tables 2a / 2b / 3a / 3b**: `active=true`, `last_sync_status=never` — never ingested.
+- **Tables 4a / 4b** (fault levels): `error` — "could not map any geometry". They were routed to the generic geospatial ingester (`npg-dataset-ingest`), which requires lat/lng. LTDS tables are **tabular**, so that ingester will always fail on them.
+- **Table 5 / Table 8**: 404 — datasets renamed/removed on the UKPN portal.
+
+The dedicated `ukpn-ltds-ingest` edge function already exists and correctly maps all six tabular tables (2a, 2b, 3a, 3b, 4a, 4b), but nothing currently triggers it — the admin UI (`NpgDatasetRegistry`) invokes `npg-dataset-ingest` for every registry row regardless of type.
+
+**Headroom = firm capacity (2a/2b) − peak demand (3a/3b).** Both sides are empty, so no headroom is available today.
 
 ## Plan
 
-### 1. Reusable Drive → GIS pipeline (edge function `ssen-drive-ingest`)
-Input: `{ region: 'SEPD'|'SHEPD', layer_base: '<shapefile-basename>' }`.
-Steps:
-1. Query Google Drive via connector gateway for the 4 sidecar files matching `layer_base.{shp,shx,dbf,prj}` in the region folder (folder IDs already known).
-2. Download each via `?alt=media` into memory.
-3. Parse with `shapefile` npm library (streaming, works in Deno via `npm:` specifier) → features with WKT geometry + `attrs_json`.
-4. Reproject BNG → WGS84 using the existing precise `ostn15` helper (already used for Leeds street lights, sub-metre accuracy).
-5. Bulk insert into `geo_points` / `geo_cables` / `geo_polygons` keyed by `layer_id`.
-6. Auto-populate `layer_registry.bbox` from feature extent.
+1. **Route LTDS rows to the correct ingester** in `src/components/admin/NpgDatasetRegistry.tsx`:
+   - When a registry row's `dataset_id` matches one of the six LTDS tabular datasets (`ltds-table-2a-transformer-2w`, `2b-...`, `3a-load-data-observed`, `3b-load-data-true`, `4a-3ph-fault-level`, `4b-earth-fault-level`), invoke `ukpn-ltds-ingest` with `{ registry_id, dataset_id }` instead of `npg-dataset-ingest`.
+   - Keep everything else unchanged.
 
-Skip annotation-only layers by default (checkbox in admin if you ever want them).
+2. **Mark non-ingestable UKPN LTDS registry rows inactive** via a migration so they stop appearing as red errors:
+   - `ltds-table-5-generation` (404 — dataset no longer exists)
+   - `ltds-table-8-gt-95-perc-fault-data` (404)
+   - `ltds-table-3a-load-data-observed-transposed` (duplicate of 3a in wide format — our ingester targets the long form)
+   - `ltds-table-1-circuit-data`, `ltds-table-6-interest-connections` (no ingester defined, not headroom-critical)
+   Set `active = false`, `last_sync_status = 'skipped'`, note in `last_sync_error`.
 
-### 2. New layer group in `layer_registry`
-Create one registry row per usable shapefile (est. ~30 rows after excluding pure annotation), grouped under two new categories:
-- `SSEN — SEPD (South England)`
-- `SSEN — SHEPD (North Scotland)`
+3. **Kick off ingest** by clicking Play in the registry for the four headroom-critical rows (2a, 2b, 3a, 3b). Verify row counts in `ukpn_ltds_transformers_2w` / `3w` / `peak_demand_observed` / `peak_demand_true` land > 0. Optionally trigger 4a/4b for fault-level completeness.
 
-Sub-grouped in the Layer panel by asset type (Wires, Cables, Towers, Cabinets, Isolating Equipment, Ducts, Fibre). Voltage class encoded as coloured styling (EHV red, HV orange, LV blue; abandoned = dashed / grey).
-
-### 3. Admin UI: `SsenDriveIngest.tsx`
-New card in **Admin → DNO Datasets** showing all 51 layers with per-row **Ingest** button + status (pending / running / rows loaded / bbox). Bulk "Ingest all SEPD" / "Ingest all SHEPD" buttons that queue ingests sequentially (self-continuing pattern already used for `npg-dataset-ingest` to avoid CPU timeout on the larger cable/wire layers).
-
-### 4. Map integration
-No changes needed in `mapLayers.ts` / `FeatureInfoPanel.tsx` — the existing registry-driven renderer picks these up automatically once rows land in `geo_*` tables and the registry entries exist. Popups will show `attrs_json` fields (voltage, install date, feeder, etc.) via the generic renderer.
-
-### 5. Verification
-1. Ingest a small layer first: `electric_et_tower_location_shepd` (~7 KB, ~90 towers) — confirm points land in Scotland with correct BNG→WGS84 offsets (<1 m).
-2. Ingest a medium wire layer (`electric_eo_wire_segment_inst_route_exi_hv_shepd`) — confirm line features render.
-3. Toggle a layer on/off in the panel; confirm map fly-to uses the auto-computed bbox.
-4. Click a tower feature → popup shows `attrs_json` attributes.
-
-## Technical details
-
-- **Google Drive access**: gateway URL `https://connector-gateway.lovable.dev/google_drive/drive/v3/files/{id}?alt=media`. Connector already linked; secrets `LOVABLE_API_KEY` + `GOOGLE_DRIVE_API_KEY` present.
-- **Shapefile parser**: `npm:shapefile@0.6.6` (pure JS, Deno-compatible). Handles .shp+.dbf streaming.
-- **Projection**: reuse `src/lib/ostn15.ts` but port the minimum needed constants into the edge function (Deno context — no `src/` imports). Same OSTN15 grid-shift already validated for Leeds street lights.
-- **Storage routing**:
-  - Point geometry → `geo_points` (towers, cabinets, isolating equipment, fibre joints)
-  - Line geometry → `geo_cables` (wires, cables, ducts)
-  - Polygon geometry (none expected in this export, but guard anyway) → `geo_polygons`
-- **Annotation layers** (`*_annotation_*`, `*_sc_anno_*`): skipped by default — they're rendered labels, not primary geometry.
-- **File-format guarantee**: I've already inspected the folder — everything is `.shp/.shx/.dbf/.prj/.cpg`. No PDFs, no XLSX, no zips. So the pipeline can be single-purpose (no format detection needed).
+4. **Confirm headroom is queryable** with a spot-check SQL joining a sample `sitefunctionallocation` across 2a and 3b (`firm_capacity_mva − peak_mw/0.95`). No engine code changes needed — the feasibility engine already reads `nearest_substation.headroom_kw` from `assets`, which is populated once these tables have data.
 
 ## Out of scope
-- The LTDS capacity/headroom pipeline (already live for SSEN via `ssen-ltds-ingest`) — untouched.
-- CIM EQ Profile ingestion.
-- Any files added to the Drive folder after ingest (would need re-run, no live sync).
+
+- Rebuilding the tabular ingester (it already exists and handles all six tables correctly).
+- Fixing 404 datasets (they don't exist on UKPN's portal anymore).
+- Any change to `feasibilityEngine.ts` or the substation lookup path — behavior is data-driven and unblocks automatically once tables populate.
