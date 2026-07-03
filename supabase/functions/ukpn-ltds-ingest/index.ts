@@ -41,7 +41,7 @@ const pick = (row: Record<string, any>, ...keys: string[]) => {
 
 const SPECS: Record<LtdsKind, TableSpec> = {
   "2a": {
-    dataset_id: "ltds-table-2a-transformer-2w",
+    dataset_id: "ukpn-ltds-table-2a-transformer-2w",
     table: "ukpn_ltds_transformers_2w",
     conflict: "sitefunctionallocation,voltage_kv,year",
     map: (r) => {
@@ -60,7 +60,7 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     },
   },
   "2b": {
-    dataset_id: "ltds-table-2b-transformer-data-3w",
+    dataset_id: "ukpn-ltds-table-2b-transformer-data-3w",
     table: "ukpn_ltds_transformers_3w",
     conflict: "sitefunctionallocation,voltage_kv,year",
     map: (r) => {
@@ -81,7 +81,7 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     },
   },
   "3a": {
-    dataset_id: "ltds-table-3a-load-data-observed",
+    dataset_id: "ukpn-ltds-table-3a-load-data-observed",
     table: "ukpn_ltds_peak_demand_observed",
     conflict: "sitefunctionallocation,voltage_kv,year,season",
     map: (r) => {
@@ -100,7 +100,7 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     },
   },
   "3b": {
-    dataset_id: "ltds-table-3b-load-data-true",
+    dataset_id: "ukpn-ltds-table-3b-load-data-true",
     table: "ukpn_ltds_peak_demand_true",
     conflict: "sitefunctionallocation,voltage_kv,year,season",
     map: (r) => {
