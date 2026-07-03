@@ -13,7 +13,7 @@ type LtdsKind = "2a" | "2b" | "3a" | "3b" | "4a" | "4b";
 interface TableSpec {
   dataset_id: string;
   table: string;
-  map: (row: Record<string, any>) => Record<string, any> | null;
+  map: (row: Record<string, any>) => Record<string, any> | Record<string, any>[] | null;
   conflict: string;
 }
 
@@ -47,13 +47,17 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     map: (r) => {
       const sfl = str(pick(r, "sitefunctionallocation", "site_functional_location", "functionallocation"));
       if (!sfl) return null;
+      // UKPN 2a (current schema) uses transformer_rating_mva_winter as the
+      // firm (N-1) rating and transformer_rating_mva_summer as nameplate.
+      const winter = num(pick(r, "transformer_rating_mva_winter"));
+      const summer = num(pick(r, "transformer_rating_mva_summer"));
       return {
         sitefunctionallocation: sfl,
-        site_name: str(pick(r, "sitename", "site_name", "substation_name")),
-        voltage_kv: num(pick(r, "voltage_kv", "primary_voltage_kv", "hv_voltage_kv", "voltage")),
-        firm_capacity_mva: num(pick(r, "firm_capacity_mva", "firmcapacity_mva", "firm_capacity", "firm_rating_mva")),
+        site_name: str(pick(r, "hv_substation", "sitename", "site_name", "substation_name")),
+        voltage_kv: num(pick(r, "voltage_hv", "voltage_kv", "primary_voltage_kv", "hv_voltage_kv", "voltage")),
+        firm_capacity_mva: num(pick(r, "firm_capacity_mva", "firmcapacity_mva", "firm_capacity", "firm_rating_mva")) ?? winter,
         cyclic_rating_mva: num(pick(r, "cyclic_rating_mva", "cyclic_mva", "cyclic_rating")),
-        nameplate_mva: num(pick(r, "nameplate_rating_mva", "nameplate_mva", "rating_mva")),
+        nameplate_mva: num(pick(r, "nameplate_rating_mva", "nameplate_mva", "rating_mva")) ?? summer,
         year: yr(pick(r, "year", "data_year", "reporting_year")),
         raw_json: r,
       };
@@ -68,13 +72,15 @@ const SPECS: Record<LtdsKind, TableSpec> = {
       if (!sfl) return null;
       return {
         sitefunctionallocation: sfl,
-        site_name: str(pick(r, "sitename", "site_name", "substation_name")),
-        voltage_kv: num(pick(r, "primary_voltage_kv", "hv_voltage_kv", "voltage_kv")),
-        firm_capacity_mva: num(pick(r, "firm_capacity_mva", "firm_rating_mva")),
+        site_name: str(pick(r, "hv_substation", "sitename", "site_name", "substation_name")),
+        voltage_kv: num(pick(r, "voltage_hv", "primary_voltage_kv", "hv_voltage_kv", "voltage_kv")),
+        firm_capacity_mva: num(pick(r, "firm_capacity_mva", "firm_rating_mva"))
+          ?? num(pick(r, "transformer_rating_mva_winter_hv")),
         cyclic_rating_mva: num(pick(r, "cyclic_rating_mva")),
-        nameplate_mva: num(pick(r, "nameplate_rating_mva", "rating_mva")),
-        tertiary_voltage_kv: num(pick(r, "tertiary_voltage_kv")),
-        tertiary_rating_mva: num(pick(r, "tertiary_rating_mva")),
+        nameplate_mva: num(pick(r, "nameplate_rating_mva", "rating_mva"))
+          ?? num(pick(r, "transformer_rating_mva_summer_hv")),
+        tertiary_voltage_kv: num(pick(r, "tertiary_voltage_kv", "voltage_lv_2")),
+        tertiary_rating_mva: num(pick(r, "tertiary_rating_mva", "transformer_rating_mva_winter_lv2")),
         year: yr(pick(r, "year", "data_year")),
         raw_json: r,
       };
@@ -85,18 +91,9 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     table: "ukpn_ltds_peak_demand_observed",
     conflict: "sitefunctionallocation,voltage_kv,year,season",
     map: (r) => {
-      const sfl = str(pick(r, "sitefunctionallocation", "functionallocation"));
+      const sfl = str(pick(r, "sitefunctionallocation", "functional_location", "functionallocation"));
       if (!sfl) return null;
-      return {
-        sitefunctionallocation: sfl,
-        site_name: str(pick(r, "sitename", "substation_name", "site_name")),
-        voltage_kv: num(pick(r, "voltage_kv", "voltage")),
-        peak_mw: num(pick(r, "peak_mw", "observed_peak_mw", "peak_demand_mw", "mw")),
-        peak_mvar: num(pick(r, "peak_mvar", "observed_peak_mvar", "mvar")),
-        year: yr(pick(r, "year", "data_year")),
-        season: str(pick(r, "season")) ?? "annual",
-        raw_json: r,
-      };
+      return expandLoadRows(r, sfl);
     },
   },
   "3b": {
@@ -104,18 +101,9 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     table: "ukpn_ltds_peak_demand_true",
     conflict: "sitefunctionallocation,voltage_kv,year,season",
     map: (r) => {
-      const sfl = str(pick(r, "sitefunctionallocation", "functionallocation"));
+      const sfl = str(pick(r, "sitefunctionallocation", "functional_location", "functionallocation"));
       if (!sfl) return null;
-      return {
-        sitefunctionallocation: sfl,
-        site_name: str(pick(r, "sitename", "substation_name", "site_name")),
-        voltage_kv: num(pick(r, "voltage_kv", "voltage")),
-        peak_mw: num(pick(r, "peak_mw", "true_peak_mw", "peak_demand_mw", "mw")),
-        peak_mvar: num(pick(r, "peak_mvar", "true_peak_mvar", "mvar")),
-        year: yr(pick(r, "year", "data_year")),
-        season: str(pick(r, "season")) ?? "annual",
-        raw_json: r,
-      };
+      return expandLoadRows(r, sfl);
     },
   },
   "4a": {
@@ -154,6 +142,60 @@ const SPECS: Record<LtdsKind, TableSpec> = {
     },
   },
 };
+
+// UKPN 3a/3b are wide-format: one row per substation/season with columns for
+// current year's observed/true peak plus forecast years. Fan out into one
+// row per year so headroom = firm_capacity_mw - peak_mw is queryable per year.
+function expandLoadRows(r: Record<string, any>, sfl: string): Record<string, any>[] {
+  const siteName = str(pick(r, "substation", "sitename", "site_name"));
+  const season = str(pick(r, "season")) ?? "annual";
+  const firmMw = num(pick(r, "firm_capacity_mw", "firm_capacity"));
+  const out: Record<string, any>[] = [];
+
+  // Collect every column that looks like maximum_demand_YY_YY_mw or forecast_m_d_mw_YY_YY.
+  for (const key of Object.keys(r)) {
+    const lk = key.toLowerCase();
+    let year: number | null = null;
+    let mw: number | null = null;
+    let mMax = lk.match(/^maximum_demand_(\d{2})_(\d{2})_mw$/);
+    if (mMax) {
+      year = 2000 + parseInt(mMax[1], 10);
+      mw = num(r[key]);
+    } else {
+      const mFc = lk.match(/^forecast_m_d_mw_(\d{2})_(\d{2})$/);
+      if (mFc) {
+        year = 2000 + parseInt(mFc[1], 10);
+        mw = num(r[key]);
+      }
+    }
+    if (year == null || mw == null) continue;
+    out.push({
+      sitefunctionallocation: sfl,
+      site_name: siteName,
+      voltage_kv: null,
+      peak_mw: mw,
+      peak_mvar: null,
+      year,
+      season,
+      raw_json: { ...r, _firm_capacity_mw: firmMw },
+    });
+  }
+
+  // Fallback: if no year-shaped columns matched (older schema), emit a single row.
+  if (out.length === 0) {
+    out.push({
+      sitefunctionallocation: sfl,
+      site_name: siteName,
+      voltage_kv: num(pick(r, "voltage_kv", "voltage")),
+      peak_mw: num(pick(r, "peak_mw", "observed_peak_mw", "true_peak_mw", "peak_demand_mw", "mw")),
+      peak_mvar: num(pick(r, "peak_mvar", "observed_peak_mvar", "true_peak_mvar", "mvar")),
+      year: yr(pick(r, "year", "data_year")),
+      season,
+      raw_json: r,
+    });
+  }
+  return out;
+}
 
 function specForDatasetId(id: string): { kind: LtdsKind; spec: TableSpec } | null {
   for (const [k, s] of Object.entries(SPECS)) {
