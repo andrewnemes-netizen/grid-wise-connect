@@ -837,6 +837,28 @@ const MapView = () => {
               }}
             />
           )}
+
+          {advisorOpen && (
+            <GridwiseAdvisorPanel
+              onClose={() => setAdvisorOpen(false)}
+              onShowOnMap={(results) => {
+                setAdvisorResults(results);
+                if (!map || !results.length) return;
+                if (results.length === 1) {
+                  map.flyTo({ center: [results[0].lng, results[0].lat], zoom: 15 });
+                } else {
+                  const bounds = new maplibregl.LngLatBounds();
+                  results.forEach((r) => bounds.extend([r.lng, r.lat]));
+                  map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+                }
+              }}
+              onAssess={(r) => {
+                setAdvisorOpen(false);
+                setAssessLocation({ lng: r.lng, lat: r.lat });
+                map?.flyTo({ center: [r.lng, r.lat], zoom: 16 });
+              }}
+            />
+          )}
         </>
       )}
     </div>
