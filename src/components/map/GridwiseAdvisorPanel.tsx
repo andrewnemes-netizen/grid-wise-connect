@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { X, Send, Download, MapPin, Zap, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -135,7 +134,7 @@ export function GridwiseAdvisorPanel({ onClose, onShowOnMap, onAssess }: Props) 
         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
 
-      <ScrollArea className="flex-1 px-3 py-2" ref={scrollRef as any}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2">
         <div className="space-y-3">
           {messages.map((m, i) => (
             <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
@@ -210,7 +209,7 @@ export function GridwiseAdvisorPanel({ onClose, onShowOnMap, onAssess }: Props) 
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       <form className="border-t p-2 flex gap-1"
         onSubmit={(e) => { e.preventDefault(); send(input); }}>
