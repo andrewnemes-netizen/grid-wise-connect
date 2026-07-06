@@ -176,7 +176,7 @@ export function SsenDriveIngest() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={!!busy || layer.is_annotation}
+                      disabled={!!busy}
                       onClick={() => runIngest(layer)}
                     >
                       {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
