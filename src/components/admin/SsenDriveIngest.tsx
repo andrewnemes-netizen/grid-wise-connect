@@ -130,7 +130,7 @@ export function SsenDriveIngest() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            {rows.filter((r) => !r.is_annotation).length} usable · {rows.filter((r) => r.is_annotation).length} annotation-only (skipped)
+            {rows.length} layers ({rows.filter((r) => r.is_annotation).length} annotation)
           </div>
           <Button size="sm" variant="secondary" onClick={() => ingestAll(region)} disabled={!!busy}>
             <Play className="h-3.5 w-3.5 mr-1.5" /> Ingest all {region}
