@@ -26,24 +26,38 @@ const LaProgramme = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { toast.error("Please log in"); return; }
 
-      setProgress(20);
-
-      const response = await supabase.functions.invoke("score-sites-batch", {
-        body: { sites: rows },
-      });
-
-      setProgress(90);
-
-      if (response.error) {
-        toast.error(`Scoring failed: ${response.error.message}`);
-        return;
+      // Chunk client-side to avoid edge function CPU limits on large batches
+      const CHUNK_SIZE = 8;
+      const chunks: SiteRow[][] = [];
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        chunks.push(rows.slice(i, i + CHUNK_SIZE));
       }
 
-      const data = response.data;
-      setResults(data.results);
-      setSummary(data.summary);
+      const allResults: any[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const response = await supabase.functions.invoke("score-sites-batch", {
+          body: { sites: chunks[i] },
+        });
+        if (response.error) {
+          toast.error(`Chunk ${i + 1}/${chunks.length} failed: ${response.error.message}`);
+          return;
+        }
+        if (response.data?.results) allResults.push(...response.data.results);
+        setProgress(10 + Math.round(((i + 1) / chunks.length) * 85));
+      }
+
+      const aggregatedSummary = {
+        total: allResults.length,
+        errors: allResults.filter((r: any) => r.error).length,
+        phase_1: allResults.filter((r: any) => r.phase === 1).length,
+        phase_2: allResults.filter((r: any) => r.phase === 2).length,
+        phase_3: allResults.filter((r: any) => r.phase === 3).length,
+      };
+
+      setResults(allResults);
+      setSummary(aggregatedSummary);
       setProgress(100);
-      toast.success(`Scored ${data.summary.total} sites (${data.summary.errors} errors)`);
+      toast.success(`Scored ${aggregatedSummary.total} sites (${aggregatedSummary.errors} errors)`);
     } catch (err: any) {
       toast.error(err.message || "Scoring failed");
     } finally {
