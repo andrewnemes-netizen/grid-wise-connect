@@ -3065,6 +3065,70 @@ export type Database = {
         Args: { target_user: string }
         Returns: string
       }
+      advisor_search_geo_feeders: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          max_rows?: number
+          radius_m: number
+          v_max?: number
+          v_min?: number
+        }
+        Returns: {
+          distance_m: number
+          dno: string
+          id: string
+          lat: number
+          lng: number
+          name: string
+          voltage_kv: number
+        }[]
+      }
+      advisor_search_geo_substations: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          max_rows?: number
+          max_util?: number
+          min_headroom?: number
+          radius_m: number
+          v_max?: number
+          v_min?: number
+        }
+        Returns: {
+          distance_m: number
+          dno: string
+          headroom_kw: number
+          id: string
+          lat: number
+          lng: number
+          name: string
+          utilisation_pct: number
+          voltage_kv: number
+        }[]
+      }
+      advisor_search_site_utilisation: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          la?: string
+          max_rows?: number
+          max_util?: number
+          min_headroom?: number
+          radius_m: number
+        }
+        Returns: {
+          distance_m: number
+          dno: string
+          headroom_kw: number
+          id: string
+          lat: number
+          lng: number
+          local_authority: string
+          name: string
+          utilisation_pct: number
+        }[]
+      }
       auto_create_dno_layers: {
         Args: { p_dno: string; p_force?: boolean }
         Returns: Json
