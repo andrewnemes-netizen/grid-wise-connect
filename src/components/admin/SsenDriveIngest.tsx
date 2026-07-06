@@ -99,7 +99,7 @@ export function SsenDriveIngest() {
   };
 
   const ingestAll = async (region: "SEPD" | "SHEPD") => {
-    const layers = (layersQ.data || []).filter((l) => l.region === region && !l.is_annotation);
+    const layers = (layersQ.data || []).filter((l) => l.region === region);
     if (layers.length === 0) return;
     // Ensure every layer has a layer_registry row before ingesting so the
     // per-layer poller can find it. Safe to call repeatedly — it's idempotent.
