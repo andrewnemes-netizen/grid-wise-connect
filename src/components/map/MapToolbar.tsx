@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Trash2, Ruler, Compass, Pentagon, SquareDashedBottom, PencilRuler, Zap } from "lucide-react";
+import { MapPin, Trash2, Ruler, Compass, Pentagon, SquareDashedBottom, PencilRuler, Zap, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Street View pegman icon (orange man like Google)
@@ -22,6 +22,8 @@ interface MapToolbarProps {
   onClear: () => void;
   onZoomToUK?: () => void;
   hasActiveStudy?: boolean;
+  advisorOpen?: boolean;
+  onToggleAdvisor?: () => void;
 }
 
 const tools = [
@@ -34,11 +36,27 @@ const tools = [
   { id: "streetview" as const, customIcon: StreetViewIcon, label: "Street View" },
 ] as const;
 
-export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy }: MapToolbarProps) {
+export function MapToolbar({ activeTool, onToolChange, onClear, onZoomToUK, hasActiveStudy, advisorOpen, onToggleAdvisor }: MapToolbarProps) {
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   return (
     <div className="absolute bottom-16 right-4 z-10 flex flex-col gap-1 items-end">
+      {onToggleAdvisor && (
+        <div className="flex items-center gap-1.5"
+          onMouseEnter={() => setHoveredTool("advisor")}
+          onMouseLeave={() => setHoveredTool(null)}>
+          {hoveredTool === "advisor" && (
+            <span className="text-xs font-medium bg-background/95 backdrop-blur border rounded-md px-2 py-1 shadow-md whitespace-nowrap">
+              Gridwise Advisor (AI)
+            </span>
+          )}
+          <Button size="icon" variant={advisorOpen ? "default" : "outline"}
+            className="h-9 w-9 shadow-md bg-background/95 backdrop-blur" onClick={onToggleAdvisor}>
+            <Sparkles className={`h-4 w-4 ${advisorOpen ? "" : "text-primary"}`} />
+          </Button>
+        </div>
+      )}
+      <div className="h-px bg-border my-0.5 w-9" />
       {tools.map((tool) => {
         const disabled = 'requiresStudy' in tool && tool.requiresStudy && !hasActiveStudy;
         return (

@@ -37,6 +37,7 @@ import { useVisualWorkflow } from "@/hooks/useVisualWorkflow";
 import type { Scenario } from "@/components/map/workflow/ScenarioManagerPanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
+import { GridwiseAdvisorPanel, type AdvisorResult } from "@/components/map/GridwiseAdvisorPanel";
 
 import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 
@@ -87,7 +88,50 @@ const MapView = () => {
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [assessLocation, setAssessLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [routeDrawActive, setRouteDrawActive] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorResults, setAdvisorResults] = useState<AdvisorResult[]>([]);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+
+  // Sync advisor result markers onto the map
+  useEffect(() => {
+    if (!map || !mapLoaded) return;
+    const src = "advisor-results-src";
+    const layer = "advisor-results-layer";
+    const layerLabel = "advisor-results-label";
+    const fc: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: advisorResults.map((r, i) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [r.lng, r.lat] },
+        properties: { rank: i + 1, name: r.name ?? "", type: r.asset_type, headroom: r.headroom_kw ?? 0 },
+      })),
+    };
+    if (!map.getSource(src)) {
+      map.addSource(src, { type: "geojson", data: fc });
+      map.addLayer({
+        id: layer, source: src, type: "circle",
+        paint: {
+          "circle-radius": 8, "circle-color": "#8b5cf6",
+          "circle-stroke-color": "#fff", "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: layerLabel, source: src, type: "symbol",
+        layout: { "text-field": ["get", "rank"], "text-size": 10, "text-offset": [0, 0.05] },
+        paint: { "text-color": "#fff" },
+      });
+    } else {
+      (map.getSource(src) as maplibregl.GeoJSONSource).setData(fc);
+    }
+    return () => {
+      if (advisorResults.length === 0 && map.getLayer(layer)) {
+        map.removeLayer(layerLabel);
+        map.removeLayer(layer);
+        map.removeSource(src);
+      }
+    };
+  }, [advisorResults, map, mapLoaded]);
+
   const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
   const routeDrawRef = useRef(routeDrawActive);
@@ -630,6 +674,8 @@ const MapView = () => {
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
             hasActiveStudy={!!activeStudy.study}
+            advisorOpen={advisorOpen}
+            onToggleAdvisor={() => setAdvisorOpen((v) => !v)}
           />
 
           {/* Route drawing controls (assess tool with source selected) */}
@@ -829,6 +875,28 @@ const MapView = () => {
                 setTimeout(() => {
                   design.placeElement(markerLng, markerLat);
                 }, 50);
+              }}
+            />
+          )}
+
+          {advisorOpen && (
+            <GridwiseAdvisorPanel
+              onClose={() => setAdvisorOpen(false)}
+              onShowOnMap={(results) => {
+                setAdvisorResults(results);
+                if (!map || !results.length) return;
+                if (results.length === 1) {
+                  map.flyTo({ center: [results[0].lng, results[0].lat], zoom: 15 });
+                } else {
+                  const bounds = new maplibregl.LngLatBounds();
+                  results.forEach((r) => bounds.extend([r.lng, r.lat]));
+                  map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+                }
+              }}
+              onAssess={(r) => {
+                setAdvisorOpen(false);
+                setAssessLocation({ lng: r.lng, lat: r.lat });
+                map?.flyTo({ center: [r.lng, r.lat], zoom: 16 });
               }}
             />
           )}
