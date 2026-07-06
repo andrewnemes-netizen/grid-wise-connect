@@ -283,7 +283,7 @@ function LaDatasetCard({ slug, title, description, parse, preload, columnsHint, 
         if (delErr) throw new Error(`Clear failed: ${delErr.message}`);
       }
 
-      const BATCH = 2000;
+      const BATCH = 500;
       let inserted = 0;
       const total = features.length;
       const totalBatches = Math.ceil(total / BATCH);
@@ -293,19 +293,32 @@ function LaDatasetCard({ slug, title, description, parse, preload, columnsHint, 
         setStatus(`Uploading batch ${batchNum}/${totalBatches}…`);
         const slice = features.slice(i, i + BATCH);
 
-        const res = await supabase.functions.invoke("ingest-geo-features", {
-          body: {
-            layer_id: layer.id,
-            storage_table: layer.storage_table,
-            dno: "Local Authority",
-            features: slice,
-          },
-        });
-
-        if (res.error) {
-          throw new Error(`Batch ${batchNum} failed: ${res.error.message || res.error}`);
+        // Retry each batch a few times — the preview fetch proxy occasionally
+        // fails large POSTs with "Failed to fetch"
+        let lastErr: any = null;
+        let batchInserted = 0;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await supabase.functions.invoke("ingest-geo-features", {
+              body: {
+                layer_id: layer.id,
+                storage_table: layer.storage_table,
+                dno: "Local Authority",
+                features: slice,
+              },
+            });
+            if (res.error) throw new Error(res.error.message || String(res.error));
+            batchInserted = (res.data as any)?.inserted || 0;
+            lastErr = null;
+            break;
+          } catch (e: any) {
+            lastErr = e;
+            console.warn(`[LA upload] batch ${batchNum} attempt ${attempt} failed:`, e?.message || e);
+            await new Promise((r) => setTimeout(r, 500 * attempt));
+          }
         }
-        inserted += (res.data as any)?.inserted || 0;
+        if (lastErr) throw new Error(`Batch ${batchNum} failed after 3 attempts: ${lastErr.message || lastErr}`);
+        inserted += batchInserted;
         setInsertedTotal(inserted);
         setProgress(Math.round(((i + slice.length) / total) * 100));
       }
