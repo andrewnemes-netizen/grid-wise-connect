@@ -91,6 +91,47 @@ const MapView = () => {
   const [advisorOpen, setAdvisorOpen] = useState(false);
   const [advisorResults, setAdvisorResults] = useState<AdvisorResult[]>([]);
   const markerRef = useRef<maplibregl.Marker | null>(null);
+
+  // Sync advisor result markers onto the map
+  useEffect(() => {
+    if (!map || !mapLoaded) return;
+    const src = "advisor-results-src";
+    const layer = "advisor-results-layer";
+    const layerLabel = "advisor-results-label";
+    const fc: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: advisorResults.map((r, i) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [r.lng, r.lat] },
+        properties: { rank: i + 1, name: r.name ?? "", type: r.asset_type, headroom: r.headroom_kw ?? 0 },
+      })),
+    };
+    if (!map.getSource(src)) {
+      map.addSource(src, { type: "geojson", data: fc });
+      map.addLayer({
+        id: layer, source: src, type: "circle",
+        paint: {
+          "circle-radius": 8, "circle-color": "#8b5cf6",
+          "circle-stroke-color": "#fff", "circle-stroke-width": 2,
+        },
+      });
+      map.addLayer({
+        id: layerLabel, source: src, type: "symbol",
+        layout: { "text-field": ["get", "rank"], "text-size": 10, "text-offset": [0, 0.05] },
+        paint: { "text-color": "#fff" },
+      });
+    } else {
+      (map.getSource(src) as maplibregl.GeoJSONSource).setData(fc);
+    }
+    return () => {
+      if (advisorResults.length === 0 && map.getLayer(layer)) {
+        map.removeLayer(layerLabel);
+        map.removeLayer(layer);
+        map.removeSource(src);
+      }
+    };
+  }, [advisorResults, map, mapLoaded]);
+
   const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
   const routeDrawRef = useRef(routeDrawActive);
