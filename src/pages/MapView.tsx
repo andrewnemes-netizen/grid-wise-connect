@@ -633,6 +633,8 @@ const MapView = () => {
             onClear={handleClear}
             onZoomToUK={handleZoomToUK}
             hasActiveStudy={!!activeStudy.study}
+            advisorOpen={advisorOpen}
+            onToggleAdvisor={() => setAdvisorOpen((v) => !v)}
           />
 
           {/* Route drawing controls (assess tool with source selected) */}
