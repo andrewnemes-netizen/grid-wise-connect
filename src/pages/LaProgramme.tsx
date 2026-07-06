@@ -52,6 +52,8 @@ const LaProgramme = () => {
         phase_1: allResults.filter((r: any) => r.phase === 1).length,
         phase_2: allResults.filter((r: any) => r.phase === 2).length,
         phase_3: allResults.filter((r: any) => r.phase === 3).length,
+        total_kw: allResults.reduce((s: number, r: any) => s + (Number(r.proposed_kw) || 0), 0),
+        total_estimate: allResults.reduce((s: number, r: any) => s + (Number(r.total_estimate) || 0), 0),
       };
 
       setResults(allResults);
