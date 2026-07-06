@@ -881,7 +881,8 @@ const MapView = () => {
 
           {advisorOpen && (
             <GridwiseAdvisorPanel
-              onClose={() => setAdvisorOpen(false)}
+              onClose={() => { setAdvisorOpen(false); setAdvisorResults([]); }}
+              onClear={() => setAdvisorResults([])}
               onShowOnMap={(results) => {
                 setAdvisorResults(results);
                 if (!map || !results.length) return;
