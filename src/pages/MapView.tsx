@@ -37,6 +37,7 @@ import { useVisualWorkflow } from "@/hooks/useVisualWorkflow";
 import type { Scenario } from "@/components/map/workflow/ScenarioManagerPanel";
 import { clearLayerCache, fetchLayerGeoJSON, addRegistryLayerToMap } from "@/lib/mapLayers";
 import { StreetViewPanel, type StreetViewMarker, type StreetViewCapture } from "@/components/map/StreetViewPanel";
+import { GridwiseAdvisorPanel, type AdvisorResult } from "@/components/map/GridwiseAdvisorPanel";
 
 import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 
@@ -87,6 +88,8 @@ const MapView = () => {
   const [selectedDno, setSelectedDno] = useState<string | null>(null);
   const [assessLocation, setAssessLocation] = useState<{ lng: number; lat: number } | null>(null);
   const [routeDrawActive, setRouteDrawActive] = useState(false);
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorResults, setAdvisorResults] = useState<AdvisorResult[]>([]);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const connectionLinesRef = useRef<ConnectionLine[]>([]);
   const activeToolRef = useRef(activeTool);
