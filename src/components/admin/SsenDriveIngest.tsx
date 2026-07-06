@@ -99,7 +99,7 @@ export function SsenDriveIngest() {
   };
 
   const ingestAll = async (region: "SEPD" | "SHEPD") => {
-    const layers = (layersQ.data || []).filter((l) => l.region === region && !l.is_annotation);
+    const layers = (layersQ.data || []).filter((l) => l.region === region);
     if (layers.length === 0) return;
     // Ensure every layer has a layer_registry row before ingesting so the
     // per-layer poller can find it. Safe to call repeatedly — it's idempotent.
@@ -130,7 +130,7 @@ export function SsenDriveIngest() {
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            {rows.filter((r) => !r.is_annotation).length} usable · {rows.filter((r) => r.is_annotation).length} annotation-only (skipped)
+            {rows.length} layers ({rows.filter((r) => r.is_annotation).length} annotation)
           </div>
           <Button size="sm" variant="secondary" onClick={() => ingestAll(region)} disabled={!!busy}>
             <Play className="h-3.5 w-3.5 mr-1.5" /> Ingest all {region}
@@ -176,7 +176,7 @@ export function SsenDriveIngest() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      disabled={!!busy || layer.is_annotation}
+                      disabled={!!busy}
                       onClick={() => runIngest(layer)}
                     >
                       {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
