@@ -26,6 +26,7 @@ Rules:
 - Default radius_km = 10 unless the user gives a distance.
 - Interpret "headroom" as min_headroom_kw; "lightly loaded" as max_utilisation_pct <= 60; "spare capacity" implies min_headroom_kw >= 100.
 - Voltage cues: LV = <1kV, HV = 6.6/11/20/33kV, EHV = 66/132kV. Map to voltage_min_kv / voltage_max_kv.
+- Default limit is 100 (max 500). Only lower it if the user explicitly asks for a short list ("top 10", "top 20"). For broad queries ("all", "every", "show me substations in X"), pass limit: 500.
 - After the tool returns, write a SHORT summary (max 4 bullet points) of the top matches — name, DNO, headroom, distance. Never repeat all fields; the UI shows the table.
 - If the user asks about export or study creation, tell them to use the Export / Assess buttons on each row.
 - If the tool returns zero results, suggest widening radius or relaxing filters.`;
@@ -52,7 +53,7 @@ const TOOLS = [
           voltage_max_kv: { type: "number" },
           local_authority: { type: "string", description: "Local authority name filter (substations only)." },
           rank_by: { type: "string", enum: ["headroom_desc", "distance_asc", "utilisation_asc"] },
-          limit: { type: "number", description: "Max results (default 25, max 100)." },
+          limit: { type: "number", description: "Max results (default 100, max 500). Use 500 for broad 'all/show me' queries." },
         },
         required: ["location"],
       },
@@ -111,7 +112,7 @@ async function runSearch(args: SearchArgs) {
   if (!loc) return { error: `Could not geocode "${args.location}".`, results: [] };
 
   const radiusM = Math.max(100, Math.min(100_000, (args.radius_km ?? 10) * 1000));
-  const limit = Math.max(1, Math.min(100, args.limit ?? 25));
+  const limit = Math.max(1, Math.min(500, args.limit ?? 100));
   const types = args.asset_types?.length ? args.asset_types : ["substation", "lv_feeder", "hv_feeder"];
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
