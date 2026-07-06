@@ -276,8 +276,7 @@ async function ingestLayer(sb: any, region: string, layer_base: string) {
   const catalogue = await buildCatalogue();
   const entry = catalogue.find((e) => e.region === region && e.base === layer_base);
   if (!entry) throw new Error(`Layer not found in Drive: ${region}/${layer_base}`);
-  if (entry.is_annotation) throw new Error(`Annotation layer, skipped: ${layer_base}`);
-  if (!entry.files.shp || !entry.files.dbf) {
+    if (!entry.files.shp || !entry.files.dbf) {
     throw new Error(`Layer missing .shp or .dbf: ${layer_base}`);
   }
 
