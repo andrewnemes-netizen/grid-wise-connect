@@ -115,100 +115,56 @@ async function runSearch(args: SearchArgs) {
   const types = args.asset_types?.length ? args.asset_types : ["substation", "lv_feeder", "hv_feeder"];
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-  const point = `SRID=4326;POINT(${loc.lng} ${loc.lat})`;
   const results: Result[] = [];
 
-  // Substations — merge site_utilisation (rich attrs) + geo_substations (broad coverage)
   if (types.includes("substation")) {
-    // 1) site_utilisation — richest metadata
-    let q = `
-      select id::text as id, site_name as name, licence_area as dno,
-             null::numeric as voltage_kv,
-             transformer_headroom_kw as headroom_kw,
-             utilisation_pct::numeric as utilisation_pct,
-             local_authority,
-             ST_Distance(geom::geography, ST_GeogFromText('${point}')) as distance_m,
-             ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
-      from public.site_utilisation
-      where geom is not null
-        and ST_DWithin(geom::geography, ST_GeogFromText('${point}'), ${radiusM})`;
-    if (args.min_headroom_kw != null) q += ` and transformer_headroom_kw >= ${Number(args.min_headroom_kw)}`;
-    if (args.max_utilisation_pct != null) q += ` and utilisation_pct <= ${Number(args.max_utilisation_pct)}`;
-    if (args.local_authority) q += ` and local_authority ilike '%${args.local_authority.replace(/'/g, "''")}%'`;
-    q += ` order by distance_m asc limit ${limit}`;
-    const { data, error } = await supabase.rpc("exec_advisor_sql", { sql_text: q }).select();
-    // Fallback: use direct query via postgres-meta unavailable — use REST select with filters instead
-    if (error || !data) {
-      // graceful degrade: query without spatial filter via ORM won't work — try geo_substations
-    } else {
-      for (const r of data as any[]) {
-        results.push({
-          asset_type: "substation",
-          source_table: "site_utilisation",
-          id: r.id, name: r.name, dno: r.dno,
-          voltage_kv: r.voltage_kv, headroom_kw: r.headroom_kw,
-          utilisation_pct: r.utilisation_pct, local_authority: r.local_authority,
-          distance_m: Math.round(r.distance_m), lat: r.lat, lng: r.lng, score: 0,
-        });
-      }
-    }
+    const { data: su } = await supabase.rpc("advisor_search_site_utilisation", {
+      center_lng: loc.lng, center_lat: loc.lat, radius_m: radiusM,
+      min_headroom: args.min_headroom_kw ?? null,
+      max_util: args.max_utilisation_pct ?? null,
+      la: args.local_authority ?? null,
+      max_rows: limit,
+    });
+    if (Array.isArray(su)) for (const r of su) results.push({
+      asset_type: "substation", source_table: "site_utilisation",
+      id: r.id, name: r.name, dno: r.dno, voltage_kv: null,
+      headroom_kw: r.headroom_kw, utilisation_pct: r.utilisation_pct,
+      local_authority: r.local_authority, distance_m: Math.round(r.distance_m),
+      lat: r.lat, lng: r.lng, score: 0,
+    });
 
-    // 2) geo_substations — capacity_value/capacity_flag when headroom unknown
-    let q2 = `
-      select id::text as id, name, dno,
-             voltage_kv,
-             capacity_value as headroom_kw,
-             null::numeric as utilisation_pct,
-             null::text as local_authority,
-             ST_Distance(geom::geography, ST_GeogFromText('${point}')) as distance_m,
-             ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
-      from public.geo_substations
-      where geom is not null
-        and ST_DWithin(geom::geography, ST_GeogFromText('${point}'), ${radiusM})`;
-    if (args.voltage_min_kv != null) q2 += ` and voltage_kv >= ${Number(args.voltage_min_kv)}`;
-    if (args.voltage_max_kv != null) q2 += ` and voltage_kv <= ${Number(args.voltage_max_kv)}`;
-    q2 += ` order by distance_m asc limit ${limit}`;
-    const { data: d2 } = await supabase.rpc("exec_advisor_sql", { sql_text: q2 }).select();
-    if (Array.isArray(d2)) {
-      for (const r of d2 as any[]) {
-        results.push({
-          asset_type: "substation",
-          source_table: "geo_substations",
-          id: r.id, name: r.name, dno: r.dno,
-          voltage_kv: r.voltage_kv, headroom_kw: r.headroom_kw,
-          utilisation_pct: null, local_authority: null,
-          distance_m: Math.round(r.distance_m), lat: r.lat, lng: r.lng, score: 0,
-        });
-      }
-    }
+    const { data: gs } = await supabase.rpc("advisor_search_geo_substations", {
+      center_lng: loc.lng, center_lat: loc.lat, radius_m: radiusM,
+      v_min: args.voltage_min_kv ?? null, v_max: args.voltage_max_kv ?? null,
+      min_headroom: args.min_headroom_kw ?? null,
+      max_util: args.max_utilisation_pct ?? null,
+      max_rows: limit,
+    });
+    if (Array.isArray(gs)) for (const r of gs) results.push({
+      asset_type: "substation", source_table: "geo_substations",
+      id: r.id, name: r.name, dno: r.dno, voltage_kv: r.voltage_kv,
+      headroom_kw: r.headroom_kw, utilisation_pct: r.utilisation_pct,
+      local_authority: null, distance_m: Math.round(r.distance_m),
+      lat: r.lat, lng: r.lng, score: 0,
+    });
   }
 
   if (types.includes("lv_feeder") || types.includes("hv_feeder")) {
-    let q = `
-      select id::text as id, name, dno, voltage_kv,
-             ST_Distance(geom::geography, ST_GeogFromText('${point}')) as distance_m,
-             ST_Y(ST_Centroid(geom::geometry)) as lat, ST_X(ST_Centroid(geom::geometry)) as lng
-      from public.geo_feeders
-      where geom is not null
-        and ST_DWithin(geom::geography, ST_GeogFromText('${point}'), ${radiusM})`;
-    if (!types.includes("lv_feeder")) q += ` and voltage_kv >= 6`;
-    if (!types.includes("hv_feeder")) q += ` and (voltage_kv is null or voltage_kv < 6)`;
-    if (args.voltage_min_kv != null) q += ` and voltage_kv >= ${Number(args.voltage_min_kv)}`;
-    if (args.voltage_max_kv != null) q += ` and voltage_kv <= ${Number(args.voltage_max_kv)}`;
-    q += ` order by distance_m asc limit ${limit}`;
-    const { data } = await supabase.rpc("exec_advisor_sql", { sql_text: q }).select();
-    if (Array.isArray(data)) {
-      for (const r of data as any[]) {
-        const isHv = (r.voltage_kv ?? 0) >= 6;
-        results.push({
-          asset_type: isHv ? "hv_feeder" : "lv_feeder",
-          source_table: "geo_feeders",
-          id: r.id, name: r.name, dno: r.dno,
-          voltage_kv: r.voltage_kv, headroom_kw: null, utilisation_pct: null,
-          local_authority: null, distance_m: Math.round(r.distance_m),
-          lat: r.lat, lng: r.lng, score: 0,
-        });
-      }
+    const vMin = !types.includes("lv_feeder") ? Math.max(args.voltage_min_kv ?? 0, 6) : args.voltage_min_kv ?? null;
+    const vMax = !types.includes("hv_feeder") ? Math.min(args.voltage_max_kv ?? 100, 5.999) : args.voltage_max_kv ?? null;
+    const { data: gf } = await supabase.rpc("advisor_search_geo_feeders", {
+      center_lng: loc.lng, center_lat: loc.lat, radius_m: radiusM,
+      v_min: vMin, v_max: vMax, max_rows: limit,
+    });
+    if (Array.isArray(gf)) for (const r of gf) {
+      const isHv = (r.voltage_kv ?? 0) >= 6;
+      results.push({
+        asset_type: isHv ? "hv_feeder" : "lv_feeder",
+        source_table: "geo_feeders",
+        id: r.id, name: r.name, dno: r.dno, voltage_kv: r.voltage_kv,
+        headroom_kw: null, utilisation_pct: null, local_authority: null,
+        distance_m: Math.round(r.distance_m), lat: r.lat, lng: r.lng, score: 0,
+      });
     }
   }
 
