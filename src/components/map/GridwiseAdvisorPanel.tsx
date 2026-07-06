@@ -30,6 +30,7 @@ interface Props {
   onClose: () => void;
   onShowOnMap: (results: AdvisorResult[]) => void;
   onAssess: (r: AdvisorResult) => void;
+  onClear?: () => void;
 }
 
 const SUGGESTIONS = [
@@ -39,7 +40,7 @@ const SUGGESTIONS = [
   "Find 11kV substations in Camden with spare capacity",
 ];
 
-export function GridwiseAdvisorPanel({ onClose, onShowOnMap, onAssess }: Props) {
+export function GridwiseAdvisorPanel({ onClose, onShowOnMap, onAssess, onClear }: Props) {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Msg[]>([
     {
@@ -163,6 +164,10 @@ export function GridwiseAdvisorPanel({ onClose, onShowOnMap, onAssess }: Props) 
                   </Button>
                   <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={createStudyShortlist}>
                     Shortlist
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2"
+                    onClick={() => { setResults([]); onClear?.(); }}>
+                    Clear
                   </Button>
                 </div>
               </div>
