@@ -10,9 +10,11 @@ import { Upload, Loader2, CheckCircle, AlertCircle, Lightbulb, Trash2 } from "lu
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { bngToWgs84Precise, preloadOstn15 } from "@/lib/ostn15";
+import * as XLSX from "xlsx";
 
 const LEEDS_LIGHTING_SLUG = "leeds-street-lighting-unmetered";
 const CAMBS_LIGHTING_SLUG = "cambridgeshire-street-lighting";
+const PBORO_LAND_ASSETS_SLUG = "peterborough-land-property-assets";
 
 /** RFC-4180-style CSV row split: handles quoted fields with embedded commas. */
 function splitCsvLine(line: string): string[] {
@@ -165,16 +167,68 @@ function parseCambridgeshireCsv(text: string): GeoJSON.Feature[] {
   return features;
 }
 
+/**
+ * Parser for Peterborough City Council "Land and Property Assets" xlsx export.
+ * Coordinates in British National Grid (Easting/Northing). Many rows lack
+ * coordinates and are skipped.
+ */
+async function parsePeterboroughXlsx(fileBuffer: ArrayBuffer): Promise<GeoJSON.Feature[]> {
+  const wb = XLSX.read(fileBuffer, { type: "array" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: null });
+  const features: GeoJSON.Feature[] = [];
+  for (const row of rows) {
+    const easting = parseFloat(row["Easting"]);
+    const northing = parseFloat(row["Northing"]);
+    if (!isFinite(easting) || !isFinite(northing) || easting === 0 || northing === 0) continue;
+    const { lat, lng } = await bngToWgs84Precise(easting, northing);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+
+    const assetId = row["Unique Asset Id"]?.toString().trim();
+    const assetName = row["Asset Name"]?.toString().trim();
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      properties: {
+        name: assetName || assetId || "Unnamed asset",
+        asset_id: assetId ? `PBC-${assetId}` : null,
+        uprn: row["UPRN"]?.toString() ?? null,
+        active: row["Active"] ?? null,
+        street: row["Street"] ?? null,
+        town: row["Town/City"] ?? null,
+        postcode: row["Postcode"] ?? null,
+        ownership: row["Ownership"] ?? null,
+        ownership_details: row["Ownership Details"] ?? null,
+        ownership_characteristics: row["Ownership Characteristics"] ?? null,
+        land_only: row["Land Only"] ?? null,
+        asset_size: row["Asset Size"] ?? null,
+        holding_reason: row["Holding Reason Description"] ?? null,
+        community_value: row["Community Value Description"] ?? null,
+        suitability: row["Suitability Description"] ?? null,
+        energy_performance: row["Energy Performance Description"] ?? null,
+        billing_authority: row["BILLING AUTHORITY"] ?? null,
+        billing_authority_code: row["BILLING AUTHORITY CODE"] ?? null,
+        source: "Peterborough City Council",
+        easting,
+        northing,
+      },
+    });
+  }
+  return features;
+}
+
 interface LaDatasetCardProps {
   slug: string;
   title: string;
   description: string;
-  parse: (text: string) => Promise<GeoJSON.Feature[]> | GeoJSON.Feature[];
+  parse: (input: string | ArrayBuffer) => Promise<GeoJSON.Feature[]> | GeoJSON.Feature[];
   preload?: () => Promise<void>;
   columnsHint: string;
+  accept?: string;
+  binary?: boolean;
 }
 
-function LaDatasetCard({ slug, title, description, parse, preload, columnsHint }: LaDatasetCardProps) {
+function LaDatasetCard({ slug, title, description, parse, preload, columnsHint, accept = ".csv", binary = false }: LaDatasetCardProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -209,13 +263,13 @@ function LaDatasetCard({ slug, title, description, parse, preload, columnsHint }
     setStatus("Reading file…");
 
     try {
-      const text = await file.text();
+      const input: string | ArrayBuffer = binary ? await file.arrayBuffer() : await file.text();
       if (preload) {
         setStatus("Loading OS national grid (OSTN15)…");
         await preload();
       }
       setStatus("Parsing rows…");
-      const features = await parse(text);
+      const features = await parse(input);
       if (features.length === 0) throw new Error("No valid rows parsed");
 
       setStatus(`Parsed ${features.length.toLocaleString()} features. Preparing upload…`);
@@ -319,13 +373,13 @@ function LaDatasetCard({ slug, title, description, parse, preload, columnsHint }
             </Label>
           </div>
 
-          <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="hidden" />
+          <input ref={fileRef} type="file" accept={accept} onChange={handleFile} className="hidden" />
 
           {!uploading && (
             <div className="flex gap-2">
               <Button onClick={() => fileRef.current?.click()} disabled={!layer}>
                 <Upload className="mr-2 h-4 w-4" />
-                Upload CSV
+                Upload file
               </Button>
               {(layer?.feature_count ?? 0) > 0 && (
                 <Button variant="outline" onClick={handleClear}>
@@ -383,7 +437,7 @@ export function LocalAuthorityDatasets() {
         slug={LEEDS_LIGHTING_SLUG}
         title="Leeds — Unmetered Street Lighting"
         description="Leeds City Council street lighting register (~110k assets)"
-        parse={parseLeedsCsv}
+        parse={(t) => parseLeedsCsv(t as string)}
         preload={preloadOstn15}
         columnsHint="Expected columns: Operational Area, Road Name, Road Ref., Unit ID, Unit Ref, Unit Type, Unit Location, Easting, Northing, Lamps Per Lantern. Coordinates in British National Grid (EPSG:27700) are converted to WGS84 client-side."
       />
@@ -392,8 +446,19 @@ export function LocalAuthorityDatasets() {
         slug={CAMBS_LIGHTING_SLUG}
         title="Cambridgeshire — Street Lighting"
         description="Cambridgeshire County Council street lighting register (~57k assets)"
-        parse={parseCambridgeshireCsv}
+        parse={(t) => parseCambridgeshireCsv(t as string)}
         columnsHint="Expected columns: unitid, unitno, location, fullstreet, town, owner, Longitude, Latitude. Coordinates already in WGS84."
+      />
+
+      <LaDatasetCard
+        slug={PBORO_LAND_ASSETS_SLUG}
+        title="Peterborough — Land & Property Assets"
+        description="Peterborough City Council public land & property register (April 2025)"
+        parse={(buf) => parsePeterboroughXlsx(buf as ArrayBuffer)}
+        preload={preloadOstn15}
+        accept=".xlsx"
+        binary
+        columnsHint="Expected sheet: TPY02. Uses Easting/Northing (EPSG:27700), converted to WGS84 client-side. Rows without coordinates are skipped."
       />
     </div>
   );
