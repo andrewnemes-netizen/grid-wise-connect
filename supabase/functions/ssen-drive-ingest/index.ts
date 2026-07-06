@@ -202,7 +202,7 @@ function classify(base: string): {
 // ─── Registry sync ───────────────────────────────────────────────────────────
 
 async function syncRegistry(sb: any, catalogue: LayerEntry[]) {
-  const usable = catalogue.filter((e) => !e.is_annotation);
+  const usable = catalogue;
   let synced = 0;
 
   for (const entry of usable) {
