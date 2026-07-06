@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { bngToWgs84Precise, preloadOstn15 } from "@/lib/ostn15";
 
 const LEEDS_LIGHTING_SLUG = "leeds-street-lighting-unmetered";
+const CAMBS_LIGHTING_SLUG = "cambridgeshire-street-lighting";
 
 /** RFC-4180-style CSV row split: handles quoted fields with embedded commas. */
 function splitCsvLine(line: string): string[] {
@@ -111,7 +112,69 @@ async function parseLeedsCsv(text: string): Promise<GeoJSON.Feature[]> {
   return features;
 }
 
-export function LocalAuthorityDatasets() {
+/**
+ * Parser for Cambridgeshire County Council street lighting.
+ * Headers: unitid, unitno, location, fullstreet, town, owner, Longitude, Latitude
+ * Coordinates already WGS84 — no BNG conversion needed.
+ */
+function parseCambridgeshireCsv(text: string): GeoJSON.Feature[] {
+  const lines = text.split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+  const idx = (name: string) => header.indexOf(name);
+  const iUnitId = idx("unitid");
+  const iUnitNo = idx("unitno");
+  const iLoc = idx("location");
+  const iStreet = idx("fullstreet");
+  const iTown = idx("town");
+  const iOwner = idx("owner");
+  const iLng = idx("longitude");
+  const iLat = idx("latitude");
+  if (iLng < 0 || iLat < 0) throw new Error("CSV missing Longitude/Latitude columns");
+
+  const features: GeoJSON.Feature[] = [];
+  for (let r = 1; r < lines.length; r++) {
+    const raw = lines[r];
+    if (!raw) continue;
+    const cols = splitCsvLine(raw);
+    if (cols.length < header.length) continue;
+    const lng = parseFloat(cols[iLng]);
+    const lat = parseFloat(cols[iLat]);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+    if (lat < 49 || lat > 61 || lng < -8 || lng > 2) continue;
+
+    const unitId = cols[iUnitId]?.trim();
+    const unitRef = cols[iUnitNo]?.trim();
+    const street = cols[iStreet]?.trim();
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lng, lat] },
+      properties: {
+        name: unitRef && street ? `${unitRef} — ${street}` : (unitRef || street || `CCC-${unitId}`),
+        asset_id: unitId ? `CCC-${unitId}` : null,
+        unit_id: unitId,
+        unit_ref: unitRef,
+        location: cols[iLoc]?.trim(),
+        full_street: street,
+        town: cols[iTown]?.trim(),
+        owner: cols[iOwner]?.trim(),
+        source: "Cambridgeshire County Council",
+      },
+    });
+  }
+  return features;
+}
+
+interface LaDatasetCardProps {
+  slug: string;
+  title: string;
+  description: string;
+  parse: (text: string) => Promise<GeoJSON.Feature[]> | GeoJSON.Feature[];
+  preload?: () => Promise<void>;
+  columnsHint: string;
+}
+
+function LaDatasetCard({ slug, title, description, parse, preload, columnsHint }: LaDatasetCardProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -122,12 +185,12 @@ export function LocalAuthorityDatasets() {
   const [insertedTotal, setInsertedTotal] = useState(0);
 
   const { data: layer, refetch } = useQuery({
-    queryKey: ["la-layer", LEEDS_LIGHTING_SLUG],
+    queryKey: ["la-layer", slug],
     queryFn: async (): Promise<LayerRow | null> => {
       const { data, error } = await supabase
         .from("layer_registry")
         .select("id, slug, display_name, storage_table, feature_count, updated_at")
-        .eq("slug", LEEDS_LIGHTING_SLUG)
+        .eq("slug", slug)
         .maybeSingle();
       if (error) throw error;
       return data as LayerRow | null;
@@ -147,13 +210,15 @@ export function LocalAuthorityDatasets() {
 
     try {
       const text = await file.text();
-      setStatus("Loading OS national grid (OSTN15)…");
-      await preloadOstn15();
-      setStatus("Parsing rows & converting BNG → WGS84 (sub-metre precision)…");
-      const features = await parseLeedsCsv(text);
+      if (preload) {
+        setStatus("Loading OS national grid (OSTN15)…");
+        await preload();
+      }
+      setStatus("Parsing rows…");
+      const features = await parse(text);
       if (features.length === 0) throw new Error("No valid rows parsed");
 
-      setStatus(`Parsed ${features.length.toLocaleString()} lights. Preparing upload…`);
+      setStatus(`Parsed ${features.length.toLocaleString()} features. Preparing upload…`);
 
       if (clearFirst) {
         setStatus("Clearing existing data for this layer…");
@@ -192,8 +257,8 @@ export function LocalAuthorityDatasets() {
       }
 
       setDone(true);
-      setStatus(`Done — ${inserted.toLocaleString()} lights ingested.`);
-      toast.success(`Ingested ${inserted.toLocaleString()} street lights`);
+      setStatus(`Done — ${inserted.toLocaleString()} features ingested.`);
+      toast.success(`Ingested ${inserted.toLocaleString()} features`);
       refetch();
     } catch (err: any) {
       console.error("[LA upload] error:", err);
@@ -222,12 +287,6 @@ export function LocalAuthorityDatasets() {
   };
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold text-foreground">Local Authority Datasets</h3>
-        <p className="text-sm text-muted-foreground">Upload council-published asset data. Coordinates are converted from British National Grid automatically.</p>
-      </div>
-
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-4">
@@ -236,8 +295,8 @@ export function LocalAuthorityDatasets() {
                 <Lightbulb className="h-5 w-5 text-amber-500" />
               </div>
               <div>
-                <CardTitle className="text-base">Leeds — Unmetered Street Lighting</CardTitle>
-                <CardDescription>Leeds City Council street lighting register (~110k assets)</CardDescription>
+                <CardTitle className="text-base">{title}</CardTitle>
+                <CardDescription>{description}</CardDescription>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -254,8 +313,8 @@ export function LocalAuthorityDatasets() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
-            <Checkbox id="clear-first" checked={clearFirst} onCheckedChange={(v) => setClearFirst(!!v)} disabled={uploading} />
-            <Label htmlFor="clear-first" className="text-sm cursor-pointer">
+            <Checkbox id={`clear-first-${slug}`} checked={clearFirst} onCheckedChange={(v) => setClearFirst(!!v)} disabled={uploading} />
+            <Label htmlFor={`clear-first-${slug}`} className="text-sm cursor-pointer">
               Clear existing data before upload (recommended for re-ingestion)
             </Label>
           </div>
@@ -266,7 +325,7 @@ export function LocalAuthorityDatasets() {
             <div className="flex gap-2">
               <Button onClick={() => fileRef.current?.click()} disabled={!layer}>
                 <Upload className="mr-2 h-4 w-4" />
-                Upload Leeds CSV
+                Upload CSV
               </Button>
               {(layer?.feature_count ?? 0) > 0 && (
                 <Button variant="outline" onClick={handleClear}>
@@ -305,11 +364,37 @@ export function LocalAuthorityDatasets() {
           )}
 
           <p className="text-xs text-muted-foreground border-t pt-3">
-            Expected columns: Operational Area, Road Name, Road Ref., Unit ID, Unit Ref, Unit Type, Unit Location, Easting, Northing, Lamps Per Lantern.
-            Coordinates in British National Grid (EPSG:27700) are converted to WGS84 client-side.
+            {columnsHint}
           </p>
         </CardContent>
       </Card>
+  );
+}
+
+export function LocalAuthorityDatasets() {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold text-foreground">Local Authority Datasets</h3>
+        <p className="text-sm text-muted-foreground">Upload council-published asset data. British National Grid coordinates are converted to WGS84 automatically where needed.</p>
+      </div>
+
+      <LaDatasetCard
+        slug={LEEDS_LIGHTING_SLUG}
+        title="Leeds — Unmetered Street Lighting"
+        description="Leeds City Council street lighting register (~110k assets)"
+        parse={parseLeedsCsv}
+        preload={preloadOstn15}
+        columnsHint="Expected columns: Operational Area, Road Name, Road Ref., Unit ID, Unit Ref, Unit Type, Unit Location, Easting, Northing, Lamps Per Lantern. Coordinates in British National Grid (EPSG:27700) are converted to WGS84 client-side."
+      />
+
+      <LaDatasetCard
+        slug={CAMBS_LIGHTING_SLUG}
+        title="Cambridgeshire — Street Lighting"
+        description="Cambridgeshire County Council street lighting register (~57k assets)"
+        parse={parseCambridgeshireCsv}
+        columnsHint="Expected columns: unitid, unitno, location, fullstreet, town, owner, Longitude, Latitude. Coordinates already in WGS84."
+      />
     </div>
   );
 }
