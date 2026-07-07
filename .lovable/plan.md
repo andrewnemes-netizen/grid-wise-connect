@@ -1,43 +1,38 @@
+## What’s causing the errors
 
-## Findings
+There are two separate issues:
 
-All four UKPN LTDS tables that power substation headroom are **empty**:
+1. **NIE ingest rows showing Error / Processing**
+   - Some NIE datasets are very large and the ingest function runs them in background chunks, so `Processing...` / `partial` is expected while it continues.
+   - Several rows timed out because large datasets were started concurrently and each background run has a short execution window.
+   - Two datasets are not mapping geometry correctly because NIE exposes conductor/fault data differently from the point assets the current parser expects.
+   - The previous “table mismatch” warning is mostly resolved for linked rows; one unlinked legacy row still exists.
 
-| Table | Rows | Purpose |
-|---|---|---|
-| `ukpn_ltds_transformers_2w` | 0 | Firm capacity (MVA) — 2-winding |
-| `ukpn_ltds_transformers_3w` | 0 | Firm capacity (MVA) — 3-winding |
-| `ukpn_ltds_peak_demand_observed` | 0 | Observed peak MW/MVAr |
-| `ukpn_ltds_peak_demand_true` | 0 | Weather-corrected peak MW/MVAr |
-
-Registry status shows why:
-- **Tables 2a / 2b / 3a / 3b**: `active=true`, `last_sync_status=never` — never ingested.
-- **Tables 4a / 4b** (fault levels): `error` — "could not map any geometry". They were routed to the generic geospatial ingester (`npg-dataset-ingest`), which requires lat/lng. LTDS tables are **tabular**, so that ingester will always fail on them.
-- **Table 5 / Table 8**: 404 — datasets renamed/removed on the UKPN portal.
-
-The dedicated `ukpn-ltds-ingest` edge function already exists and correctly maps all six tabular tables (2a, 2b, 3a, 3b, 4a, 4b), but nothing currently triggers it — the admin UI (`NpgDatasetRegistry`) invokes `npg-dataset-ingest` for every registry row regardless of type.
-
-**Headroom = firm capacity (2a/2b) − peak demand (3a/3b).** Both sides are empty, so no headroom is available today.
+2. **Runtime app error: `Cannot read properties of undefined (reading 'getLayer')`**
+   - This is from `MapView.tsx` cleanup code calling MapLibre after the map/style object has already been torn down during route changes.
+   - It is a frontend lifecycle guard issue, separate from the NIE ingest failures.
 
 ## Plan
 
-1. **Route LTDS rows to the correct ingester** in `src/components/admin/NpgDatasetRegistry.tsx`:
-   - When a registry row's `dataset_id` matches one of the six LTDS tabular datasets (`ltds-table-2a-transformer-2w`, `2b-...`, `3a-load-data-observed`, `3b-load-data-true`, `4a-3ph-fault-level`, `4b-earth-fault-level`), invoke `ukpn-ltds-ingest` with `{ registry_id, dataset_id }` instead of `npg-dataset-ingest`.
-   - Keep everything else unchanged.
+1. **Harden MapView cleanup**
+   - Add safe map/layer/source cleanup guards so `getLayer`, `removeLayer`, and `removeSource` are only called when the map style is still available.
+   - This should stop the preview runtime error.
 
-2. **Mark non-ingestable UKPN LTDS registry rows inactive** via a migration so they stop appearing as red errors:
-   - `ltds-table-5-generation` (404 — dataset no longer exists)
-   - `ltds-table-8-gt-95-perc-fault-data` (404)
-   - `ltds-table-3a-load-data-observed-transposed` (duplicate of 3a in wide format — our ingester targets the long form)
-   - `ltds-table-1-circuit-data`, `ltds-table-6-interest-connections` (no ingester defined, not headroom-critical)
-   Set `active = false`, `last_sync_status = 'skipped'`, note in `last_sync_error`.
+2. **Fix NIE dataset classification**
+   - Update the NIE crawler’s storage-table inference so point datasets default to `geo_points`, not `geo_substations`.
+   - Keep specifically substation/transformer/site datasets linked to the intended asset layers via the existing auto-layer logic.
 
-3. **Kick off ingest** by clicking Play in the registry for the four headroom-critical rows (2a, 2b, 3a, 3b). Verify row counts in `ukpn_ltds_transformers_2w` / `3w` / `peak_demand_observed` / `peak_demand_true` land > 0. Optionally trigger 4a/4b for fault-level completeness.
+3. **Improve NIE geometry ingestion**
+   - Extend the ingest parser for NIE datasets that return coordinate columns or nested geometry fields instead of the standard exported GeoJSON shape.
+   - For line/conductor datasets, avoid marking them as point-layer failures when the source is actually line/network geometry.
 
-4. **Confirm headroom is queryable** with a spot-check SQL joining a sample `sitefunctionallocation` across 2a and 3b (`firm_capacity_mva − peak_mw/0.95`). No engine code changes needed — the feasibility engine already reads `nearest_substation.headroom_kw` from `assets`, which is populated once these tables have data.
+4. **Make large NIE ingests less error-prone**
+   - Adjust the sync flow so very large datasets continue/resume cleanly instead of surfacing timeout rows as hard errors.
+   - Keep the UI clear by showing `partial/processing` as background progress rather than a failure.
 
-## Out of scope
+5. **Clean current stale NIE statuses**
+   - Add a small data correction for stale NIE rows: align linked storage table values where needed and reset stale timeout rows with saved cursors so they can resume cleanly.
 
-- Rebuilding the tabular ingester (it already exists and handles all six tables correctly).
-- Fixing 404 datasets (they don't exist on UKPN's portal anymore).
-- Any change to `feasibilityEngine.ts` or the substation lookup path — behavior is data-driven and unblocks automatically once tables populate.
+6. **Validate**
+   - Check backend logs for `npg-dataset-ingest` after the changes.
+   - Verify the admin table no longer shows avoidable table mismatch/runtime errors and that successful NIE rows continue to populate their layers.
