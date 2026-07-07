@@ -61,7 +61,7 @@ export function NpgDatasetRegistry() {
   const [filterGeo, setFilterGeo] = useState<"all" | "geo" | "tabular">("geo");
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN" | "SSEN" | "SSEN_DX">("NPG");
+  const [selectedDno, setSelectedDno] = useState<"NPG" | "ENWL" | "SPEN" | "NGED" | "UKPN" | "SSEN" | "SSEN_DX" | "NIE">("NPG");
   const [autoLinking, setAutoLinking] = useState(false);
   const [autoLinkResult, setAutoLinkResult] = useState<any>(null);
   const [page, setPage] = useState(0);
@@ -75,6 +75,7 @@ export function NpgDatasetRegistry() {
     UKPN: { label: "UK Power Networks", crawler: "ukpn-catalog-crawler", portalUrl: "ukpowernetworks.opendatasoft.com", dnoFilter: "UKPN" },
     SSEN: { label: "SSEN — Transmission", crawler: "ssen-catalog-crawler", portalUrl: "ssentransmission.opendatasoft.com", dnoFilter: "SSEN" },
     SSEN_DX: { label: "SSEN — Distribution", crawler: "ssen-distribution-crawler", portalUrl: "data.ssen.co.uk", dnoFilter: "SSEN" },
+    NIE: { label: "NIE Networks (Northern Ireland)", crawler: "nie-catalog-crawler", portalUrl: "nienetworks.opendatasoft.com", dnoFilter: "NIE" },
   };
 
   // Reset page when filters change
