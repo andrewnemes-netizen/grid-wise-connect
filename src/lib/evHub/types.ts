@@ -5,7 +5,7 @@
 
 // ── DNO Anchor ──────────────────────────────────────────────
 
-export type DnoKey = "UKPN" | "NPG" | "ENWL" | "NGED" | "SPEN" | "SSEN";
+export type DnoKey = "UKPN" | "NPG" | "ENWL" | "NGED" | "SPEN" | "SSEN" | "NIE";
 
 export interface DnoAnchorResult {
   dno_key: DnoKey;
