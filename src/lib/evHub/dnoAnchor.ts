@@ -11,6 +11,7 @@ const DNO_RULE_SET_MAP: Record<DnoKey, string> = {
   NGED: "DNO_EV_HUB_V1",
   SPEN: "DNO_EV_HUB_V1",
   SSEN: "DNO_EV_HUB_V1",
+  NIE: "DNO_EV_HUB_V1",
 };
 
 /** Normalise DNO name variations to canonical key */
@@ -22,6 +23,7 @@ function normaliseDnoName(raw: string): DnoKey | null {
   if (upper.includes("NGED") || upper.includes("NATIONAL GRID") || upper.includes("WESTERN POWER") || upper.includes("WPD")) return "NGED";
   if (upper.includes("SPEN") || upper.includes("SP ENERGY") || upper.includes("SCOTTISHPOWER")) return "SPEN";
   if (upper.includes("SSEN") || upper.includes("SCOTTISH AND SOUTHERN")) return "SSEN";
+  if (upper.includes("NIE") || upper.includes("NORTHERN IRELAND ELECTRICITY")) return "NIE";
   return null;
 }
 
