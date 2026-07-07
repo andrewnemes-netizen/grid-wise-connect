@@ -35,6 +35,7 @@ export const DNO_OPTIONS: { value: DnoKey | "auto"; label: string }[] = [
   { value: "NGED", label: "NGED" },
   { value: "SPEN", label: "SPEN" },
   { value: "SSEN", label: "SSEN" },
+  { value: "NIE", label: "NIE (Northern Ireland)" },
 ];
 
 // ── Feasibility State Config ────────────────────────────────
