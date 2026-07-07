@@ -157,7 +157,7 @@ const MapView = () => {
         paint: { "text-color": "#fff" },
       });
     } else {
-      (map.getSource(src) as maplibregl.GeoJSONSource).setData(fc);
+      (safeGetSource(map, src) as maplibregl.GeoJSONSource | undefined)?.setData(fc);
     }
     return () => {
       if (advisorResults.length === 0 && safeGetLayer(map, layer)) {
