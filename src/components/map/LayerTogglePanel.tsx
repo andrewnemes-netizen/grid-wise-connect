@@ -294,7 +294,13 @@ export function LayerTogglePanel({
         return;
       }
       const { data: rows } = await supabase.from("geo_polygons").select("name").eq("layer_id", layer.id).not("name", "is", null);
-      if (rows) setDnoList(Array.from(new Set(rows.map((r: any) => r.name as string))).sort());
+      if (rows) {
+        const names = new Set(rows.map((r: any) => r.name as string));
+        // Ensure NI operators appear even though they aren't in the GB licence-area polygons
+        const registryDnos = new Set(registryLayers.map((l) => l.dno));
+        if (registryDnos.has("NIE")) names.add("NIE");
+        setDnoList(Array.from(names).sort());
+      }
     }
     fetchDnos();
   }, [registryLayers]);
