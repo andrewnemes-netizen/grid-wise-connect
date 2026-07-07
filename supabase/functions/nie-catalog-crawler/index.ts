@@ -148,11 +148,14 @@ function processDataset(ds: any): Record<string, any> {
 
   const geoShapeField = fields.find((f: any) => f.type === "geo_shape");
   const geoPointField = fields.find((f: any) => f.type === "geo_point_2d");
-  const geoField = geoShapeField || geoPointField;
+  const geoField = geoPointField || geoShapeField;
   const isGeospatial = !!geoField;
   const geometryField = geoField?.name || null;
-  const geometryType = geoField?.type === "geo_point_2d" ? "Point" :
-    geoField?.type === "geo_shape" ? "Polygon" : null;
+  const datasetText = `${datasetId} ${metas.title || ""}`.toLowerCase();
+  const isNetworkLine = /conductor|cable|overhead|underground|\bohl\b|line/.test(datasetText);
+  const geometryType = isNetworkLine ? "LineString" :
+    geoPointField ? "Point" :
+    geoShapeField ? "Polygon" : null;
 
   const endpointBase = `${BASE_URL}/catalog/datasets/${datasetId}`;
   const exportBase = `${endpointBase}/exports`;
@@ -172,14 +175,16 @@ function processDataset(ds: any): Record<string, any> {
   const schemaHash = simpleHash(fieldSummary);
 
   let storageTable = "geo_points";
-  if (!isGeospatial) {
+  if (isNetworkLine) {
+    storageTable = "geo_cables";
+  } else if (!isGeospatial) {
     storageTable = "geo_points";
   } else if (geoShapeField && !geoPointField) {
     storageTable = "geo_polygons";
   } else if (geoShapeField && geoPointField) {
-    storageTable = "geo_polygons";
+    storageTable = "geo_points";
   } else if (geometryType === "Point") {
-    storageTable = "geo_substations";
+    storageTable = "geo_points";
   }
 
   return {

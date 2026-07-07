@@ -43,6 +43,42 @@ import type { RouteAutoDetectResult } from "@/hooks/useRouteAutoDetect";
 
 const UK_CENTER: [number, number] = [-1.5, 54.0];
 
+function mapStyleReady(map: maplibregl.Map | null | undefined): map is maplibregl.Map {
+  try {
+    return !!map?.getStyle();
+  } catch {
+    return false;
+  }
+}
+
+function safeGetLayer(map: maplibregl.Map | null | undefined, id: string) {
+  try {
+    return mapStyleReady(map) ? map.getLayer(id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeGetSource(map: maplibregl.Map | null | undefined, id: string) {
+  try {
+    return mapStyleReady(map) ? map.getSource(id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeRemoveLayer(map: maplibregl.Map | null | undefined, id: string) {
+  try {
+    if (safeGetLayer(map, id)) map!.removeLayer(id);
+  } catch {}
+}
+
+function safeRemoveSource(map: maplibregl.Map | null | undefined, id: string) {
+  try {
+    if (safeGetSource(map, id)) map!.removeSource(id);
+  } catch {}
+}
+
 function calcRouteLength(coords: [number, number][]): number {
   let t = 0;
   for (let i = 1; i < coords.length; i++) {
@@ -106,7 +142,7 @@ const MapView = () => {
         properties: { rank: i + 1, name: r.name ?? "", type: r.asset_type, headroom: r.headroom_kw ?? 0 },
       })),
     };
-    if (!map.getSource(src)) {
+    if (!safeGetSource(map, src)) {
       map.addSource(src, { type: "geojson", data: fc });
       map.addLayer({
         id: layer, source: src, type: "circle",
@@ -121,13 +157,13 @@ const MapView = () => {
         paint: { "text-color": "#fff" },
       });
     } else {
-      (map.getSource(src) as maplibregl.GeoJSONSource).setData(fc);
+      (safeGetSource(map, src) as maplibregl.GeoJSONSource | undefined)?.setData(fc);
     }
     return () => {
-      if (advisorResults.length === 0 && map.getLayer(layer)) {
-        map.removeLayer(layerLabel);
-        map.removeLayer(layer);
-        map.removeSource(src);
+      if (advisorResults.length === 0 && safeGetLayer(map, layer)) {
+        safeRemoveLayer(map, layerLabel);
+        safeRemoveLayer(map, layer);
+        safeRemoveSource(map, src);
       }
     };
   }, [advisorResults, map, mapLoaded]);
@@ -350,8 +386,8 @@ const MapView = () => {
     if (!map) return;
     connectionLinesRef.current = lines;
     ["line-cable"].forEach((id) => {
-      if (map.getLayer(id)) map.removeLayer(id);
-      if (map.getSource(id)) map.removeSource(id);
+      safeRemoveLayer(map, id);
+      safeRemoveSource(map, id);
     });
     lines.forEach((line) => {
       map.addSource(line.id, {
@@ -375,8 +411,8 @@ const MapView = () => {
     if (!map) return;
     connectionLinesRef.current = [];
     ["line-cable"].forEach((id) => {
-      if (map.getLayer(id)) map.removeLayer(id);
-      if (map.getSource(id)) map.removeSource(id);
+      safeRemoveLayer(map, id);
+      safeRemoveSource(map, id);
     });
   }, [map]);
 
@@ -468,11 +504,9 @@ const MapView = () => {
     const routeLineId = "screenshot-route-line";
     const routeOutlineId = "screenshot-route-outline";
     const cleanupRoute = () => {
-      try {
-        if (map.getLayer(routeLineId)) map.removeLayer(routeLineId);
-        if (map.getLayer(routeOutlineId)) map.removeLayer(routeOutlineId);
-        if (map.getSource(routeSrcId)) map.removeSource(routeSrcId);
-      } catch {}
+      safeRemoveLayer(map, routeLineId);
+      safeRemoveLayer(map, routeOutlineId);
+      safeRemoveSource(map, routeSrcId);
     };
     cleanupRoute();
 
@@ -507,11 +541,9 @@ const MapView = () => {
     const markerFillId = "screenshot-ep-fill";
     const markerStrokeId = "screenshot-ep-stroke";
     const cleanupMarkers = () => {
-      try {
-        if (map.getLayer(markerFillId)) map.removeLayer(markerFillId);
-        if (map.getLayer(markerStrokeId)) map.removeLayer(markerStrokeId);
-        if (map.getSource(markerSrcId)) map.removeSource(markerSrcId);
-      } catch {}
+      safeRemoveLayer(map, markerFillId);
+      safeRemoveLayer(map, markerStrokeId);
+      safeRemoveSource(map, markerSrcId);
     };
     cleanupMarkers();
 
@@ -538,14 +570,11 @@ const MapView = () => {
       cleanupMarkers();
       cleanupRoute();
       for (const id of tempLayerIds) {
-        try {
-          const mid = `layer-${id}`;
-          if (map.getLayer(mid)) map.removeLayer(mid);
-          if (map.getLayer(`${mid}-outline`)) map.removeLayer(`${mid}-outline`);
-          if (map.getLayer(`${mid}-heat`)) map.removeLayer(`${mid}-heat`);
-          const sid = `source-${id}`;
-          if (map.getSource(sid)) map.removeSource(sid);
-        } catch {}
+        const mid = `layer-${id}`;
+        safeRemoveLayer(map, mid);
+        safeRemoveLayer(map, `${mid}-outline`);
+        safeRemoveLayer(map, `${mid}-heat`);
+        safeRemoveSource(map, `source-${id}`);
       }
     };
 

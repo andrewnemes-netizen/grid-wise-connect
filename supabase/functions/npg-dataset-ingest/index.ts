@@ -18,7 +18,7 @@ const corsHeaders = {
 const HEX_PREFIXES: string[] = [];
 for (let i = 0; i < 256; i++) HEX_PREFIXES.push(i.toString(16).padStart(2, "0"));
 const ACTIVE_SYNC_STATUSES = new Set(["processing", "partial"]);
-const STALE_INGEST_MS = 5 * 60 * 1000;
+const STALE_INGEST_MS = 20 * 60 * 1000;
 
 type IngestResult = {
   inserted: number;
@@ -244,10 +244,14 @@ Deno.serve(async (req) => {
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error("Background timeout 240s")), 240000)),
       ]).catch(async (err) => {
         console.error(`[ingest] Background crash for ${entry.dataset_id}:`, err);
+        const isLargeDataset = Number(entry.record_count || 0) > 10000;
+        const errorTs = new Date().toISOString();
         await supabase.from(registryTable).update({
-          last_sync_status: "error",
-          last_sync_error: String(err),
-          last_sync_at: new Date().toISOString(),
+          last_sync_status: isLargeDataset ? "partial" : "error",
+          last_sync_error: isLargeDataset ? "Background chunk timed out; run ingest again to resume from the saved cursor" : String(err),
+          last_sync_at: errorTs,
+          updated_at: errorTs,
+          sync_cursor: isLargeDataset ? { partition_start, skip_features, saved_at: errorTs } : entry.sync_cursor,
         }).eq("id", registry_id);
       })
     );
@@ -318,7 +322,7 @@ async function performIngest(
       // Use recordid prefix partitioning to stay under the 10k offset+limit cap.
       // Each 2-char hex prefix covers ~recordCount/256 records.
       // Process PREFIXES_PER_RUN prefixes per invocation, then self-continue.
-      const PREFIXES_PER_RUN = 2; // ~2 × 2.3k = ~4.5k records per run — stays within CPU budget
+      const PREFIXES_PER_RUN = 1; // Keep large ODS/NIE runs below the edge execution budget.
       const endIndex = Math.min(partitionStart + PREFIXES_PER_RUN, HEX_PREFIXES.length);
 
       console.log(`[ingest] Partitioned records: prefixes ${partitionStart}..${endIndex - 1} of ${HEX_PREFIXES.length} (est ${recordCount} total)`);
@@ -1102,15 +1106,15 @@ function mapFeatureToRow(feature: any, entry: any, layerRow: any, storageTable: 
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
     dno: entry.dno,
-    name: props.name || props.site_name || props.psp_name || props["Substation Name"] || null,
-    asset_id: props.asset_id || props.site_id || props.circuit_id || null,
+    name: props.name || props.site_name || props.psp_name || props["Substation Name"] || props.number || props.outageid || null,
+    asset_id: props.asset_id || props.site_id || props.circuit_id || props.number || props.outageid || null,
     attrs_json: props,
     status: props.status || "active",
     capacity_kw: parseNum(props.firm_capacity_kw || props.capacity_kw || props.firm_cap),
     demand_kw: parseNum(props.max_demand_kw || props.demand_kw || props.maxdemand),
     headroom_kw: parseNum(props.transformer_headroom_kw || props.headroom_kw || props.demhr),
     utilisation_pct: parseNum(props.utilisation_pct || props.fault_level_),
-    voltage_kv: parseNum(props.voltage_kv || props.pvoltage),
+    voltage_kv: normaliseVoltageKv(props.voltage_kv || props.pvoltage || props.hv_voltage || props.voltage),
     feeder_ref: props.feeder_ref || props.circuit_id || null,
     capacity_value: parseNum(props.capacity_value),
     capacity_unit: props.capacity_unit || null,
@@ -1184,8 +1188,8 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
     geom_geojson: JSON.stringify(geom),
     layer_id: entry.linked_layer_id,
     dno: entry.dno,
-    name: rec.name || rec.psp_name || rec.site_name || null,
-    asset_id: rec.asset_id || rec.site_id || rec.circuit_id || null,
+    name: rec.name || rec.psp_name || rec.site_name || rec.number || rec.outageid || null,
+    asset_id: rec.asset_id || rec.site_id || rec.circuit_id || rec.number || rec.outageid || null,
     attrs_json: attrs,
     status: rec.status || "active",
     capacity_kw: parseNum(rec.firm_cap || rec.capacity_kw),
@@ -1193,7 +1197,7 @@ function mapOdsRecordToRow(rec: any, entry: any, layerRow: any, storageTable: st
     headroom_kw: parseNum(rec.demhr || rec.headroom_kw),
     utilisation_pct: parseNum(rec.fault_level_ || rec.utilisation_pct),
     voltage_kv: (() => {
-      const kv = parseNum(rec.voltage_kv || rec.pvoltage || rec.nominal_voltage_kv || rec["voltage_kv"]);
+      const kv = normaliseVoltageKv(rec.voltage_kv || rec.pvoltage || rec.nominal_voltage_kv || rec["voltage_kv"] || rec.hv_voltage);
       if (kv != null) return kv;
       const v = parseNum(rec.voltage || rec.voltage_v || rec.operating_voltage || rec.nominal_voltage);
       if (v != null) return v >= 1000 ? v / 1000 : v;
@@ -1407,6 +1411,13 @@ function parseNum(v: any): number | null {
   return isNaN(n) ? null : n;
 }
 
+function normaliseVoltageKv(v: any): number | null {
+  const text = String(v ?? "").toLowerCase();
+  const n = parseNum(text.replace(/kv|v/g, ""));
+  if (n == null) return null;
+  return text.includes("kv") || n < 1000 ? n : n / 1000;
+}
+
 function cleanHeader(header: string): string {
   return String(header || "").replace(/^\uFEFF/, "").trim();
 }
@@ -1552,15 +1563,17 @@ function splitTopLevelGroups(text: string): string[] {
 
 async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 3): Promise<Response> {
   let effectiveUrl = url;
+  const headers: Record<string, string> = {};
   if (apiKey && !url.includes("apikey=")) {
     const rawKey = apiKey.startsWith("Apikey ") ? apiKey.slice(7) : apiKey;
+    headers["Authorization"] = `Apikey ${rawKey}`;
     const separator = url.includes("?") ? "&" : "?";
     effectiveUrl = `${url}${separator}apikey=${encodeURIComponent(rawKey)}`;
   }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const resp = await fetch(effectiveUrl);
+      const resp = await fetch(effectiveUrl, { headers });
       if (resp.status === 429) {
         const backoff = Math.pow(2, attempt) * 1000 + Math.random() * 500;
         console.warn(`[ingest] Rate limited, backing off ${Math.round(backoff)}ms`);
