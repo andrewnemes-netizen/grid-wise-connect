@@ -1002,7 +1002,7 @@ async function ingestViaCkanGeoJson(
 ): Promise<{ inserted: number; skipped: number }> {
   const url = entry.endpoint_export_geojson;
   const headers: Record<string, string> = {};
-  if (apiKey) headers["Authorization"] = apiKey;
+  if (apiKey) headers["Authorization"] = apiKey.startsWith("Apikey ") ? apiKey : `Apikey ${apiKey}`;
 
   const resp = await fetch(url, { headers });
   if (!resp.ok) throw new Error(`GeoJSON fetch failed: HTTP ${resp.status}`);
@@ -1042,7 +1042,7 @@ async function ingestViaCkanDatastore(
 ): Promise<{ inserted: number; skipped: number }> {
   const baseUrl = entry.endpoint_records;
   const headers: Record<string, string> = {};
-  if (apiKey) headers["Authorization"] = apiKey;
+  if (apiKey) headers["Authorization"] = apiKey.startsWith("Apikey ") ? apiKey : `Apikey ${apiKey}`;
 
   let offset = 0;
   const limit = 100;
@@ -1553,8 +1553,9 @@ function splitTopLevelGroups(text: string): string[] {
 async function fetchWithRetry(url: string, apiKey?: string | null, maxRetries = 3): Promise<Response> {
   let effectiveUrl = url;
   if (apiKey && !url.includes("apikey=")) {
+    const rawKey = apiKey.startsWith("Apikey ") ? apiKey.slice(7) : apiKey;
     const separator = url.includes("?") ? "&" : "?";
-    effectiveUrl = `${url}${separator}apikey=${apiKey}`;
+    effectiveUrl = `${url}${separator}apikey=${encodeURIComponent(rawKey)}`;
   }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
