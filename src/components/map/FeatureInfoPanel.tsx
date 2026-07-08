@@ -502,8 +502,34 @@ function PlanningInfo({ feature, layerLabel }: { feature: Record<string, unknown
   );
 }
 
+/**
+ * Explicit label overrides for known-truncated or opaque source column names.
+ * NIE Networks publishes its data from shapefiles where DBF caps column names
+ * at 10 chars, so "Conductor Type" arrives as "Conducto01", etc. Keys are
+ * lower-cased for case-insensitive lookup.
+ */
+const LABEL_OVERRIDES: Record<string, string> = {
+  // NIE Networks shapefile truncations
+  conducto01: "Conductor Type",
+  conductor0: "Conductor Type",
+  operationa: "Operational Status",
+  operation0: "Operational Status",
+  installati: "Installation Date",
+  constructi: "Construction Type",
+  descriptio: "Description",
+  substatio0: "Substation Name",
+  substation: "Substation Name",
+  circuitnam: "Circuit Name",
+  voltagelev: "Voltage Level",
+  hv_voltage: "HV Voltage",
+  lv_voltage: "LV Voltage",
+  ownershipt: "Ownership Type",
+};
+
 /** Pretty label formatter: handles abbreviations and snake/kebab case. */
 function prettyLabel(key: string): string {
+  const override = LABEL_OVERRIDES[key.toLowerCase()];
+  if (override) return override;
   const cleaned = key.replace(/[_-]+/g, " ").trim();
   return cleaned
     .replace(/\b([a-z])/g, (_, c) => c.toUpperCase())
