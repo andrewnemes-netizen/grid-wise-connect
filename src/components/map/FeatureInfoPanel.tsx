@@ -510,6 +510,7 @@ function PlanningInfo({ feature, layerLabel }: { feature: Record<string, unknown
  */
 const LABEL_OVERRIDES: Record<string, string> = {
   // NIE Networks shapefile truncations
+  conducto00: "Conductor Size",
   conducto01: "Conductor Type",
   conductor0: "Conductor Type",
   operationa: "Operational Status",
@@ -524,6 +525,20 @@ const LABEL_OVERRIDES: Record<string, string> = {
   hv_voltage: "HV Voltage",
   lv_voltage: "LV Voltage",
   ownershipt: "Ownership Type",
+  no_of_circ: "Number of Circuits",
+  site_functional_location: "Site Functional Location",
+  asset_number: "Asset Number",
+  asset_type: "Asset Type",
+  asset_description: "Asset Description",
+  serial_number: "Serial Number",
+  license_area: "Licence Area",
+  year_of_manufacture: "Year of Manufacture",
+  rated_voltage: "Rated Voltage",
+  rated_voltage_unit_of_measurement: "Rated Voltage Unit",
+  rated_current: "Rated Current",
+  rated_current_unit_of_measurement: "Rated Current Unit",
+  site_latitude_y_irish_grid: "Latitude (Irish Grid)",
+  site_longitude_x_irish_grid: "Longitude (Irish Grid)",
 };
 
 /** Pretty label formatter: handles abbreviations and snake/kebab case. */
