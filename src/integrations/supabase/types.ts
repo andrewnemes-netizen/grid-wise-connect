@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          billing_terms: Json | null
+          client_id: string
+          created_at: string
+          id: string
+          name: string
+          region: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          billing_terms?: Json | null
+          client_id: string
+          created_at?: string
+          id?: string
+          name: string
+          region?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          billing_terms?: Json | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          region?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           id: string
@@ -192,6 +233,108 @@ export type Database = {
           voltage_kv?: number | null
         }
         Relationships: []
+      }
+      clients: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          primary_contact_id: string | null
+          status: string
+          tenant_org_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          primary_contact_id?: string | null
+          status?: string
+          tenant_org_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          primary_contact_id?: string | null
+          status?: string
+          tenant_org_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_tenant_org_id_fkey"
+            columns: ["tenant_org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_clients_primary_contact"
+            columns: ["primary_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          account_id: string | null
+          client_id: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          phone: string | null
+          role: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string | null
+          client_id?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       design_cables: {
         Row: {
@@ -757,6 +900,42 @@ export type Database = {
           source_date?: string | null
           status?: string | null
           voltage_kv?: number | null
+        }
+        Relationships: []
+      }
+      frameworks: {
+        Row: {
+          awarding_body: string | null
+          created_at: string
+          end_date: string | null
+          id: string
+          name: string
+          rate_card_ref: string | null
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          awarding_body?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          name: string
+          rate_card_ref?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          awarding_body?: string | null
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          name?: string
+          rate_card_ref?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1654,6 +1833,63 @@ export type Database = {
         }
         Relationships: []
       }
+      programmes: {
+        Row: {
+          account_id: string
+          code: string | null
+          created_at: string
+          end_date: string | null
+          framework_id: string | null
+          id: string
+          name: string
+          start_date: string | null
+          status: string
+          target_site_count: number | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          code?: string | null
+          created_at?: string
+          end_date?: string | null
+          framework_id?: string | null
+          id?: string
+          name: string
+          start_date?: string | null
+          status?: string
+          target_site_count?: number | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          code?: string | null
+          created_at?: string
+          end_date?: string | null
+          framework_id?: string | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          status?: string
+          target_site_count?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "programmes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "programmes_framework_id_fkey"
+            columns: ["framework_id"]
+            isOneToOne: false
+            referencedRelation: "frameworks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_requests: {
         Row: {
           created_at: string
@@ -2198,6 +2434,7 @@ export type Database = {
           updated_at: string
           voltage_level: string | null
           workflow_status: string
+          wp_id: string | null
         }
         Insert: {
           bom_json?: Json | null
@@ -2220,6 +2457,7 @@ export type Database = {
           updated_at?: string
           voltage_level?: string | null
           workflow_status?: string
+          wp_id?: string | null
         }
         Update: {
           bom_json?: Json | null
@@ -2242,6 +2480,7 @@ export type Database = {
           updated_at?: string
           voltage_level?: string | null
           workflow_status?: string
+          wp_id?: string | null
         }
         Relationships: [
           {
@@ -2256,6 +2495,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studies_wp_id_fkey"
+            columns: ["wp_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -2873,6 +3119,319 @@ export type Database = {
         }
         Relationships: []
       }
+      work_package_types: {
+        Row: {
+          created_at: string
+          default_template_bundle_ref: string | null
+          default_workflow_id: string | null
+          description: string | null
+          id: string
+          key: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_template_bundle_ref?: string | null
+          default_workflow_id?: string | null
+          description?: string | null
+          id?: string
+          key: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_template_bundle_ref?: string | null
+          default_workflow_id?: string | null
+          description?: string | null
+          id?: string
+          key?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_package_types_default_workflow_id_fkey"
+            columns: ["default_workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_packages: {
+        Row: {
+          budget_amount: number | null
+          code: string
+          commercial_user_id: string | null
+          config_json: Json | null
+          created_at: string
+          created_by: string | null
+          delivery_user_id: string | null
+          id: string
+          name: string
+          pm_user_id: string | null
+          programme_id: string
+          start_date: string | null
+          status: string
+          target_end_date: string | null
+          updated_at: string
+          wp_type_id: string | null
+        }
+        Insert: {
+          budget_amount?: number | null
+          code: string
+          commercial_user_id?: string | null
+          config_json?: Json | null
+          created_at?: string
+          created_by?: string | null
+          delivery_user_id?: string | null
+          id?: string
+          name: string
+          pm_user_id?: string | null
+          programme_id: string
+          start_date?: string | null
+          status?: string
+          target_end_date?: string | null
+          updated_at?: string
+          wp_type_id?: string | null
+        }
+        Update: {
+          budget_amount?: number | null
+          code?: string
+          commercial_user_id?: string | null
+          config_json?: Json | null
+          created_at?: string
+          created_by?: string | null
+          delivery_user_id?: string | null
+          id?: string
+          name?: string
+          pm_user_id?: string | null
+          programme_id?: string
+          start_date?: string | null
+          status?: string
+          target_end_date?: string | null
+          updated_at?: string
+          wp_type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_packages_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_packages_wp_type_id_fkey"
+            columns: ["wp_type_id"]
+            isOneToOne: false
+            referencedRelation: "work_package_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_instances: {
+        Row: {
+          created_at: string
+          current_stage: string
+          id: string
+          site_id: string | null
+          state_json: Json
+          updated_at: string
+          work_package_id: string | null
+          workflow_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_stage: string
+          id?: string
+          site_id?: string | null
+          state_json?: Json
+          updated_at?: string
+          work_package_id?: string | null
+          workflow_id: string
+        }
+        Update: {
+          created_at?: string
+          current_stage?: string
+          id?: string
+          site_id?: string | null
+          state_json?: Json
+          updated_at?: string
+          work_package_id?: string | null
+          workflow_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_instances_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_instances_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_instances_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflows: {
+        Row: {
+          created_at: string
+          id: string
+          is_published: boolean
+          key: string
+          name: string
+          stages_json: Json
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          key: string
+          name: string
+          stages_json: Json
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          key?: string
+          name?: string
+          stages_json?: Json
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      wp_access: {
+        Row: {
+          access_role: string
+          created_at: string
+          expires_at: string | null
+          granted_by: string | null
+          id: string
+          user_id: string
+          work_package_id: string
+        }
+        Insert: {
+          access_role: string
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          user_id: string
+          work_package_id: string
+        }
+        Update: {
+          access_role?: string
+          created_at?: string
+          expires_at?: string | null
+          granted_by?: string | null
+          id?: string
+          user_id?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_access_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_sites: {
+        Row: {
+          created_at: string
+          id: string
+          local_ref: string | null
+          sequence: number | null
+          site_id: string
+          work_package_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          local_ref?: string | null
+          sequence?: number | null
+          site_id: string
+          work_package_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          local_ref?: string | null
+          sequence?: number | null
+          site_id?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_sites_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_team: {
+        Row: {
+          created_at: string
+          id: string
+          team_role: string
+          user_id: string
+          work_package_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          team_role: string
+          user_id: string
+          work_package_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          team_role?: string
+          user_id?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_team_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       geography_columns: {
@@ -3411,6 +3970,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      has_wp_access: {
+        Args: { _user_id: string; _wp_id: string }
+        Returns: boolean
+      }
+      has_wp_team_access: {
+        Args: { _user_id: string; _wp_id: string }
+        Returns: boolean
+      }
+      is_gridwise_staff: { Args: { _user_id: string }; Returns: boolean }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
