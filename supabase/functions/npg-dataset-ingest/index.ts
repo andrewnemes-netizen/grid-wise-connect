@@ -347,9 +347,16 @@ async function performIngest(
     } else if (isLargeDataset && entry.is_geospatial && entry.endpoint_export_geojson) {
       // Medium datasets (5k-10k): use GeoJSON export streaming
       try {
-        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey, {
+          skipFeatures,
+          maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+        });
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
+        if (result.hasMore) {
+          hasMore = true;
+          nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+        }
       } catch (exportErr) {
         console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
@@ -369,9 +376,16 @@ async function performIngest(
       }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
-        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey, {
+          skipFeatures,
+          maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+        });
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
+        if (result.hasMore) {
+          hasMore = true;
+          nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+        }
       } catch (exportErr) {
         console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
