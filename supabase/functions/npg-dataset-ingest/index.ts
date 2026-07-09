@@ -347,9 +347,16 @@ async function performIngest(
     } else if (isLargeDataset && entry.is_geospatial && entry.endpoint_export_geojson) {
       // Medium datasets (5k-10k): use GeoJSON export streaming
       try {
-        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey, {
+          skipFeatures,
+          maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+        });
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
+        if (result.hasMore) {
+          hasMore = true;
+          nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+        }
       } catch (exportErr) {
         console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
@@ -369,9 +376,16 @@ async function performIngest(
       }
     } else if (entry.is_geospatial && entry.endpoint_export_geojson) {
       try {
-        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey);
+        const result = await ingestViaGeoJsonExport(supabase, entry, layerRow, storageTable, apiKey, {
+          skipFeatures,
+          maxFeatures: chunkSize || getDefaultChunkRowLimit(storageTable),
+        });
         totalInserted = result.inserted;
         totalSkipped = result.skipped;
+        if (result.hasMore) {
+          hasMore = true;
+          nextSkipFeatures = result.nextSkipFeatures ?? skipFeatures;
+        }
       } catch (exportErr) {
         console.warn(`[ingest] Export failed (${exportErr}), falling back to records`);
         const result = await ingestViaRecords(supabase, entry, layerRow, storageTable, apiKey, opts);
@@ -641,8 +655,9 @@ async function* streamGeoJsonFeatures(resp: Response): AsyncGenerator<any> {
 // ─── GeoJSON Export Ingestion (Streaming, for medium datasets) ──────────────
 
 async function ingestViaGeoJsonExport(
-  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null
-): Promise<{ inserted: number; skipped: number }> {
+  supabase: any, entry: any, layerRow: any, storageTable: string, apiKey: string | null,
+  options: { skipFeatures?: number; maxFeatures?: number } = {},
+): Promise<{ inserted: number; skipped: number; hasMore?: boolean; nextSkipFeatures?: number }> {
   const url = entry.endpoint_export_geojson;
   console.log(`[ingest] Fetching GeoJSON export (streaming): ${url}`);
 
@@ -653,8 +668,17 @@ async function ingestViaGeoJsonExport(
   let totalInserted = 0;
   let totalSkipped = 0;
   let batch: any[] = [];
+  const skipFeatures = Math.max(0, Number(options.skipFeatures || 0));
+  const maxFeatures = Math.max(0, Number(options.maxFeatures || 0));
+  let seen = 0;
+  let processed = 0;
+  let hasMore = false;
 
   for await (const feature of streamGeoJsonFeatures(resp)) {
+    if (seen < skipFeatures) { seen++; continue; }
+    seen++;
+    if (maxFeatures > 0 && processed >= maxFeatures) { hasMore = true; break; }
+    processed++;
     const mapped = mapFeatureToRow(feature, entry, layerRow, storageTable);
     if (mapped) batch.push(mapped); else totalSkipped++;
 
@@ -676,8 +700,10 @@ async function ingestViaGeoJsonExport(
     totalInserted += inserted ?? batch.length;
   }
 
-  console.log(`[ingest] GeoJSON streaming done: ${totalInserted} inserted, ${totalSkipped} skipped`);
-  return { inserted: totalInserted, skipped: totalSkipped };
+  try { await resp.body?.cancel(); } catch { /* ignore */ }
+  const nextSkipFeatures = skipFeatures + processed;
+  console.log(`[ingest] GeoJSON streaming done: ${totalInserted} inserted, ${totalSkipped} skipped, hasMore=${hasMore}, nextSkip=${nextSkipFeatures}`);
+  return { inserted: totalInserted, skipped: totalSkipped, hasMore, nextSkipFeatures: hasMore ? nextSkipFeatures : undefined };
 }
 
 // ─── CSV Export Ingestion (Streaming) ───────────────────────────────────────

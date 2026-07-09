@@ -1,0 +1,2 @@
+UPDATE public.dno_dataset_registry SET last_sync_status = NULL, last_sync_error = NULL, last_sync_rows = 0, sync_cursor = NULL WHERE dataset_id = 'nie-networks-assets-sites-33kv-conductor';
+DELETE FROM public.geo_cables WHERE layer_id = '76d83430-0261-4abe-9d53-49b49e3637a5';
