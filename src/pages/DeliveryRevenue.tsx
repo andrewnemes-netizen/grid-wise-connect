@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus as _Plus, FileText, CheckCircle2, XCircle, Banknote } from "lucide-react";
 import { toast } from "sonner";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
@@ -89,6 +90,7 @@ export default function DeliveryRevenue() {
         <TabsList>
           <TabsTrigger value="ev">EV Log</TabsTrigger>
           <TabsTrigger value="icp">ICP Log</TabsTrigger>
+          <TabsTrigger value="invoices">Invoices</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
           <TabsTrigger value="dash-ev">Dashboard — EV</TabsTrigger>
           <TabsTrigger value="dash-icp">Dashboard — ICP</TabsTrigger>
@@ -96,6 +98,7 @@ export default function DeliveryRevenue() {
         </TabsList>
         <TabsContent value="ev" className="mt-4"><ProjectLog stream="EV" orgId={orgId} /></TabsContent>
         <TabsContent value="icp" className="mt-4"><ProjectLog stream="ICP" orgId={orgId} /></TabsContent>
+        <TabsContent value="invoices" className="mt-4"><InvoicesTab orgId={orgId} /></TabsContent>
         <TabsContent value="forecast" className="mt-4"><ForecastGrid orgId={orgId} year={year} /></TabsContent>
         <TabsContent value="dash-ev" className="mt-4"><StreamDashboard stream="EV" orgId={orgId} year={year} /></TabsContent>
         <TabsContent value="dash-icp" className="mt-4"><StreamDashboard stream="ICP" orgId={orgId} year={year} /></TabsContent>
