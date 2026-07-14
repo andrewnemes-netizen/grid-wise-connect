@@ -396,19 +396,26 @@ function NewSiteEstimateDialog({
         });
       }
 
-      if (socketTier !== "none") {
-        const tier = socketTier as SocketTier;
-        const price = socketRate(unitRates, tier);
-        rowsToInsert.push({
-          site_estimate_id: (est as any).id,
-          description: `Build work — ${tier}-socket EV hub (fixed price)`,
-          unit: "hub", quantity: 1,
-          unit_cost: price, unit_price: price,
-          line_cost: price, line_price: price,
-          stage: "build", cost_code: `SOCKET-${tier}`, cost_code_category: "Build",
-          sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
-        });
-        await supabase.from("sites").update({ socket_count: tier } as any).eq("id", siteId);
+      if (hubCombo !== "none") {
+        const combo = HUB_COMBOS.find((h) => `${h.type}-${h.sockets}` === hubCombo);
+        if (combo) {
+          const price = hubRate(unitRates, combo.type, combo.sockets);
+          const typeLabel = combo.type[0].toUpperCase() + combo.type.slice(1);
+          rowsToInsert.push({
+            site_estimate_id: (est as any).id,
+            description: `Build work — ${typeLabel} ${combo.sockets}-socket EV hub (fixed price)`,
+            unit: "hub", quantity: 1,
+            unit_cost: price, unit_price: price,
+            line_cost: price, line_price: price,
+            stage: "build",
+            cost_code: `BUILD-${combo.type.toUpperCase()}-${combo.sockets}`,
+            cost_code_category: "Build",
+            sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
+          });
+          await supabase.from("sites")
+            .update({ socket_count: combo.sockets, build_type: combo.type } as any)
+            .eq("id", siteId);
+        }
       }
 
       if (includeIcp && latestStudy?.cost_estimate_json) {
@@ -468,17 +475,21 @@ function NewSiteEstimateDialog({
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
 
           <Card className="p-3 space-y-2 bg-muted/30">
-            <Label className="text-sm font-semibold">Build work (fixed price per socket count)</Label>
-            <Select value={String(socketTier)} onValueChange={(v) => setSocketTier(v === "none" ? "none" : (Number(v) as SocketTier))}>
+            <Label className="text-sm font-semibold">Build work (fixed client price by hub layout)</Label>
+            <Select value={hubCombo} onValueChange={setHubCombo}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No build line</SelectItem>
-                {SOCKET_TIERS.map((t) => (
-                  <SelectItem key={t} value={String(t)}>{t} sockets — {fmt(socketRate(unitRates, t))}</SelectItem>
+                {HUB_COMBOS.map((h) => (
+                  <SelectItem key={`${h.type}-${h.sockets}`} value={`${h.type}-${h.sockets}`}>
+                    {h.label} — {fmt(hubRate(unitRates, h.type, h.sockets))}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground">Rates are managed in Admin › Unit Rates.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Client sell price per hub layout. Managed in Admin › Unit Rates › Hub Build by Layout.
+            </p>
           </Card>
 
           <Card className="p-3 space-y-2 bg-muted/30">
