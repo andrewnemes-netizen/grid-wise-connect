@@ -273,88 +273,15 @@ function SitesPanel({ wpId, sites }: { wpId: string; sites: any[] }) {
 }
 
 function WpTasksPanel({ wpId, tasks, milestones }: { wpId: string; tasks: any[]; milestones: any[] }) {
-  const { user } = useAuth();
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [milestoneId, setMilestoneId] = useState("none");
-  const [due, setDue] = useState("");
-
-  const create = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from("wp_tasks").insert({
-        work_package_id: wpId, title, due_date: due || null,
-        milestone_id: milestoneId === "none" ? null : milestoneId,
-        sort_index: tasks.length, created_by: user?.id,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success("Task added"); setOpen(false); setTitle(""); setDue(""); qc.invalidateQueries({ queryKey: ["wp-tasks", wpId] }); },
-    onError: (e: any) => toast.error(e.message ?? "Failed"),
-  });
-
-  const setStatus = useMutation({
-    mutationFn: async ({ id, status, percent }: { id: string; status: string; percent: number }) => {
-      const { error } = await supabase.from("wp_tasks").update({ status: status as any, percent_complete: percent }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wp-tasks", wpId] }),
-  });
-
   return (
-    <div className="space-y-3">
-      <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button size="sm"><Plus className="h-4 w-4 mr-1" /> New WP task</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>New work-package task</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Release construction batch 1" /></div>
-              <div><Label>Milestone</Label>
-                <Select value={milestoneId} onValueChange={setMilestoneId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {milestones.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Due date</Label><Input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button disabled={!title.trim() || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Creating…" : "Create"}</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-      {tasks.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">No WP tasks yet. Add the first work-package-level task.</Card>
-      ) : (
-        <div className="grid gap-2">
-          {tasks.map((t: any) => (
-            <Card key={t.id} className="p-3 flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{t.title}</div>
-                <div className="text-xs text-muted-foreground">{t.due_date ? `due ${new Date(t.due_date).toLocaleDateString()}` : ""}</div>
-              </div>
-              <Select value={t.status}
-                onValueChange={(v) => setStatus.mutate({ id: t.id, status: v, percent: v === "done" ? 100 : v === "in_progress" ? Math.max(10, Number(t.percent_complete) || 10) : Number(t.percent_complete) || 0 })}>
-                <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="not_started">Not started</SelectItem>
-                  <SelectItem value="in_progress">In progress</SelectItem>
-                  <SelectItem value="blocked">Blocked</SelectItem>
-                  <SelectItem value="review">Review</SelectItem>
-                  <SelectItem value="done">Done</SelectItem>
-                </SelectContent>
-              </Select>
-              <Badge variant="outline">{Math.round(Number(t.percent_complete))}%</Badge>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+    <TaskBoard
+      projectId={wpId}
+      tasks={tasks}
+      milestones={milestones}
+      scope={{ table: "wp_tasks", scopeCol: "work_package_id", scopeId: wpId }}
+      statusOptions={WP_STATUS_OPTIONS}
+      invalidateKeys={[["wp-tasks", wpId]]}
+    />
   );
 }
 
