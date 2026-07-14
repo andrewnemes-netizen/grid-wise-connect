@@ -20,6 +20,9 @@ import SiteEstimatesPanel from "@/components/delivery/SiteEstimatesPanel";
 import { TaskBoard } from "@/components/delivery/board/TaskBoard";
 import { StatusOption } from "@/lib/board/types";
 import { InlineEdit } from "@/components/InlineEdit";
+import { DeliverySplitLayout } from "@/components/delivery/DeliverySplitLayout";
+import { ProgrammeMapPane } from "@/components/delivery/ProgrammeMapPane";
+import { useNavigate } from "react-router-dom";
 
 const WP_LIFECYCLE = [
   { value: "planning", label: "planning" },
@@ -41,6 +44,7 @@ export default function DeliveryWorkPackage() {
   const { id } = useParams();
   const wpId = id!;
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [editingName, setEditingName] = useState(false);
   const [editingCode, setEditingCode] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -130,8 +134,25 @@ export default function DeliveryWorkPackage() {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
+    <DeliverySplitLayout
+      storageKey="delivery.split.ratio.wp"
+      defaultRatio={0.32}
+      left={
+        <ProgrammeMapPane
+          title={wp?.name ?? "Work package"}
+          subtitle={[wp?.code, wp?.programmes?.name].filter(Boolean).join(" · ")}
+          items={(sites as any[]).map((s: any) => ({
+            id: s.id,
+            label: s.local_ref ? `${s.local_ref} · ${s.sites?.site_name ?? "Site"}` : (s.sites?.site_name ?? "Site"),
+            sub: s.sites?.postcode ?? undefined,
+          }))}
+          emptyLabel="No sites added yet"
+          onOpenMap={() => navigate("/")}
+        />
+      }
+      right={
+        <div className="p-6 max-w-6xl mx-auto space-y-6">
+          <div>
         {wp?.programmes && (
           <Link to={`/delivery/programme/${wp.programmes.id}`} className="text-sm text-muted-foreground flex items-center gap-1 mb-2 hover:text-foreground">
             <ArrowLeft className="h-3 w-3" /> {wp.programmes.name}
@@ -269,7 +290,9 @@ export default function DeliveryWorkPackage() {
           <WpEstimatePanel wpId={wpId} />
         </TabsContent>
       </Tabs>
-    </div>
+        </div>
+      }
+    />
   );
 }
 

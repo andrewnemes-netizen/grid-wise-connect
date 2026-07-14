@@ -127,8 +127,11 @@ export default function DeliveryProgrammes() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2"><Layers className="h-6 w-6" /> Delivery Programmes</h1>
-          <p className="text-sm text-muted-foreground">Client programmes group work packages. Each work package delivers 1–100 sites.</p>
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-foreground/70 mb-1">
+            <span className="h-1 w-1 rounded-full bg-accent" /> Delivery
+          </div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex items-center gap-2"><Layers className="h-6 w-6 text-primary" /> Programmes</h1>
+          <p className="text-sm text-muted-foreground mt-1">Client programmes group work packages. Each work package delivers 1–100 sites.</p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/delivery/proposals">
@@ -148,29 +151,30 @@ export default function DeliveryProgrammes() {
           <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> New programme</Button>
         </Card>
       ) : (
-        <div className="grid gap-3">
+        <div className="rounded-lg border border-border/60 bg-card shadow-panel overflow-hidden divide-y divide-border/50">
           {programmes.map((p) => (
-            <Link key={p.id} to={`/delivery/programme/${p.id}`}>
-              <Card className="p-4 hover:border-primary/40 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium truncate">{p.name}</h3>
-                      {p.code && <span className="text-xs text-muted-foreground">{p.code}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                      <Badge variant="outline">{p.status}</Badge>
-                      <span>{accountName(p.account_id)}</span>
-                      {p.target_site_count != null && <span>· target {p.target_site_count} sites</span>}
-                      {p.start_date && <span>· {new Date(p.start_date).toLocaleDateString()}</span>}
-                    </div>
+            <Link key={p.id} to={`/delivery/programme/${p.id}`} className="block group">
+              <div className="flex items-stretch gap-3 p-4 hover:bg-muted/40 transition-colors relative">
+                <div className="w-1 rounded-full bg-primary/60 group-hover:bg-accent transition-colors" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-display font-semibold tracking-tight truncate">{p.name}</h3>
+                    {p.code && <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5">{p.code}</span>}
                   </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-1 text-sm"><Briefcase className="h-4 w-4" /> {wpCounts[p.id] ?? 0}</div>
-                    <div className="text-xs text-muted-foreground">work packages</div>
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-primary" /> {p.status}
+                    </span>
+                    <span>{accountName(p.account_id)}</span>
+                    {p.target_site_count != null && <span>· target {p.target_site_count} sites</span>}
+                    {p.start_date && <span>· {new Date(p.start_date).toLocaleDateString()}</span>}
                   </div>
                 </div>
-              </Card>
+                <div className="text-right shrink-0">
+                  <div className="flex items-center justify-end gap-1 font-display text-lg font-semibold tabular-nums"><Briefcase className="h-4 w-4 text-accent" /> {wpCounts[p.id] ?? 0}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">work packages</div>
+                </div>
+              </div>
             </Link>
           ))}
         </div>
