@@ -4895,6 +4895,17 @@ export type Database = {
         Returns: unknown
       }
       _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      accept_proposal_into_wp: {
+        Args: {
+          _new_wp_code?: string
+          _new_wp_name?: string
+          _programme_id?: string
+          _proposal_id: string
+          _template_key?: string
+          _wp_id?: string
+        }
+        Returns: Json
+      }
       addauth: { Args: { "": string }; Returns: boolean }
       addgeometrycolumn:
         | {
@@ -5387,6 +5398,10 @@ export type Database = {
       }
       postgis_version: { Args: never; Returns: string }
       postgis_wagyu_version: { Args: never; Returns: string }
+      preview_accept_proposal: {
+        Args: { _proposal_id: string; _template_key?: string; _wp_id?: string }
+        Returns: Json
+      }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {

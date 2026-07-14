@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Layers, Briefcase } from "lucide-react";
+import { Plus, Layers, Briefcase, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 type Programme = {
@@ -81,7 +81,12 @@ export default function DeliveryProgrammes() {
           <h1 className="text-2xl font-semibold flex items-center gap-2"><Layers className="h-6 w-6" /> Delivery Programmes</h1>
           <p className="text-sm text-muted-foreground">Client programmes group work packages. Each work package delivers 1–100 sites.</p>
         </div>
-        <NewProgrammeDialog open={open} setOpen={setOpen} accounts={accounts as any} onCreate={(v) => create.mutate(v)} pending={create.isPending} />
+        <div className="flex items-center gap-2">
+          <Link to="/delivery/proposals">
+            <Button variant="outline"><FileText className="h-4 w-4 mr-1" /> Proposals</Button>
+          </Link>
+          <NewProgrammeDialog open={open} setOpen={setOpen} accounts={accounts as any} onCreate={(v) => create.mutate(v)} pending={create.isPending} />
+        </div>
       </div>
 
       {isLoading ? (
