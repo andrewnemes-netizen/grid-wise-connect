@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { BUILTIN_COLUMNS, BoardColumn, BoardView, BoardAutomation } from "@/lib/board/types";
+import { BUILTIN_COLUMNS, BUILTIN_COLUMNS_WP, BoardColumn, BoardView, BoardAutomation, BuiltinSet } from "@/lib/board/types";
 
-export type BoardScopeColumn = "project_id" | "work_package_id";
+export type BoardScopeColumn = "project_id" | "work_package_id" | "programme_id";
 
-export function useBoardConfig(scopeId: string, scopeCol: BoardScopeColumn = "project_id") {
+export function useBoardConfig(scopeId: string, scopeCol: BoardScopeColumn = "project_id", builtinSet: BuiltinSet = "tasks") {
   const qc = useQueryClient();
 
   const columnsQ = useQuery({
@@ -50,7 +50,8 @@ export function useBoardConfig(scopeId: string, scopeCol: BoardScopeColumn = "pr
     if (columnsQ.isLoading || !columnsQ.data) return;
     if (columnsQ.data.length > 0) return;
     (async () => {
-      const rows = BUILTIN_COLUMNS.map((c) => ({ ...c, [scopeCol]: scopeId }));
+      const seed = builtinSet === "work_packages" ? BUILTIN_COLUMNS_WP : BUILTIN_COLUMNS;
+      const rows = seed.map((c) => ({ ...c, [scopeCol]: scopeId }));
       const { error } = await supabase.from("board_columns" as any).insert(rows as any);
       if (!error) qc.invalidateQueries({ queryKey: ["board-columns", scopeCol, scopeId] });
     })();
