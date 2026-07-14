@@ -52,6 +52,11 @@ export function useUnitRates() {
         socket_build_4: Number((data as any).socket_build_4) || DEFAULT_UNIT_RATES.socket_build_4,
         socket_build_6: Number((data as any).socket_build_6) || DEFAULT_UNIT_RATES.socket_build_6,
         socket_build_8: Number((data as any).socket_build_8) || DEFAULT_UNIT_RATES.socket_build_8,
+        build_buildout_4: Number((data as any).build_buildout_4) || DEFAULT_UNIT_RATES.build_buildout_4,
+        build_horizontal_4: Number((data as any).build_horizontal_4) || DEFAULT_UNIT_RATES.build_horizontal_4,
+        build_horizontal_6: Number((data as any).build_horizontal_6) || DEFAULT_UNIT_RATES.build_horizontal_6,
+        build_vertical_4: Number((data as any).build_vertical_4) || DEFAULT_UNIT_RATES.build_vertical_4,
+        build_vertical_6: Number((data as any).build_vertical_6) || DEFAULT_UNIT_RATES.build_vertical_6,
       };
     },
     staleTime: 5 * 60 * 1000,

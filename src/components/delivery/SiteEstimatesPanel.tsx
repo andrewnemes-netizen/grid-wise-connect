@@ -28,6 +28,20 @@ function socketRate(rates: any, tier: SocketTier): number {
   return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
 }
 
+type HubType = "buildout" | "horizontal" | "vertical";
+// Only the combinations that exist in the CK BoQ workbook
+const HUB_COMBOS: { type: HubType; sockets: 4 | 6; label: string }[] = [
+  { type: "buildout",   sockets: 4, label: "Buildout — 4 sockets" },
+  { type: "horizontal", sockets: 4, label: "Horizontal — 4 sockets" },
+  { type: "horizontal", sockets: 6, label: "Horizontal — 6 sockets" },
+  { type: "vertical",   sockets: 4, label: "Vertical — 4 sockets" },
+  { type: "vertical",   sockets: 6, label: "Vertical — 6 sockets" },
+];
+function hubRate(rates: any, type: HubType, sockets: number): number {
+  const key = `build_${type}_${sockets}` as const;
+  return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
+}
+
 function studyTotal(cost: any): number {
   if (!cost) return 0;
   return Number(cost.total_estimate ?? cost.total ?? cost.total_price ?? 0);
@@ -254,14 +268,14 @@ function NewSiteEstimateDialog({
   const [seedFromRecipe, setSeedFromRecipe] = useState(true);
   const [saving, setSaving] = useState(false);
   const { data: unitRates } = useUnitRates();
-  const [socketTier, setSocketTier] = useState<"none" | SocketTier>("none");
+  const [hubCombo, setHubCombo] = useState<string>("none"); // "none" | "buildout-4" | ...
   const [includeIcp, setIncludeIcp] = useState(true);
   const [includeIcpDetail, setIncludeIcpDetail] = useState(true);
 
   const { data: site } = useQuery({
     queryKey: ["site-for-new-est", siteId],
     queryFn: async () => {
-      const { data } = await supabase.from("sites").select("id, socket_count").eq("id", siteId).maybeSingle();
+      const { data } = await supabase.from("sites").select("id, socket_count, build_type").eq("id", siteId).maybeSingle();
       return data as any;
     },
   });
@@ -281,8 +295,12 @@ function NewSiteEstimateDialog({
 
   useEffect(() => {
     const c = site?.socket_count;
-    if (c && (SOCKET_TIERS as number[]).includes(Number(c))) setSocketTier(Number(c) as SocketTier);
-  }, [site?.socket_count]);
+    const t = site?.build_type as HubType | undefined;
+    if (c && t) {
+      const match = HUB_COMBOS.find((h) => h.type === t && h.sockets === Number(c));
+      if (match) setHubCombo(`${match.type}-${match.sockets}`);
+    }
+  }, [site?.socket_count, site?.build_type]);
 
   const { data: contracts = [] } = useQuery({
     queryKey: ["contracts-all-se"],
@@ -378,19 +396,26 @@ function NewSiteEstimateDialog({
         });
       }
 
-      if (socketTier !== "none") {
-        const tier = socketTier as SocketTier;
-        const price = socketRate(unitRates, tier);
-        rowsToInsert.push({
-          site_estimate_id: (est as any).id,
-          description: `Build work — ${tier}-socket EV hub (fixed price)`,
-          unit: "hub", quantity: 1,
-          unit_cost: price, unit_price: price,
-          line_cost: price, line_price: price,
-          stage: "build", cost_code: `SOCKET-${tier}`, cost_code_category: "Build",
-          sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
-        });
-        await supabase.from("sites").update({ socket_count: tier } as any).eq("id", siteId);
+      if (hubCombo !== "none") {
+        const combo = HUB_COMBOS.find((h) => `${h.type}-${h.sockets}` === hubCombo);
+        if (combo) {
+          const price = hubRate(unitRates, combo.type, combo.sockets);
+          const typeLabel = combo.type[0].toUpperCase() + combo.type.slice(1);
+          rowsToInsert.push({
+            site_estimate_id: (est as any).id,
+            description: `Build work — ${typeLabel} ${combo.sockets}-socket EV hub (fixed price)`,
+            unit: "hub", quantity: 1,
+            unit_cost: price, unit_price: price,
+            line_cost: price, line_price: price,
+            stage: "build",
+            cost_code: `BUILD-${combo.type.toUpperCase()}-${combo.sockets}`,
+            cost_code_category: "Build",
+            sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
+          });
+          await supabase.from("sites")
+            .update({ socket_count: combo.sockets, build_type: combo.type } as any)
+            .eq("id", siteId);
+        }
       }
 
       if (includeIcp && latestStudy?.cost_estimate_json) {
@@ -450,17 +475,21 @@ function NewSiteEstimateDialog({
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
 
           <Card className="p-3 space-y-2 bg-muted/30">
-            <Label className="text-sm font-semibold">Build work (fixed price per socket count)</Label>
-            <Select value={String(socketTier)} onValueChange={(v) => setSocketTier(v === "none" ? "none" : (Number(v) as SocketTier))}>
+            <Label className="text-sm font-semibold">Build work (fixed client price by hub layout)</Label>
+            <Select value={hubCombo} onValueChange={setHubCombo}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No build line</SelectItem>
-                {SOCKET_TIERS.map((t) => (
-                  <SelectItem key={t} value={String(t)}>{t} sockets — {fmt(socketRate(unitRates, t))}</SelectItem>
+                {HUB_COMBOS.map((h) => (
+                  <SelectItem key={`${h.type}-${h.sockets}`} value={`${h.type}-${h.sockets}`}>
+                    {h.label} — {fmt(hubRate(unitRates, h.type, h.sockets))}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground">Rates are managed in Admin › Unit Rates.</p>
+            <p className="text-[11px] text-muted-foreground">
+              Client sell price per hub layout. Managed in Admin › Unit Rates › Hub Build by Layout.
+            </p>
           </Card>
 
           <Card className="p-3 space-y-2 bg-muted/30">

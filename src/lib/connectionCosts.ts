@@ -57,6 +57,12 @@ export interface UnitRates {
   socket_build_4: number;
   socket_build_6: number;
   socket_build_8: number;
+  // Fixed-price EV hub build rates by hub layout × socket count (client prices)
+  build_buildout_4: number;
+  build_horizontal_4: number;
+  build_horizontal_6: number;
+  build_vertical_4: number;
+  build_vertical_6: number;
 }
 
 export const DEFAULT_UNIT_RATES: UnitRates = {
@@ -100,6 +106,12 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   socket_build_4: 6000,
   socket_build_6: 8500,
   socket_build_8: 11000,
+  // Hub-type × socket count client sell prices (source: CK BoQ workbook)
+  build_buildout_4: 38798,
+  build_horizontal_4: 28237,
+  build_horizontal_6: 39818,
+  build_vertical_4: 29576,
+  build_vertical_6: 37091,
 };
 
 export interface CostEstimate {

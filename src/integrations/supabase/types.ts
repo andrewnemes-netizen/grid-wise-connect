@@ -3987,6 +3987,7 @@ export type Database = {
       }
       sites: {
         Row: {
+          build_type: string | null
           client_org: string | null
           connection_options: Json | null
           cost_band: string | null
@@ -4012,6 +4013,7 @@ export type Database = {
           viability_index: number | null
         }
         Insert: {
+          build_type?: string | null
           client_org?: string | null
           connection_options?: Json | null
           cost_band?: string | null
@@ -4037,6 +4039,7 @@ export type Database = {
           viability_index?: number | null
         }
         Update: {
+          build_type?: string | null
           client_org?: string | null
           connection_options?: Json | null
           cost_band?: string | null
@@ -4741,6 +4744,11 @@ export type Database = {
       }
       unit_rates: {
         Row: {
+          build_buildout_4: number
+          build_horizontal_4: number
+          build_horizontal_6: number
+          build_vertical_4: number
+          build_vertical_6: number
           cable_ehv_per_m: number
           cable_hv_per_m: number
           cable_joint_kit_185mm: number
@@ -4784,6 +4792,11 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          build_buildout_4?: number
+          build_horizontal_4?: number
+          build_horizontal_6?: number
+          build_vertical_4?: number
+          build_vertical_6?: number
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
           cable_joint_kit_185mm?: number
@@ -4827,6 +4840,11 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          build_buildout_4?: number
+          build_horizontal_4?: number
+          build_horizontal_6?: number
+          build_vertical_4?: number
+          build_vertical_6?: number
           cable_ehv_per_m?: number
           cable_hv_per_m?: number
           cable_joint_kit_185mm?: number
