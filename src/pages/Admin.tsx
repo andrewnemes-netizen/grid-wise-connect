@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen } from "lucide-react";
 import { format } from "date-fns";
 
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
@@ -21,6 +21,7 @@ import { LocalAuthorityDatasets } from "@/components/admin/LocalAuthorityDataset
 import { SsenDriveIngest } from "@/components/admin/SsenDriveIngest";
 import { EstimatingImport } from "@/components/admin/EstimatingImport";
 import { RateLibrary } from "@/components/admin/RateLibrary";
+import { RecipeLibrary } from "@/components/admin/RecipeLibrary";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -60,6 +61,7 @@ const Admin = () => {
           <TabsTrigger value="learning"><Brain className="h-3.5 w-3.5 mr-1.5" />Route Learning</TabsTrigger>
           <TabsTrigger value="estimating"><Receipt className="h-3.5 w-3.5 mr-1.5" />Estimating Import</TabsTrigger>
           <TabsTrigger value="ratelib"><Library className="h-3.5 w-3.5 mr-1.5" />Rate Library</TabsTrigger>
+          <TabsTrigger value="recipelib"><BookOpen className="h-3.5 w-3.5 mr-1.5" />Recipe Library</TabsTrigger>
         </TabsList>
 
         <TabsContent value="layers" className="mt-4">
@@ -103,6 +105,9 @@ const Admin = () => {
         </TabsContent>
         <TabsContent value="ratelib" className="mt-4">
           <RateLibrary />
+        </TabsContent>
+        <TabsContent value="recipelib" className="mt-4">
+          <RecipeLibrary />
         </TabsContent>
       </Tabs>
     </div>
