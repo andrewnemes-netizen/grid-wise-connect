@@ -668,26 +668,35 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
             </TableHeader>
             <TableBody>
               {(lines as any[]).map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="text-xs">{l.rate_code ?? "—"}</TableCell>
+                <TableRow key={l.id} className={l.is_locked ? "bg-muted/20" : ""}>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-col gap-1">
+                      <span>{l.rate_code ?? l.cost_code ?? "—"}</span>
+                      {l.source && l.source !== "MANUAL" && (
+                        <Badge variant="outline" className="text-[9px] w-fit">
+                          {l.source === "ICP_STUDY" ? "ICP study" : l.source === "ICP_STUDY_DETAIL" ? "study BoM" : l.source === "SOCKET_BUILD" ? "socket build" : l.source}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
-                    <Input value={l.description ?? ""} disabled={isApproved}
+                    <Input value={l.description ?? ""} disabled={isApproved || l.is_locked}
                            onChange={(e) => updateLine(l.id, { description: e.target.value })} />
                   </TableCell>
                   <TableCell>
-                    <Input value={l.unit ?? ""} disabled={isApproved} className="w-16"
+                    <Input value={l.unit ?? ""} disabled={isApproved || l.is_locked} className="w-16"
                            onChange={(e) => updateLine(l.id, { unit: e.target.value })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.quantity ?? 0} disabled={isApproved} className="text-right w-20"
+                    <Input type="number" step="0.01" value={l.quantity ?? 0} disabled={isApproved || l.is_locked} className="text-right w-20"
                            onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.unit_cost ?? 0} disabled={isApproved} className="text-right w-24"
+                    <Input type="number" step="0.01" value={l.unit_cost ?? 0} disabled={isApproved || l.is_locked} className="text-right w-24"
                            onChange={(e) => updateLine(l.id, { unit_cost: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.unit_price ?? 0} disabled={isApproved} className="text-right w-24"
+                    <Input type="number" step="0.01" value={l.unit_price ?? 0} disabled={isApproved || l.is_locked} className="text-right w-24"
                            onChange={(e) => updateLine(l.id, { unit_price: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right text-sm">{fmt(l.line_cost, ccy)}</TableCell>
