@@ -3154,6 +3154,262 @@ export type Database = {
           },
         ]
       }
+      site_estimate_exceptions: {
+        Row: {
+          created_at: string
+          details_json: Json
+          id: string
+          kind: Database["public"]["Enums"]["site_estimate_exception_kind"]
+          message: string
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: Database["public"]["Enums"]["site_estimate_exception_severity"]
+          site_estimate_id: string
+          site_estimate_line_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          details_json?: Json
+          id?: string
+          kind: Database["public"]["Enums"]["site_estimate_exception_kind"]
+          message: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["site_estimate_exception_severity"]
+          site_estimate_id: string
+          site_estimate_line_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          details_json?: Json
+          id?: string
+          kind?: Database["public"]["Enums"]["site_estimate_exception_kind"]
+          message?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: Database["public"]["Enums"]["site_estimate_exception_severity"]
+          site_estimate_id?: string
+          site_estimate_line_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_estimate_exceptions_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_exceptions_site_estimate_line_id_fkey"
+            columns: ["site_estimate_line_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimate_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_estimate_lines: {
+        Row: {
+          cost_code: string | null
+          cost_code_category: string | null
+          created_at: string
+          description: string
+          id: string
+          is_allowance: boolean
+          is_manual_addition: boolean
+          line_cost: number
+          line_price: number
+          markup_amount: number
+          markup_pct: number | null
+          quantity: number
+          rate_code: string | null
+          rate_item_id: string | null
+          recipe_item_id: string | null
+          site_estimate_id: string
+          sort_index: number
+          stage: string | null
+          unit: string | null
+          unit_cost: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          cost_code?: string | null
+          cost_code_category?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          is_allowance?: boolean
+          is_manual_addition?: boolean
+          line_cost?: number
+          line_price?: number
+          markup_amount?: number
+          markup_pct?: number | null
+          quantity?: number
+          rate_code?: string | null
+          rate_item_id?: string | null
+          recipe_item_id?: string | null
+          site_estimate_id: string
+          sort_index?: number
+          stage?: string | null
+          unit?: string | null
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          cost_code?: string | null
+          cost_code_category?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          is_allowance?: boolean
+          is_manual_addition?: boolean
+          line_cost?: number
+          line_price?: number
+          markup_amount?: number
+          markup_pct?: number | null
+          quantity?: number
+          rate_code?: string | null
+          rate_item_id?: string | null
+          recipe_item_id?: string | null
+          site_estimate_id?: string
+          sort_index?: number
+          stage?: string | null
+          unit?: string | null
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_estimate_lines_rate_item_id_fkey"
+            columns: ["rate_item_id"]
+            isOneToOne: false
+            referencedRelation: "rate_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_lines_recipe_item_id_fkey"
+            columns: ["recipe_item_id"]
+            isOneToOne: false
+            referencedRelation: "recipe_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_lines_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_estimates: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          recipe_id: string | null
+          site_id: string
+          status: Database["public"]["Enums"]["site_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          name: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          recipe_id?: string | null
+          site_id: string
+          status?: Database["public"]["Enums"]["site_estimate_status"]
+          superseded_by_estimate_id?: string | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          version_number?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          recipe_id?: string | null
+          site_id?: string
+          status?: Database["public"]["Enums"]["site_estimate_status"]
+          superseded_by_estimate_id?: string | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_estimates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_superseded_by_estimate_id_fkey"
+            columns: ["superseded_by_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_handover_docs: {
         Row: {
           approved_at: string | null
@@ -6543,6 +6799,15 @@ export type Database = {
       rate_card_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
       rate_provided_by: "partner" | "client" | "both" | "unknown"
       recipe_build_type: "horizontal" | "vertical" | "buildout" | "other"
+      site_estimate_exception_kind:
+        | "missing_rate"
+        | "unconfirmed_quantity"
+        | "price_override"
+        | "manual_addition"
+        | "allowance_review"
+        | "other"
+      site_estimate_exception_severity: "info" | "warning" | "blocker"
+      site_estimate_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -6735,6 +7000,16 @@ export const Constants = {
       rate_card_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
       rate_provided_by: ["partner", "client", "both", "unknown"],
       recipe_build_type: ["horizontal", "vertical", "buildout", "other"],
+      site_estimate_exception_kind: [
+        "missing_rate",
+        "unconfirmed_quantity",
+        "price_override",
+        "manual_addition",
+        "allowance_review",
+        "other",
+      ],
+      site_estimate_exception_severity: ["info", "warning", "blocker"],
+      site_estimate_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
       site_stage_state: [
         "not_started",
         "in_progress",
