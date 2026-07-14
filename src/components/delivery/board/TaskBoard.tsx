@@ -478,7 +478,7 @@ export function TaskBoard({
                 setNewTitle("");
               }
             }}
-            placeholder="+ Add task"
+            placeholder={addRowPlaceholder ?? (isWpBoard ? "+ Add work package" : "+ Add task")}
             className="flex-1 bg-transparent text-sm outline-none px-1"
           />
         </div>
