@@ -10,12 +10,12 @@ export function PersonCell({ value, onChange }: { value: string | null; onChange
   const { data: people = [] } = useQuery({
     queryKey: ["board-people"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id,full_name,email").limit(50);
+      const { data } = await supabase.from("profiles").select("user_id,full_name").limit(50);
       return data ?? [];
     },
   });
-  const current = (people as any[]).find((p) => p.id === value);
-  const label = current ? (current.full_name || current.email || "?") : null;
+  const current = (people as any[]).find((p) => p.user_id === value);
+  const label = current ? (current.full_name || "?") : null;
 
   return (
     <Popover>
@@ -36,14 +36,14 @@ export function PersonCell({ value, onChange }: { value: string | null; onChange
         </button>
         {(people as any[]).map((p) => (
           <button
-            key={p.id}
-            onClick={() => onChange(p.id)}
+            key={p.user_id}
+            onClick={() => onChange(p.user_id)}
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-muted"
           >
             <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
-              {initials(p.full_name || p.email || "?")}
+              {initials(p.full_name || "?")}
             </span>
-            <span className="truncate">{p.full_name || p.email}</span>
+            <span className="truncate">{p.full_name || p.user_id}</span>
           </button>
         ))}
       </PopoverContent>
