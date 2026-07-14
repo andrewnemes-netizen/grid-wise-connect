@@ -1971,6 +1971,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "project_activity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
         ]
       }
       project_comments: {
@@ -2016,6 +2023,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_comments_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "site_milestones"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_comments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -2023,10 +2037,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_comments_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -2074,10 +2102,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_files_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_files_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -2113,6 +2155,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
             referencedColumns: ["id"]
           },
         ]
@@ -2171,6 +2220,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "project_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
         ]
       }
       project_task_dependencies: {
@@ -2207,10 +2263,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_task_dependencies_depends_on_task_id_fkey"
+            columns: ["depends_on_task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_task_dependencies_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_task_dependencies_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
             referencedColumns: ["id"]
           },
         ]
@@ -2291,6 +2361,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_tasks_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "site_milestones"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_tasks_parent_task_id_fkey"
             columns: ["parent_task_id"]
             isOneToOne: false
@@ -2298,10 +2375,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "project_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "project_tasks_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
             referencedColumns: ["id"]
           },
         ]
@@ -3976,6 +4067,68 @@ export type Database = {
           },
         ]
       }
+      wp_milestones: {
+        Row: {
+          actual_date: string | null
+          created_at: string
+          created_by: string | null
+          depends_on_rule_json: Json | null
+          description: string | null
+          id: string
+          name: string
+          owner_user_id: string | null
+          percent_complete: number
+          phase: Database["public"]["Enums"]["wp_milestone_phase"]
+          planned_date: string | null
+          sequence: number
+          status: Database["public"]["Enums"]["wp_item_status"]
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          actual_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          depends_on_rule_json?: Json | null
+          description?: string | null
+          id?: string
+          name: string
+          owner_user_id?: string | null
+          percent_complete?: number
+          phase?: Database["public"]["Enums"]["wp_milestone_phase"]
+          planned_date?: string | null
+          sequence?: number
+          status?: Database["public"]["Enums"]["wp_item_status"]
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          actual_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          depends_on_rule_json?: Json | null
+          description?: string | null
+          id?: string
+          name?: string
+          owner_user_id?: string | null
+          percent_complete?: number
+          phase?: Database["public"]["Enums"]["wp_milestone_phase"]
+          planned_date?: string | null
+          sequence?: number
+          status?: Database["public"]["Enums"]["wp_item_status"]
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_milestones_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wp_sites: {
         Row: {
           created_at: string
@@ -4011,6 +4164,139 @@ export type Database = {
           },
           {
             foreignKeyName: "wp_sites_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_task_dependencies: {
+        Row: {
+          created_at: string
+          depends_on_site_stage_json: Json | null
+          depends_on_task_id: string | null
+          id: string
+          lag_days: number
+          task_id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          depends_on_site_stage_json?: Json | null
+          depends_on_task_id?: string | null
+          id?: string
+          lag_days?: number
+          task_id: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          depends_on_site_stage_json?: Json | null
+          depends_on_task_id?: string | null
+          id?: string
+          lag_days?: number
+          task_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_task_dependencies_depends_on_task_id_fkey"
+            columns: ["depends_on_task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_task_dependencies_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_tasks: {
+        Row: {
+          actual_hours: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string
+          metadata_json: Json
+          milestone_id: string | null
+          owner_user_id: string | null
+          parent_task_id: string | null
+          percent_complete: number
+          priority: Database["public"]["Enums"]["wp_priority"]
+          sort_index: number
+          start_date: string | null
+          status: Database["public"]["Enums"]["wp_item_status"]
+          title: string
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          actual_hours?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          metadata_json?: Json
+          milestone_id?: string | null
+          owner_user_id?: string | null
+          parent_task_id?: string | null
+          percent_complete?: number
+          priority?: Database["public"]["Enums"]["wp_priority"]
+          sort_index?: number
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["wp_item_status"]
+          title: string
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          actual_hours?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string
+          metadata_json?: Json
+          milestone_id?: string | null
+          owner_user_id?: string | null
+          parent_task_id?: string | null
+          percent_complete?: number
+          priority?: Database["public"]["Enums"]["wp_priority"]
+          sort_index?: number
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["wp_item_status"]
+          title?: string
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_tasks_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "wp_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_tasks_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
             referencedRelation: "work_packages"
@@ -4093,6 +4379,292 @@ export type Database = {
           type?: string | null
         }
         Relationships: []
+      }
+      site_milestones: {
+        Row: {
+          actual_date: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          name: string | null
+          owner_user_id: string | null
+          percent_complete: number | null
+          phase: Database["public"]["Enums"]["milestone_phase"] | null
+          planned_date: string | null
+          project_id: string | null
+          sequence: number | null
+          status: Database["public"]["Enums"]["milestone_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          actual_date?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          name?: string | null
+          owner_user_id?: string | null
+          percent_complete?: number | null
+          phase?: Database["public"]["Enums"]["milestone_phase"] | null
+          planned_date?: string | null
+          project_id?: string | null
+          sequence?: number | null
+          status?: Database["public"]["Enums"]["milestone_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          actual_date?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          name?: string | null
+          owner_user_id?: string | null
+          percent_complete?: number | null
+          phase?: Database["public"]["Enums"]["milestone_phase"] | null
+          planned_date?: string | null
+          project_id?: string | null
+          sequence?: number | null
+          status?: Database["public"]["Enums"]["milestone_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_programmes: {
+        Row: {
+          account_id: string | null
+          actual_end_date: string | null
+          code: string | null
+          config_json: Json | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          health: Database["public"]["Enums"]["project_health"] | null
+          id: string | null
+          name: string | null
+          org_id: string | null
+          percent_complete: number | null
+          priority: Database["public"]["Enums"]["project_priority"] | null
+          proposal_id: string | null
+          site_id: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          study_id: string | null
+          target_end_date: string | null
+          template_id: string | null
+          updated_at: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          actual_end_date?: string | null
+          code?: string | null
+          config_json?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          health?: Database["public"]["Enums"]["project_health"] | null
+          id?: string | null
+          name?: string | null
+          org_id?: string | null
+          percent_complete?: number | null
+          priority?: Database["public"]["Enums"]["project_priority"] | null
+          proposal_id?: string | null
+          site_id?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          study_id?: string | null
+          target_end_date?: string | null
+          template_id?: string | null
+          updated_at?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          actual_end_date?: string | null
+          code?: string | null
+          config_json?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          health?: Database["public"]["Enums"]["project_health"] | null
+          id?: string | null
+          name?: string | null
+          org_id?: string | null
+          percent_complete?: number | null
+          priority?: Database["public"]["Enums"]["project_priority"] | null
+          proposal_id?: string | null
+          site_id?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          study_id?: string | null
+          target_end_date?: string | null
+          template_id?: string | null
+          updated_at?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: true
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_tasks: {
+        Row: {
+          actual_hours: number | null
+          boq_ref: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          estimated_hours: number | null
+          id: string | null
+          metadata_json: Json | null
+          milestone_id: string | null
+          owner_user_id: string | null
+          parent_task_id: string | null
+          percent_complete: number | null
+          priority: Database["public"]["Enums"]["project_priority"] | null
+          project_id: string | null
+          sort_index: number | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["task_status"] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          actual_hours?: number | null
+          boq_ref?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string | null
+          metadata_json?: Json | null
+          milestone_id?: string | null
+          owner_user_id?: string | null
+          parent_task_id?: string | null
+          percent_complete?: number | null
+          priority?: Database["public"]["Enums"]["project_priority"] | null
+          project_id?: string | null
+          sort_index?: number | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          actual_hours?: number | null
+          boq_ref?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          estimated_hours?: number | null
+          id?: string | null
+          metadata_json?: Json | null
+          milestone_id?: string | null
+          owner_user_id?: string | null
+          parent_task_id?: string | null
+          percent_complete?: number | null
+          priority?: Database["public"]["Enums"]["project_priority"] | null
+          project_id?: string | null
+          sort_index?: number | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["task_status"] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_tasks_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "project_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "site_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "project_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "site_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ukpn_circuit_latest_utilisation: {
         Row: {
@@ -4320,6 +4892,14 @@ export type Database = {
       }
       can_access_project: {
         Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_access_wp: {
+        Args: { _user_id: string; _wp_id: string }
+        Returns: boolean
+      }
+      can_manage_wp: {
+        Args: { _user_id: string; _wp_id: string }
         Returns: boolean
       }
       clear_layer_features: {
@@ -4691,6 +5271,10 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      recalc_wp_milestone_progress: {
+        Args: { _milestone_id: string }
+        Returns: undefined
       }
       rollup_project_progress: {
         Args: { _project_id: string }
@@ -5437,6 +6021,23 @@ export type Database = {
       proposal_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
       task_dep_type: "FS" | "SS" | "FF" | "SF"
       task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
+      wp_item_status:
+        | "not_started"
+        | "in_progress"
+        | "blocked"
+        | "review"
+        | "done"
+        | "cancelled"
+      wp_milestone_phase:
+        | "mobilisation"
+        | "design_batch"
+        | "procurement"
+        | "construction"
+        | "commissioning"
+        | "handover"
+        | "commercial"
+        | "custom"
+      wp_priority: "low" | "medium" | "high" | "critical"
     }
     CompositeTypes: {
       geometry_dump: {
@@ -5603,6 +6204,25 @@ export const Constants = {
       proposal_status: ["draft", "sent", "accepted", "rejected", "expired"],
       task_dep_type: ["FS", "SS", "FF", "SF"],
       task_status: ["todo", "in_progress", "blocked", "review", "done"],
+      wp_item_status: [
+        "not_started",
+        "in_progress",
+        "blocked",
+        "review",
+        "done",
+        "cancelled",
+      ],
+      wp_milestone_phase: [
+        "mobilisation",
+        "design_batch",
+        "procurement",
+        "construction",
+        "commissioning",
+        "handover",
+        "commercial",
+        "custom",
+      ],
+      wp_priority: ["low", "medium", "high", "critical"],
     },
   },
 } as const
