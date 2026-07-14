@@ -268,14 +268,14 @@ function NewSiteEstimateDialog({
   const [seedFromRecipe, setSeedFromRecipe] = useState(true);
   const [saving, setSaving] = useState(false);
   const { data: unitRates } = useUnitRates();
-  const [socketTier, setSocketTier] = useState<"none" | SocketTier>("none");
+  const [hubCombo, setHubCombo] = useState<string>("none"); // "none" | "buildout-4" | ...
   const [includeIcp, setIncludeIcp] = useState(true);
   const [includeIcpDetail, setIncludeIcpDetail] = useState(true);
 
   const { data: site } = useQuery({
     queryKey: ["site-for-new-est", siteId],
     queryFn: async () => {
-      const { data } = await supabase.from("sites").select("id, socket_count").eq("id", siteId).maybeSingle();
+      const { data } = await supabase.from("sites").select("id, socket_count, build_type").eq("id", siteId).maybeSingle();
       return data as any;
     },
   });
@@ -295,8 +295,12 @@ function NewSiteEstimateDialog({
 
   useEffect(() => {
     const c = site?.socket_count;
-    if (c && (SOCKET_TIERS as number[]).includes(Number(c))) setSocketTier(Number(c) as SocketTier);
-  }, [site?.socket_count]);
+    const t = site?.build_type as HubType | undefined;
+    if (c && t) {
+      const match = HUB_COMBOS.find((h) => h.type === t && h.sockets === Number(c));
+      if (match) setHubCombo(`${match.type}-${match.sockets}`);
+    }
+  }, [site?.socket_count, site?.build_type]);
 
   const { data: contracts = [] } = useQuery({
     queryKey: ["contracts-all-se"],
