@@ -3017,6 +3017,123 @@ export type Database = {
         }
         Relationships: []
       }
+      revenue_invoice_counters: {
+        Row: {
+          last_seq: number
+          org_id: string
+        }
+        Insert: {
+          last_seq?: number
+          org_id: string
+        }
+        Update: {
+          last_seq?: number
+          org_id?: string
+        }
+        Relationships: []
+      }
+      revenue_invoices: {
+        Row: {
+          certified_amount: number | null
+          certified_by: string | null
+          certified_date: string | null
+          created_at: string
+          created_by: string | null
+          doc_type: string
+          due_date: string | null
+          gross_amount: number
+          id: string
+          invoice_number: string
+          issue_date: string | null
+          milestone_id: string | null
+          net_amount: number
+          notes: string | null
+          org_id: string
+          paid_amount: number | null
+          paid_date: string | null
+          period_from: string | null
+          period_to: string | null
+          po_number: string | null
+          project_id: string
+          rejection_reason: string | null
+          status: string
+          updated_at: string
+          vat_amount: number
+          vat_rate: number
+        }
+        Insert: {
+          certified_amount?: number | null
+          certified_by?: string | null
+          certified_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_type?: string
+          due_date?: string | null
+          gross_amount?: number
+          id?: string
+          invoice_number: string
+          issue_date?: string | null
+          milestone_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          org_id: string
+          paid_amount?: number | null
+          paid_date?: string | null
+          period_from?: string | null
+          period_to?: string | null
+          po_number?: string | null
+          project_id: string
+          rejection_reason?: string | null
+          status?: string
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Update: {
+          certified_amount?: number | null
+          certified_by?: string | null
+          certified_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_type?: string
+          due_date?: string | null
+          gross_amount?: number
+          id?: string
+          invoice_number?: string
+          issue_date?: string | null
+          milestone_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          org_id?: string
+          paid_amount?: number | null
+          paid_date?: string | null
+          period_from?: string | null
+          period_to?: string | null
+          po_number?: string | null
+          project_id?: string
+          rejection_reason?: string | null
+          status?: string
+          updated_at?: string
+          vat_amount?: number
+          vat_rate?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_invoices_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenue_milestones: {
         Row: {
           actual_civils: number | null
@@ -5697,6 +5814,62 @@ export type Database = {
         }
         Relationships: []
       }
+      revenue_debtor_aging: {
+        Row: {
+          aging_bucket: string | null
+          certified_amount: number | null
+          doc_type: string | null
+          due_date: string | null
+          id: string | null
+          invoice_number: string | null
+          issue_date: string | null
+          net_amount: number | null
+          org_id: string | null
+          outstanding: number | null
+          paid_amount: number | null
+          project_id: string | null
+          status: string | null
+        }
+        Insert: {
+          aging_bucket?: never
+          certified_amount?: number | null
+          doc_type?: string | null
+          due_date?: string | null
+          id?: string | null
+          invoice_number?: string | null
+          issue_date?: string | null
+          net_amount?: number | null
+          org_id?: string | null
+          outstanding?: never
+          paid_amount?: number | null
+          project_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          aging_bucket?: never
+          certified_amount?: number | null
+          doc_type?: string | null
+          due_date?: string | null
+          id?: string | null
+          invoice_number?: string | null
+          issue_date?: string | null
+          net_amount?: number | null
+          org_id?: string | null
+          outstanding?: never
+          paid_amount?: number | null
+          project_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_milestones: {
         Row: {
           actual_date: string | null
@@ -6301,6 +6474,14 @@ export type Database = {
         Args: { _user_id: string; _wp_id: string }
         Returns: boolean
       }
+      certify_invoice: {
+        Args: {
+          _certified_amount: number
+          _certified_date: string
+          _id: string
+        }
+        Returns: undefined
+      }
       clear_layer_features: {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
@@ -6682,6 +6863,10 @@ export type Database = {
         Args: { p_lat: number; p_lng: number }
         Returns: string
       }
+      mark_invoice_paid: {
+        Args: { _id: string; _paid_amount: number; _paid_date: string }
+        Returns: undefined
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
@@ -6800,6 +6985,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reject_invoice: {
+        Args: { _id: string; _reason: string }
+        Returns: undefined
       }
       revenue_monthly_rollup: {
         Args: { _org_id: string; _year: number }
