@@ -5878,6 +5878,10 @@ export type Database = {
         Args: { _project_id: string; _template_key: string }
         Returns: Json
       }
+      approve_estimate_recipe: {
+        Args: { _recipe_id: string }
+        Returns: undefined
+      }
       approve_rate_card_version: {
         Args: { _version_id: string }
         Returns: string
@@ -5968,6 +5972,10 @@ export type Database = {
       clear_layer_features: {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
+      }
+      clone_estimate_recipe_to_draft: {
+        Args: { _recipe_id: string }
+        Returns: string
       }
       clone_rate_card_version_to_draft: {
         Args: { _version_id: string }
