@@ -13,7 +13,12 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Flag, ListChecks, Users } from "lucide-react";
+import { ArrowLeft, Plus, Flag, ListChecks, Users, LayoutGrid, GanttChart, MessageSquare, Paperclip, History } from "lucide-react";
+import { TaskKanban } from "@/components/delivery/TaskKanban";
+import { TaskGantt } from "@/components/delivery/TaskGantt";
+import { ProjectComments } from "@/components/delivery/ProjectComments";
+import { ProjectFiles } from "@/components/delivery/ProjectFiles";
+import { ProjectActivity } from "@/components/delivery/ProjectActivity";
 
 export default function DeliveryProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -66,6 +71,20 @@ export default function DeliveryProjectDetail() {
       if (error) throw error;
       return data ?? [];
     },
+  });
+
+  const { data: deps = [] } = useQuery({
+    queryKey: ["delivery-deps", projectId],
+    queryFn: async () => {
+      const ids = tasks.map((t: any) => t.id);
+      if (ids.length === 0) return [];
+      const { data } = await supabase
+        .from("project_task_dependencies")
+        .select("*")
+        .in("task_id", ids);
+      return data ?? [];
+    },
+    enabled: tasks.length > 0,
   });
 
   const updateTask = useMutation({
@@ -133,14 +152,19 @@ export default function DeliveryProjectDetail() {
         </Card>
       )}
 
-      <Tabs defaultValue="tasks">
+      <Tabs defaultValue="list">
         <TabsList>
-          <TabsTrigger value="tasks"><ListChecks className="h-4 w-4 mr-1" /> Tasks</TabsTrigger>
+          <TabsTrigger value="list"><ListChecks className="h-4 w-4 mr-1" /> List</TabsTrigger>
+          <TabsTrigger value="kanban"><LayoutGrid className="h-4 w-4 mr-1" /> Kanban</TabsTrigger>
+          <TabsTrigger value="gantt"><GanttChart className="h-4 w-4 mr-1" /> Gantt</TabsTrigger>
           <TabsTrigger value="milestones"><Flag className="h-4 w-4 mr-1" /> Milestones</TabsTrigger>
+          <TabsTrigger value="comments"><MessageSquare className="h-4 w-4 mr-1" /> Comments</TabsTrigger>
+          <TabsTrigger value="files"><Paperclip className="h-4 w-4 mr-1" /> Files</TabsTrigger>
+          <TabsTrigger value="activity"><History className="h-4 w-4 mr-1" /> Activity</TabsTrigger>
           <TabsTrigger value="members"><Users className="h-4 w-4 mr-1" /> Members</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="tasks" className="space-y-3">
+        <TabsContent value="list" className="space-y-3">
           <div className="flex justify-end">
             <NewTaskDialog projectId={projectId} milestones={milestones as any} />
           </div>
@@ -187,6 +211,14 @@ export default function DeliveryProjectDetail() {
           )}
         </TabsContent>
 
+        <TabsContent value="kanban">
+          <TaskKanban projectId={projectId} tasks={tasks as any[]} />
+        </TabsContent>
+
+        <TabsContent value="gantt">
+          <TaskGantt tasks={tasks as any[]} deps={deps as any[]} />
+        </TabsContent>
+
         <TabsContent value="milestones" className="space-y-3">
           <div className="flex justify-end">
             <NewMilestoneDialog projectId={projectId} nextSeq={milestones.length} />
@@ -214,6 +246,18 @@ export default function DeliveryProjectDetail() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="comments">
+          <ProjectComments projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="files">
+          <ProjectFiles projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <ProjectActivity projectId={projectId} />
         </TabsContent>
 
         <TabsContent value="members">
