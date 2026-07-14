@@ -48,6 +48,10 @@ export function useUnitRates() {
         cable_joint_kit_pot_end: Number((data as any).cable_joint_kit_pot_end) || DEFAULT_UNIT_RATES.cable_joint_kit_pot_end,
         service_cable_35mm_per_m: Number((data as any).service_cable_35mm_per_m) || DEFAULT_UNIT_RATES.service_cable_35mm_per_m,
         mains_extension_threshold_m: Number((data as any).mains_extension_threshold_m) || DEFAULT_UNIT_RATES.mains_extension_threshold_m,
+        socket_build_2: Number((data as any).socket_build_2) || DEFAULT_UNIT_RATES.socket_build_2,
+        socket_build_4: Number((data as any).socket_build_4) || DEFAULT_UNIT_RATES.socket_build_4,
+        socket_build_6: Number((data as any).socket_build_6) || DEFAULT_UNIT_RATES.socket_build_6,
+        socket_build_8: Number((data as any).socket_build_8) || DEFAULT_UNIT_RATES.socket_build_8,
       };
     },
     staleTime: 5 * 60 * 1000,
