@@ -17,6 +17,21 @@ import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
 import { toast } from "sonner";
+import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
+
+type SocketTier = 2 | 4 | 6 | 8;
+const SOCKET_TIERS: SocketTier[] = [2, 4, 6, 8];
+
+function socketRate(rates: any, tier: SocketTier): number {
+  const key = `socket_build_${tier}` as const;
+  return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
+}
+
+function studyTotal(cost: any): number {
+  if (!cost) return 0;
+  return Number(cost.total_estimate ?? cost.total ?? cost.total_price ?? 0);
+}
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, maximumFractionDigits: 0 }).format(Number(n));
