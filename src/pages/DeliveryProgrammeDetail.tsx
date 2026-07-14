@@ -16,6 +16,8 @@ import { InlineEdit } from "@/components/InlineEdit";
 import { TaskBoard } from "@/components/delivery/board/TaskBoard";
 import { WP_LIFECYCLE_OPTIONS } from "@/lib/board/types";
 import { useNavigate } from "react-router-dom";
+import { DeliverySplitLayout } from "@/components/delivery/DeliverySplitLayout";
+import { ProgrammeMapPane } from "@/components/delivery/ProgrammeMapPane";
 
 const WP_STATUSES = [
   { value: "planning", label: "planning" },
@@ -105,8 +107,24 @@ export default function DeliveryProgrammeDetail() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div>
+    <DeliverySplitLayout
+      left={
+        <ProgrammeMapPane
+          title={programme?.name ?? "Programme"}
+          subtitle={[programme?.accounts?.name, programme?.code].filter(Boolean).join(" · ")}
+          items={(wps as any[]).map((w) => ({
+            id: w.id,
+            label: w.name || "Work package",
+            sub: [w.code, siteCounts[w.id] ? `${siteCounts[w.id]} sites` : null].filter(Boolean).join(" · "),
+            badge: w.status,
+          }))}
+          emptyLabel="No work packages yet"
+          onOpenMap={() => navigate("/")}
+        />
+      }
+      right={
+        <div className="p-6 max-w-6xl mx-auto space-y-6">
+          <div>
         <Link to="/delivery" className="text-sm text-muted-foreground flex items-center gap-1 mb-2 hover:text-foreground">
           <ArrowLeft className="h-3 w-3" /> Programmes
         </Link>
@@ -116,8 +134,8 @@ export default function DeliveryProgrammeDetail() {
               value={programme?.name}
               onSave={(v) => updateProgramme.mutate({ name: v })}
               placeholder="Programme name"
-              displayClassName="text-2xl font-semibold"
-              inputClassName="text-2xl font-semibold h-10 min-w-64"
+              displayClassName="font-display text-2xl font-semibold tracking-tight"
+              inputClassName="font-display text-2xl font-semibold h-10 min-w-64"
               pending={updateProgramme.isPending}
             />
             <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap mt-1">
@@ -147,7 +165,11 @@ export default function DeliveryProgrammeDetail() {
         </div>
       </div>
 
-      <h2 className="text-lg font-medium">Work packages</h2>
+      <div className="flex items-center gap-2">
+        <div className="h-px flex-1 bg-border/60" />
+        <h2 className="font-display text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Work packages</h2>
+        <div className="h-px flex-1 bg-border/60" />
+      </div>
       {wps.length === 0 ? (
         <Card className="p-10 text-center">
           <Briefcase className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -177,7 +199,9 @@ export default function DeliveryProgrammeDetail() {
           </div>
         </>
       )}
-    </div>
+        </div>
+      }
+    />
   );
 }
 
