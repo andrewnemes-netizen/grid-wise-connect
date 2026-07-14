@@ -336,6 +336,56 @@ export type Database = {
           },
         ]
       }
+      contracts: {
+        Row: {
+          client_id: string
+          code: string | null
+          created_at: string
+          currency: string
+          end_date: string | null
+          id: string
+          name: string
+          notes: string | null
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          code?: string | null
+          created_at?: string
+          currency?: string
+          end_date?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          code?: string | null
+          created_at?: string
+          currency?: string
+          end_date?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_cables: {
         Row: {
           cable_type: string
@@ -2595,6 +2645,186 @@ export type Database = {
             columns: ["study_id"]
             isOneToOne: false
             referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rate_card_versions: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          effective_from: string | null
+          effective_to: string | null
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          notes: string | null
+          rate_card_id: string
+          source_workbook: string | null
+          status: Database["public"]["Enums"]["rate_card_status"]
+          updated_at: string
+          version_number: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          notes?: string | null
+          rate_card_id: string
+          source_workbook?: string | null
+          status?: Database["public"]["Enums"]["rate_card_status"]
+          updated_at?: string
+          version_number: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          notes?: string | null
+          rate_card_id?: string
+          source_workbook?: string | null
+          status?: Database["public"]["Enums"]["rate_card_status"]
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_card_versions_rate_card_id_fkey"
+            columns: ["rate_card_id"]
+            isOneToOne: false
+            referencedRelation: "rate_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rate_cards: {
+        Row: {
+          code: string | null
+          contract_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code?: string | null
+          contract_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string | null
+          contract_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_cards_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rate_items: {
+        Row: {
+          category: string | null
+          client_unit_price: number | null
+          cost_code: string | null
+          cost_code_category: string | null
+          cost_split_available: boolean
+          created_at: string
+          description: string
+          id: string
+          labour_cost: number | null
+          material_cost: number | null
+          needs_pricing: boolean
+          notes: string | null
+          plant_cost: number | null
+          provided_by: Database["public"]["Enums"]["rate_provided_by"]
+          rate_card_version_id: string
+          rate_code: string
+          source_ser: string | null
+          source_sheet: string | null
+          subcontract_cost: number | null
+          total_unit_cost: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          client_unit_price?: number | null
+          cost_code?: string | null
+          cost_code_category?: string | null
+          cost_split_available?: boolean
+          created_at?: string
+          description: string
+          id?: string
+          labour_cost?: number | null
+          material_cost?: number | null
+          needs_pricing?: boolean
+          notes?: string | null
+          plant_cost?: number | null
+          provided_by?: Database["public"]["Enums"]["rate_provided_by"]
+          rate_card_version_id: string
+          rate_code: string
+          source_ser?: string | null
+          source_sheet?: string | null
+          subcontract_cost?: number | null
+          total_unit_cost?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          client_unit_price?: number | null
+          cost_code?: string | null
+          cost_code_category?: string | null
+          cost_split_available?: boolean
+          created_at?: string
+          description?: string
+          id?: string
+          labour_cost?: number | null
+          material_cost?: number | null
+          needs_pricing?: boolean
+          notes?: string | null
+          plant_cost?: number | null
+          provided_by?: Database["public"]["Enums"]["rate_provided_by"]
+          rate_card_version_id?: string
+          rate_code?: string
+          source_ser?: string | null
+          source_sheet?: string | null
+          subcontract_cost?: number | null
+          total_unit_cost?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_items_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -6158,6 +6388,8 @@ export type Database = {
         | "completed"
         | "cancelled"
       proposal_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
+      rate_card_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
+      rate_provided_by: "partner" | "client" | "both" | "unknown"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -6347,6 +6579,8 @@ export const Constants = {
         "cancelled",
       ],
       proposal_status: ["draft", "sent", "accepted", "rejected", "expired"],
+      rate_card_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
+      rate_provided_by: ["partner", "client", "both", "unknown"],
       site_stage_state: [
         "not_started",
         "in_progress",
