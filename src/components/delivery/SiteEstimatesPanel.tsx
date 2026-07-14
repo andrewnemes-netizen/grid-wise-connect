@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search } from "lucide-react";
+import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
@@ -30,6 +30,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
+  const qc = useQueryClient();
+  const [bulkOpen, setBulkOpen] = useState(false);
   const { data: wpSites = [] } = useQuery({
     queryKey: ["wp-sites-for-site-estimates", wpId],
     queryFn: async () => {
@@ -48,15 +50,32 @@ export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="text-sm text-muted-foreground">
-        Manage per-site estimates. Each site can have multiple versions; only APPROVED site estimates
-        can be included in a WP estimate.
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-sm text-muted-foreground">
+          Manage per-site estimates. Each site can have multiple versions; only APPROVED site estimates
+          can be included in a WP estimate.
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+          <Layers className="h-4 w-4 mr-1" /> Bulk apply recipe
+        </Button>
       </div>
       <Accordion type="multiple" className="space-y-2">
         {wpSites.map((ws: any) => (
           <SiteRow key={ws.id} site={ws.sites} />
         ))}
       </Accordion>
+      {bulkOpen && (
+        <BulkApplyRecipeDialog
+          wpSites={wpSites as any[]}
+          onClose={() => setBulkOpen(false)}
+          onDone={() => {
+            setBulkOpen(false);
+            (wpSites as any[]).forEach((ws) =>
+              qc.invalidateQueries({ queryKey: ["site-estimates", ws.sites?.id] })
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
