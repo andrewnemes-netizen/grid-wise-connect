@@ -50,6 +50,11 @@ const RATE_FIELDS: { key: keyof UnitRates; label: string; unit: string; group: s
   { key: "socket_build_4", label: "4-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
   { key: "socket_build_6", label: "6-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
   { key: "socket_build_8", label: "8-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
+  { key: "build_buildout_4", label: "Buildout — 4 sockets", unit: "£", group: "Hub Build by Layout (client price)" },
+  { key: "build_horizontal_4", label: "Horizontal — 4 sockets", unit: "£", group: "Hub Build by Layout (client price)" },
+  { key: "build_horizontal_6", label: "Horizontal — 6 sockets", unit: "£", group: "Hub Build by Layout (client price)" },
+  { key: "build_vertical_4", label: "Vertical — 4 sockets", unit: "£", group: "Hub Build by Layout (client price)" },
+  { key: "build_vertical_6", label: "Vertical — 6 sockets", unit: "£", group: "Hub Build by Layout (client price)" },
 ];
 
 export function UnitRatesSettings() {
