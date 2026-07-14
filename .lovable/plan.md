@@ -1,41 +1,75 @@
-## Goal
-Turn the **Programme detail** page's Work Packages list into the same Monday-style board used for WP Tasks — grouped grid, inline-edit cells, coloured status pills, custom columns, saved views and automations — scoped to the programme.
 
-## What changes
+# Redesign: Emerald Command Centre (Shell + Delivery)
 
-### 1. Database (migration)
-Extend the board config tables so they can also be scoped to a programme.
+A focused restyle of the app shell and the Delivery module. No business logic changes — only tokens, typography, layout and component polish.
 
-- `board_columns`, `board_views`, `board_automations`: add nullable `programme_id uuid references programmes(id) on delete cascade`.
-- Replace the current unique constraints with per-scope ones (project / WP / programme).
-- RLS: add policies allowing members of a programme (via its `org_id` on the parent programme → `org_members`) to read/write config rows scoped to that programme. Existing project/WP policies stay.
+## Design direction
 
-### 2. Board engine generalisation
-Make `TaskBoard` scope-aware for a third target: `work_packages` rows inside a programme.
+- **Palette (Emerald Prestige)** — dark emerald anchor, warm gold accent, cream surfaces.
+  - `--background` cream `#f5f0e0` (light) / deep emerald `#052e26` (dark)
+  - `--primary` emerald `#0d7a5f`, `--primary-deep` `#064e3b`
+  - `--accent` gold `#c9a84c` (used sparingly: active states, KPI highlights, chips)
+  - Neutrals derived from emerald-tinted greys, not pure slate
+- **Typography** — Sora (headings, tabular numerals for data), Manrope (body/UI). Wired via `@fontsource` + Tailwind font families; replaces current defaults.
+- **Density & shape** — 6px radius, 1px hairline borders in `emerald/15`, subtle inner shadow on panels, chips become small pill tags with coloured dot + label (not solid fills).
 
-- `BoardScopeColumn` gains `"programme_id"`.
-- New `BUILTIN_COLUMNS_WP` set for the work-package board: Code, Name, Status, Approved value (£), Start, Target end, Target sites, Progress (avg of task % via server field if present, else editable).
-- `useBoardConfig` accepts a `builtinSet` and seeds the correct columns on first load.
-- `TaskBoard` accepts `scope.table = "work_packages"` and a `fieldMap` describing which DB column each builtin key writes to (name, code, status, approved_value, start_date, target_end_date, target_site_count). `renderCell` uses the map instead of the hard-coded task fields.
-- Row creation uses the programme's default lifecycle status and a generated code stub; delete works via `work_packages` table.
-- Grouping by status uses a new `WP_LIFECYCLE` options list (reused from `DeliveryWorkPackage.tsx`).
+All values land as HSL tokens in `src/index.css` and mappings in `tailwind.config.ts`. No hardcoded colours in components.
 
-### 3. Programme detail page
-`src/pages/DeliveryProgrammeDetail.tsx`:
+## Layout: split-screen shell
 
-- Replace the current WP cards grid with `<TaskBoard scope={{ table: "work_packages", scopeCol: "programme_id", scopeId }} statusOptions={WP_LIFECYCLE} tasks={wps} milestones={[]} invalidateKeys={[["programme-wps", id]]} />`.
-- Keep the existing "New work package" action; the board handles inline edits so the standalone inline-edit fields for each WP are removed to avoid duplication.
-- Clicking the Name/Code cell still navigates to the WP detail page via a small link overlay on the first column.
+New app shell for Delivery routes:
 
-### 4. Types
-`src/lib/board/types.ts`: add `BUILTIN_COLUMNS_WP` and export a `BuiltinSet` union so callers pick one.
+```text
+┌────────┬──────────────────────────────────────────────┐
+│Sidebar │ Topbar: breadcrumbs · search · notifs · user │
+│(emerald├───────────────────┬──────────────────────────┤
+│ rail)  │  LEFT: Map pane   │ RIGHT: Work pane         │
+│        │  - programme sites│ - Programme header       │
+│        │  - WP pins        │ - Monday-style board     │
+│        │  - hover sync     │ - Tabs: WPs · Tasks ·    │
+│        │                   │   Gantt · Files          │
+└────────┴───────────────────┴──────────────────────────┘
+```
 
-## Out of scope
-- Projects list, Proposals, Revenue (per your answer).
-- Changing WP Tasks board behaviour.
-- New automation triggers for WP lifecycle (existing status/percent triggers still work).
+- Resizable split (drag handle, remembers ratio in `localStorage`). Collapse map to a right-edge rail on narrow viewports.
+- Map pane reuses existing MapLibre setup, filtered to the current programme's WP sites; clicking a row highlights the pin, clicking a pin scrolls the row.
+- On mobile (<768px) the split stacks: map becomes a collapsible top card, board fills below.
+
+## Delivery board polish (Monday-style, refined)
+
+Keep engine + data model. Visual pass only in `TaskBoard.tsx` and cells:
+
+- Sticky header row with gold underline on the active sort column.
+- Group headers: coloured 4px left bar + emerald text, count as gold pill.
+- Rows: 36px height, hover shows a faint emerald wash + row action rail.
+- Status/priority chips redesigned as dot+label pills using palette tokens.
+- Selection bar docks bottom-centre as a floating emerald toolbar (not inline).
+- Empty state + "Add work package/task" row gets a dashed emerald border on hover.
+
+## Scope of changes
+
+**In scope**
+1. Design tokens: `src/index.css`, `tailwind.config.ts` (Emerald Prestige, Sora/Manrope, radii, shadows, chip tokens).
+2. Fonts: add `@fontsource/sora` + `@fontsource/manrope`, wire in `src/main.tsx`.
+3. Shell: `src/components/AppSidebar.tsx`, `src/components/DashboardLayout.tsx` — emerald rail, gold active indicator, refined topbar.
+4. New split layout: `src/components/delivery/DeliverySplitLayout.tsx` (resizable panes, map+content slots) used by:
+   - `src/pages/DeliveryProgrammeDetail.tsx`
+   - `src/pages/DeliveryWorkPackage.tsx`
+5. Programmes list (`src/pages/DeliveryProgrammes.tsx`): restyle cards into a denser board-like list matching new tokens.
+6. Board polish: `src/components/delivery/board/TaskBoard.tsx` + cells (`StatusCell`, `TextCell`, header, group header, selection bar). No behaviour change.
+
+**Out of scope (this pass)**
+- Map, Studies, Portfolio, LA Programme, Admin page restyles (tokens will cascade, but no bespoke work).
+- Any data model, RLS, or engine changes.
+- New features on the board (columns/views/automations behaviour unchanged).
 
 ## Technical notes
-- Custom column values live in `work_packages.metadata_json.custom` (column already exists as `jsonb`; migration adds it if missing).
-- Formula / aggregate / views / automations reuse existing components unchanged.
-- `board_automations.runAutomations` already targets a table via `scope.table`; passes through for work_packages.
+
+- Split pane implemented with a lightweight custom component using CSS grid + a drag handle (no new dep) to avoid pulling in `react-resizable-panels` unless preferred.
+- Map filter: pass `programmeId` prop; reuse existing site query, add a `where wp.programme_id = ?` filter client-side from already-loaded WPs.
+- Row↔pin sync via a small `useDeliverySelection` context (hover/selected id).
+- All colour usage via semantic tokens; migration adds no SQL.
+
+## Deliverable
+
+After approval and implementation, Delivery routes render inside the new emerald split-screen shell with Sora/Manrope typography, and the Monday-style board is visually upgraded without changing its behaviour.
