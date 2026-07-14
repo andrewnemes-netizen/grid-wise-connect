@@ -5878,6 +5878,69 @@ export type Database = {
         Args: { _project_id: string; _template_key: string }
         Returns: Json
       }
+      approve_site_estimate: {
+        Args: { p_estimate_id: string; p_notes?: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          recipe_id: string | null
+          site_id: string
+          status: Database["public"]["Enums"]["site_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_estimates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      approve_wp_estimate: {
+        Args: { p_estimate_id: string; p_notes?: string }
+        Returns: {
+          adjustments_total_cost: number
+          adjustments_total_price: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          sites_total_cost: number
+          sites_total_price: number
+          status: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+          work_package_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_package_estimates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       auto_create_dno_layers: {
         Args: { p_dno: string; p_force?: boolean }
         Returns: Json
@@ -5901,6 +5964,69 @@ export type Database = {
       clear_layer_features: {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
+      }
+      clone_site_estimate_to_draft: {
+        Args: { p_estimate_id: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          recipe_id: string | null
+          site_id: string
+          status: Database["public"]["Enums"]["site_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "site_estimates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      clone_wp_estimate_to_draft: {
+        Args: { p_estimate_id: string }
+        Returns: {
+          adjustments_total_cost: number
+          adjustments_total_price: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          sites_total_cost: number
+          sites_total_price: number
+          status: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+          work_package_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_package_estimates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       create_notification_for_user: {
         Args: {
@@ -6276,6 +6402,39 @@ export type Database = {
       recalc_wp_milestone_progress: {
         Args: { _milestone_id: string }
         Returns: undefined
+      }
+      recalculate_wp_estimate_totals: {
+        Args: { p_estimate_id: string }
+        Returns: {
+          adjustments_total_cost: number
+          adjustments_total_price: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          sites_total_cost: number
+          sites_total_price: number
+          status: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+          work_package_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "work_package_estimates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       rollup_project_progress: {
         Args: { _project_id: string }
