@@ -652,3 +652,415 @@ function CombinedDashboard({ orgId, year }: { orgId: string; year: number }) {
     </div>
   );
 }
+// =========================================================================
+// INVOICES TAB
+// =========================================================================
+type Invoice = {
+  id: string; org_id: string; project_id: string; milestone_id: string | null;
+  invoice_number: string; doc_type: "invoice" | "payment_application";
+  status: "draft" | "submitted" | "certified" | "paid" | "rejected";
+  issue_date: string | null; due_date: string | null; period_from: string | null; period_to: string | null;
+  po_number: string | null;
+  net_amount: number; vat_rate: number; vat_amount: number; gross_amount: number;
+  certified_amount: number | null; certified_date: string | null;
+  paid_amount: number | null; paid_date: string | null;
+  rejection_reason: string | null; notes: string | null;
+};
+
+const STATUS_TONE: Record<Invoice["status"], string> = {
+  draft: "bg-muted text-muted-foreground",
+  submitted: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  certified: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  paid: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  rejected: "bg-destructive/15 text-destructive",
+};
+
+function InvoicesTab({ orgId }: { orgId: string }) {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [newOpen, setNewOpen] = useState(false);
+
+  const { data: invoices = [] } = useQuery({
+    queryKey: ["revenue-invoices", orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("revenue_invoices")
+        .select("*")
+        .eq("org_id", orgId)
+        .order("issue_date", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Invoice[];
+    },
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["revenue-projects-all", orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("revenue_projects")
+        .select("id, project_code, site_location, stream, contract_value")
+        .eq("org_id", orgId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const projectMap = useMemo(
+    () => Object.fromEntries((projects ?? []).map((p: any) => [p.id, p])),
+    [projects],
+  );
+
+  const filtered = invoices.filter((i) => statusFilter === "all" || i.status === statusFilter);
+
+  // KPIs
+  const outstanding = (i: Invoice) =>
+    (Number(i.certified_amount ?? i.net_amount) || 0) - (Number(i.paid_amount) || 0);
+  const kpis = useMemo(() => {
+    const draft = invoices.filter((i) => i.status === "draft");
+    const submitted = invoices.filter((i) => i.status === "submitted");
+    const certified = invoices.filter((i) => i.status === "certified");
+    const overdue = invoices.filter(
+      (i) => i.status === "certified" && i.due_date && new Date(i.due_date) < new Date(),
+    );
+    const paidYTD = invoices
+      .filter((i) => i.status === "paid" && i.paid_date && new Date(i.paid_date).getFullYear() === new Date().getFullYear())
+      .reduce((s, i) => s + Number(i.paid_amount ?? 0), 0);
+    const outstandingTotal = certified.reduce((s, i) => s + outstanding(i), 0);
+    return { draft: draft.length, submitted: submitted.length, certifiedCount: certified.length, overdue: overdue.length, paidYTD, outstandingTotal };
+  }, [invoices]);
+
+  const del = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("revenue_invoices").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["revenue-invoices"] }); toast.success("Invoice removed"); },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        {[
+          { label: "Draft", value: kpis.draft, icon: FileText },
+          { label: "Submitted", value: kpis.submitted, icon: FileText },
+          { label: "Certified", value: kpis.certifiedCount, icon: CheckCircle2 },
+          { label: "Overdue", value: kpis.overdue, icon: XCircle },
+          { label: "Outstanding", value: gbp(kpis.outstandingTotal), icon: Banknote },
+          { label: "Paid YTD", value: gbp(kpis.paidYTD), icon: Banknote },
+        ].map((k) => (
+          <Card key={k.label} className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-muted-foreground">{k.label}</div>
+              <k.icon className="w-4 h-4 text-muted-foreground" />
+            </div>
+            <div className="text-lg font-semibold tabular-nums mt-1">{k.value}</div>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-medium">Invoices &amp; payment applications</h3>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="submitted">Submitted</SelectItem>
+                <SelectItem value="certified">Certified</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Dialog open={newOpen} onOpenChange={setNewOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="w-4 h-4 mr-1" /> New invoice</Button>
+            </DialogTrigger>
+            <NewInvoiceDialog orgId={orgId} onDone={() => setNewOpen(false)} />
+          </Dialog>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Number</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Project</TableHead>
+                <TableHead>Issued</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="text-right">Net</TableHead>
+                <TableHead className="text-right">Gross</TableHead>
+                <TableHead className="text-right">Certified</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 && (
+                <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">No invoices</TableCell></TableRow>
+              )}
+              {filtered.map((i) => {
+                const p: any = projectMap[i.project_id];
+                const overdue = i.status === "certified" && i.due_date && new Date(i.due_date) < new Date();
+                return (
+                  <TableRow key={i.id}>
+                    <TableCell className="font-medium">{i.invoice_number}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {i.doc_type === "payment_application" ? "Payment App" : "Invoice"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {p ? (<><div>{p.project_code || "—"}</div><div className="text-muted-foreground">{p.site_location}</div></>) : "—"}
+                    </TableCell>
+                    <TableCell>{i.issue_date ?? "—"}</TableCell>
+                    <TableCell className={overdue ? "text-destructive font-medium" : ""}>{i.due_date ?? "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{gbp(i.net_amount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{gbp(i.gross_amount)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{i.certified_amount != null ? gbp(i.certified_amount) : "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{gbp(outstanding(i))}</TableCell>
+                    <TableCell>
+                      <span className={`inline-block rounded px-2 py-0.5 text-xs capitalize ${STATUS_TONE[i.status]}`}>
+                        {i.status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1 justify-end">
+                        <InvoiceActions invoice={i} />
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirm("Delete invoice?") && del.mutate(i.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function InvoiceActions({ invoice }: { invoice: Invoice }) {
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["revenue-invoices"] });
+    qc.invalidateQueries({ queryKey: ["revenue-milestones"] });
+    qc.invalidateQueries({ queryKey: ["revenue-rollup"] });
+  };
+  const setStatus = useMutation({
+    mutationFn: async (status: Invoice["status"]) => {
+      const { error } = await supabase.from("revenue_invoices").update({ status }).eq("id", invoice.id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e: any) => toast.error(e.message),
+  });
+  const certify = useMutation({
+    mutationFn: async ({ amount, date }: { amount: number; date: string }) => {
+      const { error } = await supabase.rpc("certify_invoice", {
+        _id: invoice.id, _certified_amount: amount, _certified_date: date,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+    onError: (e: any) => toast.error(e.message),
+  });
+  const pay = useMutation({
+    mutationFn: async ({ amount, date }: { amount: number; date: string }) => {
+      const { error } = await supabase.rpc("mark_invoice_paid", {
+        _id: invoice.id, _paid_amount: amount, _paid_date: date,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Marked as paid"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const reject = useMutation({
+    mutationFn: async (reason: string) => {
+      const { error } = await supabase.rpc("reject_invoice", { _id: invoice.id, _reason: reason });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const [certifyOpen, setCertifyOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [certAmt, setCertAmt] = useState(invoice.net_amount);
+  const [certDate, setCertDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payAmt, setPayAmt] = useState(Number(invoice.certified_amount ?? invoice.net_amount));
+  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+
+  return (
+    <>
+      {invoice.status === "draft" && (
+        <Button size="sm" variant="outline" className="h-7" onClick={() => setStatus.mutate("submitted")}>Submit</Button>
+      )}
+      {invoice.status === "submitted" && (
+        <>
+          <Dialog open={certifyOpen} onOpenChange={setCertifyOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-7">Certify</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Certify {invoice.invoice_number}</DialogTitle></DialogHeader>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Certified amount (£)"><Input type="number" value={certAmt} onChange={(e) => setCertAmt(Number(e.target.value))} /></Field>
+                <Field label="Certified date"><Input type="date" value={certDate} onChange={(e) => setCertDate(e.target.value)} /></Field>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { certify.mutate({ amount: certAmt, date: certDate }); setCertifyOpen(false); }}>Certify</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Button size="sm" variant="ghost" className="h-7 text-destructive"
+            onClick={() => { const r = prompt("Rejection reason?"); if (r) reject.mutate(r); }}>Reject</Button>
+        </>
+      )}
+      {invoice.status === "certified" && (
+        <Dialog open={payOpen} onOpenChange={setPayOpen}>
+          <DialogTrigger asChild>
+            <Button size="sm" className="h-7">Mark paid</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Mark {invoice.invoice_number} paid</DialogTitle></DialogHeader>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Paid amount (£)"><Input type="number" value={payAmt} onChange={(e) => setPayAmt(Number(e.target.value))} /></Field>
+              <Field label="Paid date"><Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} /></Field>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => { pay.mutate({ amount: payAmt, date: payDate }); setPayOpen(false); }}>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function NewInvoiceDialog({ orgId, onDone }: { orgId: string; onDone: () => void }) {
+  const qc = useQueryClient();
+  const [projectId, setProjectId] = useState<string>("");
+  const [milestoneId, setMilestoneId] = useState<string>("");
+  const [form, setForm] = useState({
+    doc_type: "invoice" as "invoice" | "payment_application",
+    issue_date: new Date().toISOString().slice(0, 10),
+    due_date: "",
+    period_from: "",
+    period_to: "",
+    po_number: "",
+    net_amount: 0,
+    vat_rate: 20,
+    notes: "",
+  });
+
+  const { data: projects = [] } = useQuery({
+    queryKey: ["revenue-projects-all", orgId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("revenue_projects")
+        .select("id, project_code, site_location, stream, contract_value").eq("org_id", orgId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: milestones = [] } = useQuery({
+    queryKey: ["milestones-for-project", projectId],
+    enabled: !!projectId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("revenue_milestones")
+        .select("id, milestone_status, invoice_pct, forecast_revenue")
+        .eq("project_id", projectId).order("invoice_month");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const create = useMutation({
+    mutationFn: async () => {
+      if (!projectId) throw new Error("Pick a project");
+      const { error } = await supabase.from("revenue_invoices").insert({
+        org_id: orgId,
+        project_id: projectId,
+        milestone_id: milestoneId || null,
+        doc_type: form.doc_type,
+        issue_date: form.issue_date || null,
+        due_date: form.due_date || null,
+        period_from: form.period_from || null,
+        period_to: form.period_to || null,
+        po_number: form.po_number || null,
+        net_amount: Number(form.net_amount) || 0,
+        vat_rate: Number(form.vat_rate) || 0,
+        notes: form.notes || null,
+      } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["revenue-invoices"] });
+      toast.success("Invoice created");
+      onDone();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return (
+    <DialogContent className="max-w-2xl">
+      <DialogHeader><DialogTitle>New invoice / payment application</DialogTitle></DialogHeader>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Type">
+          <Select value={form.doc_type} onValueChange={(v: any) => setForm({ ...form, doc_type: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="invoice">Invoice</SelectItem>
+              <SelectItem value="payment_application">Payment application</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="PO number"><Input value={form.po_number} onChange={(e) => setForm({ ...form, po_number: e.target.value })} /></Field>
+        <Field label="Project" className="col-span-2">
+          <Select value={projectId} onValueChange={(v) => { setProjectId(v); setMilestoneId(""); }}>
+            <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+            <SelectContent>
+              {(projects as any[]).map((p) => (
+                <SelectItem key={p.id} value={p.id}>[{p.stream}] {p.project_code || "—"} — {p.site_location}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        {projectId && (milestones as any[]).length > 0 && (
+          <Field label="Milestone (optional)" className="col-span-2">
+            <Select value={milestoneId} onValueChange={(v) => {
+              setMilestoneId(v);
+              const m: any = (milestones as any[]).find((x) => x.id === v);
+              if (m) setForm((f) => ({ ...f, net_amount: Number(m.forecast_revenue ?? 0) }));
+            }}>
+              <SelectTrigger><SelectValue placeholder="Link to milestone" /></SelectTrigger>
+              <SelectContent>
+                {(milestones as any[]).map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.milestone_status} · {gbp(m.forecast_revenue)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+        <Field label="Issue date"><Input type="date" value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value })} /></Field>
+        <Field label="Due date"><Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></Field>
+        {form.doc_type === "payment_application" && (
+          <>
+            <Field label="Period from"><Input type="date" value={form.period_from} onChange={(e) => setForm({ ...form, period_from: e.target.value })} /></Field>
+            <Field label="Period to"><Input type="date" value={form.period_to} onChange={(e) => setForm({ ...form, period_to: e.target.value })} /></Field>
+          </>
+        )}
+        <Field label="Net amount (£)"><Input type="number" value={form.net_amount} onChange={(e) => setForm({ ...form, net_amount: Number(e.target.value) })} /></Field>
+        <Field label="VAT %"><Input type="number" value={form.vat_rate} onChange={(e) => setForm({ ...form, vat_rate: Number(e.target.value) })} /></Field>
+        <Field label="Notes" className="col-span-2"><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+      </div>
+      <DialogFooter>
+        <Button onClick={() => create.mutate()} disabled={create.isPending || !projectId}>Create</Button>
+      </DialogFooter>
+    </DialogContent>
+  );
+}
