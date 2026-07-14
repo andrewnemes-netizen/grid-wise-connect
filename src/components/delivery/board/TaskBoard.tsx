@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBoardConfig, BoardScopeColumn } from "@/hooks/useBoardConfig";
 import { runAutomations } from "@/lib/board/automations";
 import {
-  BoardColumn, BoardViewConfig, StatusOption, statuses, DEFAULT_PRIORITY_OPTIONS,
+  BoardColumn, BoardViewConfig, StatusOption, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
 } from "@/lib/board/types";
 import { StatusCell } from "./cells/StatusCell";
 import { TextCell } from "./cells/TextCell";
@@ -62,7 +62,7 @@ export function TaskBoard({
   const table = effectiveScope.table;
   const scopeCol = effectiveScope.scopeCol;
   const scopeId = effectiveScope.scopeId;
-  const statuses = statusOptions ?? statuses;
+  const statuses = statusOptions ?? DEFAULT_STATUS_OPTIONS;
   const cfg = useBoardConfig(scopeId, scopeCol);
   const invalidateAll = () => {
     (invalidateKeys ?? [["delivery-tasks", projectId], ["delivery-project", projectId]])
