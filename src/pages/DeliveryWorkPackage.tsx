@@ -497,7 +497,7 @@ function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; st
               return (
                 <tr key={s.id} className="border-t">
                   <td className="p-2 sticky left-0 bg-background font-medium whitespace-nowrap">
-                    {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.name}
+                    {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.site_name}
                   </td>
                   {STAGES.map((st) => {
                     const v = row?.[st] ?? "not_started";
@@ -555,7 +555,7 @@ function MasterGantt({
         const site = siteById[sp.site_id];
         rows.push({
           key: `sp-${sp.id}`,
-          label: `▸ ${site?.local_ref ? site.local_ref + " · " : ""}${site?.sites?.name ?? sp.name}`,
+          label: `▸ ${site?.local_ref ? site.local_ref + " · " : ""}${site?.sites?.site_name ?? sp.name}`,
           kind: "site", start: s, end: e, percent: Number(sp.percent_complete),
         });
       }
