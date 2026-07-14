@@ -12,9 +12,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
+import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
 
 export default function DeliveryWorkPackage() {
   const { id } = useParams();
@@ -125,6 +126,7 @@ export default function DeliveryWorkPackage() {
           <TabsTrigger value="milestones">Milestones</TabsTrigger>
           <TabsTrigger value="matrix">Matrix</TabsTrigger>
           <TabsTrigger value="gantt">Master Gantt</TabsTrigger>
+          <TabsTrigger value="estimate"><Receipt className="h-3.5 w-3.5 mr-1" />Estimate</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -162,6 +164,10 @@ export default function DeliveryWorkPackage() {
             wpStart={wp?.start_date}
             wpEnd={wp?.target_end_date}
           />
+        </TabsContent>
+
+        <TabsContent value="estimate">
+          <WpEstimatePanel wpId={wpId} />
         </TabsContent>
       </Tabs>
     </div>
