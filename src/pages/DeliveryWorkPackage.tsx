@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt, Pencil, Check, X } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
@@ -31,6 +31,11 @@ const WP_STATUS_OPTIONS: StatusOption[] = [
 export default function DeliveryWorkPackage() {
   const { id } = useParams();
   const wpId = id!;
+  const qc = useQueryClient();
+  const [editingName, setEditingName] = useState(false);
+  const [editingCode, setEditingCode] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [codeDraft, setCodeDraft] = useState("");
 
   const { data: wp } = useQuery({
     queryKey: ["wp", wpId],
@@ -41,6 +46,21 @@ export default function DeliveryWorkPackage() {
       if (error) throw error;
       return data as any;
     },
+  });
+
+  const updateWp = useMutation({
+    mutationFn: async (patch: { name?: string; code?: string }) => {
+      const { error } = await supabase.from("work_packages").update(patch).eq("id", wpId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Work package updated");
+      qc.invalidateQueries({ queryKey: ["wp", wpId] });
+      qc.invalidateQueries({ queryKey: ["programme-wps"] });
+      setEditingName(false);
+      setEditingCode(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
   });
 
   const { data: sites = [] } = useQuery({
@@ -109,11 +129,53 @@ export default function DeliveryWorkPackage() {
           </Link>
         )}
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">{wp?.name ?? "Work package"}</h1>
-            <p className="text-sm text-muted-foreground">
-              {wp?.code} {wp?.programmes?.accounts?.name ? `· ${wp.programmes.accounts.name}` : ""}
-            </p>
+          <div className="min-w-0 flex-1">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  className="text-2xl font-semibold h-10"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && nameDraft.trim()) updateWp.mutate({ name: nameDraft.trim() });
+                    if (e.key === "Escape") setEditingName(false);
+                  }}
+                />
+                <Button size="icon" variant="ghost" disabled={!nameDraft.trim() || updateWp.isPending} onClick={() => updateWp.mutate({ name: nameDraft.trim() })}><Check className="h-4 w-4" /></Button>
+                <Button size="icon" variant="ghost" onClick={() => setEditingName(false)}><X className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h1 className="text-2xl font-semibold truncate">{wp?.name ?? "Work package"}</h1>
+                <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setNameDraft(wp?.name ?? ""); setEditingName(true); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+            <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+              {editingCode ? (
+                <>
+                  <Input
+                    autoFocus
+                    value={codeDraft}
+                    onChange={(e) => setCodeDraft(e.target.value)}
+                    className="h-7 w-32 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") updateWp.mutate({ code: codeDraft.trim() });
+                      if (e.key === "Escape") setEditingCode(false);
+                    }}
+                  />
+                  <Button size="icon" variant="ghost" className="h-6 w-6" disabled={updateWp.isPending} onClick={() => updateWp.mutate({ code: codeDraft.trim() })}><Check className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingCode(false)}><X className="h-3 w-3" /></Button>
+                </>
+              ) : (
+                <button className="hover:text-foreground inline-flex items-center gap-1" onClick={() => { setCodeDraft(wp?.code ?? ""); setEditingCode(true); }}>
+                  {wp?.code ?? "add code"} <Pencil className="h-3 w-3 opacity-60" />
+                </button>
+              )}
+              {wp?.programmes?.accounts?.name && <span>· {wp.programmes.accounts.name}</span>}
+            </div>
           </div>
         </div>
       </div>
