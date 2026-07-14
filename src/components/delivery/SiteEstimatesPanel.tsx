@@ -337,8 +337,12 @@ function NewSiteEstimateDialog({
         status: "DRAFT",
         version_number: nextVer,
         created_by: user.user?.id ?? null,
-      }).select().single();
+        study_id: (includeIcp && latestStudy?.id) ? latestStudy.id : null,
+      } as any).select().single();
       if (error) throw error;
+
+      let sortCursor = 0;
+      const rowsToInsert: any[] = [];
 
       if (seedFromRecipe && recipeId) {
         // load recipe items and join to rate_items for cost/price defaults
@@ -346,11 +350,11 @@ function NewSiteEstimateDialog({
           .select("*, rate_items(unit, total_unit_cost, client_unit_price, description)")
           .eq("recipe_id", recipeId)
           .order("sort_index");
-        const rows = (items ?? []).map((r: any, i: number) => {
+        (items ?? []).forEach((r: any) => {
           const cost = Number(r.rate_items?.total_unit_cost ?? 0);
           const price = Number(r.rate_items?.client_unit_price ?? cost);
           const qty = Number(r.default_quantity ?? 0);
-          return {
+          rowsToInsert.push({
             site_estimate_id: (est as any).id,
             recipe_item_id: r.id,
             rate_item_id: r.rate_item_id,
@@ -367,13 +371,65 @@ function NewSiteEstimateDialog({
             cost_code: r.cost_code,
             cost_code_category: r.cost_code_category,
             is_allowance: !!r.is_allowance,
-            sort_index: i,
-          };
+            sort_index: sortCursor++,
+            source: "MANUAL",
+            is_locked: false,
+          });
         });
-        if (rows.length > 0) {
-          const { error: e2 } = await supabase.from("site_estimate_lines").insert(rows);
-          if (e2) throw e2;
+      }
+
+      if (socketTier !== "none") {
+        const tier = socketTier as SocketTier;
+        const price = socketRate(unitRates, tier);
+        rowsToInsert.push({
+          site_estimate_id: (est as any).id,
+          description: `Build work — ${tier}-socket EV hub (fixed price)`,
+          unit: "hub", quantity: 1,
+          unit_cost: price, unit_price: price,
+          line_cost: price, line_price: price,
+          stage: "build", cost_code: `SOCKET-${tier}`, cost_code_category: "Build",
+          sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
+        });
+        await supabase.from("sites").update({ socket_count: tier } as any).eq("id", siteId);
+      }
+
+      if (includeIcp && latestStudy?.cost_estimate_json) {
+        const total = studyTotal(latestStudy.cost_estimate_json);
+        rowsToInsert.push({
+          site_estimate_id: (est as any).id,
+          description: `ICP connection — from study "${latestStudy.study_name}"`,
+          unit: "lot", quantity: 1,
+          unit_cost: total, unit_price: total,
+          line_cost: total, line_price: total,
+          stage: "connection", cost_code: "ICP-STUDY", cost_code_category: "ICP Connection",
+          sort_index: sortCursor++, source: "ICP_STUDY", is_locked: true,
+        });
+        if (includeIcpDetail && Array.isArray(latestStudy.bom_json)) {
+          for (const item of latestStudy.bom_json as any[]) {
+            const qty = Number(item.quantity ?? item.qty ?? 0);
+            const uc = Number(item.unit_cost ?? item.rate ?? 0);
+            rowsToInsert.push({
+              site_estimate_id: (est as any).id,
+              description: `  ↳ ${item.description ?? item.name ?? "BoM item"}`,
+              unit: item.unit ?? null,
+              quantity: qty, unit_cost: uc, unit_price: 0,
+              line_cost: Number((qty * uc).toFixed(2)), line_price: 0,
+              stage: "connection", cost_code: "ICP-DETAIL", cost_code_category: "ICP Connection (detail)",
+              is_allowance: true,
+              sort_index: sortCursor++, source: "ICP_STUDY_DETAIL", is_locked: true,
+            });
+          }
         }
+      }
+
+      if (rowsToInsert.length > 0) {
+        const { error: e2 } = await supabase.from("site_estimate_lines").insert(rowsToInsert as any);
+        if (e2) throw e2;
+        const totalCost = rowsToInsert.reduce((s, r) => s + Number(r.line_cost || 0), 0);
+        const totalPrice = rowsToInsert.reduce((s, r) => s + Number(r.line_price || 0), 0);
+        await supabase.from("site_estimates").update({
+          total_cost: totalCost, total_price: totalPrice, total_markup: totalPrice - totalCost,
+        }).eq("id", (est as any).id);
       }
 
       toast.success("Draft site estimate created");
