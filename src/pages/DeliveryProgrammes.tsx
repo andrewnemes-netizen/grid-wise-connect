@@ -39,6 +39,17 @@ export default function DeliveryProgrammes() {
     },
   });
 
+  // Clients are surfaced from organisations (single source of truth for tenants).
+  const { data: orgs = [] } = useQuery({
+    queryKey: ["delivery-client-orgs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("organisations").select("id,name").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  // Existing account labels for programmes already created (fallback display).
   const { data: accounts = [] } = useQuery({
     queryKey: ["delivery-accounts"],
     queryFn: async () => {
@@ -60,9 +71,47 @@ export default function DeliveryProgrammes() {
   });
 
   const create = useMutation({
-    mutationFn: async (v: { name: string; code: string; account_id: string; target_site_count: number | null }) => {
+    mutationFn: async (v: { name: string; code: string; org_id: string; org_name: string; target_site_count: number | null }) => {
+      // Find-or-create client bound to the chosen organisation.
+      let clientId: string | null = null;
+      const { data: existingClient } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("tenant_org_id", v.org_id)
+        .maybeSingle();
+      if (existingClient) {
+        clientId = existingClient.id;
+      } else {
+        const { data: newClient, error: clientErr } = await supabase
+          .from("clients")
+          .insert({ name: v.org_name, tenant_org_id: v.org_id })
+          .select("id").single();
+        if (clientErr) throw clientErr;
+        clientId = newClient.id;
+      }
+
+      // Find-or-create default account for the client.
+      let accountId: string | null = null;
+      const { data: existingAccount } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (existingAccount) {
+        accountId = existingAccount.id;
+      } else {
+        const { data: newAccount, error: accountErr } = await supabase
+          .from("accounts")
+          .insert({ name: v.org_name, client_id: clientId })
+          .select("id").single();
+        if (accountErr) throw accountErr;
+        accountId = newAccount.id;
+      }
+
       const { data, error } = await supabase.from("programmes").insert({
-        name: v.name, code: v.code || null, account_id: v.account_id,
+        name: v.name, code: v.code || null, account_id: accountId,
         target_site_count: v.target_site_count, status: "planning",
       }).select("id").single();
       if (error) throw error;
@@ -85,7 +134,7 @@ export default function DeliveryProgrammes() {
           <Link to="/delivery/proposals">
             <Button variant="outline"><FileText className="h-4 w-4 mr-1" /> Proposals</Button>
           </Link>
-          <NewProgrammeDialog open={open} setOpen={setOpen} accounts={accounts as any} onCreate={(v) => create.mutate(v)} pending={create.isPending} />
+          <NewProgrammeDialog open={open} setOpen={setOpen} orgs={orgs as any} onCreate={(v) => create.mutate(v)} pending={create.isPending} />
         </div>
       </div>
 
@@ -130,11 +179,12 @@ export default function DeliveryProgrammes() {
   );
 }
 
-function NewProgrammeDialog({ open, setOpen, accounts, onCreate, pending }: any) {
+function NewProgrammeDialog({ open, setOpen, orgs, onCreate, pending }: any) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const [orgId, setOrgId] = useState("");
   const [target, setTarget] = useState("");
+  const chosenOrg = (orgs ?? []).find((o: any) => o.id === orgId);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -144,10 +194,12 @@ function NewProgrammeDialog({ open, setOpen, accounts, onCreate, pending }: any)
         <DialogHeader><DialogTitle>New programme</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div><Label>Client account</Label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger><SelectValue placeholder="Pick a client" /></SelectTrigger>
+            <Select value={orgId} onValueChange={setOrgId}>
+              <SelectTrigger>
+                <SelectValue placeholder={orgs?.length ? "Pick a client organisation" : "No organisations available"} />
+              </SelectTrigger>
               <SelectContent>
-                {accounts.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                {orgs.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -159,8 +211,8 @@ function NewProgrammeDialog({ open, setOpen, accounts, onCreate, pending }: any)
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button disabled={!name.trim() || !accountId || pending}
-            onClick={() => onCreate({ name: name.trim(), code, account_id: accountId, target_site_count: target ? Number(target) : null })}>
+          <Button disabled={!name.trim() || !orgId || pending}
+            onClick={() => onCreate({ name: name.trim(), code, org_id: orgId, org_name: chosenOrg?.name ?? "", target_site_count: target ? Number(target) : null })}>
             {pending ? "Creating…" : "Create"}
           </Button>
         </DialogFooter>
