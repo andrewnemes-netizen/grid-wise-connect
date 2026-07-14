@@ -48,13 +48,17 @@ export function TaskBoard({
   scope,
   statusOptions,
   invalidateKeys,
+  addRowPlaceholder,
+  buildNewRow,
 }: {
   projectId: string;
   tasks: any[];
   milestones: { id: string; name: string }[];
-  scope?: { table: "project_tasks" | "wp_tasks"; scopeCol: BoardScopeColumn; scopeId: string };
+  scope?: { table: "project_tasks" | "wp_tasks" | "work_packages"; scopeCol: BoardScopeColumn; scopeId: string; builtinSet?: "tasks" | "work_packages" };
   statusOptions?: StatusOption[];
   invalidateKeys?: string[][];
+  addRowPlaceholder?: string;
+  buildNewRow?: (title: string) => Record<string, any>;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -62,8 +66,9 @@ export function TaskBoard({
   const table = effectiveScope.table;
   const scopeCol = effectiveScope.scopeCol;
   const scopeId = effectiveScope.scopeId;
+  const isWpBoard = table === "work_packages";
   const statuses = statusOptions ?? DEFAULT_STATUS_OPTIONS;
-  const cfg = useBoardConfig(scopeId, scopeCol);
+  const cfg = useBoardConfig(scopeId, scopeCol, effectiveScope.builtinSet ?? (isWpBoard ? "work_packages" : "tasks"));
   const invalidateAll = () => {
     (invalidateKeys ?? [["delivery-tasks", projectId], ["delivery-project", projectId]])
       .forEach((k) => qc.invalidateQueries({ queryKey: k }));
@@ -106,16 +111,16 @@ export function TaskBoard({
 
   const createTask = useMutation({
     mutationFn: async (title: string) => {
-      const { error } = await supabase.from(table as any).insert({
-        [scopeCol]: scopeId,
-        title,
-        status: statuses[0]?.value ?? "todo",
-        priority: "medium",
-        created_by: user?.id,
-      } as any);
+      const base = buildNewRow
+        ? buildNewRow(title)
+        : isWpBoard
+          ? { name: title, code: `WP-${Date.now().toString(36).toUpperCase()}`, status: statuses[0]?.value ?? "planning", created_by: user?.id }
+          : { title, status: statuses[0]?.value ?? "todo", priority: "medium", created_by: user?.id };
+      const { error } = await supabase.from(table as any).insert({ [scopeCol]: scopeId, ...base } as any);
       if (error) throw error;
     },
     onSuccess: () => invalidateAll(),
+    onError: (e: any) => toast.error(e.message ?? "Create failed"),
   });
 
   const bulkDelete = useMutation({
@@ -188,7 +193,7 @@ export function TaskBoard({
       i++;
     }
     return arr;
-  }, [filteredTasks, groupBy, milestones]);
+  }, [filteredTasks, groupBy, milestones, statuses]);
 
   const gridCols = useMemo(() => {
     return `32px ${visibleColumns.map((c) => `${c.width}px`).join(" ")} 40px`;
@@ -200,11 +205,18 @@ export function TaskBoard({
     const setCustom = (v: any) => updateTask.mutate({ id: row.id, patch: v, isCustom: true, customKey: col.key });
 
     if (col.is_system) {
+      // Generic (non-task) system columns write directly to a DB column matching builtinKey
+      const dbKey = bkey ?? col.key;
+      const writeGeneric = (v: any) => setBuiltin({ [dbKey]: v });
       switch (bkey) {
         case "title":
           return <TextCell value={row.title} onChange={(v) => setBuiltin({ title: v })} />;
         case "status":
-          return <StatusCell value={row.status} options={statuses} onChange={(v) => setBuiltin({ status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })} />;
+          return <StatusCell
+            value={row.status}
+            options={(col.options_json.options ?? statuses)}
+            onChange={(v) => setBuiltin(isWpBoard ? { status: v as any } : { status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })}
+          />;
         case "priority":
           return <StatusCell value={row.priority} options={DEFAULT_PRIORITY_OPTIONS} onChange={(v) => setBuiltin({ priority: v as any })} />;
         case "owner":
@@ -216,6 +228,18 @@ export function TaskBoard({
         case "estimated_hours":
           return <NumberCell value={row.estimated_hours} onChange={(v) => setBuiltin({ estimated_hours: v })} />;
       }
+      // Fallback: render by column type against the DB column named by builtinKey
+      switch (col.type) {
+        case "text": return <TextCell value={row[dbKey]} onChange={writeGeneric} />;
+        case "number": return <NumberCell value={row[dbKey]} onChange={writeGeneric} />;
+        case "currency": return <NumberCell value={row[dbKey]} onChange={writeGeneric} prefix={col.options_json.currency ?? "£"} />;
+        case "date": return <DateCell value={row[dbKey]} onChange={writeGeneric} />;
+        case "checkbox": return <CheckboxCell value={row[dbKey]} onChange={writeGeneric} />;
+        case "status":
+        case "dropdown":
+          return <StatusCell value={row[dbKey]} options={col.options_json.options ?? []} onChange={writeGeneric} />;
+      }
+      return null;
     }
     const val = getCustom(row, col.key);
     switch (col.type) {
@@ -265,9 +289,9 @@ export function TaskBoard({
           <SelectContent>
             <SelectItem value="none">No grouping</SelectItem>
             <SelectItem value="status">Group by status</SelectItem>
-            <SelectItem value="priority">Group by priority</SelectItem>
-            <SelectItem value="owner">Group by owner</SelectItem>
-            <SelectItem value="milestone">Group by milestone</SelectItem>
+            {!isWpBoard && <SelectItem value="priority">Group by priority</SelectItem>}
+            {!isWpBoard && <SelectItem value="owner">Group by owner</SelectItem>}
+            {!isWpBoard && <SelectItem value="milestone">Group by milestone</SelectItem>}
           </SelectContent>
         </Select>
         <Popover>
@@ -454,7 +478,7 @@ export function TaskBoard({
                 setNewTitle("");
               }
             }}
-            placeholder="+ Add task"
+            placeholder={addRowPlaceholder ?? (isWpBoard ? "+ Add work package" : "+ Add task")}
             className="flex-1 bg-transparent text-sm outline-none px-1"
           />
         </div>

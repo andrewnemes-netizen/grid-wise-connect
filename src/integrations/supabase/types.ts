@@ -118,6 +118,7 @@ export type Database = {
           enabled: boolean
           id: string
           name: string
+          programme_id: string | null
           project_id: string | null
           trigger_json: Json
           updated_at: string
@@ -129,6 +130,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           name: string
+          programme_id?: string | null
           project_id?: string | null
           trigger_json?: Json
           updated_at?: string
@@ -140,12 +142,20 @@ export type Database = {
           enabled?: boolean
           id?: string
           name?: string
+          programme_id?: string | null
           project_id?: string | null
           trigger_json?: Json
           updated_at?: string
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "board_automations_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "board_automations_project_id_fkey"
             columns: ["project_id"]
@@ -177,6 +187,7 @@ export type Database = {
           key: string
           label: string
           options_json: Json
+          programme_id: string | null
           project_id: string | null
           sort_index: number
           type: string
@@ -191,6 +202,7 @@ export type Database = {
           key: string
           label: string
           options_json?: Json
+          programme_id?: string | null
           project_id?: string | null
           sort_index?: number
           type: string
@@ -205,6 +217,7 @@ export type Database = {
           key?: string
           label?: string
           options_json?: Json
+          programme_id?: string | null
           project_id?: string | null
           sort_index?: number
           type?: string
@@ -213,6 +226,13 @@ export type Database = {
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "board_columns_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "board_columns_project_id_fkey"
             columns: ["project_id"]
@@ -243,6 +263,7 @@ export type Database = {
           id: string
           is_default: boolean
           name: string
+          programme_id: string | null
           project_id: string | null
           updated_at: string
           user_id: string | null
@@ -254,6 +275,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           name: string
+          programme_id?: string | null
           project_id?: string | null
           updated_at?: string
           user_id?: string | null
@@ -265,12 +287,20 @@ export type Database = {
           id?: string
           is_default?: boolean
           name?: string
+          programme_id?: string | null
           project_id?: string | null
           updated_at?: string
           user_id?: string | null
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "board_views_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "board_views_project_id_fkey"
             columns: ["project_id"]
@@ -5275,6 +5305,7 @@ export type Database = {
           created_by: string | null
           delivery_user_id: string | null
           id: string
+          metadata_json: Json
           name: string
           pm_user_id: string | null
           programme_id: string
@@ -5293,6 +5324,7 @@ export type Database = {
           created_by?: string | null
           delivery_user_id?: string | null
           id?: string
+          metadata_json?: Json
           name: string
           pm_user_id?: string | null
           programme_id: string
@@ -5311,6 +5343,7 @@ export type Database = {
           created_by?: string | null
           delivery_user_id?: string | null
           id?: string
+          metadata_json?: Json
           name?: string
           pm_user_id?: string | null
           programme_id?: string

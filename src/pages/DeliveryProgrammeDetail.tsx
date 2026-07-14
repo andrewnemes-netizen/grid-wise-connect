@@ -13,6 +13,9 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Plus, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { InlineEdit } from "@/components/InlineEdit";
+import { TaskBoard } from "@/components/delivery/board/TaskBoard";
+import { WP_LIFECYCLE_OPTIONS } from "@/lib/board/types";
+import { useNavigate } from "react-router-dom";
 
 const WP_STATUSES = [
   { value: "planning", label: "planning" },
@@ -27,6 +30,7 @@ export default function DeliveryProgrammeDetail() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
 
   const { data: programme } = useQuery({
     queryKey: ["programme", id],
@@ -151,68 +155,27 @@ export default function DeliveryProgrammeDetail() {
           <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> New work package</Button>
         </Card>
       ) : (
-        <div className="grid gap-3">
-          {wps.map((w: any) => (
-            <Card key={w.id} className="p-4 hover:border-primary/40 transition-colors">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <InlineEdit
-                      value={w.name}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { name: v } })}
-                      placeholder="WP name"
-                      displayClassName="font-medium"
-                      inputClassName="h-8 min-w-48 font-medium"
-                      pending={updateWp.isPending}
-                    />
-                    <InlineEdit
-                      value={w.code}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { code: v } })}
-                      placeholder="code"
-                      displayClassName="text-xs text-muted-foreground"
-                      inputClassName="h-7 w-28 text-xs"
-                      pending={updateWp.isPending}
-                    />
-                    <Link to={`/delivery/wp/${w.id}`} className="text-xs text-primary hover:underline ml-auto">Open →</Link>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                    <InlineEdit
-                      value={w.status}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { status: v } })}
-                      options={WP_STATUSES}
-                      displayClassName="text-xs"
-                      formatDisplay={(v) => v}
-                    />
-                    <span>· {siteCounts[w.id] ?? 0} sites ·</span>
-                    <span>£</span>
-                    <InlineEdit
-                      type="number"
-                      value={w.budget_amount}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { budget_amount: v } })}
-                      placeholder="0"
-                      inputClassName="h-7 w-28"
-                      formatDisplay={(v) => Number(v).toLocaleString()}
-                    />
-                    <span>· start</span>
-                    <InlineEdit
-                      type="date"
-                      value={w.start_date}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { start_date: v } })}
-                      inputClassName="h-7 w-36"
-                    />
-                    <span>· due</span>
-                    <InlineEdit
-                      type="date"
-                      value={w.target_end_date}
-                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { target_end_date: v } })}
-                      inputClassName="h-7 w-36"
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+        <>
+          <TaskBoard
+            projectId={id!}
+            tasks={wps as any[]}
+            milestones={[]}
+            statusOptions={WP_LIFECYCLE_OPTIONS}
+            scope={{ table: "work_packages", scopeCol: "programme_id", scopeId: id!, builtinSet: "work_packages" }}
+            invalidateKeys={[["programme-wps", id!]]}
+            addRowPlaceholder="+ Add work package"
+          />
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Tip: click a work package below to open its full delivery board.</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(wps as any[]).map((w) => (
+              <Button key={w.id} size="sm" variant="outline" onClick={() => navigate(`/delivery/wp/${w.id}`)}>
+                Open {w.code || w.name} →
+              </Button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
