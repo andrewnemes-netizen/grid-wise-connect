@@ -2981,6 +2981,188 @@ export type Database = {
           },
         ]
       }
+      revenue_forecast_budget: {
+        Row: {
+          budget_gp: number | null
+          budget_revenue: number | null
+          created_at: string
+          id: string
+          month: number
+          org_id: string
+          stream: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          budget_gp?: number | null
+          budget_revenue?: number | null
+          created_at?: string
+          id?: string
+          month: number
+          org_id: string
+          stream: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          budget_gp?: number | null
+          budget_revenue?: number | null
+          created_at?: string
+          id?: string
+          month?: number
+          org_id?: string
+          stream?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      revenue_milestones: {
+        Row: {
+          actual_civils: number | null
+          actual_elec: number | null
+          actual_revenue: number | null
+          baseline_civils: number | null
+          baseline_elec: number | null
+          baseline_revenue: number | null
+          created_at: string
+          forecast_civils: number | null
+          forecast_elec: number | null
+          forecast_revenue: number | null
+          id: string
+          invoice_month: string | null
+          invoice_pct: number | null
+          invoice_ref: string | null
+          milestone_status: string
+          notes: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_civils?: number | null
+          actual_elec?: number | null
+          actual_revenue?: number | null
+          baseline_civils?: number | null
+          baseline_elec?: number | null
+          baseline_revenue?: number | null
+          created_at?: string
+          forecast_civils?: number | null
+          forecast_elec?: number | null
+          forecast_revenue?: number | null
+          id?: string
+          invoice_month?: string | null
+          invoice_pct?: number | null
+          invoice_ref?: string | null
+          milestone_status: string
+          notes?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_civils?: number | null
+          actual_elec?: number | null
+          actual_revenue?: number | null
+          baseline_civils?: number | null
+          baseline_elec?: number | null
+          baseline_revenue?: number | null
+          created_at?: string
+          forecast_civils?: number | null
+          forecast_elec?: number | null
+          forecast_revenue?: number | null
+          id?: string
+          invoice_month?: string | null
+          invoice_pct?: number | null
+          invoice_ref?: string | null
+          milestone_status?: string
+          notes?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "revenue_milestones_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "revenue_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      revenue_projects: {
+        Row: {
+          app_date: string | null
+          civils_contractor: string | null
+          client_id: string | null
+          completion_date: string | null
+          contract_value: number | null
+          created_at: string
+          created_by: string | null
+          elec_contractor: string | null
+          energisation_date: string | null
+          id: string
+          notes: string | null
+          org_id: string
+          package_id: string | null
+          po_number: string | null
+          programme: string | null
+          project_code: string | null
+          site_id: string | null
+          site_location: string | null
+          start_date: string | null
+          stream: string
+          updated_at: string
+          wp_id: string | null
+        }
+        Insert: {
+          app_date?: string | null
+          civils_contractor?: string | null
+          client_id?: string | null
+          completion_date?: string | null
+          contract_value?: number | null
+          created_at?: string
+          created_by?: string | null
+          elec_contractor?: string | null
+          energisation_date?: string | null
+          id?: string
+          notes?: string | null
+          org_id: string
+          package_id?: string | null
+          po_number?: string | null
+          programme?: string | null
+          project_code?: string | null
+          site_id?: string | null
+          site_location?: string | null
+          start_date?: string | null
+          stream: string
+          updated_at?: string
+          wp_id?: string | null
+        }
+        Update: {
+          app_date?: string | null
+          civils_contractor?: string | null
+          client_id?: string | null
+          completion_date?: string | null
+          contract_value?: number | null
+          created_at?: string
+          created_by?: string | null
+          elec_contractor?: string | null
+          energisation_date?: string | null
+          id?: string
+          notes?: string | null
+          org_id?: string
+          package_id?: string | null
+          po_number?: string | null
+          programme?: string | null
+          project_code?: string | null
+          site_id?: string | null
+          site_location?: string | null
+          start_date?: string | null
+          stream?: string
+          updated_at?: string
+          wp_id?: string | null
+        }
+        Relationships: []
+      }
       role_requests: {
         Row: {
           created_at: string
@@ -6618,6 +6800,23 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revenue_monthly_rollup: {
+        Args: { _org_id: string; _year: number }
+        Returns: {
+          actual_civils: number
+          actual_elec: number
+          actual_gp: number
+          actual_revenue: number
+          baseline_revenue: number
+          forecast_civils: number
+          forecast_elec: number
+          forecast_gp: number
+          forecast_revenue: number
+          invoice_count: number
+          month: number
+          stream: string
+        }[]
       }
       rollup_project_progress: {
         Args: { _project_id: string }
