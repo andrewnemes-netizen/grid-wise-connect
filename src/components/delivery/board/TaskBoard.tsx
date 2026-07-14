@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBoardConfig, BoardScopeColumn } from "@/hooks/useBoardConfig";
 import { runAutomations } from "@/lib/board/automations";
 import {
-  BoardColumn, BoardViewConfig, StatusOption, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
+  BoardColumn, BoardViewConfig, StatusOption, statuses, DEFAULT_PRIORITY_OPTIONS,
 } from "@/lib/board/types";
 import { StatusCell } from "./cells/StatusCell";
 import { TextCell } from "./cells/TextCell";
@@ -62,7 +62,7 @@ export function TaskBoard({
   const table = effectiveScope.table;
   const scopeCol = effectiveScope.scopeCol;
   const scopeId = effectiveScope.scopeId;
-  const statuses = statusOptions ?? DEFAULT_STATUS_OPTIONS;
+  const statuses = statusOptions ?? statuses;
   const cfg = useBoardConfig(scopeId, scopeCol);
   const invalidateAll = () => {
     (invalidateKeys ?? [["delivery-tasks", projectId], ["delivery-project", projectId]])
@@ -171,7 +171,7 @@ export function TaskBoard({
       let label = key;
       let color = GROUP_COLORS[i % GROUP_COLORS.length];
       if (groupBy === "status") {
-        const o = DEFAULT_STATUS_OPTIONS.find((x) => x.value === key);
+        const o = statuses.find((x) => x.value === key);
         label = o?.label ?? key;
         color = o?.color ?? color;
       } else if (groupBy === "priority") {
@@ -204,7 +204,7 @@ export function TaskBoard({
         case "title":
           return <TextCell value={row.title} onChange={(v) => setBuiltin({ title: v })} />;
         case "status":
-          return <StatusCell value={row.status} options={DEFAULT_STATUS_OPTIONS} onChange={(v) => setBuiltin({ status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })} />;
+          return <StatusCell value={row.status} options={statuses} onChange={(v) => setBuiltin({ status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })} />;
         case "priority":
           return <StatusCell value={row.priority} options={DEFAULT_PRIORITY_OPTIONS} onChange={(v) => setBuiltin({ priority: v as any })} />;
         case "owner":
@@ -332,7 +332,7 @@ export function TaskBoard({
             <Select onValueChange={(v) => bulkStatus.mutate(v)}>
               <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Set status" /></SelectTrigger>
               <SelectContent>
-                {DEFAULT_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                {statuses.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button size="sm" variant="destructive" className="h-7" onClick={() => bulkDelete.mutate()}>
