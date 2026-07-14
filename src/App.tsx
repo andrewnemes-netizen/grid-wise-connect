@@ -29,6 +29,7 @@ const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
 const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
 const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
 const DeliveryProposalDetail = lazy(() => import("./pages/DeliveryProposalDetail"));
+const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 
@@ -136,6 +137,7 @@ const AppRoutes = () => (
       <Route path="/delivery/wp/:id" element={<ProtectedRoute><DeliveryWorkPackage /></ProtectedRoute>} />
       <Route path="/delivery/proposals" element={<ProtectedRoute><DeliveryProposals /></ProtectedRoute>} />
       <Route path="/delivery/proposal/:id" element={<ProtectedRoute><DeliveryProposalDetail /></ProtectedRoute>} />
+      <Route path="/delivery/revenue" element={<ProtectedRoute><DeliveryRevenue /></ProtectedRoute>} />
       <Route path="/delivery/projects" element={<ProtectedRoute><DeliveryProjects /></ProtectedRoute>} />
       <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
