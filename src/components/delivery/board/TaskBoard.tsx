@@ -289,9 +289,9 @@ export function TaskBoard({
           <SelectContent>
             <SelectItem value="none">No grouping</SelectItem>
             <SelectItem value="status">Group by status</SelectItem>
-            <SelectItem value="priority">Group by priority</SelectItem>
-            <SelectItem value="owner">Group by owner</SelectItem>
-            <SelectItem value="milestone">Group by milestone</SelectItem>
+            {!isWpBoard && <SelectItem value="priority">Group by priority</SelectItem>}
+            {!isWpBoard && <SelectItem value="owner">Group by owner</SelectItem>}
+            {!isWpBoard && <SelectItem value="milestone">Group by milestone</SelectItem>}
           </SelectContent>
         </Select>
         <Popover>
