@@ -47,6 +47,22 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+
+    /* Monday-style board status tokens */
+    --status-todo: 220 10% 65%;
+    --status-todo-fg: 0 0% 100%;
+    --status-progress: 210 90% 55%;
+    --status-progress-fg: 0 0% 100%;
+    --status-review: 38 92% 50%;
+    --status-review-fg: 0 0% 100%;
+    --status-blocked: 0 72% 51%;
+    --status-blocked-fg: 0 0% 100%;
+    --status-done: 145 55% 42%;
+    --status-done-fg: 0 0% 100%;
+    --prio-low: 200 15% 55%;
+    --prio-medium: 210 85% 55%;
+    --prio-high: 28 92% 55%;
+    --prio-critical: 0 72% 51%;
   }
 
   .dark {
