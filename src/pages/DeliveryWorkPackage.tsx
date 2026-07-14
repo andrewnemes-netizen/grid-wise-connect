@@ -58,7 +58,7 @@ export default function DeliveryWorkPackage() {
   });
 
   const updateWp = useMutation({
-    mutationFn: async (patch: { name?: string; code?: string }) => {
+    mutationFn: async (patch: Record<string, any>) => {
       const { error } = await supabase.from("work_packages").update(patch).eq("id", wpId);
       if (error) throw error;
     },
