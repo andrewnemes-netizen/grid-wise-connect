@@ -19,6 +19,15 @@ import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
 import SiteEstimatesPanel from "@/components/delivery/SiteEstimatesPanel";
 import { TaskBoard } from "@/components/delivery/board/TaskBoard";
 import { StatusOption } from "@/lib/board/types";
+import { InlineEdit } from "@/components/InlineEdit";
+
+const WP_LIFECYCLE = [
+  { value: "planning", label: "planning" },
+  { value: "active", label: "active" },
+  { value: "on_hold", label: "on hold" },
+  { value: "complete", label: "complete" },
+  { value: "cancelled", label: "cancelled" },
+];
 
 const WP_STATUS_OPTIONS: StatusOption[] = [
   { value: "not_started", label: "Not started", color: "hsl(var(--status-todo))" },
@@ -49,7 +58,7 @@ export default function DeliveryWorkPackage() {
   });
 
   const updateWp = useMutation({
-    mutationFn: async (patch: { name?: string; code?: string }) => {
+    mutationFn: async (patch: Record<string, any>) => {
       const { error } = await supabase.from("work_packages").update(patch).eq("id", wpId);
       if (error) throw error;
     },
@@ -206,10 +215,22 @@ export default function DeliveryWorkPackage() {
         <TabsContent value="overview">
           <Card className="p-4 space-y-2">
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-muted-foreground">Status</span><div>{wp?.status ?? "—"}</div></div>
-              <div><span className="text-muted-foreground">Approved value</span><div>{wp?.budget_amount ? `£${Number(wp.budget_amount).toLocaleString()}` : "—"}</div></div>
-              <div><span className="text-muted-foreground">Start</span><div>{wp?.start_date ?? "—"}</div></div>
-              <div><span className="text-muted-foreground">Target end</span><div>{wp?.target_end_date ?? "—"}</div></div>
+              <div>
+                <span className="text-muted-foreground">Status</span>
+                <div><InlineEdit value={wp?.status} options={WP_LIFECYCLE} onSave={(v) => updateWp.mutate({ status: v })} pending={updateWp.isPending} /></div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Approved value</span>
+                <div><InlineEdit type="number" value={wp?.budget_amount} onSave={(v) => updateWp.mutate({ budget_amount: v })} pending={updateWp.isPending} prefix="£" formatDisplay={(v) => `£${Number(v).toLocaleString()}`} inputClassName="w-40" /></div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Start</span>
+                <div><InlineEdit type="date" value={wp?.start_date} onSave={(v) => updateWp.mutate({ start_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Target end</span>
+                <div><InlineEdit type="date" value={wp?.target_end_date} onSave={(v) => updateWp.mutate({ target_end_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
+              </div>
             </div>
           </Card>
         </TabsContent>
