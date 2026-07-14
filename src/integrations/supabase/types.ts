@@ -5878,6 +5878,10 @@ export type Database = {
         Args: { _project_id: string; _template_key: string }
         Returns: Json
       }
+      approve_rate_card_version: {
+        Args: { _version_id: string }
+        Returns: string
+      }
       approve_site_estimate: {
         Args: { p_estimate_id: string; p_notes?: string }
         Returns: {
@@ -5964,6 +5968,10 @@ export type Database = {
       clear_layer_features: {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
+      }
+      clone_rate_card_version_to_draft: {
+        Args: { _version_id: string }
+        Returns: string
       }
       clone_site_estimate_to_draft: {
         Args: { p_estimate_id: string }
