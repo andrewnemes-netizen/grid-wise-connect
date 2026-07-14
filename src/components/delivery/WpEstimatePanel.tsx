@@ -181,7 +181,7 @@ function EstimateDetail({ estimate }: { estimate: any }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wp_estimate_sites")
-        .select("*, sites(name,address), site_estimates(name,version_number,status)")
+        .select("*, sites(site_name,postcode), site_estimates(name,version_number,status)")
         .eq("wp_estimate_id", estimate.id)
         .order("sort_index");
       if (error) throw error;
@@ -233,8 +233,8 @@ function EstimateDetail({ estimate }: { estimate: any }) {
                 {siteRows.map((r: any) => (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <div className="font-medium">{r.sites?.name ?? "—"}</div>
-                      <div className="text-xs text-muted-foreground">{r.sites?.address ?? ""}</div>
+                      <div className="font-medium">{r.sites?.site_name ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.sites?.postcode ?? ""}</div>
                     </TableCell>
                     <TableCell className="text-sm">
                       {r.site_estimates?.name ?? "—"}
@@ -454,7 +454,7 @@ function EstimateEditorDialog({
     queryKey: ["wp-sites-for-estimate", wpId],
     queryFn: async () => {
       const { data, error } = await supabase.from("wp_sites")
-        .select("id,site_id,sites(id,name,address)").eq("work_package_id", wpId);
+        .select("id,site_id,sites(id,site_name,postcode)").eq("work_package_id", wpId);
       if (error) throw error;
       return data ?? [];
     },
@@ -643,8 +643,8 @@ function EstimateEditorDialog({
                         />
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{ws.sites?.name}</div>
-                        <div className="text-xs text-muted-foreground">{ws.sites?.address}</div>
+                        <div className="font-medium">{ws.sites?.site_name}</div>
+                        <div className="text-xs text-muted-foreground">{ws.sites?.postcode}</div>
                       </TableCell>
                       <TableCell className="text-sm">
                         {se ? (
