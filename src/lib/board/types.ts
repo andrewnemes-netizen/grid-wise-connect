@@ -93,3 +93,24 @@ export const BUILTIN_COLUMNS: Omit<BoardColumn, "id" | "project_id">[] = [
   { key: "percent_complete", label: "Progress", type: "builtin", options_json: { builtinKey: "percent_complete", aggregate: "avg" }, width: 140, sort_index: 5, is_system: true },
   { key: "estimated_hours", label: "Est. hrs", type: "builtin", options_json: { builtinKey: "estimated_hours", aggregate: "sum" }, width: 100, sort_index: 6, is_system: true },
 ];
+
+export const WP_LIFECYCLE_OPTIONS: StatusOption[] = [
+  { value: "planning", label: "Planning", color: "hsl(var(--status-todo))" },
+  { value: "active", label: "Active", color: "hsl(var(--status-progress))" },
+  { value: "on_hold", label: "On hold", color: "hsl(var(--status-blocked))" },
+  { value: "complete", label: "Complete", color: "hsl(var(--status-done))" },
+  { value: "cancelled", label: "Cancelled", color: "hsl(var(--prio-low))" },
+];
+
+// Builtin columns for the work-package board (Programme → WP rows).
+// `builtinKey` matches the actual DB column so writes target it directly.
+export const BUILTIN_COLUMNS_WP: Omit<BoardColumn, "id" | "project_id">[] = [
+  { key: "code", label: "Code", type: "text", options_json: { builtinKey: "code" }, width: 130, sort_index: 0, is_system: true },
+  { key: "name", label: "Work package", type: "text", options_json: { builtinKey: "name" }, width: 320, sort_index: 1, is_system: true },
+  { key: "status", label: "Status", type: "status", options_json: { builtinKey: "status", options: WP_LIFECYCLE_OPTIONS }, width: 140, sort_index: 2, is_system: true },
+  { key: "budget_amount", label: "Approved value", type: "currency", options_json: { builtinKey: "budget_amount", aggregate: "sum" }, width: 140, sort_index: 3, is_system: true },
+  { key: "start_date", label: "Start", type: "date", options_json: { builtinKey: "start_date" }, width: 130, sort_index: 4, is_system: true },
+  { key: "target_end_date", label: "Target end", type: "date", options_json: { builtinKey: "target_end_date" }, width: 130, sort_index: 5, is_system: true },
+];
+
+export type BuiltinSet = "tasks" | "work_packages";
