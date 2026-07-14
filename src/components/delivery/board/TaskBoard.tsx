@@ -45,14 +45,29 @@ export function TaskBoard({
   projectId,
   tasks,
   milestones,
+  scope,
+  statusOptions,
+  invalidateKeys,
 }: {
   projectId: string;
   tasks: any[];
   milestones: { id: string; name: string }[];
+  scope?: { table: "project_tasks" | "wp_tasks"; scopeCol: BoardScopeColumn; scopeId: string };
+  statusOptions?: StatusOption[];
+  invalidateKeys?: string[][];
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const cfg = useBoardConfig(projectId);
+  const effectiveScope = scope ?? { table: "project_tasks" as const, scopeCol: "project_id" as BoardScopeColumn, scopeId: projectId };
+  const table = effectiveScope.table;
+  const scopeCol = effectiveScope.scopeCol;
+  const scopeId = effectiveScope.scopeId;
+  const statuses = statusOptions ?? DEFAULT_STATUS_OPTIONS;
+  const cfg = useBoardConfig(scopeId, scopeCol);
+  const invalidateAll = () => {
+    (invalidateKeys ?? [["delivery-tasks", projectId], ["delivery-project", projectId]])
+      .forEach((k) => qc.invalidateQueries({ queryKey: k }));
+  };
 
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [localConfig, setLocalConfig] = useState<BoardViewConfig>({ groupBy: "status", sortBy: [], search: "" });
