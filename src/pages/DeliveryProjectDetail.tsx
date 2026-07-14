@@ -19,6 +19,7 @@ import { TaskGantt } from "@/components/delivery/TaskGantt";
 import { ProjectComments } from "@/components/delivery/ProjectComments";
 import { ProjectFiles } from "@/components/delivery/ProjectFiles";
 import { ProjectActivity } from "@/components/delivery/ProjectActivity";
+import { ApplyTemplateDialog } from "@/components/delivery/ApplyTemplateDialog";
 
 export default function DeliveryProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -125,11 +126,14 @@ export default function DeliveryProjectDetail() {
               )}
             </div>
           </div>
-          <div className="w-56">
-            <div className="flex justify-between text-xs text-muted-foreground mb-1">
-              <span>Overall progress</span><span>{Math.round(project.percent_complete)}%</span>
+          <div className="flex flex-col items-end gap-2 w-56">
+            <ApplyTemplateDialog projectId={projectId} hasContent={milestones.length > 0 || tasks.length > 0} />
+            <div className="w-full">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span>Overall progress</span><span>{Math.round(project.percent_complete)}%</span>
+              </div>
+              <Progress value={Number(project.percent_complete)} />
             </div>
-            <Progress value={Number(project.percent_complete)} />
           </div>
         </div>
       </div>

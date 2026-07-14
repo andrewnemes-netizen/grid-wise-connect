@@ -4306,6 +4306,10 @@ export type Database = {
           utilisation_pct: number
         }[]
       }
+      apply_programme_template: {
+        Args: { _project_id: string; _template_key: string }
+        Returns: Json
+      }
       auto_create_dno_layers: {
         Args: { p_dno: string; p_force?: boolean }
         Returns: Json
