@@ -2772,6 +2772,69 @@ export type Database = {
           },
         ]
       }
+      site_handover_docs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          doc_type: string
+          filename: string
+          id: string
+          mime: string | null
+          notes: string | null
+          site_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_at: string
+          uploaded_by: string | null
+          work_package_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          doc_type: string
+          filename: string
+          id?: string
+          mime?: string | null
+          notes?: string | null
+          site_id: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          work_package_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          doc_type?: string
+          filename?: string
+          id?: string
+          mime?: string | null
+          notes?: string | null
+          site_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_handover_docs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_handover_docs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_notes: {
         Row: {
           created_at: string
@@ -2800,6 +2863,66 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_stage_status: {
+        Row: {
+          civils: Database["public"]["Enums"]["site_stage_state"]
+          design: Database["public"]["Enums"]["site_stage_state"]
+          dno: Database["public"]["Enums"]["site_stage_state"]
+          electrical: Database["public"]["Enums"]["site_stage_state"]
+          handover: Database["public"]["Enums"]["site_stage_state"]
+          id: string
+          meter: Database["public"]["Enums"]["site_stage_state"]
+          permit: Database["public"]["Enums"]["site_stage_state"]
+          site_id: string
+          survey: Database["public"]["Enums"]["site_stage_state"]
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          civils?: Database["public"]["Enums"]["site_stage_state"]
+          design?: Database["public"]["Enums"]["site_stage_state"]
+          dno?: Database["public"]["Enums"]["site_stage_state"]
+          electrical?: Database["public"]["Enums"]["site_stage_state"]
+          handover?: Database["public"]["Enums"]["site_stage_state"]
+          id?: string
+          meter?: Database["public"]["Enums"]["site_stage_state"]
+          permit?: Database["public"]["Enums"]["site_stage_state"]
+          site_id: string
+          survey?: Database["public"]["Enums"]["site_stage_state"]
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          civils?: Database["public"]["Enums"]["site_stage_state"]
+          design?: Database["public"]["Enums"]["site_stage_state"]
+          dno?: Database["public"]["Enums"]["site_stage_state"]
+          electrical?: Database["public"]["Enums"]["site_stage_state"]
+          handover?: Database["public"]["Enums"]["site_stage_state"]
+          id?: string
+          meter?: Database["public"]["Enums"]["site_stage_state"]
+          permit?: Database["public"]["Enums"]["site_stage_state"]
+          site_id?: string
+          survey?: Database["public"]["Enums"]["site_stage_state"]
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -5272,6 +5395,7 @@ export type Database = {
           read_ct: number
         }[]
       }
+      recalc_site_stage: { Args: { _project_id: string }; Returns: undefined }
       recalc_wp_milestone_progress: {
         Args: { _milestone_id: string }
         Returns: undefined
@@ -6019,6 +6143,12 @@ export type Database = {
         | "completed"
         | "cancelled"
       proposal_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
+      site_stage_state:
+        | "not_started"
+        | "in_progress"
+        | "blocked"
+        | "review"
+        | "done"
       task_dep_type: "FS" | "SS" | "FF" | "SF"
       task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
       wp_item_status:
@@ -6202,6 +6332,13 @@ export const Constants = {
         "cancelled",
       ],
       proposal_status: ["draft", "sent", "accepted", "rejected", "expired"],
+      site_stage_state: [
+        "not_started",
+        "in_progress",
+        "blocked",
+        "review",
+        "done",
+      ],
       task_dep_type: ["FS", "SS", "FF", "SF"],
       task_status: ["todo", "in_progress", "blocked", "review", "done"],
       wp_item_status: [
