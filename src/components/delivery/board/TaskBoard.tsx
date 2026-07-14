@@ -11,10 +11,10 @@ import {
   ChevronDown, ChevronRight, MoreHorizontal, Search, Trash2, Plus, EyeOff, GripVertical,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useBoardConfig } from "@/hooks/useBoardConfig";
+import { useBoardConfig, BoardScopeColumn } from "@/hooks/useBoardConfig";
 import { runAutomations } from "@/lib/board/automations";
 import {
-  BoardColumn, BoardViewConfig, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
+  BoardColumn, BoardViewConfig, StatusOption, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
 } from "@/lib/board/types";
 import { StatusCell } from "./cells/StatusCell";
 import { TextCell } from "./cells/TextCell";
@@ -45,14 +45,29 @@ export function TaskBoard({
   projectId,
   tasks,
   milestones,
+  scope,
+  statusOptions,
+  invalidateKeys,
 }: {
   projectId: string;
   tasks: any[];
   milestones: { id: string; name: string }[];
+  scope?: { table: "project_tasks" | "wp_tasks"; scopeCol: BoardScopeColumn; scopeId: string };
+  statusOptions?: StatusOption[];
+  invalidateKeys?: string[][];
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
-  const cfg = useBoardConfig(projectId);
+  const effectiveScope = scope ?? { table: "project_tasks" as const, scopeCol: "project_id" as BoardScopeColumn, scopeId: projectId };
+  const table = effectiveScope.table;
+  const scopeCol = effectiveScope.scopeCol;
+  const scopeId = effectiveScope.scopeId;
+  const statuses = statusOptions ?? DEFAULT_STATUS_OPTIONS;
+  const cfg = useBoardConfig(scopeId, scopeCol);
+  const invalidateAll = () => {
+    (invalidateKeys ?? [["delivery-tasks", projectId], ["delivery-project", projectId]])
+      .forEach((k) => qc.invalidateQueries({ queryKey: k }));
+  };
 
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [localConfig, setLocalConfig] = useState<BoardViewConfig>({ groupBy: "status", sortBy: [], search: "" });
@@ -74,44 +89,44 @@ export function TaskBoard({
       if (isCustom && customKey) {
         const meta = { ...(before?.metadata_json ?? {}) };
         meta.custom = { ...(meta.custom ?? {}), [customKey]: patch };
-        const { error } = await supabase.from("project_tasks").update({ metadata_json: meta }).eq("id", id);
+        const { error } = await supabase.from(table as any).update({ metadata_json: meta }).eq("id", id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("project_tasks").update(patch).eq("id", id);
+        const { error } = await supabase.from(table as any).update(patch).eq("id", id);
         if (error) throw error;
         if (before) await runAutomations(cfg.automations, id, before, { ...before, ...patch });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
-      qc.invalidateQueries({ queryKey: ["delivery-project", projectId] });
+      invalidateAll();
+      
     },
     onError: (e: any) => toast.error(e.message ?? "Update failed"),
   });
 
   const createTask = useMutation({
     mutationFn: async (title: string) => {
-      const { error } = await supabase.from("project_tasks").insert({
-        project_id: projectId,
+      const { error } = await supabase.from(table as any).insert({
+        [scopeCol]: scopeId,
         title,
-        status: "todo",
+        status: statuses[0]?.value ?? "todo",
         priority: "medium",
         created_by: user?.id,
-      });
+      } as any);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] }),
+    onSuccess: () => invalidateAll(),
   });
 
   const bulkDelete = useMutation({
     mutationFn: async () => {
       const ids = Array.from(selected);
-      const { error } = await supabase.from("project_tasks").delete().in("id", ids);
+      const { error } = await supabase.from(table as any).delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+      invalidateAll();
       toast.success("Deleted");
     },
   });
@@ -119,11 +134,11 @@ export function TaskBoard({
   const bulkStatus = useMutation({
     mutationFn: async (status: string) => {
       const ids = Array.from(selected);
-      const { error } = await supabase.from("project_tasks").update({ status: status as any }).in("id", ids);
+      const { error } = await supabase.from(table as any).update({ status: status as any }).in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+      invalidateAll();
     },
   });
 
@@ -156,7 +171,7 @@ export function TaskBoard({
       let label = key;
       let color = GROUP_COLORS[i % GROUP_COLORS.length];
       if (groupBy === "status") {
-        const o = DEFAULT_STATUS_OPTIONS.find((x) => x.value === key);
+        const o = statuses.find((x) => x.value === key);
         label = o?.label ?? key;
         color = o?.color ?? color;
       } else if (groupBy === "priority") {
@@ -189,7 +204,7 @@ export function TaskBoard({
         case "title":
           return <TextCell value={row.title} onChange={(v) => setBuiltin({ title: v })} />;
         case "status":
-          return <StatusCell value={row.status} options={DEFAULT_STATUS_OPTIONS} onChange={(v) => setBuiltin({ status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })} />;
+          return <StatusCell value={row.status} options={statuses} onChange={(v) => setBuiltin({ status: v as any, percent_complete: v === "done" ? 100 : row.percent_complete })} />;
         case "priority":
           return <StatusCell value={row.priority} options={DEFAULT_PRIORITY_OPTIONS} onChange={(v) => setBuiltin({ priority: v as any })} />;
         case "owner":
@@ -317,7 +332,7 @@ export function TaskBoard({
             <Select onValueChange={(v) => bulkStatus.mutate(v)}>
               <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Set status" /></SelectTrigger>
               <SelectContent>
-                {DEFAULT_STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                {statuses.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button size="sm" variant="destructive" className="h-7" onClick={() => bulkDelete.mutate()}>
@@ -399,8 +414,8 @@ export function TaskBoard({
                         <button
                           className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted flex items-center gap-2 text-destructive"
                           onClick={async () => {
-                            await supabase.from("project_tasks").delete().eq("id", row.id);
-                            qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+                            await supabase.from(table as any).delete().eq("id", row.id);
+                            invalidateAll();
                           }}
                         >
                           <Trash2 className="h-3 w-3" /> Delete task

@@ -3,16 +3,18 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BUILTIN_COLUMNS, BoardColumn, BoardView, BoardAutomation } from "@/lib/board/types";
 
-export function useBoardConfig(projectId: string) {
+export type BoardScopeColumn = "project_id" | "work_package_id";
+
+export function useBoardConfig(scopeId: string, scopeCol: BoardScopeColumn = "project_id") {
   const qc = useQueryClient();
 
   const columnsQ = useQuery({
-    queryKey: ["board-columns", projectId],
+    queryKey: ["board-columns", scopeCol, scopeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("board_columns" as any)
         .select("*")
-        .eq("project_id", projectId)
+        .eq(scopeCol, scopeId)
         .order("sort_index");
       if (error) throw error;
       return (data ?? []) as unknown as BoardColumn[];
@@ -20,12 +22,12 @@ export function useBoardConfig(projectId: string) {
   });
 
   const viewsQ = useQuery({
-    queryKey: ["board-views", projectId],
+    queryKey: ["board-views", scopeCol, scopeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("board_views" as any)
         .select("*")
-        .eq("project_id", projectId)
+        .eq(scopeCol, scopeId)
         .order("created_at");
       if (error) throw error;
       return (data ?? []) as unknown as BoardView[];
@@ -33,28 +35,29 @@ export function useBoardConfig(projectId: string) {
   });
 
   const automationsQ = useQuery({
-    queryKey: ["board-automations", projectId],
+    queryKey: ["board-automations", scopeCol, scopeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("board_automations" as any)
         .select("*")
-        .eq("project_id", projectId);
+        .eq(scopeCol, scopeId);
       if (error) throw error;
       return (data ?? []) as unknown as BoardAutomation[];
     },
   });
 
-  // Auto-seed built-in columns on first load
   useEffect(() => {
     if (columnsQ.isLoading || !columnsQ.data) return;
     if (columnsQ.data.length > 0) return;
     (async () => {
-      const rows = BUILTIN_COLUMNS.map((c) => ({ ...c, project_id: projectId }));
+      const rows = BUILTIN_COLUMNS.map((c) => ({ ...c, [scopeCol]: scopeId }));
       const { error } = await supabase.from("board_columns" as any).insert(rows as any);
-      if (!error) qc.invalidateQueries({ queryKey: ["board-columns", projectId] });
+      if (!error) qc.invalidateQueries({ queryKey: ["board-columns", scopeCol, scopeId] });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columnsQ.data?.length, columnsQ.isLoading]);
+
+  const invalidate = (key: string) => qc.invalidateQueries({ queryKey: [key, scopeCol, scopeId] });
 
   const upsertColumn = useMutation({
     mutationFn: async (col: Partial<BoardColumn> & { id?: string }) => {
@@ -62,11 +65,11 @@ export function useBoardConfig(projectId: string) {
         const { error } = await supabase.from("board_columns" as any).update(col as any).eq("id", col.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("board_columns" as any).insert({ ...col, project_id: projectId } as any);
+        const { error } = await supabase.from("board_columns" as any).insert({ ...col, [scopeCol]: scopeId } as any);
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-columns", projectId] }),
+    onSuccess: () => invalidate("board-columns"),
   });
 
   const deleteColumn = useMutation({
@@ -74,7 +77,7 @@ export function useBoardConfig(projectId: string) {
       const { error } = await supabase.from("board_columns" as any).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-columns", projectId] }),
+    onSuccess: () => invalidate("board-columns"),
   });
 
   const upsertView = useMutation({
@@ -84,11 +87,11 @@ export function useBoardConfig(projectId: string) {
         if (error) throw error;
       } else {
         const { data: u } = await supabase.auth.getUser();
-        const { error } = await supabase.from("board_views" as any).insert({ ...v, project_id: projectId, user_id: u.user?.id } as any);
+        const { error } = await supabase.from("board_views" as any).insert({ ...v, [scopeCol]: scopeId, user_id: u.user?.id } as any);
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-views", projectId] }),
+    onSuccess: () => invalidate("board-views"),
   });
 
   const deleteView = useMutation({
@@ -96,7 +99,7 @@ export function useBoardConfig(projectId: string) {
       const { error } = await supabase.from("board_views" as any).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-views", projectId] }),
+    onSuccess: () => invalidate("board-views"),
   });
 
   const upsertAutomation = useMutation({
@@ -105,11 +108,11 @@ export function useBoardConfig(projectId: string) {
         const { error } = await supabase.from("board_automations" as any).update(a as any).eq("id", a.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("board_automations" as any).insert({ ...a, project_id: projectId } as any);
+        const { error } = await supabase.from("board_automations" as any).insert({ ...a, [scopeCol]: scopeId } as any);
         if (error) throw error;
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-automations", projectId] }),
+    onSuccess: () => invalidate("board-automations"),
   });
 
   const deleteAutomation = useMutation({
@@ -117,7 +120,7 @@ export function useBoardConfig(projectId: string) {
       const { error } = await supabase.from("board_automations" as any).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["board-automations", projectId] }),
+    onSuccess: () => invalidate("board-automations"),
   });
 
   return {
@@ -125,11 +128,8 @@ export function useBoardConfig(projectId: string) {
     views: viewsQ.data ?? [],
     automations: automationsQ.data ?? [],
     loading: columnsQ.isLoading,
-    upsertColumn,
-    deleteColumn,
-    upsertView,
-    deleteView,
-    upsertAutomation,
-    deleteAutomation,
+    upsertColumn, deleteColumn,
+    upsertView, deleteView,
+    upsertAutomation, deleteAutomation,
   };
 }

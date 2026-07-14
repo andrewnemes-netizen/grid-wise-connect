@@ -118,9 +118,10 @@ export type Database = {
           enabled: boolean
           id: string
           name: string
-          project_id: string
+          project_id: string | null
           trigger_json: Json
           updated_at: string
+          work_package_id: string | null
         }
         Insert: {
           action_json?: Json
@@ -128,9 +129,10 @@ export type Database = {
           enabled?: boolean
           id?: string
           name: string
-          project_id: string
+          project_id?: string | null
           trigger_json?: Json
           updated_at?: string
+          work_package_id?: string | null
         }
         Update: {
           action_json?: Json
@@ -138,9 +140,10 @@ export type Database = {
           enabled?: boolean
           id?: string
           name?: string
-          project_id?: string
+          project_id?: string | null
           trigger_json?: Json
           updated_at?: string
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -155,6 +158,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_automations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -167,11 +177,12 @@ export type Database = {
           key: string
           label: string
           options_json: Json
-          project_id: string
+          project_id: string | null
           sort_index: number
           type: string
           updated_at: string
           width: number
+          work_package_id: string | null
         }
         Insert: {
           created_at?: string
@@ -180,11 +191,12 @@ export type Database = {
           key: string
           label: string
           options_json?: Json
-          project_id: string
+          project_id?: string | null
           sort_index?: number
           type: string
           updated_at?: string
           width?: number
+          work_package_id?: string | null
         }
         Update: {
           created_at?: string
@@ -193,11 +205,12 @@ export type Database = {
           key?: string
           label?: string
           options_json?: Json
-          project_id?: string
+          project_id?: string | null
           sort_index?: number
           type?: string
           updated_at?: string
           width?: number
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -212,6 +225,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_columns_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -223,9 +243,10 @@ export type Database = {
           id: string
           is_default: boolean
           name: string
-          project_id: string
+          project_id: string | null
           updated_at: string
           user_id: string | null
+          work_package_id: string | null
         }
         Insert: {
           config_json?: Json
@@ -233,9 +254,10 @@ export type Database = {
           id?: string
           is_default?: boolean
           name: string
-          project_id: string
+          project_id?: string | null
           updated_at?: string
           user_id?: string | null
+          work_package_id?: string | null
         }
         Update: {
           config_json?: Json
@@ -243,9 +265,10 @@ export type Database = {
           id?: string
           is_default?: boolean
           name?: string
-          project_id?: string
+          project_id?: string | null
           updated_at?: string
           user_id?: string | null
+          work_package_id?: string | null
         }
         Relationships: [
           {
@@ -260,6 +283,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_views_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
