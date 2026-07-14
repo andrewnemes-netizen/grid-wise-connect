@@ -52,6 +52,11 @@ export interface UnitRates {
   cable_joint_kit_pot_end: number;
   service_cable_35mm_per_m: number;
   mains_extension_threshold_m: number;
+  // Fixed-price EV hub build rates by socket count
+  socket_build_2: number;
+  socket_build_4: number;
+  socket_build_6: number;
+  socket_build_8: number;
 }
 
 export const DEFAULT_UNIT_RATES: UnitRates = {
@@ -90,6 +95,11 @@ export const DEFAULT_UNIT_RATES: UnitRates = {
   cable_joint_kit_pot_end: 182.53,
   service_cable_35mm_per_m: 8.50,
   mains_extension_threshold_m: 25,
+  // Socket build tiers (editable in Admin › Unit Rates)
+  socket_build_2: 3500,
+  socket_build_4: 6000,
+  socket_build_6: 8500,
+  socket_build_8: 11000,
 };
 
 export interface CostEstimate {
