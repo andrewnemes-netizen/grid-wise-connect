@@ -89,24 +89,24 @@ export function TaskBoard({
       if (isCustom && customKey) {
         const meta = { ...(before?.metadata_json ?? {}) };
         meta.custom = { ...(meta.custom ?? {}), [customKey]: patch };
-        const { error } = await supabase.from("project_tasks").update({ metadata_json: meta }).eq("id", id);
+        const { error } = await supabase.from(table as any).update({ metadata_json: meta }).eq("id", id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("project_tasks").update(patch).eq("id", id);
+        const { error } = await supabase.from(table as any).update(patch).eq("id", id);
         if (error) throw error;
         if (before) await runAutomations(cfg.automations, id, before, { ...before, ...patch });
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
-      qc.invalidateQueries({ queryKey: ["delivery-project", projectId] });
+      invalidateAll();
+      
     },
     onError: (e: any) => toast.error(e.message ?? "Update failed"),
   });
 
   const createTask = useMutation({
     mutationFn: async (title: string) => {
-      const { error } = await supabase.from("project_tasks").insert({
+      const { error } = await supabase.from(table as any).insert({
         project_id: projectId,
         title,
         status: "todo",
@@ -121,12 +121,12 @@ export function TaskBoard({
   const bulkDelete = useMutation({
     mutationFn: async () => {
       const ids = Array.from(selected);
-      const { error } = await supabase.from("project_tasks").delete().in("id", ids);
+      const { error } = await supabase.from(table as any).delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+      invalidateAll();
       toast.success("Deleted");
     },
   });
@@ -134,11 +134,11 @@ export function TaskBoard({
   const bulkStatus = useMutation({
     mutationFn: async (status: string) => {
       const ids = Array.from(selected);
-      const { error } = await supabase.from("project_tasks").update({ status: status as any }).in("id", ids);
+      const { error } = await supabase.from(table as any).update({ status: status as any }).in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+      invalidateAll();
     },
   });
 
@@ -414,8 +414,8 @@ export function TaskBoard({
                         <button
                           className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-muted flex items-center gap-2 text-destructive"
                           onClick={async () => {
-                            await supabase.from("project_tasks").delete().eq("id", row.id);
-                            qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] });
+                            await supabase.from(table as any).delete().eq("id", row.id);
+                            invalidateAll();
                           }}
                         >
                           <Trash2 className="h-3 w-3" /> Delete task
