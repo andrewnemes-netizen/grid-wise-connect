@@ -12,6 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Plus, Briefcase } from "lucide-react";
 import { toast } from "sonner";
+import { InlineEdit } from "@/components/InlineEdit";
+
+const WP_STATUSES = [
+  { value: "planning", label: "planning" },
+  { value: "active", label: "active" },
+  { value: "on_hold", label: "on hold" },
+  { value: "complete", label: "complete" },
+  { value: "cancelled", label: "cancelled" },
+];
 
 export default function DeliveryProgrammeDetail() {
   const { id } = useParams();
@@ -27,6 +36,24 @@ export default function DeliveryProgrammeDetail() {
       return data as any;
     },
     enabled: !!id,
+  });
+
+  const updateProgramme = useMutation({
+    mutationFn: async (patch: Record<string, any>) => {
+      const { error } = await supabase.from("programmes").update(patch).eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["programme", id] }); },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
+  });
+
+  const updateWp = useMutation({
+    mutationFn: async ({ wpId, patch }: { wpId: string; patch: Record<string, any> }) => {
+      const { error } = await supabase.from("work_packages").update(patch).eq("id", wpId);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["programme-wps", id] }); },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
   });
 
   const { data: wps = [] } = useQuery({
@@ -81,11 +108,36 @@ export default function DeliveryProgrammeDetail() {
         </Link>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">{programme?.name ?? "Programme"}</h1>
-            <p className="text-sm text-muted-foreground">
-              {programme?.accounts?.name} {programme?.code ? `· ${programme.code}` : ""}
-              {programme?.target_site_count ? ` · target ${programme.target_site_count} sites` : ""}
-            </p>
+            <InlineEdit
+              value={programme?.name}
+              onSave={(v) => updateProgramme.mutate({ name: v })}
+              placeholder="Programme name"
+              displayClassName="text-2xl font-semibold"
+              inputClassName="text-2xl font-semibold h-10 min-w-64"
+              pending={updateProgramme.isPending}
+            />
+            <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap mt-1">
+              <span>{programme?.accounts?.name}</span>
+              <span>·</span>
+              <InlineEdit
+                value={programme?.code}
+                onSave={(v) => updateProgramme.mutate({ code: v })}
+                placeholder="add code"
+                inputClassName="h-7 w-32"
+                pending={updateProgramme.isPending}
+              />
+              <span>·</span>
+              <span>target</span>
+              <InlineEdit
+                type="number"
+                value={programme?.target_site_count}
+                onSave={(v) => updateProgramme.mutate({ target_site_count: v })}
+                placeholder="—"
+                inputClassName="h-7 w-20"
+                pending={updateProgramme.isPending}
+              />
+              <span>sites</span>
+            </div>
           </div>
           <NewWpDialog open={open} setOpen={setOpen} onCreate={(v) => create.mutate(v)} pending={create.isPending} />
         </div>
@@ -101,24 +153,64 @@ export default function DeliveryProgrammeDetail() {
       ) : (
         <div className="grid gap-3">
           {wps.map((w: any) => (
-            <Link key={w.id} to={`/delivery/wp/${w.id}`}>
-              <Card className="p-4 hover:border-primary/40 transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium truncate">{w.name}</h3>
-                      <span className="text-xs text-muted-foreground">{w.code}</span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                      <Badge variant="outline">{w.status}</Badge>
-                      <span>{siteCounts[w.id] ?? 0} sites</span>
-                      {w.budget_amount && <span>· £{Number(w.budget_amount).toLocaleString()}</span>}
-                      {w.target_end_date && <span>· due {new Date(w.target_end_date).toLocaleDateString()}</span>}
-                    </div>
+            <Card key={w.id} className="p-4 hover:border-primary/40 transition-colors">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <InlineEdit
+                      value={w.name}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { name: v } })}
+                      placeholder="WP name"
+                      displayClassName="font-medium"
+                      inputClassName="h-8 min-w-48 font-medium"
+                      pending={updateWp.isPending}
+                    />
+                    <InlineEdit
+                      value={w.code}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { code: v } })}
+                      placeholder="code"
+                      displayClassName="text-xs text-muted-foreground"
+                      inputClassName="h-7 w-28 text-xs"
+                      pending={updateWp.isPending}
+                    />
+                    <Link to={`/delivery/wp/${w.id}`} className="text-xs text-primary hover:underline ml-auto">Open →</Link>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                    <InlineEdit
+                      value={w.status}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { status: v } })}
+                      options={WP_STATUSES}
+                      displayClassName="text-xs"
+                      formatDisplay={(v) => v}
+                    />
+                    <span>· {siteCounts[w.id] ?? 0} sites ·</span>
+                    <span>£</span>
+                    <InlineEdit
+                      type="number"
+                      value={w.budget_amount}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { budget_amount: v } })}
+                      placeholder="0"
+                      inputClassName="h-7 w-28"
+                      formatDisplay={(v) => Number(v).toLocaleString()}
+                    />
+                    <span>· start</span>
+                    <InlineEdit
+                      type="date"
+                      value={w.start_date}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { start_date: v } })}
+                      inputClassName="h-7 w-36"
+                    />
+                    <span>· due</span>
+                    <InlineEdit
+                      type="date"
+                      value={w.target_end_date}
+                      onSave={(v) => updateWp.mutate({ wpId: w.id, patch: { target_end_date: v } })}
+                      inputClassName="h-7 w-36"
+                    />
                   </div>
                 </div>
-              </Card>
-            </Link>
+              </div>
+            </Card>
           ))}
         </div>
       )}
