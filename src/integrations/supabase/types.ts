@@ -4589,6 +4589,110 @@ export type Database = {
         }
         Relationships: []
       }
+      work_package_estimates: {
+        Row: {
+          adjustments_total_cost: number
+          adjustments_total_price: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          sites_total_cost: number
+          sites_total_price: number
+          status: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id: string | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          version_number: number
+          work_package_id: string
+        }
+        Insert: {
+          adjustments_total_cost?: number
+          adjustments_total_price?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          name: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          sites_total_cost?: number
+          sites_total_price?: number
+          status?: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id?: string | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          version_number?: number
+          work_package_id: string
+        }
+        Update: {
+          adjustments_total_cost?: number
+          adjustments_total_price?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          sites_total_cost?: number
+          sites_total_price?: number
+          status?: Database["public"]["Enums"]["wp_estimate_status"]
+          superseded_by_estimate_id?: string | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          version_number?: number
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_package_estimates_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_package_estimates_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_package_estimates_superseded_by_estimate_id_fkey"
+            columns: ["superseded_by_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "work_package_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_package_estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_package_types: {
         Row: {
           created_at: string
@@ -4824,6 +4928,126 @@ export type Database = {
             columns: ["work_package_id"]
             isOneToOne: false
             referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_estimate_adjustments: {
+        Row: {
+          amount_cost: number
+          amount_price: number
+          applies_to: string
+          created_at: string
+          description: string | null
+          id: string
+          is_percentage: boolean
+          kind: Database["public"]["Enums"]["wp_estimate_adjustment_kind"]
+          label: string
+          percentage: number | null
+          sort_index: number
+          updated_at: string
+          wp_estimate_id: string
+        }
+        Insert: {
+          amount_cost?: number
+          amount_price?: number
+          applies_to?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_percentage?: boolean
+          kind: Database["public"]["Enums"]["wp_estimate_adjustment_kind"]
+          label: string
+          percentage?: number | null
+          sort_index?: number
+          updated_at?: string
+          wp_estimate_id: string
+        }
+        Update: {
+          amount_cost?: number
+          amount_price?: number
+          applies_to?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_percentage?: boolean
+          kind?: Database["public"]["Enums"]["wp_estimate_adjustment_kind"]
+          label?: string
+          percentage?: number | null
+          sort_index?: number
+          updated_at?: string
+          wp_estimate_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_estimate_adjustments_wp_estimate_id_fkey"
+            columns: ["wp_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "work_package_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_estimate_sites: {
+        Row: {
+          contribution_cost: number
+          contribution_price: number
+          created_at: string
+          id: string
+          included: boolean
+          notes: string | null
+          site_estimate_id: string
+          site_id: string
+          sort_index: number
+          updated_at: string
+          wp_estimate_id: string
+        }
+        Insert: {
+          contribution_cost?: number
+          contribution_price?: number
+          created_at?: string
+          id?: string
+          included?: boolean
+          notes?: string | null
+          site_estimate_id: string
+          site_id: string
+          sort_index?: number
+          updated_at?: string
+          wp_estimate_id: string
+        }
+        Update: {
+          contribution_cost?: number
+          contribution_price?: number
+          created_at?: string
+          id?: string
+          included?: boolean
+          notes?: string | null
+          site_estimate_id?: string
+          site_id?: string
+          sort_index?: number
+          updated_at?: string
+          wp_estimate_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_estimate_sites_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_sites_wp_estimate_id_fkey"
+            columns: ["wp_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "work_package_estimates"
             referencedColumns: ["id"]
           },
         ]
@@ -6816,6 +7040,15 @@ export type Database = {
         | "done"
       task_dep_type: "FS" | "SS" | "FF" | "SF"
       task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
+      wp_estimate_adjustment_kind:
+        | "contingency"
+        | "preliminaries"
+        | "overhead"
+        | "discount"
+        | "risk"
+        | "management_fee"
+        | "other"
+      wp_estimate_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
       wp_item_status:
         | "not_started"
         | "in_progress"
@@ -7019,6 +7252,16 @@ export const Constants = {
       ],
       task_dep_type: ["FS", "SS", "FF", "SF"],
       task_status: ["todo", "in_progress", "blocked", "review", "done"],
+      wp_estimate_adjustment_kind: [
+        "contingency",
+        "preliminaries",
+        "overhead",
+        "discount",
+        "risk",
+        "management_fee",
+        "other",
+      ],
+      wp_estimate_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
       wp_item_status: [
         "not_started",
         "in_progress",
