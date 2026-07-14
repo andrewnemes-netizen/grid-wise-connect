@@ -299,8 +299,8 @@ const MapView = () => {
       return;
     }
 
-    const boundary = s.boundary_geojson as GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
-    const route = s.route_geojson as GeoJSON.LineString | null;
+    const boundary = s.boundary_geojson as unknown as GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+    const route = s.route_geojson as unknown as GeoJSON.LineString | null;
 
     if (boundary && (boundary.type === "Polygon" || boundary.type === "MultiPolygon")) {
       const fc: GeoJSON.Feature = { type: "Feature", geometry: boundary, properties: {} };
