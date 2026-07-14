@@ -207,6 +207,7 @@ async function syncRegistry(sb: any, catalogue: LayerEntry[]) {
 
   for (const entry of usable) {
     const cls = classify(entry.base);
+    const category = entry.is_annotation ? "Annotations" : cls.category;
     const geometry_type = await peekGeometryType(entry.files.shp.id);
     const storage_table =
       geometry_type === "Point" ? "geo_points" :
@@ -225,14 +226,14 @@ async function syncRegistry(sb: any, catalogue: LayerEntry[]) {
       slug: cls.slug,
       display_name: cls.display_name,
       dno: "SSEN",
-      category: cls.category,
+      category,
       subcategory: cls.subcategory,
       geometry_type,
       storage_table,
       source_type: "drive_shapefile",
       enabled: true,
       visible_by_default: false,
-      min_zoom: 10,
+      min_zoom: entry.is_annotation ? 13 : 10,
       attribution: "SSEN GIS export (Google Drive)",
       style_json: styleFor(cls, geometry_type),
     });
