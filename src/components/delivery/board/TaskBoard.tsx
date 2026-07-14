@@ -11,10 +11,10 @@ import {
   ChevronDown, ChevronRight, MoreHorizontal, Search, Trash2, Plus, EyeOff, GripVertical,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useBoardConfig } from "@/hooks/useBoardConfig";
+import { useBoardConfig, BoardScopeColumn } from "@/hooks/useBoardConfig";
 import { runAutomations } from "@/lib/board/automations";
 import {
-  BoardColumn, BoardViewConfig, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
+  BoardColumn, BoardViewConfig, StatusOption, DEFAULT_STATUS_OPTIONS, DEFAULT_PRIORITY_OPTIONS,
 } from "@/lib/board/types";
 import { StatusCell } from "./cells/StatusCell";
 import { TextCell } from "./cells/TextCell";
