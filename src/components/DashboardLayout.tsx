@@ -9,11 +9,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <main className="flex-1 flex flex-col">
-          <header className="flex h-12 items-center border-b bg-background px-4">
-            <SidebarTrigger />
-            <div className="ml-3 flex items-center gap-2">
+          <header className="sticky top-0 z-40 flex h-14 items-center border-b border-border/60 bg-background/85 backdrop-blur px-4">
+            <SidebarTrigger className="text-foreground/70 hover:text-foreground" />
+            <div className="ml-3 flex items-center gap-2.5">
               <img src={epeLogo} alt="Eco Power Energy" className="h-5 object-contain" />
-              <span className="text-sm font-semibold text-foreground">Gridwise Connect</span>
+              <span className="font-display text-sm font-semibold tracking-tight text-foreground">Gridwise Connect</span>
+              <span className="hidden sm:inline-block h-1 w-1 rounded-full bg-accent" />
             </div>
             <div className="ml-auto">
               <NotificationBell />
