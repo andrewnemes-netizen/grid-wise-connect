@@ -15,6 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Receipt, TrendingUp, MapPin, SlidersHorizontal, Plus, Pencil, CheckCircle2, GitBranch, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import WpEstimateVariations from "./WpEstimateVariations";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, maximumFractionDigits: 0 }).format(Number(n));
@@ -305,6 +306,8 @@ function EstimateDetail({ estimate }: { estimate: any }) {
           <Card className="p-3 text-muted-foreground whitespace-pre-wrap">{estimate.notes}</Card>
         </section>
       )}
+
+      <WpEstimateVariations estimate={estimate} />
     </div>
   );
 }

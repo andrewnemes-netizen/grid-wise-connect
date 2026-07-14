@@ -5052,6 +5052,156 @@ export type Database = {
           },
         ]
       }
+      wp_estimate_variation_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          kind: string
+          line_cost: number
+          line_price: number
+          quantity: number
+          rate_code: string | null
+          rate_item_id: string | null
+          site_id: string | null
+          sort_index: number
+          unit: string | null
+          unit_cost: number
+          unit_price: number
+          updated_at: string
+          variation_id: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          kind?: string
+          line_cost?: number
+          line_price?: number
+          quantity?: number
+          rate_code?: string | null
+          rate_item_id?: string | null
+          site_id?: string | null
+          sort_index?: number
+          unit?: string | null
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+          variation_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          line_cost?: number
+          line_price?: number
+          quantity?: number
+          rate_code?: string | null
+          rate_item_id?: string | null
+          site_id?: string | null
+          sort_index?: number
+          unit?: string | null
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+          variation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_estimate_variation_lines_rate_item_id_fkey"
+            columns: ["rate_item_id"]
+            isOneToOne: false
+            referencedRelation: "rate_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_variation_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_variation_lines_variation_id_fkey"
+            columns: ["variation_id"]
+            isOneToOne: false
+            referencedRelation: "wp_estimate_variations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wp_estimate_variations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
+          delta_cost: number
+          delta_price: number
+          description: string | null
+          id: string
+          reason: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          title: string
+          updated_at: string
+          variation_number: number
+          wp_estimate_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          delta_cost?: number
+          delta_price?: number
+          description?: string | null
+          id?: string
+          reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          title: string
+          updated_at?: string
+          variation_number: number
+          wp_estimate_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
+          delta_cost?: number
+          delta_price?: number
+          description?: string | null
+          id?: string
+          reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          title?: string
+          updated_at?: string
+          variation_number?: number
+          wp_estimate_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_estimate_variations_wp_estimate_id_fkey"
+            columns: ["wp_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "work_package_estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wp_milestones: {
         Row: {
           actual_date: string | null
@@ -6053,6 +6203,19 @@ export type Database = {
         }
         Returns: string
       }
+      create_wp_estimate_variation: {
+        Args: {
+          _description?: string
+          _reason?: string
+          _title: string
+          _wp_estimate_id: string
+        }
+        Returns: string
+      }
+      decide_wp_estimate_variation: {
+        Args: { _approve: boolean; _notes?: string; _variation_id: string }
+        Returns: undefined
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -6415,6 +6578,10 @@ export type Database = {
         }[]
       }
       recalc_site_stage: { Args: { _project_id: string }; Returns: undefined }
+      recalc_wp_estimate_variation: {
+        Args: { _variation_id: string }
+        Returns: undefined
+      }
       recalc_wp_milestone_progress: {
         Args: { _milestone_id: string }
         Returns: undefined
@@ -7109,6 +7276,10 @@ export type Database = {
       st_wrapx: {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
+      }
+      submit_wp_estimate_variation: {
+        Args: { _variation_id: string }
+        Returns: undefined
       }
       ukpn_circuits_for_substation: {
         Args: { p_name: string }
