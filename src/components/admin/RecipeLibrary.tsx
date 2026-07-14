@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { BookOpen, CheckCircle2, ChevronsUpDown, Copy, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, ChevronsUpDown, Copy, FileText, Pencil, Plus, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -231,6 +232,7 @@ function RecipeItemsDialog({ recipeId, onClose }: { recipeId: string; onClose: (
   });
 
   const readOnly = (recipe as any)?.status !== "DRAFT";
+  const unlinkedCount = (items as any[]).filter((it) => !it.rate_item_id).length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -306,6 +308,15 @@ function RecipeItemsDialog({ recipeId, onClose }: { recipeId: string; onClose: (
           </DialogDescription>
         </DialogHeader>
 
+        {unlinkedCount > 0 && !readOnly && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {unlinkedCount} line(s) are not linked to a rate item. Approval is blocked until every line has a rate item.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <Input placeholder="Search description / code / stage…" value={search}
             onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
@@ -352,6 +363,11 @@ function RecipeItemsDialog({ recipeId, onClose }: { recipeId: string; onClose: (
                       <Input className="h-8 text-xs" disabled={readOnly} value={desc as any}
                         onChange={(e) => setField(it.id, "description_override", e.target.value)} />
                       {it.cost_code && <div className="text-[10px] text-muted-foreground mt-0.5">{it.cost_code}{it.cost_code_category ? ` · ${it.cost_code_category}` : ""}</div>}
+                      {!it.rate_item_id && (
+                        <div className="text-[10px] text-amber-600 flex items-center gap-1 mt-0.5">
+                          <AlertTriangle className="h-3 w-3" /> Not linked to a rate item
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">{it.unit ?? it.rate_item?.unit ?? "—"}</TableCell>
                     <TableCell>
