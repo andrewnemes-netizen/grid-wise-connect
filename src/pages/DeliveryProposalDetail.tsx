@@ -25,6 +25,7 @@ export default function DeliveryProposalDetail() {
   const [programmeId, setProgrammeId] = useState<string>("");
   const [wpId, setWpId] = useState<string>("");
   const [templateKey, setTemplateKey] = useState<string>("ev_hub_wp_v1");
+  const effectiveTemplateKey = templateKey === "none" ? null : templateKey;
   const [newWpName, setNewWpName] = useState("");
   const [newWpCode, setNewWpCode] = useState("");
 
@@ -76,8 +77,8 @@ export default function DeliveryProposalDetail() {
   const previewArgs = useMemo(() => ({
     _proposal_id: proposalId,
     _wp_id: mode === "existing" && wpId ? wpId : null,
-    _template_key: templateKey || null,
-  }), [proposalId, mode, wpId, templateKey]);
+    _template_key: effectiveTemplateKey,
+  }), [proposalId, mode, wpId, effectiveTemplateKey]);
 
   const { data: preview, isFetching: previewLoading } = useQuery({
     queryKey: ["accept-preview", previewArgs],
@@ -93,7 +94,7 @@ export default function DeliveryProposalDetail() {
     mutationFn: async () => {
       const payload: any = {
         _proposal_id: proposalId,
-        _template_key: templateKey || null,
+        _template_key: effectiveTemplateKey,
       };
       if (mode === "existing") {
         if (!wpId) throw new Error("Choose a work package");
@@ -216,7 +217,7 @@ export default function DeliveryProposalDetail() {
               <Select value={templateKey} onValueChange={setTemplateKey}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No template (skip milestones/tasks)</SelectItem>
+                  <SelectItem value="none">No template (skip milestones/tasks)</SelectItem>
                   {templates.map((t: any) => (
                     <SelectItem key={t.key} value={t.key}>{t.name}</SelectItem>
                   ))}
