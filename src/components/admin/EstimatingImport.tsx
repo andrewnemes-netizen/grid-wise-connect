@@ -24,11 +24,6 @@ function useContracts() {
     },
   });
 }
-async function newContract(name: string): Promise<string> {
-  const { data, error } = await supabase.from("contracts").insert({ name }).select().single();
-  if (error) throw error;
-  return (data as any).id;
-}
 
 // ---------------- Rate Library import ----------------
 // SoR MASTER sheet layout (0-indexed columns):
@@ -100,7 +95,6 @@ function RateLibraryImport() {
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<{ rows: RateRow[]; errors: string[] } | null>(null);
   const [contractId, setContractId] = useState<string | undefined>();
-  const [newContractName, setNewContractName] = useState("");
   const [rateCardName, setRateCardName] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -119,14 +113,11 @@ function RateLibraryImport() {
   const doImport = async () => {
     if (!parsed || parsed.rows.length === 0) return;
     if (!rateCardName.trim()) { toast.error("Rate card name required"); return; }
+    if (!contractId) { toast.error("Choose a contract"); return; }
     setImporting(true); setResult(null);
     try {
       const { data: user } = await supabase.auth.getUser();
-      let cid = contractId;
-      if (!cid) {
-        if (!newContractName.trim()) throw new Error("Choose a contract or enter a new one");
-        cid = await newContract(newContractName.trim());
-      }
+      const cid = contractId;
       // Insert rate_card
       const { data: rc, error: e1 } = await supabase.from("rate_cards").insert({
         contract_id: cid, name: rateCardName.trim(),
@@ -204,9 +195,9 @@ function RateLibraryImport() {
                     {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground mt-1">or create a new one:</div>
-                <Input placeholder="New contract name" value={newContractName}
-                       onChange={(e) => { setNewContractName(e.target.value); setContractId(undefined); }} />
+                <div className="text-xs text-muted-foreground mt-1">
+                  Contracts are created from the client / commercial screens.
+                </div>
               </div>
               <div>
                 <Label>Rate card name</Label>
@@ -340,7 +331,6 @@ function RecipeLibraryImport() {
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<{ groups: RecipeGroup[]; errors: string[] } | null>(null);
   const [contractId, setContractId] = useState<string | undefined>();
-  const [newContractName, setNewContractName] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -355,14 +345,11 @@ function RecipeLibraryImport() {
 
   const doImport = async () => {
     if (!parsed || parsed.groups.length === 0) return;
+    if (!contractId) { toast.error("Choose a contract"); return; }
     setImporting(true); setResult(null);
     try {
       const { data: user } = await supabase.auth.getUser();
-      let cid = contractId;
-      if (!cid) {
-        if (!newContractName.trim()) throw new Error("Choose a contract or enter a new one");
-        cid = await newContract(newContractName.trim());
-      }
+      const cid = contractId;
       let recipesCreated = 0, itemsCreated = 0;
       for (const g of parsed.groups) {
         const { data: recipe, error: e1 } = await supabase.from("estimate_recipes").insert({
@@ -438,9 +425,9 @@ function RecipeLibraryImport() {
                     {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground mt-1">or create a new one:</div>
-                <Input placeholder="New contract name" value={newContractName}
-                       onChange={(e) => { setNewContractName(e.target.value); setContractId(undefined); }} />
+                <div className="text-xs text-muted-foreground mt-1">
+                  Contracts are created from the client / commercial screens.
+                </div>
               </div>
             </div>
 
