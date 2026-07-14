@@ -636,3 +636,235 @@ function RateItemPicker({
     </Popover>
   );
 }
+// -------- Bulk apply recipe to WP sites --------
+function BulkApplyRecipeDialog({
+  wpSites, onClose, onDone,
+}: { wpSites: any[]; onClose: () => void; onDone: () => void; }) {
+  const [contractId, setContractId] = useState<string | undefined>();
+  const [rateCardVersionId, setRateCardVersionId] = useState<string | undefined>();
+  const [recipeId, setRecipeId] = useState<string | undefined>();
+  const [name, setName] = useState("Baseline");
+  const [selected, setSelected] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries((wpSites ?? []).map((ws) => [ws.sites?.id, true]))
+  );
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; errors: string[] }>({ done: 0, total: 0, errors: [] });
+
+  const { data: contracts = [] } = useQuery({
+    queryKey: ["contracts-all-bulk"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("contracts").select("id,name,code").order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: rateVersions = [] } = useQuery({
+    enabled: !!contractId,
+    queryKey: ["rate-versions-bulk", contractId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("rate_card_versions")
+        .select("id, version_number, status, rate_cards!inner(name, contract_id)")
+        .eq("rate_cards.contract_id", contractId!)
+        .eq("status", "APPROVED")
+        .order("version_number", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const { data: recipes = [] } = useQuery({
+    enabled: !!contractId,
+    queryKey: ["recipes-bulk", contractId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("estimate_recipes")
+        .select("id, name, status, version_number").eq("contract_id", contractId!)
+        .eq("status", "APPROVED")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const chosenSiteIds = Object.keys(selected).filter((k) => selected[k]);
+  const canRun = !!contractId && !!recipeId && chosenSiteIds.length > 0 && !!name.trim();
+
+  const toggleAll = (v: boolean) => {
+    const next: Record<string, boolean> = {};
+    wpSites.forEach((ws) => { if (ws.sites?.id) next[ws.sites.id] = v; });
+    setSelected(next);
+  };
+
+  const run = async () => {
+    if (!canRun) return;
+    setRunning(true);
+    setProgress({ done: 0, total: chosenSiteIds.length, errors: [] });
+
+    // Load recipe items once
+    const { data: items, error: iErr } = await supabase.from("recipe_items")
+      .select("*, rate_items(unit, total_unit_cost, client_unit_price, description)")
+      .eq("recipe_id", recipeId!)
+      .order("sort_index");
+    if (iErr) { toast.error(iErr.message); setRunning(false); return; }
+
+    const { data: userRes } = await supabase.auth.getUser();
+    const userId = userRes.user?.id ?? null;
+
+    for (const siteId of chosenSiteIds) {
+      try {
+        const { data: existing } = await supabase.from("site_estimates")
+          .select("version_number").eq("site_id", siteId)
+          .order("version_number", { ascending: false }).limit(1);
+        const nextVer = ((existing?.[0] as any)?.version_number ?? 0) + 1;
+
+        const { data: est, error } = await supabase.from("site_estimates").insert({
+          site_id: siteId,
+          name: name.trim(),
+          contract_id: contractId ?? null,
+          rate_card_version_id: rateCardVersionId ?? null,
+          recipe_id: recipeId ?? null,
+          status: "DRAFT",
+          version_number: nextVer,
+          created_by: userId,
+        }).select().single();
+        if (error) throw error;
+
+        const rows = (items ?? []).map((r: any, i: number) => {
+          const cost = Number(r.rate_items?.total_unit_cost ?? 0);
+          const price = Number(r.rate_items?.client_unit_price ?? cost);
+          const qty = Number(r.default_quantity ?? 0);
+          return {
+            site_estimate_id: (est as any).id,
+            recipe_item_id: r.id,
+            rate_item_id: r.rate_item_id,
+            description: r.description_override ?? r.rate_items?.description ?? "",
+            unit: r.unit ?? r.rate_items?.unit ?? null,
+            quantity: qty,
+            unit_cost: cost,
+            unit_price: price,
+            markup_amount: Number(r.markup_amount ?? 0),
+            markup_pct: r.markup_pct != null ? Number(r.markup_pct) : null,
+            line_cost: Number((qty * cost).toFixed(2)),
+            line_price: Number((qty * price).toFixed(2)),
+            stage: r.stage,
+            cost_code: r.cost_code,
+            cost_code_category: r.cost_code_category,
+            is_allowance: !!r.is_allowance,
+            sort_index: i,
+          };
+        });
+        if (rows.length > 0) {
+          const { error: e2 } = await supabase.from("site_estimate_lines").insert(rows);
+          if (e2) throw e2;
+        }
+        // roll up totals on the estimate
+        const totalCost = rows.reduce((s, r) => s + Number(r.line_cost || 0), 0);
+        const totalPrice = rows.reduce((s, r) => s + Number(r.line_price || 0), 0);
+        await supabase.from("site_estimates").update({
+          total_cost: totalCost, total_price: totalPrice, total_markup: totalPrice - totalCost,
+        }).eq("id", (est as any).id);
+
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch (e: any) {
+        const siteName = wpSites.find((ws) => ws.sites?.id === siteId)?.sites?.name ?? siteId;
+        setProgress((p) => ({ ...p, done: p.done + 1, errors: [...p.errors, `${siteName}: ${e.message ?? "failed"}`] }));
+      }
+    }
+
+    setRunning(false);
+    toast.success(`Applied recipe to ${chosenSiteIds.length} site(s)`);
+    // brief delay so user can see final state
+    setTimeout(() => onDone(), 400);
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v && !running) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Bulk apply recipe to sites</DialogTitle>
+          <DialogDescription>
+            Creates a new DRAFT site estimate on each selected site, seeded from the chosen recipe.
+            Existing estimates are not touched — a new version is added per site.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <Label>Estimate name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Contract</Label>
+            <Select value={contractId} onValueChange={(v) => { setContractId(v); setRateCardVersionId(undefined); setRecipeId(undefined); }}>
+              <SelectTrigger><SelectValue placeholder="Select contract" /></SelectTrigger>
+              <SelectContent>
+                {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Rate card version</Label>
+            <Select value={rateCardVersionId} onValueChange={setRateCardVersionId} disabled={!contractId}>
+              <SelectTrigger><SelectValue placeholder="Select rate card" /></SelectTrigger>
+              <SelectContent>
+                {rateVersions.map((v: any) => (
+                  <SelectItem key={v.id} value={v.id}>{v.rate_cards?.name} v{v.version_number}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2">
+            <Label>Recipe</Label>
+            <Select value={recipeId} onValueChange={setRecipeId} disabled={!contractId}>
+              <SelectTrigger><SelectValue placeholder="Select recipe" /></SelectTrigger>
+              <SelectContent>
+                {recipes.map((r: any) => <SelectItem key={r.id} value={r.id}>{r.name} v{r.version_number}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="border rounded-md">
+          <div className="flex items-center justify-between px-3 py-2 border-b">
+            <div className="text-sm font-medium">Target sites ({chosenSiteIds.length}/{wpSites.length})</div>
+            <div className="space-x-2">
+              <Button size="sm" variant="ghost" onClick={() => toggleAll(true)}>Select all</Button>
+              <Button size="sm" variant="ghost" onClick={() => toggleAll(false)}>Clear</Button>
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto divide-y">
+            {wpSites.map((ws: any) => (
+              <label key={ws.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-muted/40">
+                <Checkbox
+                  checked={!!selected[ws.sites?.id]}
+                  onCheckedChange={(v) => setSelected((s) => ({ ...s, [ws.sites?.id]: !!v }))}
+                />
+                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                <div className="flex-1">
+                  <div className="font-medium">{ws.sites?.name ?? "—"}</div>
+                  <div className="text-xs text-muted-foreground">{ws.sites?.address ?? ""}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {progress.total > 0 && (
+          <Card className="p-3 text-sm">
+            <div>Progress: {progress.done} / {progress.total}</div>
+            {progress.errors.length > 0 && (
+              <div className="text-destructive text-xs mt-2 space-y-1">
+                {progress.errors.map((e, i) => <div key={i}>• {e}</div>)}
+              </div>
+            )}
+          </Card>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={running}>Cancel</Button>
+          <Button onClick={run} disabled={!canRun || running}>
+            {running ? "Applying…" : `Apply to ${chosenSiteIds.length} site(s)`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
