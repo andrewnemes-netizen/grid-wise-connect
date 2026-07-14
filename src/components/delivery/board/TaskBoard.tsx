@@ -107,15 +107,15 @@ export function TaskBoard({
   const createTask = useMutation({
     mutationFn: async (title: string) => {
       const { error } = await supabase.from(table as any).insert({
-        project_id: projectId,
+        [scopeCol]: scopeId,
         title,
-        status: "todo",
+        status: statuses[0]?.value ?? "todo",
         priority: "medium",
         created_by: user?.id,
-      });
+      } as any);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["delivery-tasks", projectId] }),
+    onSuccess: () => invalidateAll(),
   });
 
   const bulkDelete = useMutation({
