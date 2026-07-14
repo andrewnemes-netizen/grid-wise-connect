@@ -441,13 +441,51 @@ function NewSiteEstimateDialog({
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New site estimate</DialogTitle>
-          <DialogDescription>Optionally seed lines from a recipe. Version increments automatically.</DialogDescription>
+          <DialogDescription>Add a fixed socket-build cost, pull the ICP connection cost from the site's latest map study, and optionally seed rate-card lines from a recipe.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+
+          <Card className="p-3 space-y-2 bg-muted/30">
+            <Label className="text-sm font-semibold">Build work (fixed price per socket count)</Label>
+            <Select value={String(socketTier)} onValueChange={(v) => setSocketTier(v === "none" ? "none" : (Number(v) as SocketTier))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No build line</SelectItem>
+                {SOCKET_TIERS.map((t) => (
+                  <SelectItem key={t} value={String(t)}>{t} sockets — {fmt(socketRate(unitRates, t))}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">Rates are managed in Admin › Unit Rates.</p>
+          </Card>
+
+          <Card className="p-3 space-y-2 bg-muted/30">
+            <Label className="text-sm font-semibold">ICP connection (from map study)</Label>
+            {latestStudy?.cost_estimate_json ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Switch checked={includeIcp} onCheckedChange={setIncludeIcp} />
+                  <Label className="text-sm">
+                    Include ICP total — {fmt(studyTotal(latestStudy.cost_estimate_json))}
+                    <span className="text-muted-foreground"> from “{latestStudy.study_name}”</span>
+                  </Label>
+                </div>
+                {includeIcp && (
+                  <div className="flex items-center gap-2 pl-6">
+                    <Switch checked={includeIcpDetail} onCheckedChange={setIncludeIcpDetail} />
+                    <Label className="text-sm">Include BoM detail lines (read-only, £0 price)</Label>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">No map study with a cost estimate is linked to this site yet.</p>
+            )}
+          </Card>
+
           <div>
             <Label>Contract</Label>
             <Select value={contractId} onValueChange={(v) => { setContractId(v); setRateCardVersionId(undefined); setRecipeId(undefined); }}>
