@@ -28,6 +28,20 @@ function socketRate(rates: any, tier: SocketTier): number {
   return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
 }
 
+type HubType = "buildout" | "horizontal" | "vertical";
+// Only the combinations that exist in the CK BoQ workbook
+const HUB_COMBOS: { type: HubType; sockets: 4 | 6; label: string }[] = [
+  { type: "buildout",   sockets: 4, label: "Buildout — 4 sockets" },
+  { type: "horizontal", sockets: 4, label: "Horizontal — 4 sockets" },
+  { type: "horizontal", sockets: 6, label: "Horizontal — 6 sockets" },
+  { type: "vertical",   sockets: 4, label: "Vertical — 4 sockets" },
+  { type: "vertical",   sockets: 6, label: "Vertical — 6 sockets" },
+];
+function hubRate(rates: any, type: HubType, sockets: number): number {
+  const key = `build_${type}_${sockets}` as const;
+  return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
+}
+
 function studyTotal(cost: any): number {
   if (!cost) return 0;
   return Number(cost.total_estimate ?? cost.total ?? cost.total_price ?? 0);
