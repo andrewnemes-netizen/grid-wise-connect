@@ -111,6 +111,159 @@ export type Database = {
           },
         ]
       }
+      board_automations: {
+        Row: {
+          action_json: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          name: string
+          project_id: string
+          trigger_json: Json
+          updated_at: string
+        }
+        Insert: {
+          action_json?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name: string
+          project_id: string
+          trigger_json?: Json
+          updated_at?: string
+        }
+        Update: {
+          action_json?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          name?: string
+          project_id?: string
+          trigger_json?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_automations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_automations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_columns: {
+        Row: {
+          created_at: string
+          id: string
+          is_system: boolean
+          key: string
+          label: string
+          options_json: Json
+          project_id: string
+          sort_index: number
+          type: string
+          updated_at: string
+          width: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          key: string
+          label: string
+          options_json?: Json
+          project_id: string
+          sort_index?: number
+          type: string
+          updated_at?: string
+          width?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          key?: string
+          label?: string
+          options_json?: Json
+          project_id?: string
+          sort_index?: number
+          type?: string
+          updated_at?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      board_views: {
+        Row: {
+          config_json: Json
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          config_json?: Json
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          project_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          config_json?: Json
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_views_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_views_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cable_catalogue: {
         Row: {
           cable_type: string

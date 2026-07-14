@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Plus, Flag, ListChecks, Users, LayoutGrid, GanttChart, MessageSquare, Paperclip, History } from "lucide-react";
 import { TaskKanban } from "@/components/delivery/TaskKanban";
 import { TaskGantt } from "@/components/delivery/TaskGantt";
+import { TaskBoard } from "@/components/delivery/board/TaskBoard";
 import { ProjectComments } from "@/components/delivery/ProjectComments";
 import { ProjectFiles } from "@/components/delivery/ProjectFiles";
 import { ProjectActivity } from "@/components/delivery/ProjectActivity";
@@ -169,50 +170,11 @@ export default function DeliveryProjectDetail() {
         </TabsList>
 
         <TabsContent value="list" className="space-y-3">
-          <div className="flex justify-end">
-            <NewTaskDialog projectId={projectId} milestones={milestones as any} />
-          </div>
-          {tasks.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-muted-foreground">
-              No tasks yet. Add the first delivery task.
-            </Card>
-          ) : (
-            <div className="border rounded-md divide-y">
-              {tasks.map((t: any) => (
-                <div key={t.id} className="p-3 flex items-center gap-3">
-                  <Select
-                    value={t.status}
-                    onValueChange={(v) => updateTask.mutate({ taskId: t.id, patch: { status: v, percent_complete: v === "done" ? 100 : t.percent_complete } })}
-                  >
-                    <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todo">To do</SelectItem>
-                      <SelectItem value="in_progress">In progress</SelectItem>
-                      <SelectItem value="blocked">Blocked</SelectItem>
-                      <SelectItem value="review">Review</SelectItem>
-                      <SelectItem value="done">Done</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{t.title}</div>
-                    {t.description && <div className="text-xs text-muted-foreground truncate">{t.description}</div>}
-                  </div>
-                  <Badge variant="outline" className="text-xs">{t.priority}</Badge>
-                  {t.due_date && <span className="text-xs text-muted-foreground w-24">{new Date(t.due_date).toLocaleDateString()}</span>}
-                  <div className="w-28">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={Number(t.percent_complete)}
-                      onChange={(e) => updateTask.mutate({ taskId: t.id, patch: { percent_complete: Math.min(100, Math.max(0, Number(e.target.value))) } })}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <TaskBoard
+            projectId={projectId}
+            tasks={tasks as any[]}
+            milestones={milestones as any[]}
+          />
         </TabsContent>
 
         <TabsContent value="kanban">
