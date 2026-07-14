@@ -17,6 +17,16 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
 import SiteEstimatesPanel from "@/components/delivery/SiteEstimatesPanel";
+import { TaskBoard } from "@/components/delivery/board/TaskBoard";
+import { StatusOption } from "@/lib/board/types";
+
+const WP_STATUS_OPTIONS: StatusOption[] = [
+  { value: "not_started", label: "Not started", color: "hsl(var(--status-todo))" },
+  { value: "in_progress", label: "In progress", color: "hsl(var(--status-progress))" },
+  { value: "review", label: "Review", color: "hsl(var(--status-review))" },
+  { value: "blocked", label: "Blocked", color: "hsl(var(--status-blocked))" },
+  { value: "done", label: "Done", color: "hsl(var(--status-done))" },
+];
 
 export default function DeliveryWorkPackage() {
   const { id } = useParams();
