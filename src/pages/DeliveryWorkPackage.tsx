@@ -16,6 +16,7 @@ import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt 
 import { useMemo } from "react";
 import { toast } from "sonner";
 import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
+import SiteEstimatesPanel from "@/components/delivery/SiteEstimatesPanel";
 
 export default function DeliveryWorkPackage() {
   const { id } = useParams();
@@ -126,6 +127,7 @@ export default function DeliveryWorkPackage() {
           <TabsTrigger value="milestones">Milestones</TabsTrigger>
           <TabsTrigger value="matrix">Matrix</TabsTrigger>
           <TabsTrigger value="gantt">Master Gantt</TabsTrigger>
+          <TabsTrigger value="site-estimates">Site estimates</TabsTrigger>
           <TabsTrigger value="estimate"><Receipt className="h-3.5 w-3.5 mr-1" />Estimate</TabsTrigger>
         </TabsList>
 
@@ -164,6 +166,10 @@ export default function DeliveryWorkPackage() {
             wpStart={wp?.start_date}
             wpEnd={wp?.target_end_date}
           />
+        </TabsContent>
+
+        <TabsContent value="site-estimates">
+          <SiteEstimatesPanel wpId={wpId} />
         </TabsContent>
 
         <TabsContent value="estimate">
