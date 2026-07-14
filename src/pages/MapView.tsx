@@ -241,7 +241,10 @@ const MapView = () => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
     if (siteId) setExistingSiteId(siteId);
-    setSearchParams({}, { replace: true });
+    // Preserve the `study` param so useActiveStudy can load the saved
+    // assessment (boundary, cable route, POC, cost) after fly-to.
+    const studyParam = searchParams.get("study");
+    setSearchParams(studyParam ? { study: studyParam } : {}, { replace: true });
 
     map.flyTo({ center: [lng, lat], zoom: 16, duration: 1500 });
 
@@ -261,9 +264,100 @@ const MapView = () => {
 
     mapToast({
       title: `${siteName || "Site"} loaded`,
-      description: "Use the Assess tool to run a full assessment.",
+      description: studyParam
+        ? "Restoring saved assessment — boundary, cable route and POC."
+        : "Use the Assess tool to run a full assessment.",
     });
   }, [map, mapLoaded]);
+
+  // ── Restore saved study overlays (boundary, cable route, POC) ──
+  useEffect(() => {
+    if (!map || !mapLoaded) return;
+    const s = activeStudy.study;
+    const BOUND_SRC = "study-boundary-src";
+    const BOUND_FILL = "study-boundary-fill";
+    const BOUND_LINE = "study-boundary-line";
+    const ROUTE_SRC = "study-route-src";
+    const ROUTE_LINE = "study-route-line";
+    const ROUTE_CASING = "study-route-casing";
+    const POC_SRC = "study-poc-src";
+    const POC_LAYER = "study-poc-layer";
+
+    const cleanup = () => {
+      safeRemoveLayer(map, BOUND_FILL);
+      safeRemoveLayer(map, BOUND_LINE);
+      safeRemoveSource(map, BOUND_SRC);
+      safeRemoveLayer(map, ROUTE_LINE);
+      safeRemoveLayer(map, ROUTE_CASING);
+      safeRemoveSource(map, ROUTE_SRC);
+      safeRemoveLayer(map, POC_LAYER);
+      safeRemoveSource(map, POC_SRC);
+    };
+
+    if (!s) {
+      cleanup();
+      return;
+    }
+
+    const boundary = s.boundary_geojson as unknown as GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+    const route = s.route_geojson as unknown as GeoJSON.LineString | null;
+
+    if (boundary && (boundary.type === "Polygon" || boundary.type === "MultiPolygon")) {
+      const fc: GeoJSON.Feature = { type: "Feature", geometry: boundary, properties: {} };
+      if (!safeGetSource(map, BOUND_SRC)) {
+        map.addSource(BOUND_SRC, { type: "geojson", data: fc });
+        map.addLayer({
+          id: BOUND_FILL, source: BOUND_SRC, type: "fill",
+          paint: { "fill-color": "#dc2626", "fill-opacity": 0.08 },
+        });
+        map.addLayer({
+          id: BOUND_LINE, source: BOUND_SRC, type: "line",
+          paint: { "line-color": "#dc2626", "line-width": 2 },
+        });
+      } else {
+        (safeGetSource(map, BOUND_SRC) as maplibregl.GeoJSONSource).setData(fc);
+      }
+    }
+
+    if (route && route.type === "LineString" && route.coordinates.length >= 2) {
+      const fc: GeoJSON.Feature = { type: "Feature", geometry: route, properties: {} };
+      if (!safeGetSource(map, ROUTE_SRC)) {
+        map.addSource(ROUTE_SRC, { type: "geojson", data: fc });
+        map.addLayer({
+          id: ROUTE_CASING, source: ROUTE_SRC, type: "line",
+          paint: { "line-color": "#0f172a", "line-width": 6, "line-opacity": 0.4 },
+        });
+        map.addLayer({
+          id: ROUTE_LINE, source: ROUTE_SRC, type: "line",
+          paint: { "line-color": "#16a34a", "line-width": 3.5 },
+        });
+      } else {
+        (safeGetSource(map, ROUTE_SRC) as maplibregl.GeoJSONSource).setData(fc);
+      }
+
+      // POC marker at route terminus
+      const [pocLng, pocLat] = route.coordinates[route.coordinates.length - 1] as [number, number];
+      const pocFc: GeoJSON.Feature = {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [pocLng, pocLat] },
+        properties: { label: "POC" },
+      };
+      if (!safeGetSource(map, POC_SRC)) {
+        map.addSource(POC_SRC, { type: "geojson", data: pocFc });
+        map.addLayer({
+          id: POC_LAYER, source: POC_SRC, type: "circle",
+          paint: {
+            "circle-radius": 8, "circle-color": "#16a34a",
+            "circle-stroke-color": "#fff", "circle-stroke-width": 2,
+          },
+        });
+      } else {
+        (safeGetSource(map, POC_SRC) as maplibregl.GeoJSONSource).setData(pocFc);
+      }
+    }
+
+    return cleanup;
+  }, [map, mapLoaded, activeStudy.study]);
 
   // Auto-save boundary to study when finished
   useEffect(() => {

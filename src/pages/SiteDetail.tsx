@@ -198,15 +198,32 @@ const SiteDetail = () => {
             <span className={`font-bold ${sc.color}`}>{site.score}</span>
           </div>
         )}
-        <Button size="sm" onClick={() => {
+        <Button size="sm" onClick={async () => {
           const rawLat = raw.lat ?? raw.latitude;
           const rawLng = raw.lng ?? raw.longitude;
-          if (rawLat && rawLng) {
-            const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
-            navigate(`/?lat=${coords.lat}&lng=${coords.lng}&siteName=${encodeURIComponent(site.site_name)}&kw=${site.proposed_kw || 0}&siteId=${site.id}`);
-          } else {
+          if (!rawLat || !rawLng) {
             toast({ title: "No coordinates", description: "This site has no location data to show on the map.", variant: "destructive" });
+            return;
           }
+          const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
+          // Look up the latest saved study for this site so the map can restore
+          // the saved boundary, cable route and POC.
+          const { data: latestStudy } = await supabase
+            .from("studies")
+            .select("id")
+            .eq("site_id", site.id)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const params = new URLSearchParams({
+            lat: String(coords.lat),
+            lng: String(coords.lng),
+            siteName: site.site_name,
+            kw: String(site.proposed_kw || 0),
+            siteId: site.id,
+          });
+          if (latestStudy?.id) params.set("study", latestStudy.id);
+          navigate(`/?${params.toString()}`);
         }} className="gap-1.5">
           <MapPin className="h-4 w-4" /> Open on Map
         </Button>
