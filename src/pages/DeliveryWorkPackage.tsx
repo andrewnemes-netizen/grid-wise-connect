@@ -37,7 +37,7 @@ export default function DeliveryWorkPackage() {
     queryKey: ["wp-sites", wpId],
     queryFn: async () => {
       const { data, error } = await supabase.from("wp_sites")
-        .select("id,site_id,sequence,local_ref,sites(id,name,address)")
+        .select("id,site_id,sequence,local_ref,sites(id,site_name,postcode)")
         .eq("work_package_id", wpId)
         .order("sequence", { ascending: true, nullsFirst: false });
       if (error) throw error;
@@ -198,7 +198,7 @@ function SitesPanel({ wpId, sites }: { wpId: string; sites: any[] }) {
   const { data: available = [] } = useQuery({
     queryKey: ["sites-available", wpId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sites").select("id,name,address").order("created_at", { ascending: false }).limit(500);
+      const { data, error } = await supabase.from("sites").select("id,site_name,postcode").order("created_at", { ascending: false }).limit(500);
       if (error) throw error;
       const usedIds = new Set(sites.map((s: any) => s.site_id));
       return (data ?? []).filter((s: any) => !usedIds.has(s.id));
@@ -228,7 +228,7 @@ function SitesPanel({ wpId, sites }: { wpId: string; sites: any[] }) {
                 <Select value={siteId} onValueChange={setSiteId}>
                   <SelectTrigger><SelectValue placeholder="Pick a site" /></SelectTrigger>
                   <SelectContent>
-                    {(available as any[]).map((s) => <SelectItem key={s.id} value={s.id}>{s.name} {s.address ? `— ${s.address}` : ""}</SelectItem>)}
+                    {(available as any[]).map((s) => <SelectItem key={s.id} value={s.id}>{s.site_name ?? "Site"} {s.postcode ? `— ${s.postcode}` : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -249,9 +249,9 @@ function SitesPanel({ wpId, sites }: { wpId: string; sites: any[] }) {
             <Card key={s.id} className="p-3 flex items-center justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-medium truncate">
-                  {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.name ?? "Site"}
+                  {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.site_name ?? "Site"}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{s.sites?.address ?? ""}</div>
+                <div className="text-xs text-muted-foreground truncate">{s.sites?.postcode ?? ""}</div>
               </div>
               <Link to={`/site/${s.site_id}`}><Button size="sm" variant="ghost">Open</Button></Link>
             </Card>
@@ -497,7 +497,7 @@ function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; st
               return (
                 <tr key={s.id} className="border-t">
                   <td className="p-2 sticky left-0 bg-background font-medium whitespace-nowrap">
-                    {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.name}
+                    {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.site_name}
                   </td>
                   {STAGES.map((st) => {
                     const v = row?.[st] ?? "not_started";
@@ -555,7 +555,7 @@ function MasterGantt({
         const site = siteById[sp.site_id];
         rows.push({
           key: `sp-${sp.id}`,
-          label: `▸ ${site?.local_ref ? site.local_ref + " · " : ""}${site?.sites?.name ?? sp.name}`,
+          label: `▸ ${site?.local_ref ? site.local_ref + " · " : ""}${site?.sites?.site_name ?? sp.name}`,
           kind: "site", start: s, end: e, percent: Number(sp.percent_complete),
         });
       }

@@ -33,7 +33,7 @@ export default function DeliveryProposalDetail() {
     queryKey: ["proposal", proposalId],
     queryFn: async () => {
       const { data, error } = await supabase.from("proposals")
-        .select("*, accounts(id,name), studies(id,study_name,site_id,sites(id,name,address))")
+        .select("*, accounts(id,name), studies(id,study_name,site_id,sites(id,site_name,postcode))")
         .eq("id", proposalId).single();
       if (error) throw error;
       return data as any;
@@ -136,7 +136,7 @@ export default function DeliveryProposalDetail() {
             <p className="text-sm text-muted-foreground">
               {proposal?.accounts?.name}
               {proposal?.studies?.study_name ? ` · ${proposal.studies.study_name}` : ""}
-              {proposal?.studies?.sites?.name ? ` · ${proposal.studies.sites.name}` : ""}
+              {proposal?.studies?.sites?.site_name ? ` · ${proposal.studies.sites.site_name}` : ""}
             </p>
           </div>
           <Badge variant="secondary">{proposal?.status}</Badge>
