@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Grid3x3 } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon } from "lucide-react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 export default function DeliveryWorkPackage() {
@@ -37,6 +38,27 @@ export default function DeliveryWorkPackage() {
         .select("id,site_id,sequence,local_ref,sites(id,name,address)")
         .eq("work_package_id", wpId)
         .order("sequence", { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: stageRows = [] } = useQuery({
+    queryKey: ["wp-site-stage", wpId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_stage_status")
+        .select("*").eq("work_package_id", wpId);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: sitePrograms = [] } = useQuery({
+    queryKey: ["wp-site-programmes", wpId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_programmes")
+        .select("id,name,site_id,start_date,target_end_date,percent_complete,status")
+        .eq("work_package_id", wpId);
       if (error) throw error;
       return data ?? [];
     },
@@ -102,6 +124,7 @@ export default function DeliveryWorkPackage() {
           <TabsTrigger value="tasks">WP Tasks</TabsTrigger>
           <TabsTrigger value="milestones">Milestones</TabsTrigger>
           <TabsTrigger value="matrix">Matrix</TabsTrigger>
+          <TabsTrigger value="gantt">Master Gantt</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -128,7 +151,17 @@ export default function DeliveryWorkPackage() {
         </TabsContent>
 
         <TabsContent value="matrix">
-          <SiteMatrix sites={sites as any} />
+          <SiteMatrix wpId={wpId} sites={sites as any} stageRows={stageRows as any} />
+        </TabsContent>
+
+        <TabsContent value="gantt">
+          <MasterGantt
+            sites={sites as any}
+            sitePrograms={sitePrograms as any}
+            milestones={wpMilestones as any}
+            wpStart={wp?.start_date}
+            wpEnd={wp?.target_end_date}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -373,33 +406,199 @@ function WpMilestonesPanel({ wpId, milestones }: { wpId: string; milestones: any
 }
 
 const STAGES = ["survey","design","dno","permit","civils","electrical","meter","handover"] as const;
-function SiteMatrix({ sites }: { sites: any[] }) {
+const STAGE_COLORS: Record<string, string> = {
+  not_started: "bg-muted text-muted-foreground",
+  in_progress: "bg-primary/15 text-primary border-primary/30",
+  review: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  blocked: "bg-destructive/15 text-destructive border-destructive/30",
+  done: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+};
+const STAGE_LABEL: Record<string, string> = {
+  not_started: "—", in_progress: "In progress", review: "Review", blocked: "Blocked", done: "Done",
+};
+
+function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; stageRows: any[] }) {
+  const qc = useQueryClient();
+  const stageBySite = useMemo(() => {
+    const m: Record<string, any> = {};
+    stageRows.forEach((r) => { m[r.site_id] = r; });
+    return m;
+  }, [stageRows]);
+
+  // Rollup counts
+  const counts = useMemo(() => {
+    const c: Record<string, Record<string, number>> = {};
+    STAGES.forEach((s) => { c[s] = { not_started: 0, in_progress: 0, review: 0, blocked: 0, done: 0 }; });
+    sites.forEach((s: any) => {
+      const row = stageBySite[s.site_id];
+      STAGES.forEach((st) => {
+        const v = row?.[st] ?? "not_started";
+        c[st][v] = (c[st][v] ?? 0) + 1;
+      });
+    });
+    return c;
+  }, [sites, stageBySite]);
+
+  const setStage = useMutation({
+    mutationFn: async ({ site_id, stage, value }: { site_id: string; stage: string; value: string }) => {
+      const existing = stageBySite[site_id];
+      if (existing) {
+        const { error } = await supabase.from("site_stage_status").update({ [stage]: value as any }).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("site_stage_status").insert({
+          work_package_id: wpId, site_id, [stage]: value as any,
+        } as any);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["wp-site-stage", wpId] }),
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
+  });
+
   if (sites.length === 0) return <Card className="p-8 text-center text-sm text-muted-foreground">Add sites to see the readiness matrix.</Card>;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+        {STAGES.map((st) => (
+          <Card key={st} className="p-2">
+            <div className="text-[11px] text-muted-foreground capitalize">{st}</div>
+            <div className="text-lg font-semibold">{counts[st].done}<span className="text-xs text-muted-foreground">/{sites.length}</span></div>
+            <div className="text-[10px] text-muted-foreground">
+              {counts[st].in_progress} live · {counts[st].blocked} blocked
+            </div>
+          </Card>
+        ))}
+      </div>
+      <Card className="p-0 overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className="text-left p-2 sticky left-0 bg-muted/40 z-10">Site</th>
+              {STAGES.map((s) => <th key={s} className="p-2 text-left capitalize">{s}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {sites.map((s: any) => {
+              const row = stageBySite[s.site_id];
+              return (
+                <tr key={s.id} className="border-t">
+                  <td className="p-2 sticky left-0 bg-background font-medium whitespace-nowrap">
+                    {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.name}
+                  </td>
+                  {STAGES.map((st) => {
+                    const v = row?.[st] ?? "not_started";
+                    return (
+                      <td key={st} className="p-1">
+                        <Select value={v} onValueChange={(nv) => setStage.mutate({ site_id: s.site_id, stage: st, value: nv })}>
+                          <SelectTrigger className={`h-7 text-[10px] px-2 border ${STAGE_COLORS[v]}`}>
+                            <SelectValue>{STAGE_LABEL[v]}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.keys(STAGE_LABEL).map((k) => <SelectItem key={k} value={k}>{STAGE_LABEL[k]}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
+      <p className="text-[11px] text-muted-foreground">
+        Stages auto-update from site tasks tagged with a <code>stage</code> in metadata (blocked &gt; in progress/review &gt; done). Manual overrides here take effect immediately.
+      </p>
+    </div>
+  );
+}
+
+function MasterGantt({
+  sites, sitePrograms, milestones, wpStart, wpEnd,
+}: {
+  sites: any[];
+  sitePrograms: any[];
+  milestones: any[];
+  wpStart?: string | null;
+  wpEnd?: string | null;
+}) {
+  const parse = (d: any) => (d ? new Date(d) : null);
+  const items = useMemo(() => {
+    const rows: { key: string; label: string; kind: "wp" | "milestone" | "site"; start: Date; end: Date; percent: number }[] = [];
+    const wpS = parse(wpStart);
+    const wpE = parse(wpEnd);
+    if (wpS && wpE) rows.push({ key: "wp-bar", label: "Work package", kind: "wp", start: wpS, end: wpE, percent: 0 });
+    milestones.forEach((m: any) => {
+      const d = parse(m.planned_date) ?? parse(m.actual_date);
+      if (d) rows.push({ key: `m-${m.id}`, label: `◆ ${m.name}`, kind: "milestone", start: d, end: d, percent: Number(m.percent_complete) });
+    });
+    const siteById: Record<string, any> = {};
+    sites.forEach((s: any) => { siteById[s.site_id] = s; });
+    sitePrograms.forEach((sp: any) => {
+      const s = parse(sp.start_date);
+      const e = parse(sp.target_end_date);
+      if (s && e) {
+        const site = siteById[sp.site_id];
+        rows.push({
+          key: `sp-${sp.id}`,
+          label: `▸ ${site?.local_ref ? site.local_ref + " · " : ""}${site?.sites?.name ?? sp.name}`,
+          kind: "site", start: s, end: e, percent: Number(sp.percent_complete),
+        });
+      }
+    });
+    return rows;
+  }, [sites, sitePrograms, milestones, wpStart, wpEnd]);
+
+  if (items.length === 0) {
+    return <Card className="p-8 text-center text-sm text-muted-foreground">Add start/end dates to the work package, milestones or site programmes to see the master Gantt.</Card>;
+  }
+
+  const min = new Date(Math.min(...items.map((i) => i.start.getTime())));
+  const max = new Date(Math.max(...items.map((i) => i.end.getTime())));
+  const days = Math.max(1, Math.round((max.getTime() - min.getTime()) / 86400000) + 1);
+  const dayW = 20;
+  const width = days * dayW;
+  const daysFrom = (d: Date) => Math.round((d.getTime() - min.getTime()) / 86400000);
+
   return (
     <Card className="p-0 overflow-auto">
-      <table className="w-full text-xs">
-        <thead className="bg-muted/40">
-          <tr>
-            <th className="text-left p-2 sticky left-0 bg-muted/40">Site</th>
-            {STAGES.map((s) => <th key={s} className="p-2 text-left capitalize">{s}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {sites.map((s: any) => (
-            <tr key={s.id} className="border-t">
-              <td className="p-2 sticky left-0 bg-background font-medium">
-                {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.name}
-              </td>
-              {STAGES.map((st) => (
-                <td key={st} className="p-2">
-                  <Badge variant="outline" className="text-[10px]">Not started</Badge>
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="p-2 text-[11px] text-muted-foreground">Stage tracking wired up in Phase 2b (site_stage_status table).</div>
+      <div className="grid" style={{ gridTemplateColumns: `260px ${width}px` }}>
+        <div className="p-2 border-b border-r bg-muted/40 text-xs font-medium sticky left-0 z-10">Item</div>
+        <div className="border-b bg-muted/40 flex text-[10px] text-muted-foreground">
+          {Array.from({ length: days }).map((_, i) => {
+            const d = new Date(min.getTime() + i * 86400000);
+            const label = d.getDate() === 1 || i === 0;
+            return (
+              <div key={i} className="border-r text-center py-1" style={{ width: dayW }}>
+                {label ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : d.getDate()}
+              </div>
+            );
+          })}
+        </div>
+        {items.map((it) => {
+          const off = daysFrom(it.start);
+          const span = Math.max(1, daysFrom(it.end) - off + 1);
+          const barColor = it.kind === "wp" ? "bg-primary" : it.kind === "milestone" ? "bg-amber-500" : "bg-emerald-500/80";
+          return (
+            <div key={it.key} className="contents">
+              <div className={`p-2 border-b border-r text-xs sticky left-0 bg-background z-10 truncate ${it.kind === "wp" ? "font-semibold" : ""}`}>
+                {it.label}
+              </div>
+              <div className="border-b relative h-8">
+                <div
+                  className={`absolute top-1 h-6 rounded ${barColor} text-white text-[10px] flex items-center px-2 overflow-hidden`}
+                  style={{ left: off * dayW, width: span * dayW - 2 }}
+                  title={`${it.label} · ${it.start.toLocaleDateString()} → ${it.end.toLocaleDateString()}`}
+                >
+                  {it.kind === "site" ? `${Math.round(it.percent)}%` : ""}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </Card>
   );
 }
