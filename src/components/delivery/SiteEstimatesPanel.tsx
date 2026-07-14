@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -17,6 +17,21 @@ import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
 import { toast } from "sonner";
+import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
+import { useUnitRates } from "@/hooks/useUnitRates";
+
+type SocketTier = 2 | 4 | 6 | 8;
+const SOCKET_TIERS: SocketTier[] = [2, 4, 6, 8];
+
+function socketRate(rates: any, tier: SocketTier): number {
+  const key = `socket_build_${tier}` as const;
+  return Number(rates?.[key] ?? (DEFAULT_UNIT_RATES as any)[key] ?? 0);
+}
+
+function studyTotal(cost: any): number {
+  if (!cost) return 0;
+  return Number(cost.total_estimate ?? cost.total ?? cost.total_price ?? 0);
+}
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, maximumFractionDigits: 0 }).format(Number(n));
@@ -238,6 +253,36 @@ function NewSiteEstimateDialog({
   const [recipeId, setRecipeId] = useState<string | undefined>();
   const [seedFromRecipe, setSeedFromRecipe] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { data: unitRates } = useUnitRates();
+  const [socketTier, setSocketTier] = useState<"none" | SocketTier>("none");
+  const [includeIcp, setIncludeIcp] = useState(true);
+  const [includeIcpDetail, setIncludeIcpDetail] = useState(true);
+
+  const { data: site } = useQuery({
+    queryKey: ["site-for-new-est", siteId],
+    queryFn: async () => {
+      const { data } = await supabase.from("sites").select("id, socket_count").eq("id", siteId).maybeSingle();
+      return data as any;
+    },
+  });
+  const { data: latestStudy } = useQuery({
+    queryKey: ["latest-study-for-site", siteId],
+    queryFn: async () => {
+      const { data } = await supabase.from("studies")
+        .select("id, study_name, cost_estimate_json, bom_json, updated_at")
+        .eq("site_id", siteId)
+        .not("cost_estimate_json", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+
+  useEffect(() => {
+    const c = site?.socket_count;
+    if (c && (SOCKET_TIERS as number[]).includes(Number(c))) setSocketTier(Number(c) as SocketTier);
+  }, [site?.socket_count]);
 
   const { data: contracts = [] } = useQuery({
     queryKey: ["contracts-all-se"],
@@ -292,8 +337,12 @@ function NewSiteEstimateDialog({
         status: "DRAFT",
         version_number: nextVer,
         created_by: user.user?.id ?? null,
-      }).select().single();
+        study_id: (includeIcp && latestStudy?.id) ? latestStudy.id : null,
+      } as any).select().single();
       if (error) throw error;
+
+      let sortCursor = 0;
+      const rowsToInsert: any[] = [];
 
       if (seedFromRecipe && recipeId) {
         // load recipe items and join to rate_items for cost/price defaults
@@ -301,11 +350,11 @@ function NewSiteEstimateDialog({
           .select("*, rate_items(unit, total_unit_cost, client_unit_price, description)")
           .eq("recipe_id", recipeId)
           .order("sort_index");
-        const rows = (items ?? []).map((r: any, i: number) => {
+        (items ?? []).forEach((r: any) => {
           const cost = Number(r.rate_items?.total_unit_cost ?? 0);
           const price = Number(r.rate_items?.client_unit_price ?? cost);
           const qty = Number(r.default_quantity ?? 0);
-          return {
+          rowsToInsert.push({
             site_estimate_id: (est as any).id,
             recipe_item_id: r.id,
             rate_item_id: r.rate_item_id,
@@ -322,13 +371,65 @@ function NewSiteEstimateDialog({
             cost_code: r.cost_code,
             cost_code_category: r.cost_code_category,
             is_allowance: !!r.is_allowance,
-            sort_index: i,
-          };
+            sort_index: sortCursor++,
+            source: "MANUAL",
+            is_locked: false,
+          });
         });
-        if (rows.length > 0) {
-          const { error: e2 } = await supabase.from("site_estimate_lines").insert(rows);
-          if (e2) throw e2;
+      }
+
+      if (socketTier !== "none") {
+        const tier = socketTier as SocketTier;
+        const price = socketRate(unitRates, tier);
+        rowsToInsert.push({
+          site_estimate_id: (est as any).id,
+          description: `Build work — ${tier}-socket EV hub (fixed price)`,
+          unit: "hub", quantity: 1,
+          unit_cost: price, unit_price: price,
+          line_cost: price, line_price: price,
+          stage: "build", cost_code: `SOCKET-${tier}`, cost_code_category: "Build",
+          sort_index: sortCursor++, source: "SOCKET_BUILD", is_locked: true,
+        });
+        await supabase.from("sites").update({ socket_count: tier } as any).eq("id", siteId);
+      }
+
+      if (includeIcp && latestStudy?.cost_estimate_json) {
+        const total = studyTotal(latestStudy.cost_estimate_json);
+        rowsToInsert.push({
+          site_estimate_id: (est as any).id,
+          description: `ICP connection — from study "${latestStudy.study_name}"`,
+          unit: "lot", quantity: 1,
+          unit_cost: total, unit_price: total,
+          line_cost: total, line_price: total,
+          stage: "connection", cost_code: "ICP-STUDY", cost_code_category: "ICP Connection",
+          sort_index: sortCursor++, source: "ICP_STUDY", is_locked: true,
+        });
+        if (includeIcpDetail && Array.isArray(latestStudy.bom_json)) {
+          for (const item of latestStudy.bom_json as any[]) {
+            const qty = Number(item.quantity ?? item.qty ?? 0);
+            const uc = Number(item.unit_cost ?? item.rate ?? 0);
+            rowsToInsert.push({
+              site_estimate_id: (est as any).id,
+              description: `  ↳ ${item.description ?? item.name ?? "BoM item"}`,
+              unit: item.unit ?? null,
+              quantity: qty, unit_cost: uc, unit_price: 0,
+              line_cost: Number((qty * uc).toFixed(2)), line_price: 0,
+              stage: "connection", cost_code: "ICP-DETAIL", cost_code_category: "ICP Connection (detail)",
+              is_allowance: true,
+              sort_index: sortCursor++, source: "ICP_STUDY_DETAIL", is_locked: true,
+            });
+          }
         }
+      }
+
+      if (rowsToInsert.length > 0) {
+        const { error: e2 } = await supabase.from("site_estimate_lines").insert(rowsToInsert as any);
+        if (e2) throw e2;
+        const totalCost = rowsToInsert.reduce((s, r) => s + Number(r.line_cost || 0), 0);
+        const totalPrice = rowsToInsert.reduce((s, r) => s + Number(r.line_price || 0), 0);
+        await supabase.from("site_estimates").update({
+          total_cost: totalCost, total_price: totalPrice, total_markup: totalPrice - totalCost,
+        }).eq("id", (est as any).id);
       }
 
       toast.success("Draft site estimate created");
@@ -340,13 +441,51 @@ function NewSiteEstimateDialog({
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New site estimate</DialogTitle>
-          <DialogDescription>Optionally seed lines from a recipe. Version increments automatically.</DialogDescription>
+          <DialogDescription>Add a fixed socket-build cost, pull the ICP connection cost from the site's latest map study, and optionally seed rate-card lines from a recipe.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+
+          <Card className="p-3 space-y-2 bg-muted/30">
+            <Label className="text-sm font-semibold">Build work (fixed price per socket count)</Label>
+            <Select value={String(socketTier)} onValueChange={(v) => setSocketTier(v === "none" ? "none" : (Number(v) as SocketTier))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No build line</SelectItem>
+                {SOCKET_TIERS.map((t) => (
+                  <SelectItem key={t} value={String(t)}>{t} sockets — {fmt(socketRate(unitRates, t))}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">Rates are managed in Admin › Unit Rates.</p>
+          </Card>
+
+          <Card className="p-3 space-y-2 bg-muted/30">
+            <Label className="text-sm font-semibold">ICP connection (from map study)</Label>
+            {latestStudy?.cost_estimate_json ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Switch checked={includeIcp} onCheckedChange={setIncludeIcp} />
+                  <Label className="text-sm">
+                    Include ICP total — {fmt(studyTotal(latestStudy.cost_estimate_json))}
+                    <span className="text-muted-foreground"> from “{latestStudy.study_name}”</span>
+                  </Label>
+                </div>
+                {includeIcp && (
+                  <div className="flex items-center gap-2 pl-6">
+                    <Switch checked={includeIcpDetail} onCheckedChange={setIncludeIcpDetail} />
+                    <Label className="text-sm">Include BoM detail lines (read-only, £0 price)</Label>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">No map study with a cost estimate is linked to this site yet.</p>
+            )}
+          </Card>
+
           <div>
             <Label>Contract</Label>
             <Select value={contractId} onValueChange={(v) => { setContractId(v); setRateCardVersionId(undefined); setRecipeId(undefined); }}>
@@ -529,26 +668,35 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
             </TableHeader>
             <TableBody>
               {(lines as any[]).map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell className="text-xs">{l.rate_code ?? "—"}</TableCell>
+                <TableRow key={l.id} className={l.is_locked ? "bg-muted/20" : ""}>
+                  <TableCell className="text-xs">
+                    <div className="flex flex-col gap-1">
+                      <span>{l.rate_code ?? l.cost_code ?? "—"}</span>
+                      {l.source && l.source !== "MANUAL" && (
+                        <Badge variant="outline" className="text-[9px] w-fit">
+                          {l.source === "ICP_STUDY" ? "ICP study" : l.source === "ICP_STUDY_DETAIL" ? "study BoM" : l.source === "SOCKET_BUILD" ? "socket build" : l.source}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
-                    <Input value={l.description ?? ""} disabled={isApproved}
+                    <Input value={l.description ?? ""} disabled={isApproved || l.is_locked}
                            onChange={(e) => updateLine(l.id, { description: e.target.value })} />
                   </TableCell>
                   <TableCell>
-                    <Input value={l.unit ?? ""} disabled={isApproved} className="w-16"
+                    <Input value={l.unit ?? ""} disabled={isApproved || l.is_locked} className="w-16"
                            onChange={(e) => updateLine(l.id, { unit: e.target.value })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.quantity ?? 0} disabled={isApproved} className="text-right w-20"
+                    <Input type="number" step="0.01" value={l.quantity ?? 0} disabled={isApproved || l.is_locked} className="text-right w-20"
                            onChange={(e) => updateLine(l.id, { quantity: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.unit_cost ?? 0} disabled={isApproved} className="text-right w-24"
+                    <Input type="number" step="0.01" value={l.unit_cost ?? 0} disabled={isApproved || l.is_locked} className="text-right w-24"
                            onChange={(e) => updateLine(l.id, { unit_cost: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Input type="number" step="0.01" value={l.unit_price ?? 0} disabled={isApproved} className="text-right w-24"
+                    <Input type="number" step="0.01" value={l.unit_price ?? 0} disabled={isApproved || l.is_locked} className="text-right w-24"
                            onChange={(e) => updateLine(l.id, { unit_price: Number(e.target.value || 0) })} />
                   </TableCell>
                   <TableCell className="text-right text-sm">{fmt(l.line_cost, ccy)}</TableCell>

@@ -46,6 +46,10 @@ const RATE_FIELDS: { key: keyof UnitRates; label: string; unit: string; group: s
   { key: "project_management_pct", label: "Project management", unit: "%", group: "Fees" },
   { key: "contingency_pct", label: "Contingency", unit: "%", group: "Fees" },
   { key: "reinforcement_per_kw_over_capacity", label: "Reinforcement", unit: "£/kW", group: "Reinforcement" },
+  { key: "socket_build_2", label: "2-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
+  { key: "socket_build_4", label: "4-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
+  { key: "socket_build_6", label: "6-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
+  { key: "socket_build_8", label: "8-socket hub build", unit: "£", group: "Socket Build (fixed price)" },
 ];
 
 export function UnitRatesSettings() {

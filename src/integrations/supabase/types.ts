@@ -3518,6 +3518,7 @@ export type Database = {
           description: string
           id: string
           is_allowance: boolean
+          is_locked: boolean
           is_manual_addition: boolean
           line_cost: number
           line_price: number
@@ -3529,6 +3530,7 @@ export type Database = {
           recipe_item_id: string | null
           site_estimate_id: string
           sort_index: number
+          source: string
           stage: string | null
           unit: string | null
           unit_cost: number
@@ -3542,6 +3544,7 @@ export type Database = {
           description: string
           id?: string
           is_allowance?: boolean
+          is_locked?: boolean
           is_manual_addition?: boolean
           line_cost?: number
           line_price?: number
@@ -3553,6 +3556,7 @@ export type Database = {
           recipe_item_id?: string | null
           site_estimate_id: string
           sort_index?: number
+          source?: string
           stage?: string | null
           unit?: string | null
           unit_cost?: number
@@ -3566,6 +3570,7 @@ export type Database = {
           description?: string
           id?: string
           is_allowance?: boolean
+          is_locked?: boolean
           is_manual_addition?: boolean
           line_cost?: number
           line_price?: number
@@ -3577,6 +3582,7 @@ export type Database = {
           recipe_item_id?: string | null
           site_estimate_id?: string
           sort_index?: number
+          source?: string
           stage?: string | null
           unit?: string | null
           unit_cost?: number
@@ -3622,6 +3628,7 @@ export type Database = {
           recipe_id: string | null
           site_id: string
           status: Database["public"]["Enums"]["site_estimate_status"]
+          study_id: string | null
           superseded_by_estimate_id: string | null
           total_cost: number
           total_markup: number
@@ -3643,6 +3650,7 @@ export type Database = {
           recipe_id?: string | null
           site_id: string
           status?: Database["public"]["Enums"]["site_estimate_status"]
+          study_id?: string | null
           superseded_by_estimate_id?: string | null
           total_cost?: number
           total_markup?: number
@@ -3664,6 +3672,7 @@ export type Database = {
           recipe_id?: string | null
           site_id?: string
           status?: Database["public"]["Enums"]["site_estimate_status"]
+          study_id?: string | null
           superseded_by_estimate_id?: string | null
           total_cost?: number
           total_markup?: number
@@ -3698,6 +3707,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
             referencedColumns: ["id"]
           },
           {
@@ -3990,6 +4006,7 @@ export type Database = {
           score_reasons: Json | null
           site_name: string
           site_type: string | null
+          socket_count: number | null
           status: string
           updated_at: string
           viability_index: number | null
@@ -4014,6 +4031,7 @@ export type Database = {
           score_reasons?: Json | null
           site_name: string
           site_type?: string | null
+          socket_count?: number | null
           status?: string
           updated_at?: string
           viability_index?: number | null
@@ -4038,6 +4056,7 @@ export type Database = {
           score_reasons?: Json | null
           site_name?: string
           site_type?: string | null
+          socket_count?: number | null
           status?: string
           updated_at?: string
           viability_index?: number | null
@@ -4750,6 +4769,10 @@ export type Database = {
           project_management_pct: number
           reinforcement_per_kw_over_capacity: number
           service_cable_35mm_per_m: number
+          socket_build_2: number
+          socket_build_4: number
+          socket_build_6: number
+          socket_build_8: number
           switchgear_circuit_breaker: number
           switchgear_ring_main: number
           termination_each: number
@@ -4789,6 +4812,10 @@ export type Database = {
           project_management_pct?: number
           reinforcement_per_kw_over_capacity?: number
           service_cable_35mm_per_m?: number
+          socket_build_2?: number
+          socket_build_4?: number
+          socket_build_6?: number
+          socket_build_8?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
           termination_each?: number
@@ -4828,6 +4855,10 @@ export type Database = {
           project_management_pct?: number
           reinforcement_per_kw_over_capacity?: number
           service_cable_35mm_per_m?: number
+          socket_build_2?: number
+          socket_build_4?: number
+          socket_build_6?: number
+          socket_build_8?: number
           switchgear_circuit_breaker?: number
           switchgear_ring_main?: number
           termination_each?: number
@@ -6407,6 +6438,7 @@ export type Database = {
           recipe_id: string | null
           site_id: string
           status: Database["public"]["Enums"]["site_estimate_status"]
+          study_id: string | null
           superseded_by_estimate_id: string | null
           total_cost: number
           total_markup: number
@@ -6510,6 +6542,7 @@ export type Database = {
           recipe_id: string | null
           site_id: string
           status: Database["public"]["Enums"]["site_estimate_status"]
+          study_id: string | null
           superseded_by_estimate_id: string | null
           total_cost: number
           total_markup: number
