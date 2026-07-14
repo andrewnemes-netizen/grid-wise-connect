@@ -253,6 +253,36 @@ function NewSiteEstimateDialog({
   const [recipeId, setRecipeId] = useState<string | undefined>();
   const [seedFromRecipe, setSeedFromRecipe] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { data: unitRates } = useUnitRates();
+  const [socketTier, setSocketTier] = useState<"none" | SocketTier>("none");
+  const [includeIcp, setIncludeIcp] = useState(true);
+  const [includeIcpDetail, setIncludeIcpDetail] = useState(true);
+
+  const { data: site } = useQuery({
+    queryKey: ["site-for-new-est", siteId],
+    queryFn: async () => {
+      const { data } = await supabase.from("sites").select("id, socket_count").eq("id", siteId).maybeSingle();
+      return data as any;
+    },
+  });
+  const { data: latestStudy } = useQuery({
+    queryKey: ["latest-study-for-site", siteId],
+    queryFn: async () => {
+      const { data } = await supabase.from("studies")
+        .select("id, study_name, cost_estimate_json, bom_json, updated_at")
+        .eq("site_id", siteId)
+        .not("cost_estimate_json", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data as any;
+    },
+  });
+
+  useEffect(() => {
+    const c = site?.socket_count;
+    if (c && (SOCKET_TIERS as number[]).includes(Number(c))) setSocketTier(Number(c) as SocketTier);
+  }, [site?.socket_count]);
 
   const { data: contracts = [] } = useQuery({
     queryKey: ["contracts-all-se"],
