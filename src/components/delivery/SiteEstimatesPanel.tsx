@@ -234,6 +234,7 @@ function NewSiteEstimateDialog({
       const { data, error } = await supabase.from("rate_card_versions")
         .select("id, version_number, status, rate_cards!inner(name, contract_id)")
         .eq("rate_cards.contract_id", contractId!)
+        .eq("status", "APPROVED")
         .order("version_number", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -245,6 +246,7 @@ function NewSiteEstimateDialog({
     queryFn: async () => {
       const { data, error } = await supabase.from("estimate_recipes")
         .select("id, name, status, version_number").eq("contract_id", contractId!)
+        .eq("status", "APPROVED")
         .order("name");
       if (error) throw error;
       return data ?? [];
