@@ -818,6 +818,71 @@ export type Database = {
         }
         Relationships: []
       }
+      estimate_recipes: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          build_type: Database["public"]["Enums"]["recipe_build_type"]
+          contract_id: string
+          created_at: string
+          delivering_partner: string | null
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          name: string
+          notes: string | null
+          socket_count: number | null
+          source_workbook: string | null
+          status: Database["public"]["Enums"]["rate_card_status"]
+          updated_at: string
+          version_number: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          build_type?: Database["public"]["Enums"]["recipe_build_type"]
+          contract_id: string
+          created_at?: string
+          delivering_partner?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          name: string
+          notes?: string | null
+          socket_count?: number | null
+          source_workbook?: string | null
+          status?: Database["public"]["Enums"]["rate_card_status"]
+          updated_at?: string
+          version_number?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          build_type?: Database["public"]["Enums"]["recipe_build_type"]
+          contract_id?: string
+          created_at?: string
+          delivering_partner?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          name?: string
+          notes?: string | null
+          socket_count?: number | null
+          source_workbook?: string | null
+          status?: Database["public"]["Enums"]["rate_card_status"]
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimate_recipes_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ev_hub_rulesets: {
         Row: {
           created_at: string
@@ -2825,6 +2890,93 @@ export type Database = {
             columns: ["rate_card_version_id"]
             isOneToOne: false
             referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recipe_items: {
+        Row: {
+          cost_code: string | null
+          cost_code_category: string | null
+          create_project_task: boolean
+          created_at: string
+          default_quantity: number
+          description_override: string | null
+          id: string
+          is_allowance: boolean
+          markup_amount: number
+          markup_pct: number | null
+          notes: string | null
+          quantity_rule_confirmed: boolean
+          quantity_rule_json: Json
+          rate_item_id: string | null
+          recipe_id: string
+          related_allowance_ref: string | null
+          sort_index: number
+          stage: string | null
+          task_stage_tag: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          cost_code?: string | null
+          cost_code_category?: string | null
+          create_project_task?: boolean
+          created_at?: string
+          default_quantity?: number
+          description_override?: string | null
+          id?: string
+          is_allowance?: boolean
+          markup_amount?: number
+          markup_pct?: number | null
+          notes?: string | null
+          quantity_rule_confirmed?: boolean
+          quantity_rule_json?: Json
+          rate_item_id?: string | null
+          recipe_id: string
+          related_allowance_ref?: string | null
+          sort_index?: number
+          stage?: string | null
+          task_stage_tag?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          cost_code?: string | null
+          cost_code_category?: string | null
+          create_project_task?: boolean
+          created_at?: string
+          default_quantity?: number
+          description_override?: string | null
+          id?: string
+          is_allowance?: boolean
+          markup_amount?: number
+          markup_pct?: number | null
+          notes?: string | null
+          quantity_rule_confirmed?: boolean
+          quantity_rule_json?: Json
+          rate_item_id?: string | null
+          recipe_id?: string
+          related_allowance_ref?: string | null
+          sort_index?: number
+          stage?: string | null
+          task_stage_tag?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recipe_items_rate_item_id_fkey"
+            columns: ["rate_item_id"]
+            isOneToOne: false
+            referencedRelation: "rate_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recipe_items_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_recipes"
             referencedColumns: ["id"]
           },
         ]
@@ -6390,6 +6542,7 @@ export type Database = {
       proposal_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
       rate_card_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
       rate_provided_by: "partner" | "client" | "both" | "unknown"
+      recipe_build_type: "horizontal" | "vertical" | "buildout" | "other"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -6581,6 +6734,7 @@ export const Constants = {
       proposal_status: ["draft", "sent", "accepted", "rejected", "expired"],
       rate_card_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
       rate_provided_by: ["partner", "client", "both", "unknown"],
+      recipe_build_type: ["horizontal", "vertical", "buildout", "other"],
       site_stage_state: [
         "not_started",
         "in_progress",
