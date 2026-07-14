@@ -22,6 +22,8 @@ const QuickEstimate = lazy(() => import("./pages/QuickEstimate"));
 const Training = lazy(() => import("./pages/Training"));
 const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
+const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
+const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 
@@ -124,6 +126,8 @@ const AppRoutes = () => (
       <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
       <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
+      <Route path="/delivery" element={<ProtectedRoute><DeliveryProjects /></ProtectedRoute>} />
+      <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
