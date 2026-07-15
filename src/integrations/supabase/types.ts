@@ -1031,6 +1031,321 @@ export type Database = {
         }
         Relationships: []
       }
+      estimate_allowances: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string
+          description: string | null
+          estimate_id: string
+          id: string
+          name: string
+          sort_index: number
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          estimate_id: string
+          id?: string
+          name: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          estimate_id?: string
+          id?: string
+          name?: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimate_allowances_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimate_groups: {
+        Row: {
+          collapsed: boolean
+          color: string | null
+          cost_category: string | null
+          cost_code: string | null
+          created_at: string
+          estimate_id: string
+          id: string
+          name: string
+          sort_index: number
+          updated_at: string
+        }
+        Insert: {
+          collapsed?: boolean
+          color?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
+          created_at?: string
+          estimate_id: string
+          id?: string
+          name: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Update: {
+          collapsed?: boolean
+          color?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
+          created_at?: string
+          estimate_id?: string
+          id?: string
+          name?: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimate_groups_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimate_lines: {
+        Row: {
+          attribute_group: string | null
+          boq_description: string | null
+          boq_item_name: string
+          calculate_time: boolean | null
+          charge_out_rate_used: string | null
+          compare_list: string | null
+          compare_title: string | null
+          contingency_pct: number | null
+          conversion_type: string | null
+          cost_category: string | null
+          cost_code: string | null
+          created_at: string
+          discount: number
+          estimate_id: string
+          fixed_price: boolean | null
+          flexible_qty: boolean | null
+          grand_total: number | null
+          group_id: string | null
+          id: string
+          image_link: string | null
+          include_in_create_task: boolean | null
+          is_allowance: boolean | null
+          item_logic: string | null
+          itemised: boolean | null
+          lock_markup_dollar: boolean | null
+          locked: boolean
+          markup_dollar: number | null
+          markup_pct: number | null
+          markup_type: string | null
+          milestone_for_sync: string | null
+          net_markup_pct: number | null
+          no_resources: number | null
+          parent_line_id: string | null
+          pricing_notes: string | null
+          product_service: string | null
+          product_type: string | null
+          project_description: string | null
+          project_stage: string | null
+          project_sync_type: string | null
+          project_task_name: string | null
+          qty: number
+          recipe_id: string | null
+          rfq_required: boolean | null
+          show_image_in_proposal: boolean | null
+          solution_link: string | null
+          sort_index: number
+          split_labour_materials: boolean | null
+          stage: string | null
+          sub_total: number
+          supplier: string | null
+          task_owner: string | null
+          time_measure: string | null
+          time_value: number | null
+          total_cost: number
+          total_markup: number
+          total_price: number
+          unit_cost: number
+          unit_price: number
+          uom: string | null
+          updated_at: string
+          vat_amount: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
+          created_at?: string
+          discount?: number
+          estimate_id: string
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
+          grand_total?: number | null
+          group_id?: string | null
+          id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
+          lock_markup_dollar?: boolean | null
+          locked?: boolean
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          net_markup_pct?: number | null
+          no_resources?: number | null
+          parent_line_id?: string | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
+          qty?: number
+          recipe_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
+          sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          sub_total?: number
+          supplier?: string | null
+          task_owner?: string | null
+          time_measure?: string | null
+          time_value?: number | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          unit_cost?: number
+          unit_price?: number
+          uom?: string | null
+          updated_at?: string
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
+          created_at?: string
+          discount?: number
+          estimate_id?: string
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
+          grand_total?: number | null
+          group_id?: string | null
+          id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
+          lock_markup_dollar?: boolean | null
+          locked?: boolean
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          net_markup_pct?: number | null
+          no_resources?: number | null
+          parent_line_id?: string | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
+          qty?: number
+          recipe_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
+          sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          sub_total?: number
+          supplier?: string | null
+          task_owner?: string | null
+          time_measure?: string | null
+          time_value?: number | null
+          total_cost?: number
+          total_markup?: number
+          total_price?: number
+          unit_cost?: number
+          unit_price?: number
+          uom?: string | null
+          updated_at?: string
+          vat_amount?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimate_lines_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_lines_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_lines_parent_line_id_fkey"
+            columns: ["parent_line_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_lines_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estimate_recipes: {
         Row: {
           approved_at: string | null
@@ -1092,6 +1407,130 @@ export type Database = {
             columns: ["contract_id"]
             isOneToOne: false
             referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      estimates: {
+        Row: {
+          boq_compact_view: boolean
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          exchange_rate: number
+          expense_cost: number
+          grand_total: number
+          gross_margin_pct: number | null
+          hire_cost: number
+          id: string
+          labour_cost: number
+          labour_hours: number
+          locked: boolean
+          material_cost: number
+          name: string
+          net_markup_pct: number | null
+          org_id: string | null
+          project_id: string | null
+          ref: string | null
+          show_recipe_totals: boolean
+          status: string
+          sub_total: number
+          subcontractor_cost: number
+          total_cost: number
+          total_discount: number
+          total_markup: number
+          total_price: number
+          updated_at: string
+          vat_total: number
+          work_package_id: string | null
+        }
+        Insert: {
+          boq_compact_view?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          exchange_rate?: number
+          expense_cost?: number
+          grand_total?: number
+          gross_margin_pct?: number | null
+          hire_cost?: number
+          id?: string
+          labour_cost?: number
+          labour_hours?: number
+          locked?: boolean
+          material_cost?: number
+          name?: string
+          net_markup_pct?: number | null
+          org_id?: string | null
+          project_id?: string | null
+          ref?: string | null
+          show_recipe_totals?: boolean
+          status?: string
+          sub_total?: number
+          subcontractor_cost?: number
+          total_cost?: number
+          total_discount?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          vat_total?: number
+          work_package_id?: string | null
+        }
+        Update: {
+          boq_compact_view?: boolean
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          exchange_rate?: number
+          expense_cost?: number
+          grand_total?: number
+          gross_margin_pct?: number | null
+          hire_cost?: number
+          id?: string
+          labour_cost?: number
+          labour_hours?: number
+          locked?: boolean
+          material_cost?: number
+          name?: string
+          net_markup_pct?: number | null
+          org_id?: string | null
+          project_id?: string | null
+          ref?: string | null
+          show_recipe_totals?: boolean
+          status?: string
+          sub_total?: number
+          subcontractor_cost?: number
+          total_cost?: number
+          total_discount?: number
+          total_markup?: number
+          total_price?: number
+          updated_at?: string
+          vat_total?: number
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estimates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -5877,6 +6316,7 @@ export type Database = {
           depends_on_task_id: string | null
           id: string
           lag_days: number
+          link_type: string
           task_id: string
           type: string
         }
@@ -5886,6 +6326,7 @@ export type Database = {
           depends_on_task_id?: string | null
           id?: string
           lag_days?: number
+          link_type?: string
           task_id: string
           type?: string
         }
@@ -5895,6 +6336,7 @@ export type Database = {
           depends_on_task_id?: string | null
           id?: string
           lag_days?: number
+          link_type?: string
           task_id?: string
           type?: string
         }
@@ -5922,7 +6364,9 @@ export type Database = {
           created_by: string | null
           description: string | null
           due_date: string | null
+          duration_days: number | null
           estimated_hours: number | null
+          gantt_color: string | null
           id: string
           metadata_json: Json
           milestone_id: string | null
@@ -5943,7 +6387,9 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           due_date?: string | null
+          duration_days?: number | null
           estimated_hours?: number | null
+          gantt_color?: string | null
           id?: string
           metadata_json?: Json
           milestone_id?: string | null
@@ -5964,7 +6410,9 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           due_date?: string | null
+          duration_days?: number | null
           estimated_hours?: number | null
+          gantt_color?: string | null
           id?: string
           metadata_json?: Json
           milestone_id?: string | null
