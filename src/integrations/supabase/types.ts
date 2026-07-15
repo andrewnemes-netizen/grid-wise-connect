@@ -779,6 +779,103 @@ export type Database = {
           },
         ]
       }
+      commissioning_records: {
+        Row: {
+          commissioned_at: string | null
+          commissioning_engineer_id: string | null
+          commissioning_engineer_name: string | null
+          connection_capacity_kva: number | null
+          created_at: string
+          created_by: string | null
+          energised_at: string | null
+          id: string
+          metadata_json: Json
+          meter_serial: string | null
+          mpan: string | null
+          notes: string | null
+          org_id: string
+          site_id: string | null
+          status: Database["public"]["Enums"]["commissioning_status"]
+          test_pack_file_id: string | null
+          test_pack_ref: string | null
+          updated_at: string
+          voltage_level: string | null
+          witness_name: string | null
+          witness_org: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          commissioned_at?: string | null
+          commissioning_engineer_id?: string | null
+          commissioning_engineer_name?: string | null
+          connection_capacity_kva?: number | null
+          created_at?: string
+          created_by?: string | null
+          energised_at?: string | null
+          id?: string
+          metadata_json?: Json
+          meter_serial?: string | null
+          mpan?: string | null
+          notes?: string | null
+          org_id: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["commissioning_status"]
+          test_pack_file_id?: string | null
+          test_pack_ref?: string | null
+          updated_at?: string
+          voltage_level?: string | null
+          witness_name?: string | null
+          witness_org?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          commissioned_at?: string | null
+          commissioning_engineer_id?: string | null
+          commissioning_engineer_name?: string | null
+          connection_capacity_kva?: number | null
+          created_at?: string
+          created_by?: string | null
+          energised_at?: string | null
+          id?: string
+          metadata_json?: Json
+          meter_serial?: string | null
+          mpan?: string | null
+          notes?: string | null
+          org_id?: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["commissioning_status"]
+          test_pack_file_id?: string | null
+          test_pack_ref?: string | null
+          updated_at?: string
+          voltage_level?: string | null
+          witness_name?: string | null
+          witness_org?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commissioning_records_test_pack_file_id_fkey"
+            columns: ["test_pack_file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commissioning_records_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "commissioning_records_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           account_id: string | null
@@ -2856,6 +2953,97 @@ export type Database = {
             columns: ["layer_id"]
             isOneToOne: false
             referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      handover_packs: {
+        Row: {
+          client_signed_at: string | null
+          client_signed_by_email: string | null
+          client_signed_by_name: string | null
+          created_at: string
+          created_by: string | null
+          handover_notes: string | null
+          id: string
+          metadata_json: Json
+          om_bundle_file_id: string | null
+          org_id: string
+          pc_signed_at: string | null
+          pc_signed_by: string | null
+          pc_signed_by_name: string | null
+          signature_ip: string | null
+          site_id: string | null
+          status: Database["public"]["Enums"]["handover_status"]
+          updated_at: string
+          warranty_period_months: number | null
+          warranty_start_date: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          client_signed_at?: string | null
+          client_signed_by_email?: string | null
+          client_signed_by_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          handover_notes?: string | null
+          id?: string
+          metadata_json?: Json
+          om_bundle_file_id?: string | null
+          org_id: string
+          pc_signed_at?: string | null
+          pc_signed_by?: string | null
+          pc_signed_by_name?: string | null
+          signature_ip?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["handover_status"]
+          updated_at?: string
+          warranty_period_months?: number | null
+          warranty_start_date?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          client_signed_at?: string | null
+          client_signed_by_email?: string | null
+          client_signed_by_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          handover_notes?: string | null
+          id?: string
+          metadata_json?: Json
+          om_bundle_file_id?: string | null
+          org_id?: string
+          pc_signed_at?: string | null
+          pc_signed_by?: string | null
+          pc_signed_by_name?: string | null
+          signature_ip?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["handover_status"]
+          updated_at?: string
+          warranty_period_months?: number | null
+          warranty_start_date?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "handover_packs_om_bundle_file_id_fkey"
+            columns: ["om_bundle_file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "handover_packs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "handover_packs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -7053,6 +7241,97 @@ export type Database = {
           },
         ]
       }
+      snagging_items: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          description: string | null
+          id: string
+          metadata_json: Json
+          org_id: string
+          owner_partner_id: string | null
+          owner_user_id: string | null
+          photo_file_id: string | null
+          raised_at: string
+          raised_by: string | null
+          resolution_notes: string | null
+          severity: Database["public"]["Enums"]["snag_severity"]
+          site_id: string | null
+          status: Database["public"]["Enums"]["snag_status"]
+          target_close_date: string | null
+          title: string
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata_json?: Json
+          org_id: string
+          owner_partner_id?: string | null
+          owner_user_id?: string | null
+          photo_file_id?: string | null
+          raised_at?: string
+          raised_by?: string | null
+          resolution_notes?: string | null
+          severity?: Database["public"]["Enums"]["snag_severity"]
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["snag_status"]
+          target_close_date?: string | null
+          title: string
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata_json?: Json
+          org_id?: string
+          owner_partner_id?: string | null
+          owner_user_id?: string | null
+          photo_file_id?: string | null
+          raised_at?: string
+          raised_by?: string | null
+          resolution_notes?: string | null
+          severity?: Database["public"]["Enums"]["snag_severity"]
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["snag_status"]
+          target_close_date?: string | null
+          title?: string
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snagging_items_photo_file_id_fkey"
+            columns: ["photo_file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "snagging_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "snagging_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
@@ -7544,6 +7823,98 @@ export type Database = {
           reason?: string
         }
         Relationships: []
+      }
+      test_certificates: {
+        Row: {
+          cert_number: string | null
+          cert_type: string
+          commissioning_record_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          file_id: string | null
+          id: string
+          issued_at: string | null
+          issued_by: string | null
+          issued_by_user_id: string | null
+          metadata_json: Json
+          notes: string | null
+          org_id: string
+          site_id: string | null
+          status: Database["public"]["Enums"]["certificate_status"]
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          cert_number?: string | null
+          cert_type: string
+          commissioning_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          file_id?: string | null
+          id?: string
+          issued_at?: string | null
+          issued_by?: string | null
+          issued_by_user_id?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["certificate_status"]
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          cert_number?: string | null
+          cert_type?: string
+          commissioning_record_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          file_id?: string | null
+          id?: string
+          issued_at?: string | null
+          issued_by?: string | null
+          issued_by_user_id?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id?: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["certificate_status"]
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "test_certificates_commissioning_record_id_fkey"
+            columns: ["commissioning_record_id"]
+            isOneToOne: false
+            referencedRelation: "commissioning_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_certificates_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_certificates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "test_certificates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       traffic_management_plans: {
         Row: {
@@ -9663,6 +10034,30 @@ export type Database = {
         }
         Relationships: []
       }
+      v_site_handover_readiness: {
+        Row: {
+          cert_count: number | null
+          cert_expired_count: number | null
+          cert_issued_count: number | null
+          client_signed_at: string | null
+          commissioned_at: string | null
+          energised_at: string | null
+          handover_status: Database["public"]["Enums"]["handover_status"] | null
+          has_om_bundle: boolean | null
+          is_commissioned: boolean | null
+          is_energised: boolean | null
+          org_id: string | null
+          pc_signed_at: string | null
+          ready_for_handover: boolean | null
+          site_id: string | null
+          snag_open: number | null
+          snag_open_critical: number | null
+          snag_open_major: number | null
+          snag_total: number | null
+          work_package_id: string | null
+        }
+        Relationships: []
+      }
       v_wp_commercial_position: {
         Row: {
           actual_cost: number | null
@@ -11298,6 +11693,19 @@ export type Database = {
         | "other"
       actual_cost_source: "manual" | "invoice" | "timesheet" | "po" | "import"
       app_role: "admin" | "engineer" | "client"
+      certificate_status: "draft" | "issued" | "expired" | "revoked"
+      commissioning_status:
+        | "pending"
+        | "in_progress"
+        | "energised"
+        | "commissioned"
+        | "failed"
+      handover_status:
+        | "pending"
+        | "practical_completion"
+        | "client_signed"
+        | "completed"
+        | "on_hold"
       inspection_result: "pending" | "passed" | "passed_with_defects" | "failed"
       milestone_gate_status: "open" | "passed" | "blocked" | "waived"
       milestone_gate_type:
@@ -11365,6 +11773,8 @@ export type Database = {
         | "blocked"
         | "review"
         | "done"
+      snag_severity: "minor" | "major" | "critical"
+      snag_status: "open" | "in_progress" | "resolved" | "closed" | "wont_fix"
       task_dep_type: "FS" | "SS" | "FF" | "SF"
       task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
       tm_approval_state:
@@ -11545,6 +11955,21 @@ export const Constants = {
       ],
       actual_cost_source: ["manual", "invoice", "timesheet", "po", "import"],
       app_role: ["admin", "engineer", "client"],
+      certificate_status: ["draft", "issued", "expired", "revoked"],
+      commissioning_status: [
+        "pending",
+        "in_progress",
+        "energised",
+        "commissioned",
+        "failed",
+      ],
+      handover_status: [
+        "pending",
+        "practical_completion",
+        "client_signed",
+        "completed",
+        "on_hold",
+      ],
       inspection_result: ["pending", "passed", "passed_with_defects", "failed"],
       milestone_gate_status: ["open", "passed", "blocked", "waived"],
       milestone_gate_type: [
@@ -11620,6 +12045,8 @@ export const Constants = {
         "review",
         "done",
       ],
+      snag_severity: ["minor", "major", "critical"],
+      snag_status: ["open", "in_progress", "resolved", "closed", "wont_fix"],
       task_dep_type: ["FS", "SS", "FF", "SF"],
       task_status: ["todo", "in_progress", "blocked", "review", "done"],
       tm_approval_state: [
