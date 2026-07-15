@@ -7252,6 +7252,9 @@ export type Database = {
           org_id: string
           owner_partner_id: string | null
           owner_user_id: string | null
+          partner_ack_notes: string | null
+          partner_acknowledged_at: string | null
+          partner_acknowledged_by: string | null
           photo_file_id: string | null
           raised_at: string
           raised_by: string | null
@@ -7274,6 +7277,9 @@ export type Database = {
           org_id: string
           owner_partner_id?: string | null
           owner_user_id?: string | null
+          partner_ack_notes?: string | null
+          partner_acknowledged_at?: string | null
+          partner_acknowledged_by?: string | null
           photo_file_id?: string | null
           raised_at?: string
           raised_by?: string | null
@@ -7296,6 +7302,9 @@ export type Database = {
           org_id?: string
           owner_partner_id?: string | null
           owner_user_id?: string | null
+          partner_ack_notes?: string | null
+          partner_acknowledged_at?: string | null
+          partner_acknowledged_by?: string | null
           photo_file_id?: string | null
           raised_at?: string
           raised_by?: string | null
@@ -10793,6 +10802,8 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      is_partner_for_site: { Args: { _site_id: string }; Returns: boolean }
+      is_partner_for_wp: { Args: { _wp_id: string }; Returns: boolean }
       is_platform_admin: { Args: { _user_id: string }; Returns: boolean }
       is_project_member: {
         Args: { _project_id: string; _user_id: string }
@@ -10831,6 +10842,40 @@ export type Database = {
           id: string
           name: string
         }[]
+      }
+      partner_acknowledge_snag: {
+        Args: { _notes?: string; _snag_id: string }
+        Returns: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          description: string | null
+          id: string
+          metadata_json: Json
+          org_id: string
+          owner_partner_id: string | null
+          owner_user_id: string | null
+          partner_ack_notes: string | null
+          partner_acknowledged_at: string | null
+          partner_acknowledged_by: string | null
+          photo_file_id: string | null
+          raised_at: string
+          raised_by: string | null
+          resolution_notes: string | null
+          severity: Database["public"]["Enums"]["snag_severity"]
+          site_id: string | null
+          status: Database["public"]["Enums"]["snag_status"]
+          target_close_date: string | null
+          title: string
+          updated_at: string
+          work_package_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "snagging_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       populate_geometry_columns:
         | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
