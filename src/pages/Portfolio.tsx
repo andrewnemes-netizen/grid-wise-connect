@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2, ClipboardList } from "lucide-react";
+import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2, ClipboardList, Upload } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -358,6 +358,9 @@ const Portfolio = () => {
           )}
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="mr-1 h-3 w-3" />Export CSV
+          </Button>
+          <Button variant="default" size="sm" onClick={() => navigate("/import/wizard")}>
+            <Upload className="mr-1 h-3 w-3" />Import sites
           </Button>
         </div>
       </div>
