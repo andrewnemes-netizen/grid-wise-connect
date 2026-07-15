@@ -54,7 +54,7 @@ export function EstimateRevisionsBar({
     queryFn: async () => {
       const { data, error } = await supabase.from("partners" as any).select("id,name").order("name");
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      return (data ?? []) as unknown as { id: string; name: string }[];
     },
   });
 
