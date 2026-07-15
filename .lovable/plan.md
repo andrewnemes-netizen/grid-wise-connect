@@ -1,96 +1,51 @@
+## Unblock survey testing without email, then re-verify the domain
 
-## Goal
+Two independent things. The first lets you keep working today; the second restores email sends properly.
 
-Rework the Site Survey so both the surveyor-facing form and the generated PDF match the structure, field names, and answer format of the example Zoho submission (REF1777 – Carlton Terrace). Current schema is too generic (A–L numeric dims, missing photo groups, missing Zoho-specific questions).
+---
 
-## Gaps vs. example PDF
+### 1. Add a "Generate link" mode to Send Survey (no email required)
 
-The example PDF contains many fields we don't currently capture:
+Right now `send-site-survey` creates the survey record **and** sends the invite email in one step — if the email send fails, the whole call errors out and no token is created. We'll split those responsibilities so testing (and manual delivery via WhatsApp / SMS / hand-off) works even while email is down.
 
-**Job Description**
-- Site Survey Date (dd-MMM-yyyy HH:MM)
-- Site name & Address (pre-filled from site)
-- Relevant DNO (with helper link to DNO map)
+**Backend — `supabase/functions/send-site-survey/index.ts`**
+- Accept a new `delivery_mode: "email" | "link_only"` flag (default `"email"`).
+- Always create the `site_surveys` row and return `{ survey_id, survey_url, expires_at }`.
+- Only invoke `send-transactional-email` when `delivery_mode === "email"`.
+- If email send fails, keep the survey row (do not cancel it) and return `email_sent: false` along with the link, so the caller can share it manually.
 
-**EVCP / DNO Info**
-- EV Charging Point (Dual) — model name + Quantity
-- EV Charging Point (Single) — model name + Quantity
-- Total Charge Point Socket Quantity (auto = dual×2 + single)
-- Earth Solution (TT / TN-S / Earth Mat etc.) + methodology explanation
+**Frontend — `src/components/portfolio/SendSurveyDialog.tsx`**
+- Add a mode toggle: "Send by email" / "Generate shareable link".
+- In link-only mode: hide the message textarea, submit with `delivery_mode: "link_only"`, then show each returned `survey_url` with a Copy button and a "Copy all" action.
+- In email mode: if the response reports `email_sent: false` for any recipient, still surface the link with a Copy button so nothing is lost.
 
-**Scenario** — radio: On-Street EVCP / Public Car Park EVCP
+**Frontend — `src/components/site/SiteSurveysPanel.tsx`**
+- For every pending survey, expose a "Copy link" button that reconstructs `${origin}/survey/${token}`. (The token is already on the row.)
 
-**Critical Dimensions (A–I, not A–L)** — each dimension is a *composite* row: `Surface Type` (Footway / Carriageway / Grass / Other) + `Distance (m)` + `Description`, with A and C supporting multiple surface sub-rows that sum to a Total.
-- A. POC to FP Distance
-- B. Width of Footway (FP side)
-- C. Civil Distance FP to EVCPs
-- D. Width of Proposed Parking Bay
-- E. Total Length of Proposed EV Parking
-- F. Length of each EV Parking Bay
-- G. Width of Carriageway
-- H. Width of Opposite Footway
-- I. Datum Point To FP Distance (+ datum description e.g. Lamppost)
-- Reference diagram image + guidance link
+No schema changes required.
 
-**Route & Media**
-- POC → EVCP satellite view upload (mandatory, annotated dig route)
-- What3words for feeder pillar location
-- Multiple photo upload groups (5 per group) with per-photo captions
-- Excavation Route Hazard Description
+---
 
-**Excavation logistics**
-- Road Crossing Excavation Required (Y/N)
-- Traffic Management Required (Y/N) + Reason
-- Bay Marking Required (Y/N)
-- HydroBlasting Required (Y/N)
-- Height Restriction (m)
+### 2. Re-verify the email domain `notify.ecopoweruk.com`
 
-**Site conditions**
-- Flood-risk map screenshot upload + Flood Zone (1/2/3)
-- Signal test screenshot + speed value + adequate (Y/N)
-- Existing signpost present + photo
-- Existing Parking Restrictions (details) + summary field
-- EV Recharging Point Signs required (Y/N)
-- Parking bay suspension required (Y/N)
-- Elevation within ±10mm (Y/N)
-- Surface Condition (Good/Fair/Poor)
-- Asbestos Survey required (Y/N)
-- Out of hours (Y/N)
-- Additional Hazards (text)
-- Extraneous Parts within 2.5m (text)
-- ANPR cameras present (Y/N)
-- Additional image upload
+Verification expired because the NS delegation was never completed at your DNS provider. Fixing this restores both survey invite emails and any other app emails.
 
-**Sign Off** — Overall Status, Signature, First Name, Last Name, Email
+- Open **Project Settings → Emails** and click **Rerun Setup** for `notify.ecopoweruk.com`.
+- The setup dialog will show the two `NS` records to add at your registrar (values are per-domain — always copy them from that dialog, not from anywhere else).
+- Add those NS records at wherever DNS for `ecopoweruk.com` is hosted, then click **Verify Domain**. DNS can take up to 72 hours.
+- Once verified, existing tokens keep working and new survey invites will send by email automatically.
 
-## Changes
+If your DNS provider can't create NS records (e.g. Shopify-managed DNS), the two supported workarounds are: transfer the domain into Lovable, or move DNS hosting to a provider that supports NS records (Cloudflare's free plan works).
 
-### 1. `src/lib/survey-schema.ts` — rewrite
-Extend `FieldType` with `date`, `radio`, `composite_distance` (surface + distance + description; `multi:true` for A and C), and `photo_group` (array of `{file, caption}`). Add all fields above, grouped into 6 sections matching Zoho ordering: Job Description, EVCP & DNO, Scenario, Critical Dimensions, Route & Photos, Site Conditions, Sign Off. Split `submitter_name` into `first_name` + `last_name`.
+---
 
-### 2. `src/pages/SurveyForm.tsx` — extend renderer
-Add renderers for the new field types:
-- `date` (native `<input type="date">` with time)
-- `radio` (shadcn `RadioGroup`)
-- `composite_distance` — repeatable rows with Surface select, distance number, description text; auto-total for A and C
-- `photo_group` — up to 5 file inputs + caption text per photo, previews, upload to `site-surveys` bucket
-- Auto-compute Total Socket Quantity
-Reorder wizard steps to match the 6 Zoho sections.
+### Out of scope
 
-### 3. `src/lib/survey-pdf.ts` — restructure to match example
-- Cover: site name & address, survey date, DNO, surveyor
-- Section tables that print composite-distance sub-rows the same way Zoho does (Surface / Distance table, then Total row underneath)
-- Dedicated "Photos" pages with captions under each image (one per page for satellite view, 2-up for others), matching the example layout
-- Signature block at end with printed name + email
-- Header "On-Street/Public Car Park Site Survey" on every page
+- No changes to the PDF, form schema, storage bucket, or RPCs — those are all working after the previous fixes.
+- No changes to `notify-survey-submitted`; it will start firing once the domain verifies.
 
-### 4. DB — no schema change required
-Response is stored in `site_survey_responses.answers` (jsonb) and photos array — the wider schema is fully backward-compatible; older submissions just render with missing keys as "—".
+### Testing after implementation
 
-### 5. Public form defaults
-Pre-fill Site name & Address and Relevant DNO from the parent site record so surveyors don't retype them (mirrors the Zoho behaviour where these come from job setup).
-
-## Out of scope
-- No changes to invitation flow, tokenised link, or email templates.
-- No changes to Portfolio bulk-send UI.
-- No new tables/RLS — reusing existing `site_surveys` / `site_survey_responses` / `site-surveys` storage bucket.
+1. From Portfolio → Send Survey, switch to "Generate shareable link", pick a site, submit → confirm a URL appears with a Copy button and the corresponding `site_surveys` row exists.
+2. Open the link in a private window, complete the form, submit → confirm PDF and response as before.
+3. Once DNS verifies, retry "Send by email" and confirm a message arrives.
