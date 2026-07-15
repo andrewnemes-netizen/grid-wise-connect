@@ -335,6 +335,13 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
         open={planOpen}
         onOpenChange={setPlanOpen}
       />
+      <SendQuotationDialog
+        open={quoteOpen}
+        onOpenChange={setQuoteOpen}
+        estimate={e}
+        groups={groups.data ?? []}
+        lines={lines.data ?? []}
+      />
     </div>
   );
 }
