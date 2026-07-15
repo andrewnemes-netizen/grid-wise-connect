@@ -1,0 +1,112 @@
+# 06 — Migration Dependency Map
+
+DAG of phased migrations. Each node is one Supabase migration file with a paired `*_rollback.sql`.
+
+```text
+                 ┌──────────────────────┐
+                 │ P1.a stage_definitions│
+                 │      + workflow sets  │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P1.b partners +      │
+                 │      partner_users   │
+                 └──────────┬───────────┘
+                            │
+     ┌──────────────────────┼──────────────────────┐
+     │                      │                      │
+┌────▼─────┐         ┌──────▼──────┐        ┌──────▼──────┐
+│P1.c dno_ │         │P1.d purchase│        │P1.e design_ │
+│offers    │         │_orders +    │        │submissions +│
+│+ sites   │         │po_lines +   │        │reviews +    │
+│          │         │po_line_sites│        │site_design_ │
+└────┬─────┘         └──────┬──────┘        │submissions  │
+     │                      │               └──────┬──────┘
+     │                      │                      │
+     └──────────────────────┼──────────────────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P1.f wp_partner_     │
+                 │      allocations     │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P1.g altered tables  │
+                 │  (sites, wp_sites,   │
+                 │   project_files,     │
+                 │   estimates+lines,   │
+                 │   tasks, work_pkgs)  │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P1.h views + mv +    │
+                 │      lens views      │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P1.i site_stage_     │
+                 │      history +       │
+                 │      transition rules│
+                 └──────────┬───────────┘
+                            │
+          ─────────────── P2 (UI only, no SQL) ───────────────
+                            │
+                 ┌──────────▼───────────┐
+                 │ P3 (import extensions│
+                 │  — no schema change) │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P4 estimate revisions│
+                 │  + prelims cols +    │
+                 │  award trigger       │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P5 studies.site_id/  │
+                 │     wp_id + design   │
+                 │     approval trigger │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P6 milestone.gate_   │
+                 │     type             │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P7 resources (5 tbls)│
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P8 actual_costs +    │
+                 │    v_wp_commercial_  │
+                 │    position          │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P9 construction      │
+                 │    (7 tables)        │
+                 └──────────┬───────────┘
+                            │
+                 ┌──────────▼───────────┐
+                 │ P10 commissioning    │
+                 │    (4 tables)        │
+                 └──────────┬───────────┘
+                            │
+          ─────────── P11 UI only ───────────
+          ─────────── P12 UI/MCP ────────────
+                            │
+                 ┌──────────▼───────────┐
+                 │ P13 legacy retire    │
+                 │    (drops + 301s)    │
+                 └──────────────────────┘
+```
+
+## Rollback order
+Reverse of the DAG. Every migration file has a sibling `*_rollback.sql`. Rollbacks are non-destructive to pre-Phase-1 columns/data — only Phase-1+ additions are dropped.
+
+## Cycle-freeness
+Verified by hand: no back-edges. `partners → wp_partner_allocations → work_packages` is a straight chain; `dno_offer_sites`/`po_line_sites` depend on both parents but never on `sites` in the other direction.
+
+---
+**Sign-off:** Engineering ☐  DevOps ☐
