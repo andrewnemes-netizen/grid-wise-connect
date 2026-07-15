@@ -46,8 +46,8 @@ export default function WpTasksTab() {
     const buckets: Record<string, any[]> = {};
     STATUSES.forEach((s) => (buckets[s] = []));
     (tasks as any[]).forEach((t) => {
-      const s = (STATUSES as readonly string[]).includes(t.status) ? t.status : "not_started";
-      buckets[s].push(t);
+      const s: string = (STATUSES as readonly string[]).includes(t.status) ? t.status : "not_started";
+      (buckets[s] ??= []).push(t);
     });
     return buckets;
   }, [tasks]);
