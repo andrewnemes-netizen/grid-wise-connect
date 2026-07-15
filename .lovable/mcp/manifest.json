@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://xqmrnfimcuktyyltikoy.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "gridwise-connect-mcp",
+      "version": "0.1.0",
+      "title": "Gridwise Connect"
+    },
+    "tools": [
+      {
+        "name": "search_grid_assets",
+        "title": "Search UK grid assets",
+        "description": "Find UK substations near a place, postcode or 'lat,lng'. Optionally filter by minimum headroom (kW), maximum utilisation (%), and local authority. Returns ranked results with distance.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": true
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "Place name, postcode, or 'lat,lng'."
+            },
+            "radius_km": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 100,
+              "description": "Search radius in km (default 10)."
+            },
+            "min_headroom_kw": {
+              "type": "number"
+            },
+            "max_utilisation_pct": {
+              "type": "number"
+            },
+            "local_authority": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Max rows (default 50)."
+            }
+          },
+          "required": [
+            "location"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_sites",
+        "title": "List my sites",
+        "description": "List sites in the signed-in user's portfolio. Returns site name, postcode, coordinates, DNO, voltage and creation date. Scoped by the app's RLS policies.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Max rows (default 50)."
+            },
+            "search": {
+              "type": "string",
+              "description": "Case-insensitive substring match on site name or postcode."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_my_studies",
+        "title": "List my studies",
+        "description": "List Gridwise studies visible to the signed-in user (name, mode, status, DNO, voltage level, proposed kW, updated date).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Max rows (default 50)."
+            },
+            "status": {
+              "type": "string",
+              "description": "Optional exact status filter."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
