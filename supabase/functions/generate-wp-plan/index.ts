@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const [{ data: estimate, error: eErr }, { data: groups, error: gErr }, { data: lines, error: lErr }] = await Promise.all([
       admin.from("estimates").select("*").eq("id", estimateId).single(),
       admin.from("estimate_groups").select("*").eq("estimate_id", estimateId).order("sort_index"),
-      admin.from("estimate_lines").select("*, rate_items(productivity_qty_per_day, default_crew_size, default_stage, code)").eq("estimate_id", estimateId).order("sort_index"),
+      admin.from("estimate_lines").select("*, rate_items(productivity_qty_per_day, default_crew_size, default_stage, rate_code)").eq("estimate_id", estimateId).order("sort_index"),
     ]);
     if (eErr || gErr || lErr) throw eErr ?? gErr ?? lErr;
     if (!estimate) throw new Error("Estimate not found");
@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
             duration_days: dur,
             fallback,
             color: stage.color,
-            rate_code: ri?.code ?? l.rate_code ?? null,
+            rate_code: ri?.rate_code ?? l.rate_code ?? null,
           });
         }
       }
