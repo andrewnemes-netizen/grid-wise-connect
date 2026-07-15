@@ -15,6 +15,7 @@ import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
+import { SiteSurveysPanel } from "@/components/site/SiteSurveysPanel";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
