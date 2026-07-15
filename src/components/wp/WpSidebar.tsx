@@ -16,6 +16,7 @@ import {
   FolderOpen,
   Camera,
   ScrollText,
+  Zap,
   ChevronLeft,
 } from "lucide-react";
 import {
@@ -77,6 +78,12 @@ const NAV: Group[] = [
       { title: "Documents", slug: "records/documents", icon: FolderOpen },
       { title: "Photos", slug: "records/photos", icon: Camera },
       { title: "Audit", slug: "records/audit", icon: ScrollText },
+    ],
+  },
+  {
+    label: "Close-out",
+    items: [
+      { title: "Commissioning", slug: "commissioning", icon: Zap },
     ],
   },
 ];
