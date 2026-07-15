@@ -3860,9 +3860,14 @@ export type Database = {
           actual_date: string | null
           created_at: string
           description: string | null
+          gate_notes: string | null
+          gate_status: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type: Database["public"]["Enums"]["milestone_gate_type"]
           id: string
           name: string
           owner_user_id: string | null
+          passed_at: string | null
+          passed_by: string | null
           percent_complete: number
           phase: Database["public"]["Enums"]["milestone_phase"]
           planned_date: string | null
@@ -3875,9 +3880,14 @@ export type Database = {
           actual_date?: string | null
           created_at?: string
           description?: string | null
+          gate_notes?: string | null
+          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
           id?: string
           name: string
           owner_user_id?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
           percent_complete?: number
           phase?: Database["public"]["Enums"]["milestone_phase"]
           planned_date?: string | null
@@ -3890,9 +3900,14 @@ export type Database = {
           actual_date?: string | null
           created_at?: string
           description?: string | null
+          gate_notes?: string | null
+          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
           id?: string
           name?: string
           owner_user_id?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
           percent_complete?: number
           phase?: Database["public"]["Enums"]["milestone_phase"]
           planned_date?: string | null
@@ -7761,9 +7776,14 @@ export type Database = {
           created_by: string | null
           depends_on_rule_json: Json | null
           description: string | null
+          gate_notes: string | null
+          gate_status: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type: Database["public"]["Enums"]["milestone_gate_type"]
           id: string
           name: string
           owner_user_id: string | null
+          passed_at: string | null
+          passed_by: string | null
           percent_complete: number
           phase: Database["public"]["Enums"]["wp_milestone_phase"]
           planned_date: string | null
@@ -7778,9 +7798,14 @@ export type Database = {
           created_by?: string | null
           depends_on_rule_json?: Json | null
           description?: string | null
+          gate_notes?: string | null
+          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
           id?: string
           name: string
           owner_user_id?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
           percent_complete?: number
           phase?: Database["public"]["Enums"]["wp_milestone_phase"]
           planned_date?: string | null
@@ -7795,9 +7820,14 @@ export type Database = {
           created_by?: string | null
           depends_on_rule_json?: Json | null
           description?: string | null
+          gate_notes?: string | null
+          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
+          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
           id?: string
           name?: string
           owner_user_id?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
           percent_complete?: number
           phase?: Database["public"]["Enums"]["wp_milestone_phase"]
           planned_date?: string | null
@@ -10115,6 +10145,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "engineer" | "client"
+      milestone_gate_status: "open" | "passed" | "blocked" | "waived"
+      milestone_gate_type:
+        | "information"
+        | "stage_gate"
+        | "payment"
+        | "dno_energisation"
+        | "commissioning"
+        | "handover"
+        | "commercial"
+        | "compliance"
       milestone_phase:
         | "procurement"
         | "delivery"
@@ -10323,6 +10363,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "engineer", "client"],
+      milestone_gate_status: ["open", "passed", "blocked", "waived"],
+      milestone_gate_type: [
+        "information",
+        "stage_gate",
+        "payment",
+        "dno_energisation",
+        "commissioning",
+        "handover",
+        "commercial",
+        "compliance",
+      ],
       milestone_phase: [
         "procurement",
         "delivery",
