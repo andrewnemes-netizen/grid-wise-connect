@@ -13,12 +13,13 @@ import { RateItemPicker } from "./RateItemPicker";
 import { GeneratePlanDialog } from "./GeneratePlanDialog";
 import { SendQuotationDialog } from "./SendQuotationDialog";
 import { downloadQuotationPdf } from "@/lib/quotation-pdf";
+import { EstimateRevisionsBar, PrelimsInline } from "./EstimateRevisionsBar";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${Number(n).toFixed(2)}%`);
 
-export function EstimateEditor({ estimateId, onClose }: { estimateId: string; onClose?: () => void }) {
+export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estimateId: string; onClose?: () => void; onOpenEstimate?: (id: string) => void }) {
   const qc = useQueryClient();
   const [editingLine, setEditingLine] = useState<string | null>(null);
   const [creatingInGroup, setCreatingInGroup] = useState<string | null>(null);
@@ -191,6 +192,23 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
           </Button>
           {onClose && <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>}
         </div>
+      </div>
+
+      {/* Revisions & award */}
+      <EstimateRevisionsBar estimate={e as any} onOpenEstimate={(id) => onOpenEstimate?.(id)} />
+
+      {/* Prelims */}
+      <div className="flex items-center gap-2 px-6 py-2 border-b bg-background">
+        <PrelimsInline
+          estimateId={e.id}
+          prelims_pct={e.prelims_pct ?? null}
+          prelims_amount={e.prelims_amount ?? null}
+          currency={c}
+          disabled={e.status === "AWARDED" || e.status === "SUPERSEDED"}
+        />
+        <span className="text-[11px] text-muted-foreground">
+          Preliminaries are applied on top of the BOQ subtotal. Tag lines as prelim inside the line editor to roll them up separately.
+        </span>
       </div>
 
       {/* Totals bar */}
