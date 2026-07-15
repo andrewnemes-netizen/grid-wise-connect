@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt, Pencil, Check, X, Upload } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
@@ -221,6 +221,14 @@ export default function DeliveryWorkPackage() {
           <div className="text-2xl font-semibold mb-2">{percent}%</div>
           <Progress value={percent} className="h-1.5" />
         </Card>
+      </div>
+
+      <div className="flex justify-end">
+        <Button asChild variant="outline" size="sm">
+          <Link to={`/import/wizard?wp=${wpId}${wp?.programme_id ? `&programme=${wp.programme_id}` : ""}`}>
+            <Upload className="h-4 w-4 mr-2" /> Import sites
+          </Link>
+        </Button>
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
