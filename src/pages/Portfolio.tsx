@@ -616,6 +616,12 @@ const Portfolio = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SendSurveyDialog
+        open={!!surveySiteIds && surveySiteIds.length > 0}
+        onOpenChange={(o) => { if (!o) setSurveySiteIds(null); }}
+        siteIds={surveySiteIds ?? []}
+      />
     </div>
   );
 };
