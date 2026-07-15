@@ -8,7 +8,6 @@ export async function extractPdfText(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
   // Configure worker via CDN — matches installed version.
   const workerUrl = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  // @ts-expect-error runtime property
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
   const buf = await file.arrayBuffer();
@@ -23,7 +22,6 @@ export async function extractPdfText(file: File): Promise<string> {
       .filter(Boolean);
     parts.push(strings.join(" "));
   }
-  await doc.destroy();
   return parts.join("\n\n").trim();
 }
 
