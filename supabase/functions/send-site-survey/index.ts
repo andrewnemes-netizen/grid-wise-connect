@@ -9,6 +9,7 @@ interface Body {
   save_as_default?: boolean
   survey_base_url?: string
   expires_in_days?: number
+  delivery_mode?: 'email' | 'link_only'
 }
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -45,6 +46,7 @@ Deno.serve(async (req) => {
   if (validRecipients.length === 0) return json({ error: 'No valid recipient emails' }, 400)
 
   const admin = createClient(supabaseUrl, serviceKey)
+  const deliveryMode: 'email' | 'link_only' = body.delivery_mode === 'link_only' ? 'link_only' : 'email'
 
   // Load sites (respect RLS via user client)
   const { data: sites, error: sitesErr } = await userClient
@@ -89,6 +91,20 @@ Deno.serve(async (req) => {
 
       const surveyUrl = baseUrl ? `${baseUrl}/survey/${survey.token}` : `/survey/${survey.token}`
 
+      // Link-only mode: create the token but skip email delivery so the caller
+      // can share it manually (WhatsApp / SMS / hand-off).
+      if (deliveryMode === 'link_only') {
+        if (body.save_as_default && !site.surveyor_email) {
+          await admin.from('sites').update({ surveyor_email: r.email }).eq('id', site.id)
+        }
+        results.push({
+          site_id: site.id, site_name: site.site_name, email: r.email,
+          ok: true, email_sent: false, survey_id: survey.id, survey_url: surveyUrl,
+          expires_at: survey.expires_at,
+        })
+        continue
+      }
+
       const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
@@ -111,8 +127,12 @@ Deno.serve(async (req) => {
 
       if (!sendRes.ok) {
         const errText = await sendRes.text()
-        await admin.from('site_surveys').update({ status: 'cancelled' }).eq('id', survey.id)
-        results.push({ site_id: site.id, email: r.email, ok: false, error: `email failed: ${errText}` })
+        // Keep the survey row so the link is still usable — caller can share manually.
+        results.push({
+          site_id: site.id, site_name: site.site_name, email: r.email,
+          ok: true, email_sent: false, survey_id: survey.id, survey_url: surveyUrl,
+          expires_at: survey.expires_at, error: `email failed: ${errText.slice(0, 200)}`,
+        })
         continue
       }
 
@@ -121,11 +141,22 @@ Deno.serve(async (req) => {
         await admin.from('sites').update({ surveyor_email: r.email }).eq('id', site.id)
       }
 
-      results.push({ site_id: site.id, email: r.email, ok: true, survey_id: survey.id, survey_url: surveyUrl })
+      results.push({
+        site_id: site.id, site_name: site.site_name, email: r.email,
+        ok: true, email_sent: true, survey_id: survey.id, survey_url: surveyUrl,
+        expires_at: survey.expires_at,
+      })
     }
   }
 
-  return json({ success: true, sent: results.filter(r => r.ok).length, failed: results.filter(r => !r.ok).length, results })
+  return json({
+    success: true,
+    delivery_mode: deliveryMode,
+    sent: results.filter(r => r.ok && r.email_sent).length,
+    generated: results.filter(r => r.ok).length,
+    failed: results.filter(r => !r.ok).length,
+    results,
+  })
 })
 
 function json(data: Record<string, unknown>, status = 200) {
