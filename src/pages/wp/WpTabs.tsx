@@ -10,6 +10,10 @@ import WpVariationsTab from "./tabs/WpVariationsTab";
 import WpGridStudiesTab from "./tabs/WpGridStudiesTab";
 import WpDnoOffersTab from "./tabs/WpDnoOffersTab";
 import WpDesignTab from "./tabs/WpDesignTab";
+import WpProgrammeTab from "./tabs/WpProgrammeTab";
+import WpTasksTab from "./tabs/WpTasksTab";
+import WpPartnersTab from "./tabs/WpPartnersTab";
+import WpPreConTab from "./tabs/WpPreConTab";
 
 function TabShell({
   title,
@@ -53,24 +57,16 @@ function TabShell({
 export const WpOverview = WpOverviewTab;
 export const WpSiteRegister = WpSiteRegisterTab;
 export const WpMap = WpMapTab;
-export const WpPreCon = () => (
-  <TabShell title="Pre-Construction" phase="Phase 7" description="Permits, RAMS, traffic management and mobilisation readiness per site." />
-);
+export const WpPreCon = WpPreConTab;
 export const WpEstimating = WpEstimatingTab;
 export const WpPurchaseOrders = WpPurchaseOrdersTab;
 export const WpVariations = WpVariationsTab;
 export const WpGridStudies = WpGridStudiesTab;
 export const WpDnoOffers = WpDnoOffersTab;
 export const WpDesign = WpDesignTab;
-export const WpProgramme = () => (
-  <TabShell title="Programme" phase="Phase 2" description="Delivery programme, milestone gantt and mv_programme_dashboard KPIs." />
-);
-export const WpTasks = () => (
-  <TabShell title="Tasks" phase="Phase 2" description="WP tasks and site tasks in a unified board, keyed to project_tasks." />
-);
-export const WpPartners = () => (
-  <TabShell title="Partners" phase="Phase 3" description="Allocated partners, scope split and portal access status." />
-);
+export const WpProgramme = WpProgrammeTab;
+export const WpTasks = WpTasksTab;
+export const WpPartners = WpPartnersTab;
 export const WpDocuments = () => (
   <TabShell title="Documents" phase="Phase 2" description="Polymorphic project_files bound to this WP, its sites, POs and designs." />
 );
