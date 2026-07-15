@@ -1,6 +1,12 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+export interface SurveyPhotoGroup {
+  key: string;
+  title: string;
+  photos: Array<{ url: string; caption?: string }>;
+}
+
 export interface SurveyPdfInput {
   siteName?: string;
   postcode?: string;
@@ -11,9 +17,11 @@ export interface SurveyPdfInput {
     title: string;
     rows: Array<[string, string | number | boolean | null | undefined]>;
   }>;
-  images?: string[];
+  photoGroups?: SurveyPhotoGroup[];
   signatureDataUrl?: string;
   companyName?: string;
+  relevantDno?: string;
+  surveyDate?: string;
 }
 
 const fmt = (v: unknown): string => {
@@ -30,9 +38,11 @@ export async function generateSurveyPdf(input: SurveyPdfInput): Promise<Blob> {
     submitterEmail,
     submittedAt = new Date(),
     sections,
-    images = [],
+    photoGroups = [],
     signatureDataUrl,
     companyName = "EcoPower UK",
+    relevantDno,
+    surveyDate,
   } = input;
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -40,47 +50,47 @@ export async function generateSurveyPdf(input: SurveyPdfInput): Promise<Blob> {
   const pageH = doc.internal.pageSize.getHeight();
   const marginX = 40;
 
-  // Header
-  doc.setFillColor(13, 122, 95);
-  doc.rect(0, 0, pageW, 80, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("SITE SURVEY", marginX, 40);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text("On-Street / Public Car Park", marginX, 58);
-  doc.setFontSize(9);
-  doc.text(companyName, pageW - marginX, 40, { align: "right" });
-  doc.text(submittedAt.toLocaleString("en-GB"), pageW - marginX, 55, { align: "right" });
+  const drawHeader = () => {
+    doc.setFillColor(13, 122, 95);
+    doc.rect(0, 0, pageW, 48, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("On-Street/Public Car Park Site Survey", marginX, 22);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(companyName, pageW - marginX, 22, { align: "right" });
+    doc.text(submittedAt.toLocaleString("en-GB"), pageW - marginX, 36, { align: "right" });
+    doc.setTextColor(0, 0, 0);
+  };
 
-  doc.setTextColor(0, 0, 0);
-  let y = 100;
+  drawHeader();
+  let y = 70;
 
-  // Site info block
+  // Cover block
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  doc.text(siteName ?? "Site", marginX, y);
-  y += 16;
+  doc.setFontSize(16);
+  doc.text(siteName ?? "Site Survey", marginX, y);
+  y += 20;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  if (postcode) {
-    doc.text(`Postcode: ${postcode}`, marginX, y);
-    y += 14;
-  }
+  const cover: string[] = [];
+  if (postcode) cover.push(`Postcode: ${postcode}`);
+  if (relevantDno) cover.push(`Relevant DNO: ${relevantDno}`);
+  if (surveyDate) cover.push(`Site Survey Date: ${new Date(surveyDate).toLocaleString("en-GB")}`);
   if (submitterName || submitterEmail) {
-    doc.text(
-      `Surveyor: ${submitterName ?? ""}${submitterEmail ? ` <${submitterEmail}>` : ""}`,
-      marginX,
-      y,
-    );
+    cover.push(`Surveyor: ${submitterName ?? ""}${submitterEmail ? ` <${submitterEmail}>` : ""}`);
+  }
+  for (const line of cover) {
+    doc.text(line, marginX, y);
     y += 14;
   }
-  y += 6;
+  y += 8;
 
   // Sections as tables
   for (const section of sections) {
     if (!section.rows.length) continue;
+    if (y > pageH - 140) { doc.addPage(); drawHeader(); y = 70; }
     autoTable(doc, {
       startY: y,
       head: [[section.title, ""]],
@@ -88,63 +98,92 @@ export async function generateSurveyPdf(input: SurveyPdfInput): Promise<Blob> {
       theme: "grid",
       headStyles: { fillColor: [13, 122, 95], textColor: 255, fontStyle: "bold" },
       styles: { fontSize: 9, cellPadding: 5 },
-      columnStyles: { 0: { cellWidth: 200, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
+      columnStyles: { 0: { cellWidth: 220, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
       margin: { left: marginX, right: marginX },
+      didDrawPage: () => drawHeader(),
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
-    if (y > pageH - 80) {
-      doc.addPage();
-      y = 60;
-    }
+    if (y > pageH - 80) { doc.addPage(); drawHeader(); y = 70; }
   }
 
-  // Images
-  if (images.length > 0) {
-    if (y > pageH - 200) { doc.addPage(); y = 60; }
+  // Photo groups — one section per group, photos with captions.
+  for (const group of photoGroups) {
+    if (!group.photos.length) continue;
+    doc.addPage();
+    drawHeader();
+    y = 70;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Photos", marginX, y);
-    y += 12;
-
-    const cellW = (pageW - marginX * 2 - 20) / 2;
-    const cellH = 180;
+    doc.text(group.title, marginX, y);
+    y += 14;
+    const isSatellite = group.key === "satellite_view";
+    // Satellite = one large image per page; others = 2-up.
+    const cellW = isSatellite ? pageW - marginX * 2 : (pageW - marginX * 2 - 16) / 2;
+    const cellH = isSatellite ? 380 : 220;
     let col = 0;
-    for (const src of images) {
+    for (const photo of group.photos) {
       try {
-        const dataUrl = await urlToDataUrl(src);
-        const x = marginX + col * (cellW + 20);
-        if (y + cellH > pageH - 60) { doc.addPage(); y = 60; col = 0; }
-        doc.addImage(dataUrl, "JPEG", x, y, cellW, cellH, undefined, "FAST");
-        col = col === 0 ? 1 : 0;
-        if (col === 0) y += cellH + 12;
+        const dataUrl = await urlToDataUrl(photo.url);
+        if (y + cellH + (photo.caption ? 20 : 8) > pageH - 40) {
+          doc.addPage();
+          drawHeader();
+          y = 70;
+          col = 0;
+        }
+        const x = marginX + col * (cellW + 16);
+        const ext = detectImageExt(dataUrl);
+        doc.addImage(dataUrl, ext, x, y, cellW, cellH, undefined, "FAST");
+        if (photo.caption) {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          doc.setTextColor(80, 80, 80);
+          const captionLines = doc.splitTextToSize(photo.caption, cellW);
+          doc.text(captionLines, x, y + cellH + 10);
+          doc.setTextColor(0, 0, 0);
+        }
+        if (isSatellite) {
+          y += cellH + (photo.caption ? 24 : 12);
+          col = 0;
+        } else {
+          col = col === 0 ? 1 : 0;
+          if (col === 0) y += cellH + (photo.caption ? 24 : 14);
+        }
       } catch (e) {
         console.warn("Failed to embed image", e);
       }
     }
-    if (col === 1) y += cellH + 12;
+    if (!isSatellite && col === 1) y += cellH + 14;
   }
 
   // Signature
   if (signatureDataUrl) {
-    if (y > pageH - 140) { doc.addPage(); y = 60; }
+    if (y > pageH - 160) { doc.addPage(); drawHeader(); y = 70; }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.text("Signature", marginX, y);
-    y += 8;
+    y += 14;
     try {
       doc.addImage(signatureDataUrl, "PNG", marginX, y, 200, 80);
     } catch (e) {
       console.warn("signature embed failed", e);
     }
-    y += 90;
-    if (submitterName) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(submitterName, marginX, y);
+    y += 96;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    if (submitterName) doc.text(submitterName, marginX, y);
+    if (submitterEmail) {
+      y += 14;
+      doc.setTextColor(80, 80, 80);
+      doc.text(submitterEmail, marginX, y);
+      doc.setTextColor(0, 0, 0);
     }
   }
 
   return doc.output("blob");
+}
+
+function detectImageExt(dataUrl: string): "PNG" | "JPEG" {
+  return dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
 }
 
 async function urlToDataUrl(url: string): Promise<string> {
