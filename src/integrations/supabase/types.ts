@@ -55,6 +55,136 @@ export type Database = {
           },
         ]
       }
+      actual_costs: {
+        Row: {
+          amount: number
+          category: Database["public"]["Enums"]["actual_cost_category"]
+          cost_code: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          description: string | null
+          estimate_line_id: string | null
+          id: string
+          incurred_on: string
+          invoice_number: string | null
+          metadata_json: Json
+          notes: string | null
+          org_id: string
+          purchase_order_id: string | null
+          qty: number | null
+          resource_id: string | null
+          site_id: string | null
+          source: Database["public"]["Enums"]["actual_cost_source"]
+          source_ref: string | null
+          supplier: string | null
+          unit_cost: number | null
+          uom: string | null
+          updated_at: string
+          work_package_id: string
+          wp_task_id: string | null
+        }
+        Insert: {
+          amount?: number
+          category?: Database["public"]["Enums"]["actual_cost_category"]
+          cost_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          estimate_line_id?: string | null
+          id?: string
+          incurred_on?: string
+          invoice_number?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id: string
+          purchase_order_id?: string | null
+          qty?: number | null
+          resource_id?: string | null
+          site_id?: string | null
+          source?: Database["public"]["Enums"]["actual_cost_source"]
+          source_ref?: string | null
+          supplier?: string | null
+          unit_cost?: number | null
+          uom?: string | null
+          updated_at?: string
+          work_package_id: string
+          wp_task_id?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: Database["public"]["Enums"]["actual_cost_category"]
+          cost_code?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          description?: string | null
+          estimate_line_id?: string | null
+          id?: string
+          incurred_on?: string
+          invoice_number?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id?: string
+          purchase_order_id?: string | null
+          qty?: number | null
+          resource_id?: string | null
+          site_id?: string | null
+          source?: Database["public"]["Enums"]["actual_cost_source"]
+          source_ref?: string | null
+          supplier?: string | null
+          unit_cost?: number | null
+          uom?: string | null
+          updated_at?: string
+          work_package_id?: string
+          wp_task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_costs_estimate_line_id_fkey"
+            columns: ["estimate_line_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_costs_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_costs_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_costs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "actual_costs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_costs_wp_task_id_fkey"
+            columns: ["wp_task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           id: string
@@ -304,6 +434,13 @@ export type Database = {
             foreignKeyName: "board_automations_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "board_automations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -381,6 +518,13 @@ export type Database = {
             foreignKeyName: "board_columns_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "board_columns_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -444,6 +588,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "site_programmes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "board_views_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "board_views_work_package_id_fkey"
@@ -994,6 +1145,13 @@ export type Database = {
             foreignKeyName: "design_submissions_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "design_submissions_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -1240,6 +1398,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offers_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "dno_offers_work_package_id_fkey"
@@ -1963,6 +2128,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "estimates_work_package_id_fkey"
@@ -4220,6 +4392,13 @@ export type Database = {
             foreignKeyName: "projects_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "projects_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -4376,6 +4555,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "purchase_orders_work_package_id_fkey"
@@ -4793,6 +4979,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "resource_allocations_work_package_id_fkey"
@@ -5840,6 +6033,13 @@ export type Database = {
             foreignKeyName: "site_handover_docs_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "site_handover_docs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -5982,6 +6182,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "site_stage_status_work_package_id_fkey"
@@ -6674,6 +6881,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studies_wp_id_fkey"
+            columns: ["wp_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "studies_wp_id_fkey"
@@ -7423,6 +7637,13 @@ export type Database = {
             foreignKeyName: "work_package_estimates_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "work_package_estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -7623,6 +7844,13 @@ export type Database = {
             foreignKeyName: "workflow_instances_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "workflow_instances_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -7768,6 +7996,13 @@ export type Database = {
           work_package_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "wp_access_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
           {
             foreignKeyName: "wp_access_work_package_id_fkey"
             columns: ["work_package_id"]
@@ -8119,6 +8354,13 @@ export type Database = {
             foreignKeyName: "wp_milestones_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "wp_milestones_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -8163,6 +8405,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_partner_allocations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "wp_partner_allocations_work_package_id_fkey"
@@ -8215,6 +8464,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_sites_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
           },
           {
             foreignKeyName: "wp_sites_work_package_id_fkey"
@@ -8392,6 +8648,13 @@ export type Database = {
             foreignKeyName: "wp_tasks_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "wp_tasks_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -8420,6 +8683,13 @@ export type Database = {
           work_package_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "wp_team_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
           {
             foreignKeyName: "wp_team_work_package_id_fkey"
             columns: ["work_package_id"]
@@ -8698,6 +8968,13 @@ export type Database = {
             foreignKeyName: "projects_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "projects_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
@@ -8829,6 +9106,40 @@ export type Database = {
           year: number | null
         }
         Relationships: []
+      }
+      v_wp_commercial_position: {
+        Row: {
+          actual_cost: number | null
+          actual_expense: number | null
+          actual_labour: number | null
+          actual_material: number | null
+          actual_other: number | null
+          actual_plant: number | null
+          actual_subcontractor: number | null
+          awarded_cost: number | null
+          awarded_grand_total: number | null
+          awarded_price: number | null
+          budget_amount: number | null
+          budget_variance: number | null
+          code: string | null
+          cost_pct_of_awarded: number | null
+          cost_variance: number | null
+          forecast_margin: number | null
+          forecast_margin_pct: number | null
+          name: string | null
+          programme_id: string | null
+          status: string | null
+          work_package_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_packages_programme_id_fkey"
+            columns: ["programme_id"]
+            isOneToOne: false
+            referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -10422,6 +10733,14 @@ export type Database = {
       user_org_id: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {
+      actual_cost_category:
+        | "labour"
+        | "material"
+        | "plant"
+        | "subcontractor"
+        | "expense"
+        | "other"
+      actual_cost_source: "manual" | "invoice" | "timesheet" | "po" | "import"
       app_role: "admin" | "engineer" | "client"
       milestone_gate_status: "open" | "passed" | "blocked" | "waived"
       milestone_gate_type:
@@ -10640,6 +10959,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      actual_cost_category: [
+        "labour",
+        "material",
+        "plant",
+        "subcontractor",
+        "expense",
+        "other",
+      ],
+      actual_cost_source: ["manual", "invoice", "timesheet", "po", "import"],
       app_role: ["admin", "engineer", "client"],
       milestone_gate_status: ["open", "passed", "blocked", "waived"],
       milestone_gate_type: [
