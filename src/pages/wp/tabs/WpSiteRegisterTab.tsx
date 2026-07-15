@@ -48,7 +48,7 @@ export default function WpSiteRegisterTab() {
   const { data: stages = [] } = useQuery({
     queryKey: ["stage-defs"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("stage_definitions").select("id, name");
+      const { data, error } = await supabase.from("stage_definitions").select("id, label");
       if (error) throw error;
       return data ?? [];
     },
@@ -123,7 +123,7 @@ export default function WpSiteRegisterTab() {
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{s?.postcode ?? "—"}</TableCell>
                     <TableCell>
-                      {stage ? <Badge variant="secondary" className="text-[10px]">{(stage as any).name}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
+                      {stage ? <Badge variant="secondary" className="text-[10px]">{(stage as any).label}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
                     </TableCell>
                     <TableCell className="text-xs">{(partner as any)?.name ?? <span className="text-muted-foreground">—</span>}</TableCell>
                     <TableCell className="text-right tabular-nums">
