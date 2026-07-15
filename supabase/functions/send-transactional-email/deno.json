@@ -1,5 +1,4 @@
 {
-  "nodeModulesDir": "auto",
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "npm:react@18.3.1",

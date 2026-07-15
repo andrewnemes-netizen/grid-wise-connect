@@ -47,6 +47,7 @@
         "embla-carousel-react": "^8.6.0",
         "input-otp": "^1.4.2",
         "jspdf": "^4.2.1",
+        "jspdf-autotable": "^5.0.8",
         "jszip": "^3.10.1",
         "lucide-react": "^0.462.0",
         "maplibre-gl": "^5.16.0",
@@ -916,6 +917,8 @@
     "json-stringify-pretty-compact": ["json-stringify-pretty-compact@4.0.0", "", {}, ""],
 
     "jspdf": ["jspdf@4.2.1", "", { "dependencies": { "@babel/runtime": "^7.28.6", "fast-png": "^6.2.0", "fflate": "^0.8.1" }, "optionalDependencies": { "canvg": "^3.0.11", "core-js": "^3.6.0", "dompurify": "^3.3.1", "html2canvas": "^1.0.0-rc.5" } }, ""],
+
+    "jspdf-autotable": ["jspdf-autotable@5.0.8", "https://europe-west4-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/jspdf-autotable/-/jspdf-autotable-5.0.8.tgz", { "peerDependencies": { "jspdf": "^2 || ^3 || ^4" } }, "sha512-Hy05N86yBO7CXBrnSLOge7i1ZYpKH2DjQ94iybaP7vBhSInjvRBgDc99ngKzSbSO8Jc98ZCally8I6n0tj2RJQ=="],
 
     "jszip": ["jszip@3.10.1", "", { "dependencies": { "lie": "~3.3.0", "pako": "~1.0.2", "readable-stream": "~2.3.6", "setimmediate": "^1.0.5" } }, ""],
 

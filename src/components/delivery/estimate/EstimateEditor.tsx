@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles, CalendarClock } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles, CalendarClock, Send, Download } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateLineDialog } from "./EstimateLineDialog";
 import { RateItemPicker } from "./RateItemPicker";
 import { GeneratePlanDialog } from "./GeneratePlanDialog";
+import { SendQuotationDialog } from "./SendQuotationDialog";
+import { downloadQuotationPdf } from "@/lib/quotation-pdf";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -23,6 +25,7 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [rateCardOpen, setRateCardOpen] = useState<string | null | false>(false); // group id | null (auto) | false (closed)
   const [planOpen, setPlanOpen] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
@@ -180,6 +183,12 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
             <CalendarClock className="h-3.5 w-3.5 mr-1" />Generate Plan
           </Button>
           <Button size="sm" variant="outline" onClick={() => cloneEstimate.mutate()}><Copy className="h-3.5 w-3.5 mr-1" />Clone</Button>
+          <Button size="sm" variant="outline" onClick={() => downloadQuotationPdf({ estimate: e, groups: groups.data ?? [], lines: lines.data ?? [] })}>
+            <Download className="h-3.5 w-3.5 mr-1" />Download PDF
+          </Button>
+          <Button size="sm" onClick={() => setQuoteOpen(true)}>
+            <Send className="h-3.5 w-3.5 mr-1" />Send Quotation
+          </Button>
           {onClose && <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>}
         </div>
       </div>
@@ -325,6 +334,13 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
         workPackageId={e.work_package_id ?? null}
         open={planOpen}
         onOpenChange={setPlanOpen}
+      />
+      <SendQuotationDialog
+        open={quoteOpen}
+        onOpenChange={setQuoteOpen}
+        estimate={e}
+        groups={groups.data ?? []}
+        lines={lines.data ?? []}
       />
     </div>
   );

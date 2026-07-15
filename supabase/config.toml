@@ -72,9 +72,13 @@ verify_jwt = false
 [functions.ssen-ltds-ingest]
 verify_jwt = false
 
+[functions.process-email-queue]
 verify_jwt = true
 
 [functions.send-transactional-email]
+verify_jwt = true
+
+[functions.send-quotation]
 verify_jwt = true
 
 [functions.preview-transactional-email]
