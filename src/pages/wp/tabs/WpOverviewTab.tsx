@@ -91,11 +91,11 @@ export default function WpOverviewTab() {
   const openSnags = readiness.reduce((sum: number, r: any) => sum + Number(r.snag_open ?? 0), 0);
   const criticalSnags = readiness.reduce((sum: number, r: any) => sum + Number(r.snag_open_critical ?? 0), 0);
 
-  const stageRollup = stages.reduce((acc: Record<string, number>, row: any) => {
+  const stageRollup: Record<string, number> = (stages as any[]).reduce((acc: Record<string, number>, row: any) => {
     const name = row.stage_definitions?.label ?? "Unknown";
     acc[name] = (acc[name] ?? 0) + 1;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
   const stageEntries = Object.entries(stageRollup).sort(([a], [b]) => a.localeCompare(b));
 
   return (
