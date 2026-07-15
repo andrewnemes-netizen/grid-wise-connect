@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, MapPin, Upload as UploadIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, MapPin, Upload as UploadIcon, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { MappingTemplates } from "@/components/import/MappingTemplates";
+import { detectExtractableType, extractPdfText, extractDocxText } from "@/lib/import/documentText";
 
 type BatchRow = {
   id: string;
@@ -136,6 +137,36 @@ export default function ImportWizard() {
   }, []);
 
   /* ------- Step 0: Upload ------- */
+  const runAiExtraction = async () => {
+    if (!file) return toast.error("Choose a PDF or DOCX first");
+    const kind = detectExtractableType(file);
+    if (!kind) return toast.error("File must be PDF or DOCX");
+    try {
+      setBusy(kind === "pdf" ? "Reading PDF…" : "Reading DOCX…");
+      const text = kind === "pdf" ? await extractPdfText(file) : await extractDocxText(file);
+      if (!text.trim()) throw new Error("No text found in document");
+      setBusy("Asking AI to extract site rows…");
+      const { data, error } = await supabase.functions.invoke("extract-sites-from-text", {
+        body: { text, filename: file.name },
+      });
+      if (error) {
+        const detail = "context" in error && error.context ? await (error.context as Response).text() : error.message;
+        throw new Error(detail || "AI extraction failed");
+      }
+      const csv = (data as { csv?: string; rows?: number })?.csv ?? "";
+      const rowCount = (data as { rows?: number })?.rows ?? 0;
+      if (!csv) throw new Error("AI returned no rows");
+      setPasted(csv);
+      setFile(null);
+      toast.success(`AI extracted ${rowCount} site row${rowCount === 1 ? "" : "s"} — review the CSV, then Parse & continue`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Extraction failed";
+      toast.error(msg);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const doUpload = async () => {
     if (!file && !pasted.trim()) return toast.error("Choose a file or paste data first");
     try {
@@ -144,7 +175,12 @@ export default function ImportWizard() {
       if (file) {
         const ext = file.name.split(".").pop()?.toLowerCase();
         source = ext === "csv" ? "csv" : (ext === "xlsx" || ext === "xls") ? "xlsx" : "";
-        if (!source) throw new Error("File must be .csv, .xlsx, or .xls");
+        if (!source) {
+          if (ext === "pdf" || ext === "docx") {
+            throw new Error("Use the AI extract button for PDF/DOCX — it converts the document to reviewable CSV first.");
+          }
+          throw new Error("File must be .csv, .xlsx, .xls, .pdf, or .docx");
+        }
         const { data: sess } = await supabase.auth.getSession();
         const userId = sess.session?.user.id;
         if (!userId) throw new Error("Not signed in");
@@ -281,8 +317,33 @@ export default function ImportWizard() {
           <CardContent className="space-y-4">
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <UploadIcon className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mx-auto" />
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,.pdf,.docx"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="mx-auto"
+              />
               {file && <p className="text-sm mt-2">Selected: <span className="font-mono">{file.name}</span></p>}
+              <p className="text-[11px] text-muted-foreground mt-3">
+                CSV / XLSX → parsed directly. PDF / DOCX → extracted by AI into an editable CSV first.
+              </p>
+              {file && detectExtractableType(file) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="mt-3"
+                  onClick={runAiExtraction}
+                  disabled={busy !== null}
+                >
+                  {busy?.startsWith("Reading") || busy?.startsWith("Asking AI") ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  Extract sites with AI
+                </Button>
+              )}
             </div>
             <div>
               <Label className="text-xs">Or paste rows (CSV with headers)</Label>
