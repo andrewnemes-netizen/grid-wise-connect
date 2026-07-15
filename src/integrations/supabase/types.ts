@@ -3411,6 +3411,68 @@ export type Database = {
           },
         ]
       }
+      quotation_sends: {
+        Row: {
+          cc_emails: string[] | null
+          created_at: string
+          error_message: string | null
+          estimate_id: string
+          id: string
+          message: string | null
+          pdf_signed_url: string | null
+          pdf_storage_path: string
+          recipient_email: string
+          recipient_name: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          cc_emails?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          estimate_id: string
+          id?: string
+          message?: string | null
+          pdf_signed_url?: string | null
+          pdf_storage_path: string
+          recipient_email: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          cc_emails?: string[] | null
+          created_at?: string
+          error_message?: string | null
+          estimate_id?: string
+          id?: string
+          message?: string | null
+          pdf_signed_url?: string | null
+          pdf_storage_path?: string
+          recipient_email?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_sends_estimate_id_fkey"
+            columns: ["estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rate_card_versions: {
         Row: {
           approved_at: string | null
