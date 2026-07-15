@@ -111,9 +111,8 @@ export function WpSidebar() {
         </SidebarGroup>
 
         {NAV.map((group) => {
-          const groupActive = group.items.some((i) => isActive(i.slug));
           return (
-            <SidebarGroup key={group.label} defaultOpen={groupActive || group.label === "Overview"}>
+            <SidebarGroup key={group.label}>
               {!collapsed && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
               <SidebarGroupContent>
                 <SidebarMenu>
