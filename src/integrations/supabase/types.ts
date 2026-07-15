@@ -880,6 +880,81 @@ export type Database = {
           },
         ]
       }
+      daily_logs: {
+        Row: {
+          created_at: string
+          crew_count: number | null
+          crew_names: string | null
+          hours_worked: number | null
+          id: string
+          issues: string | null
+          log_date: string
+          logged_by: string | null
+          metadata_json: Json
+          org_id: string
+          photos_count: number
+          site_id: string | null
+          temperature_c: number | null
+          updated_at: string
+          weather: string | null
+          work_done: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          crew_count?: number | null
+          crew_names?: string | null
+          hours_worked?: number | null
+          id?: string
+          issues?: string | null
+          log_date?: string
+          logged_by?: string | null
+          metadata_json?: Json
+          org_id: string
+          photos_count?: number
+          site_id?: string | null
+          temperature_c?: number | null
+          updated_at?: string
+          weather?: string | null
+          work_done?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          crew_count?: number | null
+          crew_names?: string | null
+          hours_worked?: number | null
+          id?: string
+          issues?: string | null
+          log_date?: string
+          logged_by?: string | null
+          metadata_json?: Json
+          org_id?: string
+          photos_count?: number
+          site_id?: string | null
+          temperature_c?: number | null
+          updated_at?: string
+          weather?: string | null
+          work_done?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_logs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "daily_logs_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_cables: {
         Row: {
           cable_type: string
@@ -3072,6 +3147,84 @@ export type Database = {
           },
         ]
       }
+      inspections: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          defects_json: Json
+          followup_due: string | null
+          followup_required: boolean
+          id: string
+          inspected_at: string
+          inspection_type: string
+          inspector_id: string | null
+          inspector_name: string | null
+          metadata_json: Json
+          notes: string | null
+          org_id: string
+          result: Database["public"]["Enums"]["inspection_result"]
+          score: number | null
+          site_id: string | null
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          defects_json?: Json
+          followup_due?: string | null
+          followup_required?: boolean
+          id?: string
+          inspected_at?: string
+          inspection_type: string
+          inspector_id?: string | null
+          inspector_name?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id: string
+          result?: Database["public"]["Enums"]["inspection_result"]
+          score?: number | null
+          site_id?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          defects_json?: Json
+          followup_due?: string | null
+          followup_required?: boolean
+          id?: string
+          inspected_at?: string
+          inspection_type?: string
+          inspector_id?: string | null
+          inspector_name?: string | null
+          metadata_json?: Json
+          notes?: string | null
+          org_id?: string
+          result?: Database["public"]["Enums"]["inspection_result"]
+          score?: number | null
+          site_id?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspections_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "inspections_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       layer_registry: {
         Row: {
           attribution: string | null
@@ -3188,6 +3341,104 @@ export type Database = {
           size_value?: number
         }
         Relationships: []
+      }
+      materials_deliveries: {
+        Row: {
+          condition_notes: string | null
+          created_at: string
+          created_by: string | null
+          delivered_at: string
+          delivery_note_ref: string | null
+          description: string | null
+          id: string
+          item: string
+          metadata_json: Json
+          org_id: string
+          po_line_id: string | null
+          purchase_order_id: string | null
+          qty: number
+          received_by: string | null
+          received_by_name: string | null
+          site_id: string | null
+          supplier: string | null
+          uom: string | null
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          condition_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivery_note_ref?: string | null
+          description?: string | null
+          id?: string
+          item: string
+          metadata_json?: Json
+          org_id: string
+          po_line_id?: string | null
+          purchase_order_id?: string | null
+          qty?: number
+          received_by?: string | null
+          received_by_name?: string | null
+          site_id?: string | null
+          supplier?: string | null
+          uom?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          condition_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivered_at?: string
+          delivery_note_ref?: string | null
+          description?: string | null
+          id?: string
+          item?: string
+          metadata_json?: Json
+          org_id?: string
+          po_line_id?: string | null
+          purchase_order_id?: string | null
+          qty?: number
+          received_by?: string | null
+          received_by_name?: string | null
+          site_id?: string | null
+          supplier?: string | null
+          uom?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_deliveries_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "po_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materials_deliveries_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materials_deliveries_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "materials_deliveries_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ndp_projects: {
         Row: {
@@ -3485,6 +3736,81 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permits: {
+        Row: {
+          applied_on: string | null
+          approved_on: string | null
+          authority: string | null
+          created_at: string
+          created_by: string | null
+          expiry_date: string | null
+          id: string
+          metadata_json: Json
+          notes: string | null
+          org_id: string
+          permit_type: string
+          reference: string | null
+          site_id: string | null
+          status: Database["public"]["Enums"]["permit_status"]
+          updated_at: string
+          valid_from: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          applied_on?: string | null
+          approved_on?: string | null
+          authority?: string | null
+          created_at?: string
+          created_by?: string | null
+          expiry_date?: string | null
+          id?: string
+          metadata_json?: Json
+          notes?: string | null
+          org_id: string
+          permit_type: string
+          reference?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["permit_status"]
+          updated_at?: string
+          valid_from?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          applied_on?: string | null
+          approved_on?: string | null
+          authority?: string | null
+          created_at?: string
+          created_by?: string | null
+          expiry_date?: string | null
+          id?: string
+          metadata_json?: Json
+          notes?: string | null
+          org_id?: string
+          permit_type?: string
+          reference?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["permit_status"]
+          updated_at?: string
+          valid_from?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permits_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "permits_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -4630,6 +4956,78 @@ export type Database = {
             columns: ["estimate_id"]
             isOneToOne: false
             referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rams_documents: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata_json: Json
+          org_id: string
+          site_id: string | null
+          status: Database["public"]["Enums"]["rams_status"]
+          summary: string | null
+          title: string
+          updated_at: string
+          valid_from: string | null
+          valid_to: string | null
+          version: string
+          work_package_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata_json?: Json
+          org_id: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["rams_status"]
+          summary?: string | null
+          title: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+          version?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata_json?: Json
+          org_id?: string
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["rams_status"]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+          version?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rams_documents_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "rams_documents_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -6077,6 +6475,92 @@ export type Database = {
           },
         ]
       }
+      site_photos: {
+        Row: {
+          bearing: number | null
+          caption: string | null
+          created_at: string
+          created_by: string | null
+          daily_log_id: string | null
+          exif_json: Json
+          id: string
+          latitude: number | null
+          longitude: number | null
+          org_id: string
+          project_file_id: string | null
+          site_id: string | null
+          tags: string[] | null
+          taken_at: string | null
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          bearing?: number | null
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_log_id?: string | null
+          exif_json?: Json
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          org_id: string
+          project_file_id?: string | null
+          site_id?: string | null
+          tags?: string[] | null
+          taken_at?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          bearing?: number | null
+          caption?: string | null
+          created_at?: string
+          created_by?: string | null
+          daily_log_id?: string | null
+          exif_json?: Json
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          org_id?: string
+          project_file_id?: string | null
+          site_id?: string | null
+          tags?: string[] | null
+          taken_at?: string | null
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_photos_daily_log_id_fkey"
+            columns: ["daily_log_id"]
+            isOneToOne: false
+            referencedRelation: "daily_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_photos_project_file_id_fkey"
+            columns: ["project_file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_photos_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "site_photos_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_stage_history: {
         Row: {
           changed_at: string
@@ -7060,6 +7544,78 @@ export type Database = {
           reason?: string
         }
         Relationships: []
+      }
+      traffic_management_plans: {
+        Row: {
+          approval_state: Database["public"]["Enums"]["tm_approval_state"]
+          authority: string | null
+          contractor: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata_json: Json
+          notes: string | null
+          org_id: string
+          reference: string | null
+          site_id: string | null
+          tm_type: string
+          updated_at: string
+          valid_from: string | null
+          valid_to: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          approval_state?: Database["public"]["Enums"]["tm_approval_state"]
+          authority?: string | null
+          contractor?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata_json?: Json
+          notes?: string | null
+          org_id: string
+          reference?: string | null
+          site_id?: string | null
+          tm_type: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          approval_state?: Database["public"]["Enums"]["tm_approval_state"]
+          authority?: string | null
+          contractor?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata_json?: Json
+          notes?: string | null
+          org_id?: string
+          reference?: string | null
+          site_id?: string | null
+          tm_type?: string
+          updated_at?: string
+          valid_from?: string | null
+          valid_to?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "traffic_management_plans_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "traffic_management_plans_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ukpn_circuit_monthly: {
         Row: {
@@ -10742,6 +11298,7 @@ export type Database = {
         | "other"
       actual_cost_source: "manual" | "invoice" | "timesheet" | "po" | "import"
       app_role: "admin" | "engineer" | "client"
+      inspection_result: "pending" | "passed" | "passed_with_defects" | "failed"
       milestone_gate_status: "open" | "passed" | "blocked" | "waived"
       milestone_gate_type:
         | "information"
@@ -10759,6 +11316,13 @@ export type Database = {
         | "handover"
         | "custom"
       milestone_status: "not_started" | "in_progress" | "completed" | "blocked"
+      permit_status:
+        | "draft"
+        | "applied"
+        | "approved"
+        | "rejected"
+        | "expired"
+        | "cancelled"
       project_health: "green" | "amber" | "red"
       project_member_role:
         | "owner"
@@ -10777,6 +11341,12 @@ export type Database = {
         | "completed"
         | "cancelled"
       proposal_status: "draft" | "sent" | "accepted" | "rejected" | "expired"
+      rams_status:
+        | "draft"
+        | "under_review"
+        | "approved"
+        | "superseded"
+        | "rejected"
       rate_card_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
       rate_provided_by: "partner" | "client" | "both" | "unknown"
       recipe_build_type: "horizontal" | "vertical" | "buildout" | "other"
@@ -10797,6 +11367,12 @@ export type Database = {
         | "done"
       task_dep_type: "FS" | "SS" | "FF" | "SF"
       task_status: "todo" | "in_progress" | "blocked" | "review" | "done"
+      tm_approval_state:
+        | "draft"
+        | "submitted"
+        | "approved"
+        | "rejected"
+        | "expired"
       wp_estimate_adjustment_kind:
         | "contingency"
         | "preliminaries"
@@ -10969,6 +11545,7 @@ export const Constants = {
       ],
       actual_cost_source: ["manual", "invoice", "timesheet", "po", "import"],
       app_role: ["admin", "engineer", "client"],
+      inspection_result: ["pending", "passed", "passed_with_defects", "failed"],
       milestone_gate_status: ["open", "passed", "blocked", "waived"],
       milestone_gate_type: [
         "information",
@@ -10988,6 +11565,14 @@ export const Constants = {
         "custom",
       ],
       milestone_status: ["not_started", "in_progress", "completed", "blocked"],
+      permit_status: [
+        "draft",
+        "applied",
+        "approved",
+        "rejected",
+        "expired",
+        "cancelled",
+      ],
       project_health: ["green", "amber", "red"],
       project_member_role: [
         "owner",
@@ -11008,6 +11593,13 @@ export const Constants = {
         "cancelled",
       ],
       proposal_status: ["draft", "sent", "accepted", "rejected", "expired"],
+      rams_status: [
+        "draft",
+        "under_review",
+        "approved",
+        "superseded",
+        "rejected",
+      ],
       rate_card_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
       rate_provided_by: ["partner", "client", "both", "unknown"],
       recipe_build_type: ["horizontal", "vertical", "buildout", "other"],
@@ -11030,6 +11622,13 @@ export const Constants = {
       ],
       task_dep_type: ["FS", "SS", "FF", "SF"],
       task_status: ["todo", "in_progress", "blocked", "review", "done"],
+      tm_approval_state: [
+        "draft",
+        "submitted",
+        "approved",
+        "rejected",
+        "expired",
+      ],
       wp_estimate_adjustment_kind: [
         "contingency",
         "preliminaries",
