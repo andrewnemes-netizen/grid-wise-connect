@@ -1,192 +1,176 @@
 
-# Gridwise AI Platform — MCP Server (Phase 1 Architecture)
+# Gridwise Assistant — Embedded Claude (Phase 1, read-only)
 
-Read-only Phase 1. No write tools. Builds on the existing `@lovable.dev/mcp-js` server at `src/lib/mcp/` (bundled to `supabase/functions/mcp/index.ts`) that already has Supabase OAuth 2.1, `/.well-known/oauth-protected-resource`, and 3 tools (`search_grid_assets`, `list_my_sites`, `list_my_studies`).
-
----
-
-## 1. MCP Architecture
-
-```
-AI Assistant (Claude / ChatGPT / Gemini / Cursor)
-        │ HTTPS + OAuth 2.1 bearer
-        ▼
-Supabase Edge Function: /functions/v1/mcp   (@lovable.dev/mcp-js)
-        │  token verify → user_id, client_id, claims
-        ▼
-Tool Registry  (src/lib/mcp/tools/*)
-        │  permission gate → audit start
-        ▼
-Domain layer (existing, unchanged)
-  ├─ Supabase RLS (per-user + per-org)
-  ├─ PostGIS RPCs (advisor_search_*, ST_DWithin)
-  ├─ Engineering: src/lib/gridwise/*, src/lib/evHub/*
-  ├─ Estimating:  src/lib/connectionCosts.ts, unit_rates, rate_items
-  ├─ PM:          projects, work_packages, project_tasks
-  └─ Documents:   Supabase Storage buckets
-        │  result
-        ▼
-Audit log write → response to AI
-```
-
-**Boundaries**
-- MCP function = thin dispatcher; no engineering math lives in the function.
-- Tools call existing RPCs / edge functions / lib helpers — never re-implement.
-- All DB access uses the per-request Supabase client with the user's forwarded token, so RLS applies as that user.
+Right-side chat panel, available throughout the app. Server-side Anthropic key, permission-aware, audited, no writes. Reuses the tool layer designed for the MCP server so both AI paths share one source of truth.
 
 ---
 
-## 2. Tool Registry (Phase 1 — read-only subset)
+## 0. Two decisions needed before build (chat UI contract)
 
-Each `defineTool` file under `src/lib/mcp/tools/`. Registered in `src/lib/mcp/index.ts`.
+Defaults chosen — reply if you want different:
+1. **Conversation shape:** *threaded* — user can start new conversations, revisit old ones. (Alternative: one rolling conversation per user.)
+2. **Storage:** *database (Supabase)*, scoped to user + optional programme/work-package/site context. (Alternatives: browser localStorage, no persistence.)
 
-| Category | Phase-1 tools | Backing implementation |
+---
+
+## 1. Proposed Architecture
+
+```
+Right-side Assistant panel  (src/components/assistant/*)
+        │  useChat (AI SDK) → transport
+        ▼
+Edge Function  /functions/v1/gridwise-assistant   (streaming)
+        │  auth: supabase.auth.getUser(bearer)
+        │  load: mcp_sessions context + thread history
+        ▼
+AI SDK streamText — Anthropic provider (@ai-sdk/anthropic)
+   model: claude-sonnet-4-5   (opus-4-1 optional, haiku-4-5 for cheap)
+   tools:  Gridwise Tool Registry (shared with MCP)
+   stopWhen: stepCountIs(50)
+        │  tool call
+        ▼
+Gridwise Tool Registry   (src/lib/gridwise-tools/*)
+        │  assertToolAllowed(user, tool) → withAudit → handler
+        ▼
+Existing domain layer
+   • Supabase RLS (per-user + per-org)
+   • PostGIS RPCs
+   • Engineering: gridwise/*, evHub/*, electricalEngine
+   • Estimating: connectionCosts, unit_rates, rate_items
+   • PM: projects, work_packages, project_tasks
+   • Documents: Storage
+        │
+        ▼
+Response back to Claude → cited answer streamed to panel
+```
+
+The **same tool registry** is exposed by (a) the AI SDK `tools` object here, and (b) the MCP server. One implementation, two adapters.
+
+---
+
+## 2. Tool definitions (Phase 1 — read-only, 9 tools to start)
+
+Each tool: Zod input schema, `execute` calling existing lib/RPC, returns compact JSON + `sources` array of `{ table, id, url }` for citations.
+
+| Tool | Backing implementation | Returns |
 |---|---|---|
-| GIS | `search_sites`, `search_substations`, `search_feeder_pillars`, `search_lv_assets`, `search_hv_assets`, `search_transformers`, `search_postcodes`, `search_local_authorities`, `find_sites_within_radius`, `rank_candidate_sites` | PostGIS RPCs on `sites`, `geo_substations`, `geo_points`, `geo_cables`, `site_utilisation`; Nominatim geocode; `advisor_search_site_utilisation` |
-| Grid Connection | `run_capacity_assessment`, `find_best_connection`, `calculate_headroom`, `calculate_distance` | `feasibilityEngine`, `assetEngine`, existing edge fn `dno-capacity-lookup` |
-| Engineering (read-only) | `run_voltage_drop`, `run_fault_level`, `run_cable_selection`, `run_dno_rules`, `run_g81_validation`, `validate_route`, `calculate_cable_lengths` | `electricalEngine`, `evHub/electricalSizing`, `evHub/cableSelection`, `apply-dno-rules` edge fn, `roadRoute` |
-| Estimating (read-only) | `get_rate_card`, `get_recipe`, `calculate_boq`, `calculate_cost`, `compare_estimates` | `unit_rates`, `rate_items`, `estimate_recipes`, `evHub/boqGenerator`, `connectionCosts` |
-| PM (read-only) | `get_project_summary`, `get_work_package_summary`, `get_delivery_risk`, `list_my_programmes`, `list_my_projects` | `projects`, `work_packages`, `project_tasks` |
-| Reporting | `generate_estimate_pdf`, `generate_client_report` (returns signed Storage URL) | `quotation-pdf`, `generateAssessmentPdf` invoked server-side |
-| Documents | `find_documents`, `read_document`, `summarise_document` | `project_files`, `site_handover_docs`, Storage signed URLs, Lovable AI Gateway for summarise |
-| Commercial (read-only) | `project_budget`, `variation_summary`, `invoice_summary` | `revenue_projects`, `revenue_invoices`, `wp_estimate_variations` |
-| AI Search | `semantic_search`, `natural_language_query`, `search_everything` | pgvector table (new — see §9) + Lovable AI embeddings |
+| `search_programmes` | `programmes` + `work_packages` count | id, name, client, dates, wp_count, status |
+| `get_programme_summary` | `programmes` + rollup RPC over `sites`+`project_tasks` | dates, RAG, site counts by stage, blockers |
+| `get_work_package_summary` | `work_packages` + `wp_sites` + `wp_tasks` | progress %, forecast completion, overdue tasks, missing docs |
+| `search_sites` | `sites` + optional PostGIS radius | site rows (respects RLS) |
+| `get_site_details` | `sites` + `site_stage_status` + latest `studies` | full site record + latest study id |
+| `get_site_feasibility` | reads latest `studies.result_json` (does **not** re-run engines) | verdict, capacity, DNO rule outcomes, cable spec |
+| `get_estimate_summary` | `estimates`+`estimate_lines` or `site_estimates` | totals, margin (permission-filtered), non-standard flag |
+| `get_delivery_risks` | RPC aggregating overdue tasks, expiring permits, missing metering, slippage | ranked risk list per programme/WP |
+| `draft_client_report` | pulls WP + site rollups + risks, returns markdown draft | markdown + `sources[]`; **labelled AI-assisted** |
 
-**Deferred to Phase 2+ (write tools):** every `create_*`, `update_*`, `assign_*`, `approve_*`, `run_gridwise_connect`, `run_ev_hub`, `calculate_reinforcement`, `calculate_connection_cost` (persisted), `attach_document`, `upload_photo`, `generate_dno_pack`, `generate_construction_pack`, `generate_excel_export`.
-
-Missing categories that exist in the request but have **no backing data today** and are dropped from Phase 1 with a note in the summary: `search_joint_bays`, `search_roads`, `assign_resources`, `forecast_margin`, `forecast_cashflow`, `procurement_summary`, `retrieve_photo`. These re-enter once the underlying tables/features exist.
+Explicit **non-tools**: no `run_ev_hub`, no `calculate_*`, no `create_*`, no `update_*`, no `approve_*`. Claude asks for feasibility → tool returns the **already-computed** study record. If none exists, tool returns `{ needs_study: true, site_id }` and Claude explains that a study must be run in the app first.
 
 ---
 
-## 3. Tool Schemas (conventions)
+## 3. Database additions
 
-Every tool file exports `defineTool({ name, title, description, inputSchema, annotations, handler })`.
+One migration, all with GRANTs before RLS.
 
-- `inputSchema`: Zod object, small & flat, no `.min/.max` chains on strings the model must produce (schema limits stated in `description` instead).
-- `annotations`: always set `readOnlyHint: true, idempotentHint: true, openWorldHint: <bool>` for Phase 1.
-- Response shape: `{ content: [{type:"text", text: humanSummary}], structuredContent: {…machine JSON…}, isError? }`.
-- Never include tokens, service-role responses, or other users' rows in `structuredContent`.
-- Every tool starts with `if (!ctx.isAuthenticated()) return { isError:true, … }`.
-
----
-
-## 4. Authentication
-
-Already active — reuse it, do not rebuild.
-- **OAuth 2.1** via `supabase--configure_oauth_server` (done). Consent route: to add at `/.lovable/oauth/consent` (currently missing — Phase 1 gap, required before Claude/ChatGPT can complete auth).
-- **JWT verification**: `@lovable.dev/mcp-js` verifies Supabase-issued access tokens against `https://<ref>.supabase.co/auth/v1` with audience `authenticated`.
-- **API keys**: Phase 1 uses OAuth tokens only. A separate `mcp_api_keys` table (hashed, scoped, revocable) is designed but not implemented until Phase 2.
-- No service-role key anywhere in `src/lib/mcp/**` — enforced by convention + a lint rule.
+- `assistant_threads`: id uuid PK, user_id, title, context_programme_id/wp_id/site_id (all nullable), created_at, updated_at, archived_at. RLS: owner only.
+- `assistant_messages`: id uuid PK, thread_id FK, role (`user|assistant|tool`), parts jsonb (AI SDK `UIMessage.parts`), tool_name, tokens_in, tokens_out, cost_cents, created_at. RLS via thread ownership.
+- `assistant_tool_calls` (audit): id, thread_id, message_id, user_id, tool_name, params jsonb, result_summary text, record_ids uuid[], status (`ok|denied|error`), execution_ms, model, created_at. RLS: owner read, admin read, append-only.
+- Reuse `mcp_sessions` from previous plan for the "current context" (programme/WP/site) — same table, both AI paths read it.
+- No changes to existing tables.
 
 ---
 
-## 5. Permissions
+## 4. Permission model
 
-Two layers, both required:
+Two enforcement points, both required, both reuse what's designed for MCP:
 
-1. **RLS (existing)** — every tool query runs as the caller. `user_roles`, `org_members`, `sites.org_id`, `studies.org_id` policies already scope data.
-2. **Tool-level role gate** — new helper `assertToolAllowed(ctx, toolName)` reads roles from `user_roles` + `profiles.is_platform_admin` and checks against a matrix:
-
-| Role | GIS | GridConn | Eng | Estimating | PM read | Commercial | Reporting | Docs | Search |
-|---|---|---|---|---|---|---|---|---|---|
-| Admin / MD | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Commercial | ✓ | ✓ | – | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Estimator | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | ✓ |
-| Designer / Engineer | ✓ | ✓ | ✓ | ✓ | ✓ | – | ✓ | ✓ | ✓ |
-| Programme / Project Mgr | ✓ | ✓ | – | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Supervisor / Installer | ✓ | – | – | – | site-scope | – | site-only | ✓ | ✓ |
-| Client | own sites | own sites | – | own | own | own | own | own | own |
-| DNO | assigned only | assigned | – | – | – | – | assigned | assigned | ✓ |
-
-New role enum values required: `managing_director`, `commercial`, `estimator`, `designer`, `programme_manager`, `project_manager`, `supervisor`, `installer`, `dno`. Existing app_role enum has `admin | engineer | client` — extended in the same migration.
+1. **RLS** — edge function creates the Supabase client with the caller's bearer token; every tool query runs as that user.
+2. **Tool + field gate** — `assertToolAllowed(user, toolName)` uses the role matrix from the MCP plan (managing_director, commercial, estimator, designer, programme_manager, project_manager, supervisor, installer, client, dno). Additionally, `get_estimate_summary` and `get_work_package_summary` **strip** commercial fields (sell price, margin, mark-up) for non-commercial roles before returning to Claude — so the model never sees data the user isn't allowed to see.
 
 ---
 
-## 6. Conversation Context Model
+## 5. Audit model
 
-MCP is stateless per call, so context = OAuth client claims + explicit args + a small server-side session table.
+Written automatically by a `withAudit(tool)` wrapper — no per-tool boilerplate. Every call records: user, thread, timestamp, tool, params, record ids touched, status, execution ms, model. Prompt text is stored in `assistant_messages` (already persisted per thread), so audit + conversation together reconstruct exactly what Claude did and why.
 
-New table `mcp_sessions`:
-- `id` uuid PK, `user_id`, `client_id` (OAuth client), `account_id` nullable, `current_programme_id`, `current_work_package_id`, `current_site_id`, `current_estimate_id`, `current_project_id`, `updated_at`.
-- Two Phase-1 tools manipulate it: `set_context({...ids})` and `get_context()`. All other tools accept explicit ids in args AND fall back to session ids when absent — so the AI never has to re-ask.
-- RLS: user reads/writes own rows only.
+For write actions (Phase 2+): the same wrapper will add `before_value` / `after_value` / `approved_by` / `approved_at` columns.
 
 ---
 
-## 7. Audit Model
+## 6. Conversation context model
 
-New table `mcp_audit_log`:
-- `id`, `user_id`, `client_id` (AI platform id from OAuth), `client_name`, `tool_name`, `params_json`, `result_summary` (short), `record_ids` (uuid[] of records touched), `execution_ms`, `status` (`ok`|`denied`|`error`), `error_code`, `created_at`.
-- Written by a wrapper `withAudit(tool)` applied to every registered tool — no per-tool boilerplate.
-- Prompt text is NOT captured (MCP does not receive it). We log tool name + params, which is the audit unit MCP actually has.
-- RLS: users read own rows; admins read all; append-only (no update/delete).
-- Retention: 12 months, pruned by a cron job (Phase 2).
+- Thread route: `/assistant/:threadId` (opens the side panel with that thread). Panel is available site-wide via a floating "Ask Gridwise" button; opening it creates or resumes the last active thread.
+- Auto-context capture: when the panel opens on `/site/:id`, `/study/:id`, `/delivery/programme/:id`, etc., the thread's `context_*_id` is pre-populated so the user doesn't have to say "for site X".
+- Tools accept explicit ids in args AND fall back to the thread's context ids.
 
 ---
 
-## 8. API Structure
+## 7. API cost controls
 
-- `/functions/v1/mcp` — MCP Streamable HTTP (existing).
-- `/functions/v1/mcp/.well-known/oauth-protected-resource` — existing.
-- `/.lovable/oauth/consent` — **new client route** (React page in `src/pages/`) using `supabase.auth.oauth.{getAuthorizationDetails|approveAuthorization|denyAuthorization}`. Preserves consent URL through login/signup/Google OAuth per Lovable knowledge.
-- All tool files stay under `src/lib/mcp/tools/` and are default-exported; the Vite plugin re-bundles the Deno function on save; `supabase--deploy_edge_functions` deploys after every change.
-
----
-
-## 9. Database Additions (migrations, in order, with GRANTs)
-
-1. Extend `app_role` enum with the 9 new roles above.
-2. `mcp_sessions` table + RLS (self-only) + GRANT.
-3. `mcp_audit_log` table + RLS (self read / admin read / append only) + GRANT.
-4. `mcp_api_keys` table skeleton (created, not used in Phase 1) — hashed key, scopes[], revoked_at.
-5. `search_documents` (pgvector) — `id`, `source_table`, `source_id`, `org_id`, `chunk`, `embedding vector(1536)`, `metadata jsonb`. HNSW index. Populated by a Phase-1 backfill edge fn `index-search-corpus` covering `sites`, `studies`, `project_files.text_content`, `estimates`.
-6. Read-only PostGIS RPCs where a matching one is missing: `mcp_search_sites`, `mcp_search_feeder_pillars`, `mcp_rank_candidate_sites` — SECURITY INVOKER so RLS applies.
-
-No changes to existing tables' columns.
+- Model default: **claude-sonnet-4-5**; user role admin/MD can opt into opus-4-1 per thread. Cheap-path haiku-4-5 for `search_*` tool-planning-only turns.
+- Hard caps per request: `max_tokens: 4096`, `stopWhen: stepCountIs(50)`.
+- Per-user daily cost cap (default £5/day/user, admin-configurable in `app_settings`). Enforced in the edge function before calling Anthropic; over-cap returns a friendly error.
+- Token+cost recorded per message → nightly rollup view `assistant_usage_daily` for the admin console.
+- Rate limit: 20 req/min per user (in-function sliding window in a small `assistant_rate` table or memory).
+- Streaming responses to avoid double-billing on retries.
 
 ---
 
-## 10. Phased Implementation Plan
+## 8. UI plan (right-side panel)
 
-**Phase 1a — Foundations (this iteration)**
-1. Migration: roles enum extension, `mcp_sessions`, `mcp_audit_log`, `mcp_api_keys` skeleton, `search_documents` + HNSW.
-2. `src/lib/mcp/lib/permissions.ts` (role matrix + `assertToolAllowed`).
-3. `src/lib/mcp/lib/audit.ts` (`withAudit` wrapper).
-4. `src/lib/mcp/lib/context.ts` (session read/write helpers).
-5. Consent route `src/pages/OAuthConsent.tsx` + router entry `/.lovable/oauth/consent`, with next-preservation across email/password + Google.
-6. Refactor existing 3 tools onto `withAudit` + `assertToolAllowed`.
-
-**Phase 1b — GIS + PM read tools**
-7. Add GIS tools (10) + PM read tools (5). Each ≤ 60 lines, calls existing RPC or edge fn.
-
-**Phase 1c — Engineering + Estimating read tools**
-8. Wrap `electricalEngine`, `evHub/*`, `connectionCosts`, `apply-dno-rules` behind read tools. No new math.
-
-**Phase 1d — Search + Docs + Reporting + Commercial**
-9. `index-search-corpus` backfill fn + `semantic_search`/`natural_language_query`/`search_everything`.
-10. Document tools returning signed URLs. Reporting tools call existing PDF generators, store to Storage, return URL.
-11. Commercial read tools.
-
-**Phase 1e — Verify**
-12. `app_mcp_server--extract_mcp_manifest` after each batch; deploy `mcp` function.
-13. End-to-end smoke: local `curl` against `/functions/v1/mcp` with a real OAuth token from Claude Desktop or MCP Inspector.
-
-**Phase 2 (later, gated on user approval)** — Write tools, API-key auth, retention job, `run_gridwise_connect` / `run_ev_hub` as job-runners (async pattern, since these exceed MCP sync timeout).
+- New component `src/components/assistant/AssistantPanel.tsx`, mounted once in `DashboardLayout`, opens/closes via floating button + `⌘K` shortcut.
+- Thread list drawer with new/rename/archive/delete. Route `/assistant/:threadId`.
+- Message rendering via `message.parts`: text streams as markdown; `tool-invocation` parts render a small "🔧 called `tool_name` → n records" chip with expandable JSON.
+- Every assistant message shows a **Sources** row: chips linking to `/site/:id`, `/study/:id`, `/delivery/work-package/:id` etc., built from the tools' `sources` output.
+- Every assistant message carries an "AI-assisted" badge.
+- Composer stays focused; disabled while streaming; toast on rate-limit/cost-cap/network.
+- Optimistic user bubble + typing indicator on `status === "submitted"`.
 
 ---
 
-## Out of Scope for Phase 1
+## 9. Phased implementation
+
+**Phase 1a — foundations (this iteration if approved)**
+1. `ANTHROPIC_API_KEY` secret request.
+2. Migration: `assistant_threads`, `assistant_messages`, `assistant_tool_calls`, `mcp_sessions`, extended `app_role` enum.
+3. `src/lib/gridwise-tools/` — shared tool registry (Zod schemas + handlers + `sources`).
+4. Helpers: `assertToolAllowed`, `withAudit`, cost/rate-limit guard.
+5. Edge function `gridwise-assistant` — streams with AI SDK + `@ai-sdk/anthropic`, loads/persists thread messages, executes tools.
+6. UI: floating button, panel, thread list, `/assistant/:threadId` route, message + citation rendering.
+7. Verify: send-message smoke test; confirm tool-call → citation link works end to end.
+
+**Phase 1b — remaining read tools + drafting**
+8. `get_delivery_risks` RPC, `draft_client_report` composition, permission-aware field stripping.
+
+**Phase 2 — controlled write actions** (each gated by explicit user preview + confirm; separate approval per tool)
+9. `create_tasks_from_template`, `update_task_status`, `assign_owner`, `apply_programme_template`, `move_dates`, `create_work_package_with_sites`. Preview UI shows diff before commit; `withAudit` records before/after.
+
+**Phase 3 — Estimating assistant**
+10. `select_recipe`, `apply_rate_card_version`, `generate_site_estimate`, `aggregate_wp_estimate`, `variance_analysis`. All call existing engines only.
+
+**Phase 4 — Scheduled monitoring agent**
+11. Nightly cron edge fn runs Claude with a fixed system prompt over each active WP; writes `notifications` rows for overdue/expiring/slippage findings.
+
+**Phase 5 — Public MCP server for external Claude/ChatGPT/etc.**
+12. Adapt the same registry into `@lovable.dev/mcp-js` tools (partially done — 3 tools already live). Public OAuth 2.1 already configured; add consent route + remaining tools.
+
+---
+
+## Out of scope for Phase 1
 
 - Any write / mutation tool.
-- Long-running engines (`run_gridwise_connect`, `run_ev_hub`) — MCP sync-timeout risk; deferred with the async-job pattern.
-- Building a Claude-specific chatbot inside the app (explicitly not wanted).
-- API-key auth surface (table exists, no endpoint).
-- Photo upload/retrieve (no schema today).
+- Re-running engines (`run_ev_hub`, `run_gridwise_connect`) — Claude reads the last stored study; user must run engines from the app UI.
+- Scheduled/proactive monitoring.
+- MCP server expansion (kept as Phase 5).
+- Photo/document upload; only read/summarise existing docs (Phase 1b via `find_documents`+`read_document` if you want it in Phase 1 — flag it and I'll add).
 
-## Technical Notes
+## Technical notes
 
-- Existing MCP OAuth issuer is `https://xqmrnfimcuktyyltikoy.supabase.co/auth/v1` — kept as-is; must not be a `.lovable.cloud` proxy.
-- Every migration adding a `public` table includes `GRANT ... TO authenticated; GRANT ALL ... TO service_role;` before `ENABLE ROW LEVEL SECURITY`.
-- Tools never accept `user_id`/`org_id` from input; they read from `ctx` and RLS.
-- Embeddings via Lovable AI Gateway (`openai/text-embedding-3-small`, 1536 dims) — no user key.
-- Manifest regen + function deploy are non-negotiable on every MCP change.
+- Uses **Anthropic API directly** via `@ai-sdk/anthropic` because Claude is not offered through Lovable AI Gateway. Key: `ANTHROPIC_API_KEY` (server-only, never in browser). Model IDs: `claude-sonnet-4-5` / `claude-opus-4-1` / `claude-haiku-4-5`.
+- Tool registry is the shared boundary — MCP path (Phase 5) will wrap the same handlers, so we get one audit shape, one permission gate, one set of engineering guarantees.
+- Every tool result includes `sources: [{table, id, url}]` so the panel can render citation chips deterministically without asking the model to format them.
+- Claude never receives raw commercial fields the user can't see; stripping happens in the tool handler before returning, not in the prompt.
+
+---
+
+**Reply "proceed" (or answer the two questions in §0 if you want non-default choices) and I'll implement Phase 1a.**
