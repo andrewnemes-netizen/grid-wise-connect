@@ -215,6 +215,7 @@ const Portfolio = () => {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
+  const [surveySiteIds, setSurveySiteIds] = useState<string[] | null>(null);
 
   const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
