@@ -1482,6 +1482,7 @@ export type Database = {
           image_link: string | null
           include_in_create_task: boolean | null
           is_allowance: boolean | null
+          is_prelim: boolean
           item_logic: string | null
           itemised: boolean | null
           lock_markup_dollar: boolean | null
@@ -1550,6 +1551,7 @@ export type Database = {
           image_link?: string | null
           include_in_create_task?: boolean | null
           is_allowance?: boolean | null
+          is_prelim?: boolean
           item_logic?: string | null
           itemised?: boolean | null
           lock_markup_dollar?: boolean | null
@@ -1618,6 +1620,7 @@ export type Database = {
           image_link?: string | null
           include_in_create_task?: boolean | null
           is_allowance?: boolean | null
+          is_prelim?: boolean
           item_logic?: string | null
           itemised?: boolean | null
           lock_markup_dollar?: boolean | null
@@ -1775,6 +1778,9 @@ export type Database = {
       }
       estimates: {
         Row: {
+          awarded_at: string | null
+          awarded_by: string | null
+          awarded_partner_id: string | null
           boq_compact_view: boolean
           created_at: string
           created_by: string | null
@@ -1786,6 +1792,7 @@ export type Database = {
           gross_margin_pct: number | null
           hire_cost: number
           id: string
+          is_current: boolean
           labour_cost: number
           labour_hours: number
           locked: boolean
@@ -1794,10 +1801,14 @@ export type Database = {
           net_markup_pct: number | null
           org_id: string | null
           parent_estimate_id: string | null
+          prelims_amount: number | null
+          prelims_pct: number | null
           project_id: string | null
           rate_card_version_id: string | null
           ref: string | null
+          revision: number
           show_recipe_totals: boolean
+          source_estimate_id: string | null
           status: string
           sub_total: number
           subcontractor_cost: number
@@ -1811,6 +1822,9 @@ export type Database = {
           work_package_id: string | null
         }
         Insert: {
+          awarded_at?: string | null
+          awarded_by?: string | null
+          awarded_partner_id?: string | null
           boq_compact_view?: boolean
           created_at?: string
           created_by?: string | null
@@ -1822,6 +1836,7 @@ export type Database = {
           gross_margin_pct?: number | null
           hire_cost?: number
           id?: string
+          is_current?: boolean
           labour_cost?: number
           labour_hours?: number
           locked?: boolean
@@ -1830,10 +1845,14 @@ export type Database = {
           net_markup_pct?: number | null
           org_id?: string | null
           parent_estimate_id?: string | null
+          prelims_amount?: number | null
+          prelims_pct?: number | null
           project_id?: string | null
           rate_card_version_id?: string | null
           ref?: string | null
+          revision?: number
           show_recipe_totals?: boolean
+          source_estimate_id?: string | null
           status?: string
           sub_total?: number
           subcontractor_cost?: number
@@ -1847,6 +1866,9 @@ export type Database = {
           work_package_id?: string | null
         }
         Update: {
+          awarded_at?: string | null
+          awarded_by?: string | null
+          awarded_partner_id?: string | null
           boq_compact_view?: boolean
           created_at?: string
           created_by?: string | null
@@ -1858,6 +1880,7 @@ export type Database = {
           gross_margin_pct?: number | null
           hire_cost?: number
           id?: string
+          is_current?: boolean
           labour_cost?: number
           labour_hours?: number
           locked?: boolean
@@ -1866,10 +1889,14 @@ export type Database = {
           net_markup_pct?: number | null
           org_id?: string | null
           parent_estimate_id?: string | null
+          prelims_amount?: number | null
+          prelims_pct?: number | null
           project_id?: string | null
           rate_card_version_id?: string | null
           ref?: string | null
+          revision?: number
           show_recipe_totals?: boolean
+          source_estimate_id?: string | null
           status?: string
           sub_total?: number
           subcontractor_cost?: number
@@ -1883,6 +1910,13 @@ export type Database = {
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "estimates_awarded_partner_id_fkey"
+            columns: ["awarded_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estimates_parent_estimate_id_fkey"
             columns: ["parent_estimate_id"]
@@ -1909,6 +1943,13 @@ export type Database = {
             columns: ["rate_card_version_id"]
             isOneToOne: false
             referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_source_estimate_id_fkey"
+            columns: ["source_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
             referencedColumns: ["id"]
           },
           {
@@ -8774,6 +8815,10 @@ export type Database = {
       clear_layer_features: {
         Args: { _layer_id: string; _table_name: string }
         Returns: number
+      }
+      clone_estimate_as_revision: {
+        Args: { _estimate_id: string }
+        Returns: string
       }
       clone_estimate_recipe_to_draft: {
         Args: { _recipe_id: string }
