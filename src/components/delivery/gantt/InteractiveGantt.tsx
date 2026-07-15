@@ -27,6 +27,7 @@ export function InteractiveGantt({
   const [zoom, setZoom] = useState<Zoom>("week");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const didAutoFitRef = useRef(false);
 
   const tasksQ = useQuery({
     queryKey: [`gantt-tasks`, scope.scopeId],
@@ -218,6 +219,17 @@ export function InteractiveGantt({
 
   const todayLeft = daysBetween(rangeStart, today) * dayWidth;
   const nameColW = 420;
+
+  // Auto-fit: scroll to the earliest task on first load / when data arrives, or when zoom changes
+  useEffect(() => {
+    if (!tasks.length || !containerRef.current) return;
+    const firstTaskLeft = daysBetween(rangeStart, minDate) * dayWidth;
+    // Land ~1 day before the first task so it isn't flush against the name column
+    const target = Math.max(0, firstTaskLeft - dayWidth);
+    containerRef.current.scrollLeft = target;
+    didAutoFitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks.length, zoom]);
 
   return (
     <div className="border rounded-md overflow-hidden bg-card">
