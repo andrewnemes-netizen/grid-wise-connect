@@ -46,7 +46,7 @@ export default function WpTasksTab() {
     const buckets: Record<string, any[]> = {};
     STATUSES.forEach((s) => (buckets[s] = []));
     (tasks as any[]).forEach((t) => {
-      const s = STATUSES.includes(t.status) ? t.status : "not_started";
+      const s = (STATUSES as readonly string[]).includes(t.status) ? t.status : "not_started";
       buckets[s].push(t);
     });
     return buckets;
@@ -155,13 +155,13 @@ function NewTaskDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string; 
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
-      const { error } = await supabase.from("wp_tasks").insert({
+      const { error } = await supabase.from("wp_tasks").insert([{
         work_package_id: wpId,
         title: title.trim(),
         due_date: due || null,
-        status,
+        status: status as any,
         created_by: user.user?.id ?? null,
-      });
+      }]);
       if (error) throw error;
       toast.success("Task created");
       reset(); onOpenChange(false); onCreated();
