@@ -1,6 +1,7 @@
-import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical, Briefcase, PoundSterling, Bot } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical, Briefcase, PoundSterling, Bot, Handshake } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
+import { usePartnerMembership } from "@/hooks/usePartnerMembership";
 import { RoleRequestDialog } from "@/components/RoleRequestDialog";
 import epeLogo from "@/assets/epe-logo.png";
 import {
@@ -42,8 +43,10 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { user, hasRole, signOut, orgName } = useAuth();
+  const { isPartner } = usePartnerMembership();
   const showAdmin = hasRole("admin");
   const showInternal = hasRole("admin") || hasRole("engineer");
+  const partnerItem = { title: "Partner Portal", url: "/partner", icon: Handshake };
 
   return (
     <Sidebar collapsible="icon">
@@ -64,6 +67,7 @@ export function AppSidebar() {
                 ...navItems,
                 ...(showInternal ? internalItems : []),
                 ...commonItems,
+                ...(isPartner ? [partnerItem] : []),
                 ...(showAdmin ? adminItems : []),
               ].map((item) => (
                 <SidebarMenuItem key={item.title}>
