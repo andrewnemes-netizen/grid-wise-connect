@@ -35,10 +35,11 @@ const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 const SurveyForm = lazy(() => import("./pages/SurveyForm"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const ImportWizard = lazy(() => import("./pages/ImportWizard"));
+const WorkPackageShell = lazy(() => import("./pages/WorkPackageShell"));
 
 const queryClient = new QueryClient();
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, bare = false }: { children: React.ReactNode; bare?: boolean }) {
   const { user, loading } = useAuth();
   const [profileState, setProfileState] = useState<"loading" | "complete" | "incomplete" | "pending_approval">("loading");
   const lastCheckedUserId = useRef<string | null>(null);
@@ -94,6 +95,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Loading…</div>;
   if (profileState === "pending_approval") return <PendingApproval />;
   if (profileState === "incomplete") return <CompleteProfile onComplete={checkProfile} />;
+  if (bare) return <>{children}</>;
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
@@ -150,6 +152,7 @@ const AppRoutes = () => (
       <Route path="/assistant/:threadId" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
       <Route path="/import/wizard" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
       <Route path="/import/wizard/:batchId" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
+      <Route path="/wp/:id/*" element={<ProtectedRoute bare><WorkPackageShell /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>
