@@ -215,10 +215,11 @@ Deno.serve(async (req) => {
       }),
     };
 
+    const modelMessages = await convertToModelMessages(messages);
     const result = streamText({
       model,
       system,
-      messages: convertToModelMessages(messages),
+      messages: modelMessages,
       tools,
       stopWhen: stepCountIs(20),
       onError: (err) => console.error("streamText error", err),
