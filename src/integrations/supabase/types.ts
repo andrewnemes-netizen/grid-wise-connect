@@ -2342,6 +2342,260 @@ export type Database = {
         }
         Relationships: []
       }
+      import_audit: {
+        Row: {
+          action: string
+          actor_id: string | null
+          batch_id: string
+          created_at: string
+          diff_json: Json
+          id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          batch_id: string
+          created_at?: string
+          diff_json?: Json
+          id?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          batch_id?: string
+          created_at?: string
+          diff_json?: Json
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_audit_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_batches: {
+        Row: {
+          approved_at: string | null
+          created_at: string
+          created_by: string
+          duplicate_rows: number
+          error_rows: number
+          file_path: string | null
+          filename: string | null
+          id: string
+          mapping_json: Json
+          new_client_name: string | null
+          new_programme_json: Json | null
+          new_wp_json: Json | null
+          org_id: string | null
+          parent_batch_id: string | null
+          rolled_back_at: string | null
+          source: string
+          status: string
+          summary_json: Json
+          target_client_id: string | null
+          target_programme_id: string | null
+          target_wp_id: string | null
+          total_rows: number
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string
+          created_by: string
+          duplicate_rows?: number
+          error_rows?: number
+          file_path?: string | null
+          filename?: string | null
+          id?: string
+          mapping_json?: Json
+          new_client_name?: string | null
+          new_programme_json?: Json | null
+          new_wp_json?: Json | null
+          org_id?: string | null
+          parent_batch_id?: string | null
+          rolled_back_at?: string | null
+          source: string
+          status?: string
+          summary_json?: Json
+          target_client_id?: string | null
+          target_programme_id?: string | null
+          target_wp_id?: string | null
+          total_rows?: number
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string
+          created_by?: string
+          duplicate_rows?: number
+          error_rows?: number
+          file_path?: string | null
+          filename?: string | null
+          id?: string
+          mapping_json?: Json
+          new_client_name?: string | null
+          new_programme_json?: Json | null
+          new_wp_json?: Json | null
+          org_id?: string | null
+          parent_batch_id?: string | null
+          rolled_back_at?: string | null
+          source?: string
+          status?: string
+          summary_json?: Json
+          target_client_id?: string | null
+          target_programme_id?: string | null
+          target_wp_id?: string | null
+          total_rows?: number
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_parent_batch_id_fkey"
+            columns: ["parent_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_column_mappings: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          mapping_json: Json
+          name: string
+          org_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          mapping_json: Json
+          name: string
+          org_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          mapping_json?: Json
+          name?: string
+          org_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      import_created_records: {
+        Row: {
+          batch_id: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reversible: boolean
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          reversible?: boolean
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          reversible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_created_records_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          dedupe_key: string | null
+          errors_json: Json
+          geocode_confidence: number | null
+          geocode_source: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          mapped_json: Json
+          raw_json: Json
+          resolved_site_id: string | null
+          row_index: number
+          status: string
+          updated_at: string
+          warnings_json: Json
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          dedupe_key?: string | null
+          errors_json?: Json
+          geocode_confidence?: number | null
+          geocode_source?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mapped_json?: Json
+          raw_json: Json
+          resolved_site_id?: string | null
+          row_index: number
+          status?: string
+          updated_at?: string
+          warnings_json?: Json
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          dedupe_key?: string | null
+          errors_json?: Json
+          geocode_confidence?: number | null
+          geocode_source?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          mapped_json?: Json
+          raw_json?: Json
+          resolved_site_id?: string | null
+          row_index?: number
+          status?: string
+          updated_at?: string
+          warnings_json?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       layer_registry: {
         Row: {
           attribution: string | null
@@ -2822,6 +3076,7 @@ export type Database = {
           end_date: string | null
           framework_id: string | null
           id: string
+          import_batch_id: string | null
           name: string
           start_date: string | null
           status: string
@@ -2835,6 +3090,7 @@ export type Database = {
           end_date?: string | null
           framework_id?: string | null
           id?: string
+          import_batch_id?: string | null
           name: string
           start_date?: string | null
           status?: string
@@ -2848,6 +3104,7 @@ export type Database = {
           end_date?: string | null
           framework_id?: string | null
           id?: string
+          import_batch_id?: string | null
           name?: string
           start_date?: string | null
           status?: string
@@ -2867,6 +3124,13 @@ export type Database = {
             columns: ["framework_id"]
             isOneToOne: false
             referencedRelation: "frameworks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "programmes_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -5028,6 +5292,8 @@ export type Database = {
           geom: unknown
           grid_readiness: string | null
           id: string
+          import_batch_id: string | null
+          import_row_id: string | null
           next_steps: Json | null
           org_id: string | null
           postcode: string | null
@@ -5055,6 +5321,8 @@ export type Database = {
           geom?: unknown
           grid_readiness?: string | null
           id?: string
+          import_batch_id?: string | null
+          import_row_id?: string | null
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
@@ -5082,6 +5350,8 @@ export type Database = {
           geom?: unknown
           grid_readiness?: string | null
           id?: string
+          import_batch_id?: string | null
+          import_row_id?: string | null
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
@@ -5099,6 +5369,20 @@ export type Database = {
           viability_index?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sites_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_import_row_id_fkey"
+            columns: ["import_row_id"]
+            isOneToOne: false
+            referencedRelation: "import_rows"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sites_org_id_fkey"
             columns: ["org_id"]
@@ -6126,6 +6410,7 @@ export type Database = {
           created_by: string | null
           delivery_user_id: string | null
           id: string
+          import_batch_id: string | null
           metadata_json: Json
           name: string
           pm_user_id: string | null
@@ -6145,6 +6430,7 @@ export type Database = {
           created_by?: string | null
           delivery_user_id?: string | null
           id?: string
+          import_batch_id?: string | null
           metadata_json?: Json
           name: string
           pm_user_id?: string | null
@@ -6164,6 +6450,7 @@ export type Database = {
           created_by?: string | null
           delivery_user_id?: string | null
           id?: string
+          import_batch_id?: string | null
           metadata_json?: Json
           name?: string
           pm_user_id?: string | null
@@ -6175,6 +6462,13 @@ export type Database = {
           wp_type_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "work_packages_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "work_packages_programme_id_fkey"
             columns: ["programme_id"]
