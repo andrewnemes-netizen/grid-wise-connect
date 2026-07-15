@@ -182,7 +182,7 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [onlyNeedsPricing, setOnlyNeedsPricing] = useState(false);
-  const [edits, setEdits] = useState<Record<string, { total_unit_cost?: string; client_unit_price?: string }>>({});
+  const [edits, setEdits] = useState<Record<string, { total_unit_cost?: string; client_unit_price?: string; productivity_qty_per_day?: string; default_crew_size?: string }>>({});
   const [saving, setSaving] = useState(false);
 
   const { data: version } = useQuery({
@@ -202,7 +202,7 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rate_items")
-        .select("id, rate_code, description, unit, category, labour_cost, material_cost, total_unit_cost, client_unit_price, needs_pricing")
+        .select("id, rate_code, description, unit, category, labour_cost, material_cost, total_unit_cost, client_unit_price, needs_pricing, productivity_qty_per_day, default_crew_size")
         .eq("rate_card_version_id", versionId)
         .order("rate_code");
       if (error) throw error;
@@ -223,7 +223,7 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
   const needsPricingCount = (items as any[]).filter((i) => i.needs_pricing).length;
   const pending = Object.keys(edits).length;
 
-  const setField = (id: string, field: "total_unit_cost" | "client_unit_price", val: string) => {
+  const setField = (id: string, field: "total_unit_cost" | "client_unit_price" | "productivity_qty_per_day" | "default_crew_size", val: string) => {
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
   };
 
@@ -239,6 +239,12 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
         }
         if (patch.client_unit_price != null && patch.client_unit_price !== "") {
           upd.client_unit_price = Number(patch.client_unit_price);
+        }
+        if (patch.productivity_qty_per_day != null && patch.productivity_qty_per_day !== "") {
+          upd.productivity_qty_per_day = Number(patch.productivity_qty_per_day);
+        }
+        if (patch.default_crew_size != null && patch.default_crew_size !== "") {
+          upd.default_crew_size = Math.max(1, Math.round(Number(patch.default_crew_size)));
         }
         if (Object.keys(upd).length === 0) return;
         const { error } = await supabase.from("rate_items").update(upd).eq("id", id);
@@ -303,18 +309,22 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
                 <TableHead className="w-24">Unit</TableHead>
                 <TableHead className="w-32 text-right">Unit cost (£)</TableHead>
                 <TableHead className="w-32 text-right">Client price (£)</TableHead>
+                <TableHead className="w-24 text-right">Prod / day</TableHead>
+                <TableHead className="w-16 text-right">Crew</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No items match filters</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No items match filters</TableCell></TableRow>
               ) : filtered.map((it: any) => {
                 const edit = edits[it.id] ?? {};
                 const cost = edit.total_unit_cost ?? (it.total_unit_cost ?? "");
                 const price = edit.client_unit_price ?? (it.client_unit_price ?? "");
+                const prod = edit.productivity_qty_per_day ?? (it.productivity_qty_per_day ?? "");
+                const crew = edit.default_crew_size ?? (it.default_crew_size ?? "");
                 return (
                   <TableRow key={it.id}>
                     <TableCell className="text-xs font-mono">{it.rate_code}</TableCell>
@@ -332,6 +342,16 @@ function RateItemsDialog({ versionId, onClose }: { versionId: string; onClose: (
                       <Input type="number" step="0.01" className="h-8 text-right text-xs"
                         disabled={readOnly} value={price as any}
                         onChange={(e) => setField(it.id, "client_unit_price", e.target.value)} />
+                    </TableCell>
+                    <TableCell>
+                      <Input type="number" step="0.5" className="h-8 text-right text-xs"
+                        disabled={readOnly} value={prod as any} placeholder={`${it.unit}/day`}
+                        onChange={(e) => setField(it.id, "productivity_qty_per_day", e.target.value)} />
+                    </TableCell>
+                    <TableCell>
+                      <Input type="number" step="1" min="1" className="h-8 text-right text-xs"
+                        disabled={readOnly} value={crew as any} placeholder="1"
+                        onChange={(e) => setField(it.id, "default_crew_size", e.target.value)} />
                     </TableCell>
                     <TableCell>
                       {it.needs_pricing && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
