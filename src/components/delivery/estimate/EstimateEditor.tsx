@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogT
 import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateLineDialog } from "./EstimateLineDialog";
+import { RateItemPicker } from "./RateItemPicker";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -19,6 +20,7 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
   const [editingLine, setEditingLine] = useState<string | null>(null);
   const [creatingInGroup, setCreatingInGroup] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [rateCardOpen, setRateCardOpen] = useState<string | null | false>(false); // group id | null (auto) | false (closed)
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
@@ -168,7 +170,9 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
             <Switch checked={e.boq_compact_view} onCheckedChange={(v) => updateEstimate.mutate({ boq_compact_view: v })} />
             Compact view
           </div>
-          <Button size="sm" variant="outline"><LinkIcon className="h-3.5 w-3.5 mr-1" />Link BOQ</Button>
+          <Button size="sm" variant="outline" onClick={() => setRateCardOpen(null)}>
+            <LinkIcon className="h-3.5 w-3.5 mr-1" />From Rate Card
+          </Button>
           <Button size="sm" variant="outline"><Package className="h-3.5 w-3.5 mr-1" />Add Recipe</Button>
           <Button size="sm" variant="outline" onClick={() => cloneEstimate.mutate()}><Copy className="h-3.5 w-3.5 mr-1" />Clone</Button>
           {onClose && <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>}
@@ -218,6 +222,7 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
                   <div className="px-2 text-right tabular-nums font-semibold">{fmt(groupSub, c)}</div>
                   <div className="px-2 flex justify-end gap-1">
                     <Button size="icon" variant="ghost" className="h-6 w-6 text-primary-foreground hover:bg-white/20" onClick={() => setCreatingInGroup(g.id)}><Plus className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-primary-foreground hover:bg-white/20" onClick={() => setRateCardOpen(g.id)} title="Add from rate card"><Package className="h-3.5 w-3.5" /></Button>
                   </div>
                   <button className="h-9 flex items-center justify-center hover:bg-white/10" onClick={() => { if (confirm("Delete group and its lines?")) deleteGroup.mutate(g.id); }}>
                     <Trash2 className="h-3.5 w-3.5" />
@@ -298,6 +303,16 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
           currency={c}
           onOpenChange={(o) => { if (!o) { setEditingLine(null); setCreatingInGroup(null); } }}
           onSaved={invalidateAll}
+        />
+      )}
+      {rateCardOpen !== false && (
+        <RateItemPicker
+          estimateId={estimateId}
+          groups={(groups.data ?? []).map((g: any) => ({ id: g.id, name: g.name, cost_category: g.cost_category }))}
+          defaultGroupId={rateCardOpen}
+          currency={c}
+          onOpenChange={(o) => { if (!o) setRateCardOpen(false); }}
+          onInserted={invalidateAll}
         />
       )}
     </div>
