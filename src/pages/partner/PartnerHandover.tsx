@@ -23,10 +23,9 @@ interface HandoverRow {
 
 interface FileRow {
   id: string;
-  file_name: string | null;
+  filename: string | null;
   storage_path: string | null;
-  mime_type: string | null;
-  bucket: string | null;
+  mime: string | null;
 }
 
 export default function PartnerHandover() {
@@ -57,7 +56,7 @@ export default function PartnerHandover() {
       if (fileIds.length > 0) {
         const { data: fdata } = await supabase
           .from("project_files")
-          .select("id, file_name, storage_path, mime_type, bucket")
+          .select("id, filename, storage_path, mime")
           .in("id", fileIds);
         const map: Record<string, FileRow> = {};
         (fdata ?? []).forEach((f: any) => (map[f.id] = f));
@@ -77,12 +76,12 @@ export default function PartnerHandover() {
 
   const handleDownload = async (fileId: string) => {
     const file = files[fileId];
-    if (!file || !file.storage_path || !file.bucket) {
+    if (!file || !file.storage_path) {
       toast.error("File not available");
       return;
     }
     const { data, error } = await supabase.storage
-      .from(file.bucket)
+      .from("project-files")
       .createSignedUrl(file.storage_path, 300);
     if (error || !data?.signedUrl) {
       toast.error("Could not generate download link");
