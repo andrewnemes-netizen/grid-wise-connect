@@ -6,10 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateLineDialog } from "./EstimateLineDialog";
 import { RateItemPicker } from "./RateItemPicker";
+import { GeneratePlanDialog } from "./GeneratePlanDialog";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -21,6 +22,7 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
   const [creatingInGroup, setCreatingInGroup] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [rateCardOpen, setRateCardOpen] = useState<string | null | false>(false); // group id | null (auto) | false (closed)
+  const [planOpen, setPlanOpen] = useState(false);
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
@@ -174,6 +176,9 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
             <LinkIcon className="h-3.5 w-3.5 mr-1" />From Rate Card
           </Button>
           <Button size="sm" variant="outline"><Package className="h-3.5 w-3.5 mr-1" />Add Recipe</Button>
+          <Button size="sm" onClick={() => setPlanOpen(true)} disabled={!e.work_package_id}>
+            <CalendarClock className="h-3.5 w-3.5 mr-1" />Generate Plan
+          </Button>
           <Button size="sm" variant="outline" onClick={() => cloneEstimate.mutate()}><Copy className="h-3.5 w-3.5 mr-1" />Clone</Button>
           {onClose && <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>}
         </div>
@@ -315,6 +320,12 @@ export function EstimateEditor({ estimateId, onClose }: { estimateId: string; on
           onInserted={invalidateAll}
         />
       )}
+      <GeneratePlanDialog
+        estimateId={estimateId}
+        workPackageId={e.work_package_id ?? null}
+        open={planOpen}
+        onOpenChange={setPlanOpen}
+      />
     </div>
   );
 }
