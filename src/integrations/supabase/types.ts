@@ -1165,6 +1165,9 @@ export type Database = {
           project_sync_type: string | null
           project_task_name: string | null
           qty: number
+          rate_card_version_id: string | null
+          rate_code: string | null
+          rate_item_id: string | null
           recipe_id: string | null
           rfq_required: boolean | null
           show_image_in_proposal: boolean | null
@@ -1229,6 +1232,9 @@ export type Database = {
           project_sync_type?: string | null
           project_task_name?: string | null
           qty?: number
+          rate_card_version_id?: string | null
+          rate_code?: string | null
+          rate_item_id?: string | null
           recipe_id?: string | null
           rfq_required?: boolean | null
           show_image_in_proposal?: boolean | null
@@ -1293,6 +1299,9 @@ export type Database = {
           project_sync_type?: string | null
           project_task_name?: string | null
           qty?: number
+          rate_card_version_id?: string | null
+          rate_code?: string | null
+          rate_item_id?: string | null
           recipe_id?: string | null
           rfq_required?: boolean | null
           show_image_in_proposal?: boolean | null
@@ -1335,6 +1344,20 @@ export type Database = {
             columns: ["parent_line_id"]
             isOneToOne: false
             referencedRelation: "estimate_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_lines_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimate_lines_rate_item_id_fkey"
+            columns: ["rate_item_id"]
+            isOneToOne: false
+            referencedRelation: "rate_items"
             referencedColumns: ["id"]
           },
           {
@@ -1432,6 +1455,7 @@ export type Database = {
           net_markup_pct: number | null
           org_id: string | null
           project_id: string | null
+          rate_card_version_id: string | null
           ref: string | null
           show_recipe_totals: boolean
           status: string
@@ -1465,6 +1489,7 @@ export type Database = {
           net_markup_pct?: number | null
           org_id?: string | null
           project_id?: string | null
+          rate_card_version_id?: string | null
           ref?: string | null
           show_recipe_totals?: boolean
           status?: string
@@ -1498,6 +1523,7 @@ export type Database = {
           net_markup_pct?: number | null
           org_id?: string | null
           project_id?: string | null
+          rate_card_version_id?: string | null
           ref?: string | null
           show_recipe_totals?: boolean
           status?: string
@@ -1524,6 +1550,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
             referencedColumns: ["id"]
           },
           {
