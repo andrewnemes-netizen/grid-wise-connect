@@ -4724,6 +4724,284 @@ export type Database = {
           },
         ]
       }
+      resource_allocations: {
+        Row: {
+          actual_hours: number | null
+          allocation_pct: number
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          notes: string | null
+          planned_hours: number | null
+          resource_id: string
+          role: string | null
+          site_id: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          work_package_id: string | null
+          wp_task_id: string | null
+        }
+        Insert: {
+          actual_hours?: number | null
+          allocation_pct?: number
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          notes?: string | null
+          planned_hours?: number | null
+          resource_id: string
+          role?: string | null
+          site_id?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          work_package_id?: string | null
+          wp_task_id?: string | null
+        }
+        Update: {
+          actual_hours?: number | null
+          allocation_pct?: number
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          notes?: string | null
+          planned_hours?: number | null
+          resource_id?: string
+          role?: string | null
+          site_id?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          work_package_id?: string | null
+          wp_task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_allocations_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_wp_task_id_fkey"
+            columns: ["wp_task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_availability: {
+        Row: {
+          created_at: string
+          date_from: string
+          date_to: string
+          hours_per_day: number | null
+          id: string
+          kind: string
+          notes: string | null
+          resource_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_from: string
+          date_to: string
+          hours_per_day?: number | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          resource_id: string
+        }
+        Update: {
+          created_at?: string
+          date_from?: string
+          date_to?: string
+          hours_per_day?: number | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          resource_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_availability_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_rates: {
+        Row: {
+          charge_rate: number
+          cost_rate: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          effective_from: string
+          effective_to: string | null
+          id: string
+          resource_id: string
+          uom: string
+        }
+        Insert: {
+          charge_rate?: number
+          cost_rate?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          resource_id: string
+          uom?: string
+        }
+        Update: {
+          charge_rate?: number
+          cost_rate?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          resource_id?: string
+          uom?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_rates_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resource_skills: {
+        Row: {
+          certification: string | null
+          created_at: string
+          expires_on: string | null
+          id: string
+          level: number
+          resource_id: string
+          skill: string
+        }
+        Insert: {
+          certification?: string | null
+          created_at?: string
+          expires_on?: string | null
+          id?: string
+          level?: number
+          resource_id: string
+          skill: string
+        }
+        Update: {
+          certification?: string | null
+          created_at?: string
+          expires_on?: string | null
+          id?: string
+          level?: number
+          resource_id?: string
+          skill?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resource_skills_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "resources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resources: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          org_id: string | null
+          partner_id: string | null
+          phone: string | null
+          resource_type: string
+          role_title: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          org_id?: string | null
+          partner_id?: string | null
+          phone?: string | null
+          resource_type?: string
+          role_title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          org_id?: string | null
+          partner_id?: string | null
+          phone?: string | null
+          resource_type?: string
+          role_title?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resources_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       revenue_forecast_budget: {
         Row: {
           budget_gp: number | null
