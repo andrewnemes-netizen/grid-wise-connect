@@ -103,7 +103,6 @@ export async function generateSurveyPdf(input: SurveyPdfInput): Promise<Blob> {
       didDrawPage: () => drawHeader(),
     });
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
-    if (y > pageH - 80) { doc.addPage(); drawHeader(); y = 70; }
   }
 
   // Photo groups — one section per group, photos with captions.
