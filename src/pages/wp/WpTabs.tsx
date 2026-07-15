@@ -1,6 +1,9 @@
 import { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import WpOverviewTab from "./tabs/WpOverviewTab";
+import WpSiteRegisterTab from "./tabs/WpSiteRegisterTab";
+import WpMapTab from "./tabs/WpMapTab";
 
 function TabShell({
   title,
@@ -41,15 +44,9 @@ function TabShell({
   );
 }
 
-export const WpOverview = () => (
-  <TabShell title="Overview" phase="Phase 2" description="KPI snapshot for this Work Package — sites by stage, commercial commitment, delivery health." />
-);
-export const WpSiteRegister = () => (
-  <TabShell title="Site Register" phase="Phase 2" description="Every site in scope for this WP with stage, partner, POC status and last activity." />
-);
-export const WpMap = () => (
-  <TabShell title="Map" phase="Phase 2" description="Geographic view of this WP filtered to its sites and DNO region." />
-);
+export const WpOverview = WpOverviewTab;
+export const WpSiteRegister = WpSiteRegisterTab;
+export const WpMap = WpMapTab;
 export const WpPreCon = () => (
   <TabShell title="Pre-Construction" phase="Phase 7" description="Permits, RAMS, traffic management and mobilisation readiness per site." />
 );
