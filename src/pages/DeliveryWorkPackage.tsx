@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt, Pencil, Check, X, Upload } from "lucide-react";
+import { ArrowLeft, Plus, MapPin, ListTodo, Milestone as MilestoneIcon, Receipt, Pencil, Check, X, Upload, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
@@ -25,6 +25,7 @@ import { InlineEdit } from "@/components/InlineEdit";
 import { DeliverySplitLayout } from "@/components/delivery/DeliverySplitLayout";
 import { ProgrammeMapPane } from "@/components/delivery/ProgrammeMapPane";
 import { useNavigate } from "react-router-dom";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 const WP_LIFECYCLE = [
   { value: "planning", label: "planning" },
@@ -47,6 +48,7 @@ export default function DeliveryWorkPackage() {
   const wpId = id!;
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { enabled: gridwiseOsEnabled } = useFeatureFlag("gridwise_os_shell");
   const [editingName, setEditingName] = useState(false);
   const [editingCode, setEditingCode] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -224,6 +226,13 @@ export default function DeliveryWorkPackage() {
       </div>
 
       <div className="flex justify-end">
+        {gridwiseOsEnabled && (
+          <Button asChild variant="default" size="sm" className="mr-2">
+            <Link to={`/wp/${wpId}`}>
+              <Sparkles className="h-4 w-4 mr-2" /> Open in Gridwise OS
+            </Link>
+          </Button>
+        )}
         <Button asChild variant="outline" size="sm">
           <Link to={`/import/wizard?wp=${wpId}${wp?.programme_id ? `&programme=${wp.programme_id}` : ""}`}>
             <Upload className="h-4 w-4 mr-2" /> Import sites
