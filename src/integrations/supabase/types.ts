@@ -8499,6 +8499,10 @@ export type Database = {
           utilisation_pct: number
         }[]
       }
+      set_site_geom_wgs84: {
+        Args: { _lat: number; _lng: number; _site_id: string }
+        Returns: undefined
+      }
       ssen_substation_capacity_lookup: {
         Args: { _name: string }
         Returns: {
