@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, FileSpreadsheet, Loader2, MapPin, Upload as UploadIcon } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { MappingTemplates } from "@/components/import/MappingTemplates";
 
 type BatchRow = {
   id: string;
@@ -168,6 +169,15 @@ export default function ImportWizard() {
     const next = { ...(batch.mapping_json ?? {}), [header]: canonical === "__none__" ? null : canonical };
     setBatch({ ...batch, mapping_json: next });
   };
+  const applyMappingTemplate = async (tpl: Record<string, string | null>) => {
+    if (!batch) return;
+    // Only apply entries whose source header exists in this file.
+    const merged: Record<string, string | null> = { ...(batch.mapping_json ?? {}) };
+    for (const h of headers) {
+      if (h in tpl) merged[h] = tpl[h];
+    }
+    setBatch({ ...batch, mapping_json: merged });
+  };
   const saveMappingAndValidate = async () => {
     if (!batch) return;
     try {
@@ -293,6 +303,9 @@ export default function ImportWizard() {
           <CardHeader><CardTitle>Map columns</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-3">Detected {rows.length} rows. Review each source column and assign it to a Gridwise field, or set to Ignore.</p>
+            <div className="mb-3">
+              <MappingTemplates mapping={batch.mapping_json ?? {}} onApply={applyMappingTemplate} />
+            </div>
             <div className="border rounded max-h-96 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted sticky top-0"><tr><th className="text-left p-2">Source column</th><th className="text-left p-2">Sample</th><th className="text-left p-2">Gridwise field</th></tr></thead>
