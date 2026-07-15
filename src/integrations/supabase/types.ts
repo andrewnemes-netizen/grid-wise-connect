@@ -1082,10 +1082,14 @@ export type Database = {
           cost_category: string | null
           cost_code: string | null
           created_at: string
+          default_predecessor_stage_code: string | null
           estimate_id: string
           id: string
           name: string
           sort_index: number
+          stage_code: string | null
+          stage_color: string | null
+          stage_order: number | null
           updated_at: string
         }
         Insert: {
@@ -1094,10 +1098,14 @@ export type Database = {
           cost_category?: string | null
           cost_code?: string | null
           created_at?: string
+          default_predecessor_stage_code?: string | null
           estimate_id: string
           id?: string
           name: string
           sort_index?: number
+          stage_code?: string | null
+          stage_color?: string | null
+          stage_order?: number | null
           updated_at?: string
         }
         Update: {
@@ -1106,10 +1114,14 @@ export type Database = {
           cost_category?: string | null
           cost_code?: string | null
           created_at?: string
+          default_predecessor_stage_code?: string | null
           estimate_id?: string
           id?: string
           name?: string
           sort_index?: number
+          stage_code?: string | null
+          stage_color?: string | null
+          stage_order?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -3504,6 +3516,8 @@ export type Database = {
           cost_code_category: string | null
           cost_split_available: boolean
           created_at: string
+          default_crew_size: number | null
+          default_stage: string | null
           description: string
           id: string
           labour_cost: number | null
@@ -3511,6 +3525,7 @@ export type Database = {
           needs_pricing: boolean
           notes: string | null
           plant_cost: number | null
+          productivity_qty_per_day: number | null
           provided_by: Database["public"]["Enums"]["rate_provided_by"]
           rate_card_version_id: string
           rate_code: string
@@ -3528,6 +3543,8 @@ export type Database = {
           cost_code_category?: string | null
           cost_split_available?: boolean
           created_at?: string
+          default_crew_size?: number | null
+          default_stage?: string | null
           description: string
           id?: string
           labour_cost?: number | null
@@ -3535,6 +3552,7 @@ export type Database = {
           needs_pricing?: boolean
           notes?: string | null
           plant_cost?: number | null
+          productivity_qty_per_day?: number | null
           provided_by?: Database["public"]["Enums"]["rate_provided_by"]
           rate_card_version_id: string
           rate_code: string
@@ -3552,6 +3570,8 @@ export type Database = {
           cost_code_category?: string | null
           cost_split_available?: boolean
           created_at?: string
+          default_crew_size?: number | null
+          default_stage?: string | null
           description?: string
           id?: string
           labour_cost?: number | null
@@ -3559,6 +3579,7 @@ export type Database = {
           needs_pricing?: boolean
           notes?: string | null
           plant_cost?: number | null
+          productivity_qty_per_day?: number | null
           provided_by?: Database["public"]["Enums"]["rate_provided_by"]
           rate_card_version_id?: string
           rate_code?: string
@@ -6395,11 +6416,14 @@ export type Database = {
           actual_hours: number | null
           created_at: string
           created_by: string | null
+          crew_size: number | null
           description: string | null
           due_date: string | null
           duration_days: number | null
+          estimate_line_id: string | null
           estimated_hours: number | null
           gantt_color: string | null
+          generated_from_estimate_id: string | null
           id: string
           metadata_json: Json
           milestone_id: string | null
@@ -6407,10 +6431,16 @@ export type Database = {
           parent_task_id: string | null
           percent_complete: number
           priority: Database["public"]["Enums"]["wp_priority"]
+          productivity_qty_per_day: number | null
+          qty: number | null
+          site_id: string | null
           sort_index: number
+          stage_code: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["wp_item_status"]
+          task_kind: Database["public"]["Enums"]["wp_task_kind"]
           title: string
+          uom: string | null
           updated_at: string
           work_package_id: string
         }
@@ -6418,11 +6448,14 @@ export type Database = {
           actual_hours?: number | null
           created_at?: string
           created_by?: string | null
+          crew_size?: number | null
           description?: string | null
           due_date?: string | null
           duration_days?: number | null
+          estimate_line_id?: string | null
           estimated_hours?: number | null
           gantt_color?: string | null
+          generated_from_estimate_id?: string | null
           id?: string
           metadata_json?: Json
           milestone_id?: string | null
@@ -6430,10 +6463,16 @@ export type Database = {
           parent_task_id?: string | null
           percent_complete?: number
           priority?: Database["public"]["Enums"]["wp_priority"]
+          productivity_qty_per_day?: number | null
+          qty?: number | null
+          site_id?: string | null
           sort_index?: number
+          stage_code?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["wp_item_status"]
+          task_kind?: Database["public"]["Enums"]["wp_task_kind"]
           title: string
+          uom?: string | null
           updated_at?: string
           work_package_id: string
         }
@@ -6441,11 +6480,14 @@ export type Database = {
           actual_hours?: number | null
           created_at?: string
           created_by?: string | null
+          crew_size?: number | null
           description?: string | null
           due_date?: string | null
           duration_days?: number | null
+          estimate_line_id?: string | null
           estimated_hours?: number | null
           gantt_color?: string | null
+          generated_from_estimate_id?: string | null
           id?: string
           metadata_json?: Json
           milestone_id?: string | null
@@ -6453,10 +6495,16 @@ export type Database = {
           parent_task_id?: string | null
           percent_complete?: number
           priority?: Database["public"]["Enums"]["wp_priority"]
+          productivity_qty_per_day?: number | null
+          qty?: number | null
+          site_id?: string | null
           sort_index?: number
+          stage_code?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["wp_item_status"]
+          task_kind?: Database["public"]["Enums"]["wp_task_kind"]
           title?: string
+          uom?: string | null
           updated_at?: string
           work_package_id?: string
         }
@@ -8548,6 +8596,7 @@ export type Database = {
         | "commercial"
         | "custom"
       wp_priority: "low" | "medium" | "high" | "critical"
+      wp_task_kind: "site_summary" | "stage_summary" | "work"
     }
     CompositeTypes: {
       geometry_dump: {
@@ -8763,6 +8812,7 @@ export const Constants = {
         "custom",
       ],
       wp_priority: ["low", "medium", "high", "critical"],
+      wp_task_kind: ["site_summary", "stage_summary", "work"],
     },
   },
 } as const
