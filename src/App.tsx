@@ -32,6 +32,7 @@ const DeliveryProposalDetail = lazy(() => import("./pages/DeliveryProposalDetail
 const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
+const SurveyForm = lazy(() => import("./pages/SurveyForm"));
 
 const queryClient = new QueryClient();
 
@@ -126,6 +127,7 @@ const AppRoutes = () => (
       <Route path="/auth" element={<AuthRoute />} />
       <Route path="/quick-estimate" element={<QuickEstimate />} />
       <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
+      <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
       <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
