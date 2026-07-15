@@ -72,7 +72,23 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-heading font-semibold truncate">{e.name}</span>
-                    <Badge variant="outline" className="text-[10px]">{e.status}</Badge>
+                    <Badge variant="outline" className="text-[10px]">Rev {e.revision ?? 1}</Badge>
+                    <Badge
+                      variant="outline"
+                      className={
+                        "text-[10px] " +
+                        (e.status === "AWARDED"
+                          ? "bg-emerald-600/15 text-emerald-700 border-emerald-600/30"
+                          : e.status === "SUPERSEDED"
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-amber-500/15 text-amber-700 border-amber-500/30")
+                      }
+                    >
+                      {e.status}
+                    </Badge>
+                    {e.is_current && (
+                      <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">Current</Badge>
+                    )}
                     {e.ref && <span className="text-xs text-muted-foreground">{e.ref}</span>}
                   </div>
                   <div className="text-xs text-muted-foreground">Updated {new Date(e.updated_at).toLocaleDateString()}</div>
@@ -89,7 +105,7 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
 
       <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
         <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col">
-          {openId && <EstimateEditor estimateId={openId} onClose={() => setOpenId(null)} />}
+          {openId && <EstimateEditor estimateId={openId} onClose={() => setOpenId(null)} onOpenEstimate={(id) => setOpenId(id)} />}
         </DialogContent>
       </Dialog>
     </div>
