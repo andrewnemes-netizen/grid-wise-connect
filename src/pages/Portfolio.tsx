@@ -346,6 +346,11 @@ const Portfolio = () => {
               <Trash2 className="mr-1 h-3 w-3" />Delete Selected ({compareIds.size})
             </Button>
           )}
+          {compareIds.size > 0 && (
+            <Button variant="default" size="sm" onClick={() => setSurveySiteIds(Array.from(compareIds))}>
+              <ClipboardList className="mr-1 h-3 w-3" />Send Survey ({compareIds.size})
+            </Button>
+          )}
           {compareIds.size >= 2 && (
             <Button variant="outline" size="sm" onClick={() => setCompareIds(new Set())}>
               <X className="mr-1 h-3 w-3" />Clear Compare
