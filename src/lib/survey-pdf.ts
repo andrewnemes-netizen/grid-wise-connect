@@ -91,8 +91,7 @@ export async function generateSurveyPdf(input: SurveyPdfInput): Promise<Blob> {
       columnStyles: { 0: { cellWidth: 200, fontStyle: "bold" }, 1: { cellWidth: "auto" } },
       margin: { left: marginX, right: marginX },
     });
-    // @ts-expect-error - autotable sets lastAutoTable
-    y = (doc as any).lastAutoTable.finalY + 16;
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 16;
     if (y > pageH - 80) {
       doc.addPage();
       y = 60;
