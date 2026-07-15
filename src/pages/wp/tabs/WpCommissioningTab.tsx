@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Zap, FileCheck2, AlertTriangle, PackageCheck } from "lucide-react";
+import { useSitesMap, attachSites } from "./_useSitesMap";
 
 function StatusBadge({ value }: { value?: string | null }) {
   if (!value) return <Badge variant="outline">—</Badge>;
@@ -23,7 +24,7 @@ function StatusBadge({ value }: { value?: string | null }) {
   return <Badge variant="outline" className={cls}>{value}</Badge>;
 }
 
-function useWp(table: string, wpId?: string, select = "*, sites(site_name,postcode)") {
+function useWp(table: string, wpId?: string, select = "*") {
   return useQuery({
     queryKey: ["wp-commissioning", table, wpId],
     enabled: !!wpId,
@@ -54,6 +55,18 @@ export default function WpCommissioningTab() {
   const certs = useWp("test_certificates", wpId);
   const snags = useWp("snagging_items", wpId);
   const packs = useWp("handover_packs", wpId);
+
+  const allIds = [
+    ...(comm.data ?? []),
+    ...(certs.data ?? []),
+    ...(snags.data ?? []),
+    ...(packs.data ?? []),
+  ].map((r: any) => r.site_id);
+  const sitesMap = useSitesMap(allIds);
+  const commRows = attachSites((comm.data ?? []) as any[], sitesMap);
+  const certRows = attachSites((certs.data ?? []) as any[], sitesMap);
+  const snagRows = attachSites((snags.data ?? []) as any[], sitesMap);
+  const packRows = attachSites((packs.data ?? []) as any[], sitesMap);
 
   const c = {
     comm: comm.data?.length ?? 0,
@@ -105,7 +118,7 @@ export default function WpCommissioningTab() {
                   <TableHead>Energised</TableHead><TableHead>Commissioned</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(comm.data as any[]).map((r) => (
+                  {commRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell><SiteCell row={r} /></TableCell>
                       <TableCell className="text-xs font-mono">{r.mpan ?? "—"}</TableCell>
@@ -134,7 +147,7 @@ export default function WpCommissioningTab() {
                   <TableHead>Issued by</TableHead><TableHead>Issued</TableHead><TableHead>Expires</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(certs.data as any[]).map((r) => (
+                  {certRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.cert_number ?? "—"}</TableCell>
                       <TableCell className="text-sm">{r.cert_type ?? "—"}</TableCell>
@@ -162,7 +175,7 @@ export default function WpCommissioningTab() {
                   <TableHead>Raised</TableHead><TableHead>Target close</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(snags.data as any[]).map((r) => (
+                  {snagRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium max-w-xs truncate">{r.title ?? "—"}</TableCell>
                       <TableCell><SiteCell row={r} /></TableCell>
@@ -189,7 +202,7 @@ export default function WpCommissioningTab() {
                   <TableHead>Warranty start</TableHead><TableHead>Warranty (mo)</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(packs.data as any[]).map((r) => (
+                  {packRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell><SiteCell row={r} /></TableCell>
                       <TableCell className="text-xs text-muted-foreground">
