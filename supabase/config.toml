@@ -98,3 +98,6 @@ verify_jwt = true
 
 [functions.notify-survey-submitted]
 verify_jwt = false
+
+[functions.gridwise-assistant]
+verify_jwt = true

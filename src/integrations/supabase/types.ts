@@ -76,6 +76,136 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_messages: {
+        Row: {
+          cost_cents: number | null
+          created_at: string
+          id: string
+          parts: Json
+          role: string
+          thread_id: string
+          tokens_in: number | null
+          tokens_out: number | null
+        }
+        Insert: {
+          cost_cents?: number | null
+          created_at?: string
+          id?: string
+          parts?: Json
+          role: string
+          thread_id: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Update: {
+          cost_cents?: number | null
+          created_at?: string
+          id?: string
+          parts?: Json
+          role?: string
+          thread_id?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_threads: {
+        Row: {
+          archived_at: string | null
+          context_programme_id: string | null
+          context_site_id: string | null
+          context_wp_id: string | null
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          context_programme_id?: string | null
+          context_site_id?: string | null
+          context_wp_id?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          context_programme_id?: string | null
+          context_site_id?: string | null
+          context_wp_id?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_tool_calls: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          execution_ms: number | null
+          id: string
+          model: string | null
+          params: Json | null
+          record_ids: string[] | null
+          result_summary: string | null
+          status: string
+          thread_id: string | null
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          execution_ms?: number | null
+          id?: string
+          model?: string | null
+          params?: Json | null
+          record_ids?: string[] | null
+          result_summary?: string | null
+          status: string
+          thread_id?: string | null
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          execution_ms?: number | null
+          id?: string
+          model?: string | null
+          params?: Json | null
+          record_ids?: string[] | null
+          result_summary?: string | null
+          status?: string
+          thread_id?: string | null
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_tool_calls_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
