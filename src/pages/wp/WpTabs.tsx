@@ -7,6 +7,9 @@ import WpMapTab from "./tabs/WpMapTab";
 import WpEstimatingTab from "./tabs/WpEstimatingTab";
 import WpPurchaseOrdersTab from "./tabs/WpPurchaseOrdersTab";
 import WpVariationsTab from "./tabs/WpVariationsTab";
+import WpGridStudiesTab from "./tabs/WpGridStudiesTab";
+import WpDnoOffersTab from "./tabs/WpDnoOffersTab";
+import WpDesignTab from "./tabs/WpDesignTab";
 
 function TabShell({
   title,
@@ -56,15 +59,9 @@ export const WpPreCon = () => (
 export const WpEstimating = WpEstimatingTab;
 export const WpPurchaseOrders = WpPurchaseOrdersTab;
 export const WpVariations = WpVariationsTab;
-export const WpGridStudies = () => (
-  <TabShell title="Grid Studies" phase="Phase 2" description="Immutable Gridwise Connect study snapshots for every site in this WP." />
-);
-export const WpDnoOffers = () => (
-  <TabShell title="DNO Offers" phase="Phase 5" description="DNO quotations, offer status and per-site cost allocation." />
-);
-export const WpDesign = () => (
-  <TabShell title="Design" phase="Phase 5" description="Design submissions, DNO reviews and per-site approved design pointer." />
-);
+export const WpGridStudies = WpGridStudiesTab;
+export const WpDnoOffers = WpDnoOffersTab;
+export const WpDesign = WpDesignTab;
 export const WpProgramme = () => (
   <TabShell title="Programme" phase="Phase 2" description="Delivery programme, milestone gantt and mv_programme_dashboard KPIs." />
 );
