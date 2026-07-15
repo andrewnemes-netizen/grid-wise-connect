@@ -121,7 +121,7 @@ export function InteractiveGantt({
   // Positions
   const taskPos: Record<string, { top: number; left: number; width: number }> = {};
   const groupPos: Record<string, { top: number; left: number; width: number; color?: string | null; task?: any }> = {};
-  const rowH = 32;
+  const rowH = 40;
   let y = 0;
   for (const r of rows) {
     if (r.kind === "task") {
@@ -217,7 +217,7 @@ export function InteractiveGantt({
   }
 
   const todayLeft = daysBetween(rangeStart, today) * dayWidth;
-  const nameColW = 260;
+  const nameColW = 420;
 
   return (
     <div className="border rounded-md overflow-hidden bg-card">
@@ -300,13 +300,13 @@ function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setColl
           <button onClick={() => setCollapsed((s: any) => ({ ...s, [r.id]: !s[r.id] }))}>
             {col ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
-          <span className={`truncate ${isSite ? "text-xs font-bold uppercase tracking-wider text-primary" : isStage ? "text-xs font-semibold text-foreground" : "text-xs font-semibold uppercase tracking-wider text-primary"}`}>{r.name}</span>
+          <span className={`truncate min-w-0 ${isSite ? "text-xs font-bold uppercase tracking-wider text-primary" : isStage ? "text-xs font-semibold text-foreground" : "text-xs font-semibold uppercase tracking-wider text-primary"}`} title={r.name}>{r.name}</span>
           <Badge variant="outline" className="ml-auto text-[9px] h-4 px-1 border-primary/30 text-primary">{r.count}</Badge>
         </div>
         <div className={`relative border-b ${isSite ? "bg-primary/10 border-primary/30" : isStage ? "bg-primary/[0.03] border-primary/15" : "bg-primary/5 border-primary/20"}`} style={{ height: rowH, width: canvasWidth }}>
           {gp && (
             <div
-              className={`absolute rounded-sm ${isSite ? "top-2 h-4" : "top-2.5 h-3"} shadow-sm`}
+              className={`absolute rounded-sm ${isSite ? "top-3 h-4" : "top-3.5 h-3"} shadow-sm`}
               style={{ left: gp.left, width: gp.width, background: gp.color || (isSite ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.6)") }}
               title={r.name}
             >
@@ -324,10 +324,15 @@ function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setColl
   const pct = Math.min(100, Math.max(0, Number(t.percent_complete ?? 0)));
   return (
     <>
-      <div className="sticky left-0 bg-background border-b border-r flex items-center gap-2 text-xs" style={{ width: nameColW, height: rowH, zIndex: 5, paddingLeft: 12 + depth * 14, paddingRight: 12 }}>
-        <span className="truncate flex-1">{t.title}</span>
+      <div className="sticky left-0 bg-background border-b border-r flex items-center text-xs min-w-0" style={{ width: nameColW, height: rowH, zIndex: 5, paddingLeft: 12 + depth * 14, paddingRight: 12 }} title={t.title}>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate font-medium">{t.title}</div>
+          {t.description?.startsWith("Rate: ") && (
+            <div className="truncate text-[9px] text-muted-foreground font-mono mt-0.5">{t.description.slice(6)}</div>
+          )}
+        </div>
         {t.description?.startsWith("Rate: ") && (
-          <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">{t.description.slice(6)}</span>
+          <span className="sr-only">{t.description.slice(6)}</span>
         )}
       </div>
       <div className="relative border-b" style={{ height: rowH, width: canvasWidth }}>
@@ -339,13 +344,13 @@ function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setColl
             ))}
           </div>
         )}
-        <div id={`gbar-${t.id}`} className="absolute top-1 h-6 rounded shadow-sm select-none cursor-grab active:cursor-grabbing group"
+        <div id={`gbar-${t.id}`} className="absolute top-2 h-6 rounded shadow-sm select-none cursor-grab active:cursor-grabbing group"
           style={{ left: p?.left ?? 0, width: p?.width ?? dayWidth, background: t.gantt_color || "hsl(var(--primary) / 0.85)" }}
           onMouseDown={(ev) => onDragStart("move", ev, t)}>
           <div className="absolute inset-y-0 left-0 w-1.5 cursor-w-resize hover:bg-white/30" onMouseDown={(ev) => { ev.stopPropagation(); onDragStart("resize-l", ev, t); }} />
           <div className="absolute inset-y-0 right-0 w-1.5 cursor-e-resize hover:bg-white/30" onMouseDown={(ev) => { ev.stopPropagation(); onDragStart("resize-r", ev, t); }} />
           <div className="absolute inset-y-0 left-0 bg-primary rounded-l" style={{ width: `${pct}%`, opacity: 0.5 }} />
-          <div className="relative flex items-center h-full px-2 text-[10px] text-white font-medium truncate">
+          <div className="relative flex items-center h-full px-2 text-[10px] text-primary-foreground font-medium whitespace-nowrap overflow-visible min-w-max">
             {t.title} · {pct}%
           </div>
         </div>
