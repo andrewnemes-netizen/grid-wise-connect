@@ -248,7 +248,7 @@ export function InteractiveGantt({
           {rows.map((r, i) => (
             <RowCells key={r.kind === "group" ? `g-${r.id}` : `t-${r.task.id}`}
               r={r} rowH={rowH} nameColW={nameColW} canvasWidth={canvasWidth} dayWidth={dayWidth}
-              collapsed={collapsed} setCollapsed={setCollapsed} taskPos={taskPos} zoom={zoom}
+              collapsed={collapsed} setCollapsed={setCollapsed} taskPos={taskPos} groupPos={groupPos} zoom={zoom}
               onDragStart={(mode, ev, t) => {
                 const s = toDate(t.start_date) ?? today;
                 const e = toDate(t.due_date) ?? s;
@@ -284,29 +284,51 @@ export function InteractiveGantt({
   );
 }
 
-function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setCollapsed, taskPos, onDragStart, zoom }: any) {
+function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setCollapsed, taskPos, groupPos, onDragStart, zoom }: any) {
   if (r.kind === "group") {
     const col = collapsed[r.id];
+    const depth = r.depth ?? 0;
+    const gp = groupPos?.[r.id];
+    const isSite = depth === 0 && r.id.startsWith("site-");
+    const isStage = depth === 1;
     return (
       <>
-        <div className="sticky left-0 bg-primary/10 border-b border-r border-primary/20 flex items-center gap-2 px-2" style={{ width: nameColW, height: rowH }}>
+        <div
+          className={`sticky left-0 border-b border-r flex items-center gap-2 px-2 ${isSite ? "bg-primary/15 border-primary/30" : isStage ? "bg-primary/5 border-primary/15" : "bg-primary/10 border-primary/20"}`}
+          style={{ width: nameColW, height: rowH, paddingLeft: 8 + depth * 14 }}
+        >
           <button onClick={() => setCollapsed((s: any) => ({ ...s, [r.id]: !s[r.id] }))}>
             {col ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary truncate">{r.name}</span>
+          <span className={`truncate ${isSite ? "text-xs font-bold uppercase tracking-wider text-primary" : isStage ? "text-xs font-semibold text-foreground" : "text-xs font-semibold uppercase tracking-wider text-primary"}`}>{r.name}</span>
           <Badge variant="outline" className="ml-auto text-[9px] h-4 px-1 border-primary/30 text-primary">{r.count}</Badge>
         </div>
-        <div className="bg-primary/5 border-b border-primary/20" style={{ height: rowH, width: canvasWidth }} />
+        <div className={`relative border-b ${isSite ? "bg-primary/10 border-primary/30" : isStage ? "bg-primary/[0.03] border-primary/15" : "bg-primary/5 border-primary/20"}`} style={{ height: rowH, width: canvasWidth }}>
+          {gp && (
+            <div
+              className={`absolute rounded-sm ${isSite ? "top-2 h-4" : "top-2.5 h-3"} shadow-sm`}
+              style={{ left: gp.left, width: gp.width, background: gp.color || (isSite ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.6)") }}
+              title={r.name}
+            >
+              {isSite && <div className="absolute -bottom-1 left-0 w-2 h-2 bg-inherit rotate-45" />}
+              {isSite && <div className="absolute -bottom-1 right-0 w-2 h-2 bg-inherit rotate-45" />}
+            </div>
+          )}
+        </div>
       </>
     );
   }
   const t = r.task;
+  const depth = r.depth ?? 0;
   const p = taskPos[t.id];
   const pct = Math.min(100, Math.max(0, Number(t.percent_complete ?? 0)));
   return (
     <>
-      <div className="sticky left-0 bg-background border-b border-r px-3 flex items-center gap-2 text-xs" style={{ width: nameColW, height: rowH, zIndex: 5 }}>
-        <span className="truncate">{t.title}</span>
+      <div className="sticky left-0 bg-background border-b border-r flex items-center gap-2 text-xs" style={{ width: nameColW, height: rowH, zIndex: 5, paddingLeft: 12 + depth * 14, paddingRight: 12 }}>
+        <span className="truncate flex-1">{t.title}</span>
+        {t.description?.startsWith("Rate: ") && (
+          <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">{t.description.slice(6)}</span>
+        )}
       </div>
       <div className="relative border-b" style={{ height: rowH, width: canvasWidth }}>
         {/* weekend shading in day zoom */}
