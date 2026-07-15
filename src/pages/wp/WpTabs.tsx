@@ -4,6 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import WpOverviewTab from "./tabs/WpOverviewTab";
 import WpSiteRegisterTab from "./tabs/WpSiteRegisterTab";
 import WpMapTab from "./tabs/WpMapTab";
+import WpEstimatingTab from "./tabs/WpEstimatingTab";
+import WpPurchaseOrdersTab from "./tabs/WpPurchaseOrdersTab";
+import WpVariationsTab from "./tabs/WpVariationsTab";
 
 function TabShell({
   title,
@@ -50,15 +53,9 @@ export const WpMap = WpMapTab;
 export const WpPreCon = () => (
   <TabShell title="Pre-Construction" phase="Phase 7" description="Permits, RAMS, traffic management and mobilisation readiness per site." />
 );
-export const WpEstimating = () => (
-  <TabShell title="Estimating" phase="Phase 4" description="Client, partner and DNO cost lenses over shared estimate lines." />
-);
-export const WpPurchaseOrders = () => (
-  <TabShell title="Purchase Orders" phase="Phase 5" description="Client and partner POs, line-level commitment and site allocations." />
-);
-export const WpVariations = () => (
-  <TabShell title="Variations" phase="Phase 5" description="Change requests and PO amendments with approval trail." />
-);
+export const WpEstimating = WpEstimatingTab;
+export const WpPurchaseOrders = WpPurchaseOrdersTab;
+export const WpVariations = WpVariationsTab;
 export const WpGridStudies = () => (
   <TabShell title="Grid Studies" phase="Phase 2" description="Immutable Gridwise Connect study snapshots for every site in this WP." />
 );
