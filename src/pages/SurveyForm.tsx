@@ -158,7 +158,7 @@ export default function SurveyForm() {
       // 4) RPC submit
       const { data: responseId, error: rpcErr } = await supabase.rpc("submit_survey_by_token", {
         _token: token,
-        _submission: { ...values, _photo_groups: uploadedGroups },
+        _submission: { ...values, _photo_groups: uploadedGroups } as any,
         _signature_url: sigUrl,
         _image_urls: flatImageUrls,
         _pdf_url: pdfUrl,
