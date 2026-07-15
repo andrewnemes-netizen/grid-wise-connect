@@ -495,16 +495,11 @@ async function handleApprove(req: Request, ctx: NonNullable<Awaited<ReturnType<t
       continue;
     }
     if (r.lat != null && r.lng != null) {
-      // Sites.geom is SRID 27700 (British National Grid). Transform from WGS84.
-      await ctx.admin.rpc("exec_sql" as any, {}).catch(() => null); // placeholder — use direct update via SQL below
-      const { error: geomErr } = await ctx.admin
-        .from("sites")
-        .update({ geom: `SRID=4326;POINT(${r.lng} ${r.lat})` as any })
-        .eq("id", site.id);
-      if (geomErr) {
-        // Fallback: run raw SQL through the REST endpoint via rpc — skip if unavailable.
-        console.warn("geom update failed", geomErr.message);
-      }
+      // sites.geom is SRID 27700 — use RPC helper to transform WGS84 → BNG.
+      const { error: geomErr } = await ctx.admin.rpc("set_site_geom_wgs84", {
+        _site_id: site.id, _lng: r.lng, _lat: r.lat,
+      });
+      if (geomErr) console.warn("geom update failed", geomErr.message);
     }
     await track("site", site.id);
     createdCount++;
