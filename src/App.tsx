@@ -33,6 +33,7 @@ const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 const SurveyForm = lazy(() => import("./pages/SurveyForm"));
+const Assistant = lazy(() => import("./pages/Assistant"));
 
 const queryClient = new QueryClient();
 
@@ -144,6 +145,8 @@ const AppRoutes = () => (
       <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+      <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+      <Route path="/assistant/:threadId" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>

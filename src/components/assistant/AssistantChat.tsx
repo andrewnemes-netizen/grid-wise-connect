@@ -113,7 +113,7 @@ export function AssistantChat({ threadId }: { threadId: string }) {
 
   const busy = status === "submitted" || status === "streaming";
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(_message: unknown, e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || busy) return;
