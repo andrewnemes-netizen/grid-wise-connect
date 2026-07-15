@@ -1,75 +1,105 @@
 
-# Redesign: Emerald Command Centre (Shell + Delivery)
+# Estimate-Driven Project Plan Builder
 
-A focused restyle of the app shell and the Delivery module. No business logic changes — only tokens, typography, layout and component polish.
+Turn an estimate into a full, structured work plan for the Work Package: **WP → Site → Stage → Task**, where Stages come directly from the estimate's groups, and task durations are computed from productivity rates on each rate item.
 
-## Design direction
+## 1. Data model changes
 
-- **Palette (Emerald Prestige)** — dark emerald anchor, warm gold accent, cream surfaces.
-  - `--background` cream `#f5f0e0` (light) / deep emerald `#052e26` (dark)
-  - `--primary` emerald `#0d7a5f`, `--primary-deep` `#064e3b`
-  - `--accent` gold `#c9a84c` (used sparingly: active states, KPI highlights, chips)
-  - Neutrals derived from emerald-tinted greys, not pure slate
-- **Typography** — Sora (headings, tabular numerals for data), Manrope (body/UI). Wired via `@fontsource` + Tailwind font families; replaces current defaults.
-- **Density & shape** — 6px radius, 1px hairline borders in `emerald/15`, subtle inner shadow on panels, chips become small pill tags with coloured dot + label (not solid fills).
+### `rate_items` (existing)
+- `productivity_qty_per_day numeric` — units of the item's UoM a standard crew delivers per day (e.g. 40 for m of trench)
+- `default_crew_size int default 1`
+- `default_stage text` — optional hint (e.g. 'Civils') for auto-mapping when group name is ambiguous
 
-All values land as HSL tokens in `src/index.css` and mappings in `tailwind.config.ts`. No hardcoded colours in components.
+### `estimate_groups` (existing)
+- `stage_code text` — slug used as the stage identifier when generating the plan (defaults to slugified group name)
+- `stage_color text`
+- `stage_order int`
+- `default_predecessor_stage_code text` — for auto FS dependencies (e.g. Electrical follows Civils)
 
-## Layout: split-screen shell
+### `wp_tasks` (existing — extend)
+- `site_id uuid` — link task to a site (nullable for WP-level tasks)
+- `stage_code text` — which stage the task belongs to
+- `parent_task_id uuid` — supports the Site and Stage summary rows
+- `task_kind text check in ('site_summary','stage_summary','work')` default 'work'
+- `estimate_line_id uuid references estimate_lines(id)` — provenance back to the BoQ
+- `generated_from_estimate_id uuid` — which estimate build produced it
+- `qty numeric`, `uom text`, `crew_size int`, `productivity_qty_per_day numeric` — snapshot for recompute
+- Unique index on `(work_package_id, site_id, stage_code, estimate_line_id)` to make regeneration idempotent
 
-New app shell for Delivery routes:
+### `wp_task_dependencies` (existing) — unchanged; used for stage-to-stage FS links.
+
+All new columns nullable/defaulted so existing rows keep working.
+
+## 2. Generation engine (Edge Function `generate-wp-plan`)
+
+Input: `{ work_package_id, estimate_id, options: { site_ids?, overwrite: 'merge'|'replace' } }`
+
+Algorithm:
 
 ```text
-┌────────┬──────────────────────────────────────────────┐
-│Sidebar │ Topbar: breadcrumbs · search · notifs · user │
-│(emerald├───────────────────┬──────────────────────────┤
-│ rail)  │  LEFT: Map pane   │ RIGHT: Work pane         │
-│        │  - programme sites│ - Programme header       │
-│        │  - WP pins        │ - Monday-style board     │
-│        │  - hover sync     │ - Tabs: WPs · Tasks ·    │
-│        │                   │   Gantt · Files          │
-└────────┴───────────────────┴──────────────────────────┘
+1. Load estimate + groups + lines (with joined rate_items for productivity).
+2. Load wp_sites for the work package (or the subset in site_ids).
+3. Derive stages from estimate_groups:
+     stage_code = group.stage_code ?? slug(group.name)
+     stage_order = group.sort_index
+4. For each site:
+     upsert site_summary task (parent = null)
+     for each stage present in the estimate:
+        upsert stage_summary task (parent = site_summary)
+        for each estimate line in that group:
+            duration_days = ceil( qty / (productivity_qty_per_day * crew_size) )
+            upsert work task (parent = stage_summary, estimate_line_id = line.id)
+            set start_date/due_date sequentially within the stage
+5. Create FS dependencies between consecutive stages per site
+   (using default_predecessor_stage_code where set, else stage_order-1).
+6. Roll up parent bars (Gantt already renders these from children).
 ```
 
-- Resizable split (drag handle, remembers ratio in `localStorage`). Collapse map to a right-edge rail on narrow viewports.
-- Map pane reuses existing MapLibre setup, filtered to the current programme's WP sites; clicking a row highlights the pin, clicking a pin scrolls the row.
-- On mobile (<768px) the split stacks: map becomes a collapsible top card, board fills below.
+Idempotency: the unique index on `(wp, site, stage, estimate_line_id)` means re-running merges. `overwrite='replace'` clears only generated rows (`generated_from_estimate_id = :id`), preserving manual tasks.
 
-## Delivery board polish (Monday-style, refined)
+## 3. UI
 
-Keep engine + data model. Visual pass only in `TaskBoard.tsx` and cells:
+### On the Estimate editor
+- New button in header: **"Generate plan from estimate"** (only enabled when at least one group + one site exist)
+- Opens a confirmation modal:
+  - Site multi-select (defaults: all sites on WP)
+  - Preview list: `Site × Stage × #tasks × total days`
+  - Mode: **Merge** (default) or **Replace generated**
+  - Warns about missing productivity rates (lists items that will use fallback of 1 day)
 
-- Sticky header row with gold underline on the active sort column.
-- Group headers: coloured 4px left bar + emerald text, count as gold pill.
-- Rows: 36px height, hover shows a faint emerald wash + row action rail.
-- Status/priority chips redesigned as dot+label pills using palette tokens.
-- Selection bar docks bottom-centre as a floating emerald toolbar (not inline).
-- Empty state + "Add work package/task" row gets a dashed emerald border on hover.
+### On the WP page
+- Interactive Gantt gets a **grouping selector**: `By Site → Stage` (default) / `By Stage → Site` / `Flat`
+- Site summary rows and Stage summary rows render as darker, wider bars auto-computed from children
+- Task rows show a small chip with the source rate code (e.g. `CIV-TR-450`)
+- Right-click a task → "Open estimate line"
 
-## Scope of changes
+### On each Site row (Sites tab)
+- New pill: **"Plan: X tasks / Y days"** with a link that filters the Gantt to that site
 
-**In scope**
-1. Design tokens: `src/index.css`, `tailwind.config.ts` (Emerald Prestige, Sora/Manrope, radii, shadows, chip tokens).
-2. Fonts: add `@fontsource/sora` + `@fontsource/manrope`, wire in `src/main.tsx`.
-3. Shell: `src/components/AppSidebar.tsx`, `src/components/DashboardLayout.tsx` — emerald rail, gold active indicator, refined topbar.
-4. New split layout: `src/components/delivery/DeliverySplitLayout.tsx` (resizable panes, map+content slots) used by:
-   - `src/pages/DeliveryProgrammeDetail.tsx`
-   - `src/pages/DeliveryWorkPackage.tsx`
-5. Programmes list (`src/pages/DeliveryProgrammes.tsx`): restyle cards into a denser board-like list matching new tokens.
-6. Board polish: `src/components/delivery/board/TaskBoard.tsx` + cells (`StatusCell`, `TextCell`, header, group header, selection bar). No behaviour change.
+## 4. Stage inference & colours
 
-**Out of scope (this pass)**
-- Map, Studies, Portfolio, LA Programme, Admin page restyles (tokens will cascade, but no bespoke work).
-- Any data model, RLS, or engine changes.
-- New features on the board (columns/views/automations behaviour unchanged).
+Because stages are derived from estimate groups, we normalize once:
+- `slug(group.name)` → stage_code (Civils, Electrical, `bay-marking`, `icp-connection`, etc.)
+- Colour = `estimate_groups.color` when set, else a hash-based palette
+- Order = `sort_index`
+- Dependencies default to sequential FS in that order; user can override per group via a new small "Stage settings" popover on the group header (sets `default_predecessor_stage_code`)
 
-## Technical notes
+## 5. Recompute & drift
 
-- Split pane implemented with a lightweight custom component using CSS grid + a drag handle (no new dep) to avoid pulling in `react-resizable-panels` unless preferred.
-- Map filter: pass `programmeId` prop; reuse existing site query, add a `where wp.programme_id = ?` filter client-side from already-loaded WPs.
-- Row↔pin sync via a small `useDeliverySelection` context (hover/selected id).
-- All colour usage via semantic tokens; migration adds no SQL.
+- Editing an estimate line's `qty`, `uom`, or the linked rate item's productivity **does not auto-push** — instead, the WP shows a **"Estimate changed — 4 tasks out of date"** banner with a **Rebuild** button that re-runs the generator in Merge mode.
+- Manual edits to a generated task (dates, %) are preserved on merge; only `qty`, `duration`, `title` re-sync unless user unlinked the task.
 
-## Deliverable
+## 6. Delivery scope
 
-After approval and implementation, Delivery routes render inside the new emerald split-screen shell with Sora/Manrope typography, and the Monday-style board is visually upgraded without changing its behaviour.
+1. Migration: extend `rate_items`, `estimate_groups`, `wp_tasks`; add unique index.
+2. Edge function `generate-wp-plan` with the algorithm above.
+3. Admin: add productivity fields to `RateLibrary` editor.
+4. Estimate editor: "Generate plan" button + modal with preview and warnings.
+5. Interactive Gantt: hierarchical rendering (Site → Stage → Task), grouping selector, summary bars.
+6. WP tabs: drift banner + Rebuild.
+7. Tests: idempotency (re-run keeps same row count), manual-edit preservation, duration math.
+
+## Out of scope for this iteration
+- Resource levelling / crew calendars
+- Cross-site dependency editing UI (still possible via existing dependency table)
+- Cost baseline snapshots on plan generation (can follow once plan is stable)

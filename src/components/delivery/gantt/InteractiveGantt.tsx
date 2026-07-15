@@ -69,29 +69,58 @@ export function InteractiveGantt({
   const dayWidth = zoom === "day" ? 28 : zoom === "week" ? 90 / 7 : 280 / 30;
   const canvasWidth = totalDays * dayWidth;
 
-  // Group by milestone
-  const groups = useMemo(() => {
+  // Decide grouping: Site → Stage (when tasks have site_id) else by milestone
+  const hasSiteHierarchy = tasks.some((t) => t.site_id && t.task_kind);
+
+  const rows: Array<
+    | { kind: "group"; id: string; name: string; count: number; depth?: number; color?: string | null; summaryTask?: any }
+    | { kind: "task"; task: any; depth?: number }
+  > = [];
+
+  if (hasSiteHierarchy) {
+    const siteSummaries = tasks.filter((t) => t.task_kind === "site_summary");
+    const stageSummaries = tasks.filter((t) => t.task_kind === "stage_summary");
+    const workTasks = tasks.filter((t) => (t.task_kind ?? "work") === "work");
+    // Orphan work rows (no site_id) grouped last
+    const orphanWork = workTasks.filter((t) => !t.site_id);
+
+    for (const site of siteSummaries) {
+      const siteId = site.site_id;
+      const stages = stageSummaries.filter((s) => s.site_id === siteId).sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? ""));
+      const siteWork = workTasks.filter((t) => t.site_id === siteId);
+      rows.push({ kind: "group", id: `site-${site.id}`, name: site.title, count: siteWork.length, depth: 0, summaryTask: site });
+      if (collapsed[`site-${site.id}`]) continue;
+      for (const st of stages) {
+        const rowsForStage = siteWork.filter((t) => t.stage_code === st.stage_code);
+        rows.push({ kind: "group", id: `stage-${st.id}`, name: st.title, count: rowsForStage.length, depth: 1, color: st.gantt_color, summaryTask: st });
+        if (collapsed[`stage-${st.id}`]) continue;
+        for (const t of rowsForStage) rows.push({ kind: "task", task: t, depth: 2 });
+      }
+    }
+    if (orphanWork.length) {
+      rows.push({ kind: "group", id: "__orphan", name: "Ungrouped", count: orphanWork.length, depth: 0 });
+      if (!collapsed["__orphan"]) for (const t of orphanWork) rows.push({ kind: "task", task: t, depth: 1 });
+    }
+  } else {
     const groupMap: Record<string, any[]> = { __none: [] };
     for (const t of tasks) {
       const k = t.milestone_id ?? "__none";
       (groupMap[k] ??= []).push(t);
     }
-    return groupMap;
-  }, [tasks]);
-
-  const rows: Array<{ kind: "group"; id: string; name: string; count: number } | { kind: "task"; task: any }> = [];
-  const groupOrder = [
-    ...(milestones ?? []).filter((m) => groups[m.id]).map((m) => ({ id: m.id, name: m.name })),
-    ...(groups["__none"]?.length ? [{ id: "__none", name: "Ungrouped" }] : []),
-  ];
-  for (const g of groupOrder) {
-    const gt = groups[g.id] ?? [];
-    rows.push({ kind: "group", id: g.id, name: g.name, count: gt.length });
-    if (!collapsed[g.id]) for (const t of gt) rows.push({ kind: "task", task: t });
+    const groupOrder = [
+      ...(milestones ?? []).filter((m) => groupMap[m.id]).map((m) => ({ id: m.id, name: m.name })),
+      ...(groupMap["__none"]?.length ? [{ id: "__none", name: "Ungrouped" }] : []),
+    ];
+    for (const g of groupOrder) {
+      const gt = groupMap[g.id] ?? [];
+      rows.push({ kind: "group", id: g.id, name: g.name, count: gt.length });
+      if (!collapsed[g.id]) for (const t of gt) rows.push({ kind: "task", task: t });
+    }
   }
 
   // Positions
   const taskPos: Record<string, { top: number; left: number; width: number }> = {};
+  const groupPos: Record<string, { top: number; left: number; width: number; color?: string | null; task?: any }> = {};
   const rowH = 32;
   let y = 0;
   for (const r of rows) {
@@ -102,6 +131,12 @@ export function InteractiveGantt({
       const left = daysBetween(rangeStart, s) * dayWidth;
       const width = Math.max(dayWidth, (daysBetween(s, e) + 1) * dayWidth);
       taskPos[t.id] = { top: y, left, width };
+    } else if (r.summaryTask?.start_date && r.summaryTask?.due_date) {
+      const s = toDate(r.summaryTask.start_date)!;
+      const e = toDate(r.summaryTask.due_date)!;
+      const left = daysBetween(rangeStart, s) * dayWidth;
+      const width = Math.max(dayWidth, (daysBetween(s, e) + 1) * dayWidth);
+      groupPos[r.id] = { top: y, left, width, color: r.color, task: r.summaryTask };
     }
     y += rowH;
   }
@@ -213,7 +248,7 @@ export function InteractiveGantt({
           {rows.map((r, i) => (
             <RowCells key={r.kind === "group" ? `g-${r.id}` : `t-${r.task.id}`}
               r={r} rowH={rowH} nameColW={nameColW} canvasWidth={canvasWidth} dayWidth={dayWidth}
-              collapsed={collapsed} setCollapsed={setCollapsed} taskPos={taskPos} zoom={zoom}
+              collapsed={collapsed} setCollapsed={setCollapsed} taskPos={taskPos} groupPos={groupPos} zoom={zoom}
               onDragStart={(mode, ev, t) => {
                 const s = toDate(t.start_date) ?? today;
                 const e = toDate(t.due_date) ?? s;
@@ -249,29 +284,51 @@ export function InteractiveGantt({
   );
 }
 
-function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setCollapsed, taskPos, onDragStart, zoom }: any) {
+function RowCells({ r, rowH, nameColW, canvasWidth, dayWidth, collapsed, setCollapsed, taskPos, groupPos, onDragStart, zoom }: any) {
   if (r.kind === "group") {
     const col = collapsed[r.id];
+    const depth = r.depth ?? 0;
+    const gp = groupPos?.[r.id];
+    const isSite = depth === 0 && r.id.startsWith("site-");
+    const isStage = depth === 1;
     return (
       <>
-        <div className="sticky left-0 bg-primary/10 border-b border-r border-primary/20 flex items-center gap-2 px-2" style={{ width: nameColW, height: rowH }}>
+        <div
+          className={`sticky left-0 border-b border-r flex items-center gap-2 px-2 ${isSite ? "bg-primary/15 border-primary/30" : isStage ? "bg-primary/5 border-primary/15" : "bg-primary/10 border-primary/20"}`}
+          style={{ width: nameColW, height: rowH, paddingLeft: 8 + depth * 14 }}
+        >
           <button onClick={() => setCollapsed((s: any) => ({ ...s, [r.id]: !s[r.id] }))}>
             {col ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
-          <span className="text-xs font-semibold uppercase tracking-wider text-primary truncate">{r.name}</span>
+          <span className={`truncate ${isSite ? "text-xs font-bold uppercase tracking-wider text-primary" : isStage ? "text-xs font-semibold text-foreground" : "text-xs font-semibold uppercase tracking-wider text-primary"}`}>{r.name}</span>
           <Badge variant="outline" className="ml-auto text-[9px] h-4 px-1 border-primary/30 text-primary">{r.count}</Badge>
         </div>
-        <div className="bg-primary/5 border-b border-primary/20" style={{ height: rowH, width: canvasWidth }} />
+        <div className={`relative border-b ${isSite ? "bg-primary/10 border-primary/30" : isStage ? "bg-primary/[0.03] border-primary/15" : "bg-primary/5 border-primary/20"}`} style={{ height: rowH, width: canvasWidth }}>
+          {gp && (
+            <div
+              className={`absolute rounded-sm ${isSite ? "top-2 h-4" : "top-2.5 h-3"} shadow-sm`}
+              style={{ left: gp.left, width: gp.width, background: gp.color || (isSite ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.6)") }}
+              title={r.name}
+            >
+              {isSite && <div className="absolute -bottom-1 left-0 w-2 h-2 bg-inherit rotate-45" />}
+              {isSite && <div className="absolute -bottom-1 right-0 w-2 h-2 bg-inherit rotate-45" />}
+            </div>
+          )}
+        </div>
       </>
     );
   }
   const t = r.task;
+  const depth = r.depth ?? 0;
   const p = taskPos[t.id];
   const pct = Math.min(100, Math.max(0, Number(t.percent_complete ?? 0)));
   return (
     <>
-      <div className="sticky left-0 bg-background border-b border-r px-3 flex items-center gap-2 text-xs" style={{ width: nameColW, height: rowH, zIndex: 5 }}>
-        <span className="truncate">{t.title}</span>
+      <div className="sticky left-0 bg-background border-b border-r flex items-center gap-2 text-xs" style={{ width: nameColW, height: rowH, zIndex: 5, paddingLeft: 12 + depth * 14, paddingRight: 12 }}>
+        <span className="truncate flex-1">{t.title}</span>
+        {t.description?.startsWith("Rate: ") && (
+          <span className="text-[9px] text-muted-foreground shrink-0 tabular-nums">{t.description.slice(6)}</span>
+        )}
       </div>
       <div className="relative border-b" style={{ height: rowH, width: canvasWidth }}>
         {/* weekend shading in day zoom */}
