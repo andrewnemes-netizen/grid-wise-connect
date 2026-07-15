@@ -1,176 +1,107 @@
+# Work Package Import Wizard
 
-# Gridwise Assistant — Embedded Claude (Phase 1, read-only)
+Foundation of the Gridwise Portfolio Import Engine. Not a generic CSV importer — a batch-safe, versioned, auditable pipeline that lands sites into Programme + Work Package + Portfolio + GIS + Site Register in one governed action.
 
-Right-side chat panel, available throughout the app. Server-side Anthropic key, permission-aware, audited, no writes. Reuses the tool layer designed for the MCP server so both AI paths share one source of truth.
+## User journey
 
----
+1. Entry points
+   - Delivery → Work Package → “Import Sites”
+   - Portfolio → “Import Portfolio”
+   - Assistant chat → paperclip → “Import sites…” (opens the same wizard in a drawer)
+2. Step 1 — Upload
+   - Drag/drop or browse: `.csv`, `.xlsx`, `.xls`, `.pdf`, `.docx`. Or “Paste table”.
+   - Files stored in a private `imports` bucket keyed by `import_batch.id`.
+   - For PDF/DOCX we run AI extraction (Gemini) into a tabular preview the user still reviews.
+3. Step 2 — Column mapping
+   - Auto-detects and suggests mappings for: Address, UPRN, Site Name, Latitude, Longitude, Postcode, Client Reference, Charger Type, Power Demand (kW), Estimated Sockets, DNO, LPA, Notes, Client, Programme, Work Package.
+   - User can rename, ignore, or remap any column. Mapping saved on the batch for re-use.
+4. Step 3 — Validate
+   - Per-row status: OK / Warning / Error / Duplicate.
+   - Checks: required fields, kW numeric range, valid UK postcode, UPRN format, duplicate detection (existing site UPRN or address+postcode, and within-batch dupes), coord sanity (UK envelope + auto lat/lng swap fix).
+   - Inline edit for any cell; re-validates on change.
+5. Step 4 — Geocode
+   - “Geocode missing coordinates” action. Uses OS Places via existing edge proxy (batched). Rate-limited, resumable. Rows update in place with `geocode_confidence`.
+6. Step 5 — Map preview
+   - MapLibre map with a pin per site, colour-coded by status. Click a pin → row detail. Bounding-box fit; large batches clustered.
+7. Step 6 — Destination
+   - Choose Client (existing Account, or “new”), Programme (existing or new), Work Package (existing or new). Autosuggest from existing records the user can access.
+   - If new: inline forms for Programme (name, code, dates) and WP (name, code, type).
+8. Step 7 — Summary
+   - Total sites, valid, warnings, errors, duplicates, total requested kW, estimated sockets, client, programme, WP, contract value if provided. Prominent “N errors — review” link back to Validate step.
+9. Step 8 — Approve Import
+   - Button disabled until 0 blocking errors. Confirmation dialog with counts.
+   - Server writes everything in one transactional edge function (see below). Progress toast for large batches.
+10. Step 9 — Post-import
+    - Success screen with three actions:
+      - Run Gridwise Connect on all sites
+      - Run only selected sites (opens map with multi-select)
+      - Save for later
+    - Deep links so the sites appear immediately in Portfolio, Work Package, GIS Map, Site Register.
 
-## 0. Two decisions needed before build (chat UI contract)
+## Data model additions
 
-Defaults chosen — reply if you want different:
-1. **Conversation shape:** *threaded* — user can start new conversations, revisit old ones. (Alternative: one rolling conversation per user.)
-2. **Storage:** *database (Supabase)*, scoped to user + optional programme/work-package/site context. (Alternatives: browser localStorage, no persistence.)
+Seven new tables (all `public`, RLS by `org_id` via existing `has_role`/`org_members` pattern):
 
----
+- `import_batches` — id, org_id, created_by, source (`csv|xlsx|pdf|docx|paste`), file_path, filename, status (`draft|validating|geocoding|ready|approved|failed|rolled_back`), mapping_json, summary_json, target_programme_id, target_wp_id, target_client_id, version, parent_batch_id, created_at, approved_at.
+- `import_rows` — id, batch_id, row_index, raw_json, mapped_json, status (`ok|warning|error|duplicate|skipped`), errors_json, warnings_json, dedupe_key, geocode_confidence, resolved_site_id (nullable, filled after approval).
+- `import_column_mappings` — org_id, name, mapping_json (saved templates the user can reapply).
+- `import_audit` — id, batch_id, actor_id, action (`create|edit_row|remap|geocode|validate|approve|rollback`), diff_json, at.
+- `import_created_records` — batch_id, entity_type (`programme|work_package|site|portfolio_entry|geo_point|wp_site`), entity_id (uuid), created (bool), reversible (bool). Enables true rollback.
+- Extend `sites` with `import_batch_id` (nullable FK) and `import_row_id` for traceability.
+- Extend `programmes` and `work_packages` with `import_batch_id` (nullable) so import-created parents can be rolled back.
 
-## 1. Proposed Architecture
+RLS: all scoped to caller’s `org_id`; `service_role` full access for the edge function.
 
-```
-Right-side Assistant panel  (src/components/assistant/*)
-        │  useChat (AI SDK) → transport
-        ▼
-Edge Function  /functions/v1/gridwise-assistant   (streaming)
-        │  auth: supabase.auth.getUser(bearer)
-        │  load: mcp_sessions context + thread history
-        ▼
-AI SDK streamText — Anthropic provider (@ai-sdk/anthropic)
-   model: claude-sonnet-4-5   (opus-4-1 optional, haiku-4-5 for cheap)
-   tools:  Gridwise Tool Registry (shared with MCP)
-   stopWhen: stepCountIs(50)
-        │  tool call
-        ▼
-Gridwise Tool Registry   (src/lib/gridwise-tools/*)
-        │  assertToolAllowed(user, tool) → withAudit → handler
-        ▼
-Existing domain layer
-   • Supabase RLS (per-user + per-org)
-   • PostGIS RPCs
-   • Engineering: gridwise/*, evHub/*, electricalEngine
-   • Estimating: connectionCosts, unit_rates, rate_items
-   • PM: projects, work_packages, project_tasks
-   • Documents: Storage
-        │
-        ▼
-Response back to Claude → cited answer streamed to panel
-```
+## Backend
 
-The **same tool registry** is exposed by (a) the AI SDK `tools` object here, and (b) the MCP server. One implementation, two adapters.
+Two edge functions:
 
----
+- `import-wizard` (thin per-step API)
+  - `POST /parse` — parses uploaded file (CSV via `papaparse`, XLSX via `xlsx`, PDF/DOCX via existing document parser + Gemini extraction), inserts `import_batches` + `import_rows` rows, returns preview.
+  - `POST /remap` — updates `mapping_json`, re-derives `mapped_json` per row.
+  - `POST /validate` — runs deterministic checks + duplicate lookup against `sites`.
+  - `POST /geocode` — calls existing OS Places proxy in batches of 50 with backoff, updates rows.
+  - `POST /approve` — the transactional writer (below).
+  - `POST /rollback` — deletes/undoes all `import_created_records` in reverse order, marks batch `rolled_back`.
 
-## 2. Tool definitions (Phase 1 — read-only, 9 tools to start)
+- `import-approve-worker` (invoked by `/approve` for batches > 200 rows via Inngest)
+  - Emits `gridwise/import.approve.requested` event; Inngest function chunks the batch (250 rows/step), writes with `service_role`, streams live progress to a `import_progress` channel the UI subscribes to via Supabase realtime.
 
-Each tool: Zod input schema, `execute` calling existing lib/RPC, returns compact JSON + `sources` array of `{ table, id, url }` for citations.
+### Write order inside approval
+For each batch, in one logical transaction per chunk:
+1. Upsert Client → Programme → Work Package (skip if existing IDs supplied).
+2. For each row: insert `sites` row, insert `wp_sites` link, insert `geo_points` (from coords), insert portfolio row (`site_utilisation` seed or the portfolio table you use — I’ll follow the existing pattern found during exploration).
+3. Record every insert in `import_created_records`.
+4. Update `import_rows.resolved_site_id` and `import_rows.status = ok`.
+5. Update `import_batches.status = approved`, write `summary_json`.
 
-| Tool | Backing implementation | Returns |
-|---|---|---|
-| `search_programmes` | `programmes` + `work_packages` count | id, name, client, dates, wp_count, status |
-| `get_programme_summary` | `programmes` + rollup RPC over `sites`+`project_tasks` | dates, RAG, site counts by stage, blockers |
-| `get_work_package_summary` | `work_packages` + `wp_sites` + `wp_tasks` | progress %, forecast completion, overdue tasks, missing docs |
-| `search_sites` | `sites` + optional PostGIS radius | site rows (respects RLS) |
-| `get_site_details` | `sites` + `site_stage_status` + latest `studies` | full site record + latest study id |
-| `get_site_feasibility` | reads latest `studies.result_json` (does **not** re-run engines) | verdict, capacity, DNO rule outcomes, cable spec |
-| `get_estimate_summary` | `estimates`+`estimate_lines` or `site_estimates` | totals, margin (permission-filtered), non-standard flag |
-| `get_delivery_risks` | RPC aggregating overdue tasks, expiring permits, missing metering, slippage | ranked risk list per programme/WP |
-| `draft_client_report` | pulls WP + site rollups + risks, returns markdown draft | markdown + `sources[]`; **labelled AI-assisted** |
+Feasibility engine is **not** triggered here — that is a separate user action from the post-import screen.
 
-Explicit **non-tools**: no `run_ev_hub`, no `calculate_*`, no `create_*`, no `update_*`, no `approve_*`. Claude asks for feasibility → tool returns the **already-computed** study record. If none exists, tool returns `{ needs_study: true, site_id }` and Claude explains that a study must be run in the app first.
+## Frontend
 
----
+- Route: `/import/wizard/:batchId?` (new). Stepper shell with the 9 steps above.
+- Reusable `<ImportEntry />` button placed on Work Package detail, Portfolio page, Delivery landing, and as a chat composer attachment handler.
+- Components: `UploadDropzone`, `MappingTable`, `ValidationGrid` (virtualised, up to 10k rows via `@tanstack/react-virtual`), `GeocodePanel`, `ImportMap` (MapLibre reused), `DestinationPicker`, `ImportSummaryCard`, `ImportSuccessPanel`.
+- Assistant integration: paperclip button on the chat composer starts a batch, then hands off to `/import/wizard/:batchId` in the same tab. The assistant remains read-only; it does not perform the write.
 
-## 3. Database additions
+## Scale + safety
 
-One migration, all with GRANTs before RLS.
+- Up to 10,000 rows per batch. Server always writes in 250-row chunks.
+- Files are private-bucket; presigned URLs only.
+- Geocoding, parsing, and writing are resumable — every step is idempotent and safe to re-run.
+- Rollback restores state by deleting `import_created_records` in reverse dependency order.
+- Every action is logged in `import_audit`; each batch has a monotonically increasing `version` (parent_batch_id used when re-importing a corrected file).
 
-- `assistant_threads`: id uuid PK, user_id, title, context_programme_id/wp_id/site_id (all nullable), created_at, updated_at, archived_at. RLS: owner only.
-- `assistant_messages`: id uuid PK, thread_id FK, role (`user|assistant|tool`), parts jsonb (AI SDK `UIMessage.parts`), tool_name, tokens_in, tokens_out, cost_cents, created_at. RLS via thread ownership.
-- `assistant_tool_calls` (audit): id, thread_id, message_id, user_id, tool_name, params jsonb, result_summary text, record_ids uuid[], status (`ok|denied|error`), execution_ms, model, created_at. RLS: owner read, admin read, append-only.
-- Reuse `mcp_sessions` from previous plan for the "current context" (programme/WP/site) — same table, both AI paths read it.
-- No changes to existing tables.
+## Phased delivery (single PR-worth per phase)
 
----
+- Phase A (this ticket): DB migrations, `imports` bucket + RLS, `import-wizard` edge function with parse/remap/validate/geocode/approve/rollback for CSV + XLSX + paste, wizard UI end-to-end, entry points on Delivery WP + Portfolio + Assistant, post-import success actions (Run All / Run Selected / Save for later — the two “Run” actions just deep-link to the existing feasibility runner selected-set).
+- Phase B: PDF/DOCX AI extraction, saved mapping templates, Inngest background worker + realtime progress for > 200-row batches.
+- Phase C: Rollback UI + batch version history, admin dashboard of imports, CSV export of failures.
 
-## 4. Permission model
+## Out of scope for this ticket
 
-Two enforcement points, both required, both reuse what's designed for MCP:
+- Automatic feasibility runs on import.
+- Editing imported sites in bulk after approval (existing site editor covers single-site edits).
+- Multi-tenant sharing of mapping templates across orgs.
 
-1. **RLS** — edge function creates the Supabase client with the caller's bearer token; every tool query runs as that user.
-2. **Tool + field gate** — `assertToolAllowed(user, toolName)` uses the role matrix from the MCP plan (managing_director, commercial, estimator, designer, programme_manager, project_manager, supervisor, installer, client, dno). Additionally, `get_estimate_summary` and `get_work_package_summary` **strip** commercial fields (sell price, margin, mark-up) for non-commercial roles before returning to Claude — so the model never sees data the user isn't allowed to see.
-
----
-
-## 5. Audit model
-
-Written automatically by a `withAudit(tool)` wrapper — no per-tool boilerplate. Every call records: user, thread, timestamp, tool, params, record ids touched, status, execution ms, model. Prompt text is stored in `assistant_messages` (already persisted per thread), so audit + conversation together reconstruct exactly what Claude did and why.
-
-For write actions (Phase 2+): the same wrapper will add `before_value` / `after_value` / `approved_by` / `approved_at` columns.
-
----
-
-## 6. Conversation context model
-
-- Thread route: `/assistant/:threadId` (opens the side panel with that thread). Panel is available site-wide via a floating "Ask Gridwise" button; opening it creates or resumes the last active thread.
-- Auto-context capture: when the panel opens on `/site/:id`, `/study/:id`, `/delivery/programme/:id`, etc., the thread's `context_*_id` is pre-populated so the user doesn't have to say "for site X".
-- Tools accept explicit ids in args AND fall back to the thread's context ids.
-
----
-
-## 7. API cost controls
-
-- Model default: **claude-sonnet-4-5**; user role admin/MD can opt into opus-4-1 per thread. Cheap-path haiku-4-5 for `search_*` tool-planning-only turns.
-- Hard caps per request: `max_tokens: 4096`, `stopWhen: stepCountIs(50)`.
-- Per-user daily cost cap (default £5/day/user, admin-configurable in `app_settings`). Enforced in the edge function before calling Anthropic; over-cap returns a friendly error.
-- Token+cost recorded per message → nightly rollup view `assistant_usage_daily` for the admin console.
-- Rate limit: 20 req/min per user (in-function sliding window in a small `assistant_rate` table or memory).
-- Streaming responses to avoid double-billing on retries.
-
----
-
-## 8. UI plan (right-side panel)
-
-- New component `src/components/assistant/AssistantPanel.tsx`, mounted once in `DashboardLayout`, opens/closes via floating button + `⌘K` shortcut.
-- Thread list drawer with new/rename/archive/delete. Route `/assistant/:threadId`.
-- Message rendering via `message.parts`: text streams as markdown; `tool-invocation` parts render a small "🔧 called `tool_name` → n records" chip with expandable JSON.
-- Every assistant message shows a **Sources** row: chips linking to `/site/:id`, `/study/:id`, `/delivery/work-package/:id` etc., built from the tools' `sources` output.
-- Every assistant message carries an "AI-assisted" badge.
-- Composer stays focused; disabled while streaming; toast on rate-limit/cost-cap/network.
-- Optimistic user bubble + typing indicator on `status === "submitted"`.
-
----
-
-## 9. Phased implementation
-
-**Phase 1a — foundations (this iteration if approved)**
-1. `ANTHROPIC_API_KEY` secret request.
-2. Migration: `assistant_threads`, `assistant_messages`, `assistant_tool_calls`, `mcp_sessions`, extended `app_role` enum.
-3. `src/lib/gridwise-tools/` — shared tool registry (Zod schemas + handlers + `sources`).
-4. Helpers: `assertToolAllowed`, `withAudit`, cost/rate-limit guard.
-5. Edge function `gridwise-assistant` — streams with AI SDK + `@ai-sdk/anthropic`, loads/persists thread messages, executes tools.
-6. UI: floating button, panel, thread list, `/assistant/:threadId` route, message + citation rendering.
-7. Verify: send-message smoke test; confirm tool-call → citation link works end to end.
-
-**Phase 1b — remaining read tools + drafting**
-8. `get_delivery_risks` RPC, `draft_client_report` composition, permission-aware field stripping.
-
-**Phase 2 — controlled write actions** (each gated by explicit user preview + confirm; separate approval per tool)
-9. `create_tasks_from_template`, `update_task_status`, `assign_owner`, `apply_programme_template`, `move_dates`, `create_work_package_with_sites`. Preview UI shows diff before commit; `withAudit` records before/after.
-
-**Phase 3 — Estimating assistant**
-10. `select_recipe`, `apply_rate_card_version`, `generate_site_estimate`, `aggregate_wp_estimate`, `variance_analysis`. All call existing engines only.
-
-**Phase 4 — Scheduled monitoring agent**
-11. Nightly cron edge fn runs Claude with a fixed system prompt over each active WP; writes `notifications` rows for overdue/expiring/slippage findings.
-
-**Phase 5 — Public MCP server for external Claude/ChatGPT/etc.**
-12. Adapt the same registry into `@lovable.dev/mcp-js` tools (partially done — 3 tools already live). Public OAuth 2.1 already configured; add consent route + remaining tools.
-
----
-
-## Out of scope for Phase 1
-
-- Any write / mutation tool.
-- Re-running engines (`run_ev_hub`, `run_gridwise_connect`) — Claude reads the last stored study; user must run engines from the app UI.
-- Scheduled/proactive monitoring.
-- MCP server expansion (kept as Phase 5).
-- Photo/document upload; only read/summarise existing docs (Phase 1b via `find_documents`+`read_document` if you want it in Phase 1 — flag it and I'll add).
-
-## Technical notes
-
-- Uses **Anthropic API directly** via `@ai-sdk/anthropic` because Claude is not offered through Lovable AI Gateway. Key: `ANTHROPIC_API_KEY` (server-only, never in browser). Model IDs: `claude-sonnet-4-5` / `claude-opus-4-1` / `claude-haiku-4-5`.
-- Tool registry is the shared boundary — MCP path (Phase 5) will wrap the same handlers, so we get one audit shape, one permission gate, one set of engineering guarantees.
-- Every tool result includes `sources: [{table, id, url}]` so the panel can render citation chips deterministically without asking the model to format them.
-- Claude never receives raw commercial fields the user can't see; stripping happens in the tool handler before returning, not in the prompt.
-
----
-
-**Reply "proceed" (or answer the two questions in §0 if you want non-default choices) and I'll implement Phase 1a.**
+Ready to build Phase A on approval.
