@@ -51,12 +51,23 @@ export default function WpOverviewTab() {
     queryKey: ["wp-stage-rollup", wpId],
     enabled: !!wpId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: rows, error } = await supabase
         .from("site_stage_status")
-        .select("stage_id, status, stage_definitions(name, sequence)")
+        .select("stage_id, status")
         .eq("work_package_id", wpId!);
       if (error) throw error;
-      return data ?? [];
+      const list = rows ?? [];
+      const ids = Array.from(new Set(list.map((r: any) => r.stage_id).filter(Boolean))) as string[];
+      let defs: any[] = [];
+      if (ids.length) {
+        const { data: d } = await supabase
+          .from("stage_definitions")
+          .select("id, label, order_index")
+          .in("id", ids);
+        defs = d ?? [];
+      }
+      const byId = new Map(defs.map((d) => [d.id, d]));
+      return list.map((r: any) => ({ ...r, stage_definitions: byId.get(r.stage_id) ?? null }));
     },
   });
 
@@ -81,7 +92,7 @@ export default function WpOverviewTab() {
   const criticalSnags = readiness.reduce((sum: number, r: any) => sum + Number(r.snag_open_critical ?? 0), 0);
 
   const stageRollup = stages.reduce((acc: Record<string, number>, row: any) => {
-    const name = row.stage_definitions?.name ?? "Unknown";
+    const name = row.stage_definitions?.label ?? "Unknown";
     acc[name] = (acc[name] ?? 0) + 1;
     return acc;
   }, {});
