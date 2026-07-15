@@ -826,6 +826,44 @@ export type Database = {
           },
         ]
       }
+      design_reviews: {
+        Row: {
+          comments: string | null
+          created_at: string
+          decided_at: string
+          decision: string
+          design_submission_id: string
+          id: string
+          reviewer_id: string
+        }
+        Insert: {
+          comments?: string | null
+          created_at?: string
+          decided_at?: string
+          decision: string
+          design_submission_id: string
+          id?: string
+          reviewer_id: string
+        }
+        Update: {
+          comments?: string | null
+          created_at?: string
+          decided_at?: string
+          decision?: string
+          design_submission_id?: string
+          id?: string
+          reviewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_reviews_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "design_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_scenarios: {
         Row: {
           cost_high: number | null
@@ -891,6 +929,63 @@ export type Database = {
           voltage_level?: string | null
         }
         Relationships: []
+      }
+      design_submissions: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          revision: number
+          status: string
+          submitted_at: string
+          submitted_by_partner_id: string | null
+          submitted_by_user_id: string | null
+          title: string | null
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          revision?: number
+          status?: string
+          submitted_at?: string
+          submitted_by_partner_id?: string | null
+          submitted_by_user_id?: string | null
+          title?: string | null
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          revision?: number
+          status?: string
+          submitted_at?: string
+          submitted_by_partner_id?: string | null
+          submitted_by_user_id?: string | null
+          title?: string | null
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_submissions_submitted_by_partner_id_fkey"
+            columns: ["submitted_by_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       design_workflow_events: {
         Row: {
@@ -1040,6 +1135,105 @@ export type Database = {
             columns: ["linked_layer_id"]
             isOneToOne: false
             referencedRelation: "layer_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dno_offer_sites: {
+        Row: {
+          created_at: string
+          dno_offer_id: string
+          site_id: string
+        }
+        Insert: {
+          created_at?: string
+          dno_offer_id: string
+          site_id: string
+        }
+        Update: {
+          created_at?: string
+          dno_offer_id?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dno_offer_sites_dno_offer_id_fkey"
+            columns: ["dno_offer_id"]
+            isOneToOne: false
+            referencedRelation: "dno_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offer_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dno_offers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dno_key: string | null
+          expires_at: string | null
+          id: string
+          notes: string | null
+          offer_ref: string
+          offer_value: number | null
+          org_id: string | null
+          received_at: string | null
+          revision: number
+          status: string
+          updated_at: string
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dno_key?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          offer_ref: string
+          offer_value?: number | null
+          org_id?: string | null
+          received_at?: string | null
+          revision?: number
+          status?: string
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dno_key?: string | null
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          offer_ref?: string
+          offer_value?: number | null
+          org_id?: string | null
+          received_at?: string | null
+          revision?: number
+          status?: string
+          updated_at?: string
+          work_package_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dno_offers_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offers_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -1299,6 +1493,7 @@ export type Database = {
           net_markup_pct: number | null
           no_resources: number | null
           parent_line_id: string | null
+          partner_visible: boolean
           pricing_notes: string | null
           product_service: string | null
           product_type: string | null
@@ -1366,6 +1561,7 @@ export type Database = {
           net_markup_pct?: number | null
           no_resources?: number | null
           parent_line_id?: string | null
+          partner_visible?: boolean
           pricing_notes?: string | null
           product_service?: string | null
           product_type?: string | null
@@ -1433,6 +1629,7 @@ export type Database = {
           net_markup_pct?: number | null
           no_resources?: number | null
           parent_line_id?: string | null
+          partner_visible?: boolean
           pricing_notes?: string | null
           product_service?: string | null
           product_type?: string | null
@@ -1596,6 +1793,7 @@ export type Database = {
           name: string
           net_markup_pct: number | null
           org_id: string | null
+          parent_estimate_id: string | null
           project_id: string | null
           rate_card_version_id: string | null
           ref: string | null
@@ -1609,6 +1807,7 @@ export type Database = {
           total_price: number
           updated_at: string
           vat_total: number
+          visibility_lens_default: string | null
           work_package_id: string | null
         }
         Insert: {
@@ -1630,6 +1829,7 @@ export type Database = {
           name?: string
           net_markup_pct?: number | null
           org_id?: string | null
+          parent_estimate_id?: string | null
           project_id?: string | null
           rate_card_version_id?: string | null
           ref?: string | null
@@ -1643,6 +1843,7 @@ export type Database = {
           total_price?: number
           updated_at?: string
           vat_total?: number
+          visibility_lens_default?: string | null
           work_package_id?: string | null
         }
         Update: {
@@ -1664,6 +1865,7 @@ export type Database = {
           name?: string
           net_markup_pct?: number | null
           org_id?: string | null
+          parent_estimate_id?: string | null
           project_id?: string | null
           rate_card_version_id?: string | null
           ref?: string | null
@@ -1677,9 +1879,17 @@ export type Database = {
           total_price?: number
           updated_at?: string
           vat_total?: number
+          visibility_lens_default?: string | null
           work_package_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "estimates_parent_estimate_id_fkey"
+            columns: ["parent_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "estimates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "estimates_project_id_fkey"
             columns: ["project_id"]
@@ -1745,6 +1955,47 @@ export type Database = {
           version?: string
         }
         Relationships: []
+      }
+      feature_flags: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          flag_key: string
+          id: string
+          org_id: string | null
+          scope: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          flag_key: string
+          id?: string
+          org_id?: string | null
+          scope: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          flag_key?: string
+          id?: string
+          org_id?: string | null
+          scope?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       feeders_ehv: {
         Row: {
@@ -2924,6 +3175,179 @@ export type Database = {
         }
         Relationships: []
       }
+      partner_users: {
+        Row: {
+          created_at: string
+          id: string
+          partner_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          partner_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          partner_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_users_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_rate_card_id: string | null
+          id: string
+          name: string
+          notes: string | null
+          org_id: string
+          primary_contact_email: string | null
+          status: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_rate_card_id?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          org_id: string
+          primary_contact_email?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_rate_card_id?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          org_id?: string
+          primary_contact_email?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partners_default_rate_card_id_fkey"
+            columns: ["default_rate_card_id"]
+            isOneToOne: false
+            referencedRelation: "rate_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partners_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_line_sites: {
+        Row: {
+          po_line_id: string
+          qty: number | null
+          site_id: string
+          value: number | null
+        }
+        Insert: {
+          po_line_id: string
+          qty?: number | null
+          site_id: string
+          value?: number | null
+        }
+        Update: {
+          po_line_id?: string
+          qty?: number | null
+          site_id?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_line_sites_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "po_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_line_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      po_lines: {
+        Row: {
+          created_at: string
+          description: string | null
+          estimate_line_id: string | null
+          id: string
+          line_value: number
+          po_id: string
+          sort_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          estimate_line_id?: string | null
+          id?: string
+          line_value?: number
+          po_id: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          estimate_line_id?: string | null
+          id?: string
+          line_value?: number
+          po_id?: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "po_lines_estimate_line_id_fkey"
+            columns: ["estimate_line_id"]
+            isOneToOne: false
+            referencedRelation: "estimate_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_lines_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       primary_substations_33kv: {
         Row: {
           asset_id: string
@@ -3268,6 +3692,8 @@ export type Database = {
       project_files: {
         Row: {
           created_at: string
+          entity_id: string | null
+          entity_type: string | null
           filename: string
           id: string
           mime: string | null
@@ -3279,6 +3705,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           filename: string
           id?: string
           mime?: string | null
@@ -3290,6 +3718,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
           filename?: string
           id?: string
           mime?: string | null
@@ -3508,6 +3938,8 @@ export type Database = {
           percent_complete: number
           priority: Database["public"]["Enums"]["project_priority"]
           project_id: string
+          scope: string
+          site_id: string | null
           sort_index: number
           start_date: string | null
           status: Database["public"]["Enums"]["task_status"]
@@ -3530,6 +3962,8 @@ export type Database = {
           percent_complete?: number
           priority?: Database["public"]["Enums"]["project_priority"]
           project_id: string
+          scope?: string
+          site_id?: string | null
           sort_index?: number
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -3552,6 +3986,8 @@ export type Database = {
           percent_complete?: number
           priority?: Database["public"]["Enums"]["project_priority"]
           project_id?: string
+          scope?: string
+          site_id?: string | null
           sort_index?: number
           start_date?: string | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -3599,6 +4035,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "site_programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_tasks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
             referencedColumns: ["id"]
           },
         ]
@@ -3801,6 +4244,76 @@ export type Database = {
             columns: ["study_id"]
             isOneToOne: false
             referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          issued_at: string | null
+          notes: string | null
+          order_value: number
+          org_id: string | null
+          po_number: string
+          status: string
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          order_value?: number
+          org_id?: string | null
+          po_number: string
+          status?: string
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          issued_at?: string | null
+          notes?: string | null
+          order_value?: number
+          org_id?: string | null
+          po_number?: string
+          status?: string
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -4615,6 +5128,42 @@ export type Database = {
           },
         ]
       }
+      site_design_submissions: {
+        Row: {
+          created_at: string
+          design_submission_id: string
+          is_current: boolean
+          site_id: string
+        }
+        Insert: {
+          created_at?: string
+          design_submission_id: string
+          is_current?: boolean
+          site_id: string
+        }
+        Update: {
+          created_at?: string
+          design_submission_id?: string
+          is_current?: boolean
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_design_submissions_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "design_submissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_estimate_exceptions: {
         Row: {
           created_at: string
@@ -4982,6 +5531,61 @@ export type Database = {
           },
         ]
       }
+      site_stage_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          from_stage_id: string | null
+          id: string
+          metadata_json: Json
+          reason: string | null
+          site_id: string
+          to_stage_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          from_stage_id?: string | null
+          id?: string
+          metadata_json?: Json
+          reason?: string | null
+          site_id: string
+          to_stage_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          from_stage_id?: string | null
+          id?: string
+          metadata_json?: Json
+          reason?: string | null
+          site_id?: string
+          to_stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_stage_history_from_stage_id_fkey"
+            columns: ["from_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_history_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_history_to_stage_id_fkey"
+            columns: ["to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_stage_status: {
         Row: {
           civils: Database["public"]["Enums"]["site_stage_state"]
@@ -5288,6 +5892,7 @@ export type Database = {
           cost_band: string | null
           created_at: string
           created_by: string
+          current_stage_id: string | null
           deployment_class: string | null
           geom: unknown
           grid_readiness: string | null
@@ -5297,6 +5902,7 @@ export type Database = {
           next_steps: Json | null
           org_id: string | null
           postcode: string | null
+          primary_partner_id: string | null
           proposed_kw: number | null
           raw_score_data: Json | null
           reinforcement_probability: number | null
@@ -5317,6 +5923,7 @@ export type Database = {
           cost_band?: string | null
           created_at?: string
           created_by: string
+          current_stage_id?: string | null
           deployment_class?: string | null
           geom?: unknown
           grid_readiness?: string | null
@@ -5326,6 +5933,7 @@ export type Database = {
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
+          primary_partner_id?: string | null
           proposed_kw?: number | null
           raw_score_data?: Json | null
           reinforcement_probability?: number | null
@@ -5346,6 +5954,7 @@ export type Database = {
           cost_band?: string | null
           created_at?: string
           created_by?: string
+          current_stage_id?: string | null
           deployment_class?: string | null
           geom?: unknown
           grid_readiness?: string | null
@@ -5355,6 +5964,7 @@ export type Database = {
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
+          primary_partner_id?: string | null
           proposed_kw?: number | null
           raw_score_data?: Json | null
           reinforcement_probability?: number | null
@@ -5369,6 +5979,13 @@ export type Database = {
           viability_index?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sites_current_stage_id_fkey"
+            columns: ["current_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sites_import_batch_id_fkey"
             columns: ["import_batch_id"]
@@ -5388,6 +6005,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_primary_partner_id_fkey"
+            columns: ["primary_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
             referencedColumns: ["id"]
           },
         ]
@@ -5520,6 +6144,105 @@ export type Database = {
           voltage_kv?: number | null
         }
         Relationships: []
+      }
+      stage_definitions: {
+        Row: {
+          category: string
+          colour: string | null
+          created_at: string
+          id: string
+          is_terminal: boolean
+          key: string
+          label: string
+          order_index: number
+          org_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          colour?: string | null
+          created_at?: string
+          id?: string
+          is_terminal?: boolean
+          key: string
+          label: string
+          order_index?: number
+          org_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          colour?: string | null
+          created_at?: string
+          id?: string
+          is_terminal?: boolean
+          key?: string
+          label?: string
+          order_index?: number
+          org_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_definitions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stage_transition_rules: {
+        Row: {
+          created_at: string
+          from_stage_id: string | null
+          id: string
+          required_gate: string | null
+          required_role: string | null
+          to_stage_id: string
+          workflow_set_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          required_gate?: string | null
+          required_role?: string | null
+          to_stage_id: string
+          workflow_set_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          required_gate?: string | null
+          required_role?: string | null
+          to_stage_id?: string
+          workflow_set_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_transition_rules_from_stage_id_fkey"
+            columns: ["from_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_transition_rules_to_stage_id_fkey"
+            columns: ["to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_transition_rules_workflow_set_id_fkey"
+            columns: ["workflow_set_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_stage_sets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       studies: {
         Row: {
@@ -6408,6 +7131,7 @@ export type Database = {
           config_json: Json | null
           created_at: string
           created_by: string | null
+          delivery_project_id: string | null
           delivery_user_id: string | null
           id: string
           import_batch_id: string | null
@@ -6419,6 +7143,8 @@ export type Database = {
           status: string
           target_end_date: string | null
           updated_at: string
+          workflow_stage_set_id: string | null
+          wp_procurement_unlocked: boolean
           wp_type_id: string | null
         }
         Insert: {
@@ -6428,6 +7154,7 @@ export type Database = {
           config_json?: Json | null
           created_at?: string
           created_by?: string | null
+          delivery_project_id?: string | null
           delivery_user_id?: string | null
           id?: string
           import_batch_id?: string | null
@@ -6439,6 +7166,8 @@ export type Database = {
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_stage_set_id?: string | null
+          wp_procurement_unlocked?: boolean
           wp_type_id?: string | null
         }
         Update: {
@@ -6448,6 +7177,7 @@ export type Database = {
           config_json?: Json | null
           created_at?: string
           created_by?: string | null
+          delivery_project_id?: string | null
           delivery_user_id?: string | null
           id?: string
           import_batch_id?: string | null
@@ -6459,6 +7189,8 @@ export type Database = {
           status?: string
           target_end_date?: string | null
           updated_at?: string
+          workflow_stage_set_id?: string | null
+          wp_procurement_unlocked?: boolean
           wp_type_id?: string | null
         }
         Relationships: [
@@ -6474,6 +7206,13 @@ export type Database = {
             columns: ["programme_id"]
             isOneToOne: false
             referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_packages_workflow_stage_set_id_fkey"
+            columns: ["workflow_stage_set_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_stage_sets"
             referencedColumns: ["id"]
           },
           {
@@ -6536,6 +7275,77 @@ export type Database = {
             columns: ["workflow_id"]
             isOneToOne: false
             referencedRelation: "workflows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_stage_set_stages: {
+        Row: {
+          order_index: number
+          set_id: string
+          stage_id: string
+        }
+        Insert: {
+          order_index?: number
+          set_id: string
+          stage_id: string
+        }
+        Update: {
+          order_index?: number
+          set_id?: string
+          stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_stage_set_stages_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "workflow_stage_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_stage_set_stages_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workflow_stage_sets: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          org_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          org_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          org_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workflow_stage_sets_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
         ]
@@ -6943,11 +7753,61 @@ export type Database = {
           },
         ]
       }
+      wp_partner_allocations: {
+        Row: {
+          allocated_at: string
+          allocated_by: string | null
+          id: string
+          partner_id: string
+          site_id: string | null
+          work_package_id: string
+        }
+        Insert: {
+          allocated_at?: string
+          allocated_by?: string | null
+          id?: string
+          partner_id: string
+          site_id?: string | null
+          work_package_id: string
+        }
+        Update: {
+          allocated_at?: string
+          allocated_by?: string | null
+          id?: string
+          partner_id?: string
+          site_id?: string | null
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wp_partner_allocations_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_partner_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_partner_allocations_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wp_sites: {
         Row: {
           created_at: string
           id: string
           local_ref: string | null
+          partner_id: string | null
           sequence: number | null
           site_id: string
           work_package_id: string
@@ -6956,6 +7816,7 @@ export type Database = {
           created_at?: string
           id?: string
           local_ref?: string | null
+          partner_id?: string | null
           sequence?: number | null
           site_id: string
           work_package_id: string
@@ -6964,11 +7825,19 @@ export type Database = {
           created_at?: string
           id?: string
           local_ref?: string | null
+          partner_id?: string | null
           sequence?: number | null
           site_id?: string
           work_package_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "wp_sites_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "wp_sites_site_id_fkey"
             columns: ["site_id"]
@@ -7055,6 +7924,7 @@ export type Database = {
           priority: Database["public"]["Enums"]["wp_priority"]
           productivity_qty_per_day: number | null
           qty: number | null
+          scope: string
           site_id: string | null
           sort_index: number
           stage_code: string | null
@@ -7087,6 +7957,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["wp_priority"]
           productivity_qty_per_day?: number | null
           qty?: number | null
+          scope?: string
           site_id?: string | null
           sort_index?: number
           stage_code?: string | null
@@ -7119,6 +7990,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["wp_priority"]
           productivity_qty_per_day?: number | null
           qty?: number | null
+          scope?: string
           site_id?: string | null
           sort_index?: number
           stage_code?: string | null
