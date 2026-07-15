@@ -194,7 +194,7 @@ function PartnerUsersTab() {
   const qc = useQueryClient();
   const [partnerId, setPartnerId] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
-  const [role, setRole] = useState<string>("member");
+  const [role, setRole] = useState<string>("viewer");
 
   const { data: partners = [] } = useQuery({
     queryKey: ["admin-partners-min"],
@@ -288,8 +288,7 @@ function PartnerUsersTab() {
             <Select value={role} onValueChange={setRole}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="member">Member</SelectItem>
-                <SelectItem value="lead">Lead</SelectItem>
+                <SelectItem value="viewer">Viewer</SelectItem>
                 <SelectItem value="admin">Partner Admin</SelectItem>
               </SelectContent>
             </Select>
