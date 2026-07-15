@@ -53,7 +53,7 @@ export default function WpOverviewTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("site_stage_status")
-        .select("stage_id, status, stage_definitions(name, sequence)")
+        .select("survey, design, dno, permit, civils, electrical, meter, handover")
         .eq("work_package_id", wpId!);
       if (error) throw error;
       return data ?? [];
@@ -80,12 +80,18 @@ export default function WpOverviewTab() {
   const openSnags = readiness.reduce((sum: number, r: any) => sum + Number(r.snag_open ?? 0), 0);
   const criticalSnags = readiness.reduce((sum: number, r: any) => sum + Number(r.snag_open_critical ?? 0), 0);
 
-  const stageRollup = stages.reduce((acc: Record<string, number>, row: any) => {
-    const name = row.stage_definitions?.name ?? "Unknown";
-    acc[name] = (acc[name] ?? 0) + 1;
-    return acc;
-  }, {});
-  const stageEntries = Object.entries(stageRollup).sort(([a], [b]) => a.localeCompare(b));
+  const STAGE_KEYS = ["survey","design","dno","permit","civils","electrical","meter","handover"] as const;
+  const STAGE_LABELS: Record<string,string> = {
+    survey:"Survey", design:"Design", dno:"DNO", permit:"Permit",
+    civils:"Civils", electrical:"Electrical", meter:"Meter", handover:"Handover",
+  };
+  const stageEntries: [string, number][] = STAGE_KEYS.map((k): [string, number] => {
+    const done = (stages as any[]).filter((r) => {
+      const v = String(r[k] ?? "").toLowerCase();
+      return ["complete","completed","done","approved","signed","valid","passed"].includes(v);
+    }).length;
+    return [STAGE_LABELS[k], done];
+  }).filter(([, n]) => n > 0);
 
   return (
     <div className="space-y-6">

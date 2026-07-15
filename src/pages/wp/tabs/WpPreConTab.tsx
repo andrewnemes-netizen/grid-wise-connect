@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FileCheck2, ShieldCheck, TrafficCone, ClipboardList, SearchCheck, Package } from "lucide-react";
+import { useSitesMap, attachSites } from "./_useSitesMap";
 
 function StatusBadge({ value }: { value?: string | null }) {
   if (!value) return <Badge variant="outline">—</Badge>;
@@ -28,7 +29,7 @@ function useWpTable(wpId: string | undefined, table: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from(table as any)
-        .select("*, sites(site_name,postcode)")
+        .select("*")
         .eq("work_package_id", wpId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -64,6 +65,22 @@ export default function WpPreConTab() {
   const logs = useWpTable(wpId, "daily_logs");
   const inspections = useWpTable(wpId, "inspections");
   const deliveries = useWpTable(wpId, "materials_deliveries");
+
+  const allIds = [
+    ...(permits.data ?? []),
+    ...(rams.data ?? []),
+    ...(tm.data ?? []),
+    ...(logs.data ?? []),
+    ...(inspections.data ?? []),
+    ...(deliveries.data ?? []),
+  ].map((r: any) => r.site_id);
+  const sitesMap = useSitesMap(allIds);
+  const permitRows = attachSites((permits.data ?? []) as any[], sitesMap);
+  const ramsRows = attachSites((rams.data ?? []) as any[], sitesMap);
+  const tmRows = attachSites((tm.data ?? []) as any[], sitesMap);
+  const logRows = attachSites((logs.data ?? []) as any[], sitesMap);
+  const inspRows = attachSites((inspections.data ?? []) as any[], sitesMap);
+  const delRows = attachSites((deliveries.data ?? []) as any[], sitesMap);
 
   const counts = {
     permits: permits.data?.length ?? 0,
@@ -108,7 +125,7 @@ export default function WpPreConTab() {
                   <TableHead>Authority</TableHead><TableHead>Valid</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(permits.data as any[]).map((r) => (
+                  {permitRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.reference ?? "—"}</TableCell>
                       <TableCell className="text-sm">{r.permit_type ?? "—"}</TableCell>
@@ -137,7 +154,7 @@ export default function WpPreConTab() {
                   <TableHead>Valid</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(rams.data as any[]).map((r) => (
+                  {ramsRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.title ?? "—"}</TableCell>
                       <TableCell className="text-sm">{r.version ?? "—"}</TableCell>
@@ -166,7 +183,7 @@ export default function WpPreConTab() {
                   <TableHead>Valid</TableHead><TableHead>Status</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(tm.data as any[]).map((r) => (
+                  {tmRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.reference ?? "—"}</TableCell>
                       <TableCell className="text-sm">{r.tm_type ?? "—"}</TableCell>
@@ -197,7 +214,7 @@ export default function WpPreConTab() {
                   <TableHead>Weather</TableHead><TableHead>Work done</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(logs.data as any[]).map((r) => (
+                  {logRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="text-sm">{r.log_date ?? "—"}</TableCell>
                       <TableCell><SiteCell row={r} /></TableCell>
@@ -225,7 +242,7 @@ export default function WpPreConTab() {
                   <TableHead>Result</TableHead><TableHead>Follow-up</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(inspections.data as any[]).map((r) => (
+                  {inspRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.inspection_type ?? "—"}</TableCell>
                       <TableCell><SiteCell row={r} /></TableCell>
@@ -257,7 +274,7 @@ export default function WpPreConTab() {
                   <TableHead>Delivered</TableHead><TableHead>Delivery note</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {(deliveries.data as any[]).map((r) => (
+                  {delRows.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="font-medium">{r.item ?? "—"}</TableCell>
                       <TableCell><SiteCell row={r} /></TableCell>

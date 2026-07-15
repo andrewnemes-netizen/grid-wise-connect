@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, ListTodo } from "lucide-react";
 import { toast } from "sonner";
+import { useSitesMap } from "./_useSitesMap";
 
 const STATUSES = ["not_started", "in_progress", "review", "blocked", "done"] as const;
 
@@ -33,7 +34,7 @@ export default function WpTasksTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("wp_tasks")
-        .select("id,title,status,priority,due_date,percent_complete,sort_index,site_id,sites(site_name)")
+        .select("id,title,status,priority,due_date,percent_complete,sort_index,site_id")
         .eq("work_package_id", wpId!)
         .order("sort_index")
         .order("created_at");
@@ -42,15 +43,17 @@ export default function WpTasksTab() {
     },
   });
 
+  const sitesMap = useSitesMap((tasks as any[]).map((t) => t.site_id));
+
   const byStatus = useMemo(() => {
     const buckets: Record<string, any[]> = {};
     STATUSES.forEach((s) => (buckets[s] = []));
     (tasks as any[]).forEach((t) => {
       const s: string = (STATUSES as readonly string[]).includes(t.status) ? t.status : "not_started";
-      (buckets[s] ??= []).push(t);
+      (buckets[s] ??= []).push({ ...t, sites: t.site_id ? sitesMap[t.site_id] ?? null : null });
     });
     return buckets;
-  }, [tasks]);
+  }, [tasks, sitesMap]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {

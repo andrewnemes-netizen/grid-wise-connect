@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Camera, MapPin, Calendar } from "lucide-react";
+import { useSitesMap } from "./_useSitesMap";
 
 function monthKey(d?: string | null) {
   if (!d) return "Unknown";
@@ -41,7 +42,7 @@ export default function WpPhotosTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("site_photos")
-        .select("*, sites(site_name,postcode), project_files(storage_path,mime)")
+        .select("*")
         .eq("work_package_id", wpId!)
         .order("taken_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
@@ -51,16 +52,42 @@ export default function WpPhotosTab() {
     },
   });
 
-  const paths = useMemo(() =>
-    ((photos.data ?? []) as any[])
-      .map((p) => p.project_files?.storage_path)
-      .filter(Boolean) as string[],
-    [photos.data]
+  const sitesMap = useSitesMap(((photos.data ?? []) as any[]).map((p) => p.site_id));
+
+  const [filesMap, setFilesMap] = useState<Record<string, { storage_path: string; mime: string | null }>>({});
+  useEffect(() => {
+    const ids = Array.from(
+      new Set(((photos.data ?? []) as any[]).map((p) => p.project_file_id).filter(Boolean))
+    ) as string[];
+    if (ids.length === 0) { setFilesMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("project_files").select("id, storage_path, mime").in("id", ids);
+      if (cancelled || !data) return;
+      const m: Record<string, any> = {};
+      for (const f of data as any[]) m[f.id] = { storage_path: f.storage_path, mime: f.mime };
+      setFilesMap(m);
+    })();
+    return () => { cancelled = true; };
+  }, [photos.data]);
+
+  const enriched = useMemo(
+    () => ((photos.data ?? []) as any[]).map((p) => ({
+      ...p,
+      sites: p.site_id ? sitesMap[p.site_id] ?? null : null,
+      project_files: p.project_file_id ? filesMap[p.project_file_id] ?? null : null,
+    })),
+    [photos.data, sitesMap, filesMap]
+  );
+
+  const paths = useMemo(
+    () => enriched.map((p) => p.project_files?.storage_path).filter(Boolean) as string[],
+    [enriched]
   );
   const urls = useSignedUrls(paths);
 
   const groups = useMemo(() => {
-    const rows = (photos.data ?? []) as any[];
+    const rows = enriched;
     const map = new Map<string, any[]>();
     for (const p of rows) {
       const site = p.sites?.site_name ?? "Unknown site";
@@ -70,7 +97,7 @@ export default function WpPhotosTab() {
       map.get(key)!.push(p);
     }
     return Array.from(map.entries());
-  }, [photos.data]);
+  }, [enriched]);
 
   return (
     <div className="space-y-4">
