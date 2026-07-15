@@ -23,6 +23,7 @@ import {
   WpDocuments,
   WpPhotos,
   WpAudit,
+  WpCommissioning,
 } from "./wp/WpTabs";
 
 function WpHeader({ wpId }: { wpId: string }) {
@@ -116,6 +117,7 @@ export default function WorkPackageShell() {
               <Route path="records/documents" element={<WpDocuments />} />
               <Route path="records/photos" element={<WpPhotos />} />
               <Route path="records/audit" element={<WpAudit />} />
+              <Route path="commissioning" element={<WpCommissioning />} />
               <Route path="*" element={<Navigate to="overview" replace />} />
             </Routes>
           </main>
