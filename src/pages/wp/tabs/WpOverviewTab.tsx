@@ -85,7 +85,7 @@ export default function WpOverviewTab() {
     survey:"Survey", design:"Design", dno:"DNO", permit:"Permit",
     civils:"Civils", electrical:"Electrical", meter:"Meter", handover:"Handover",
   };
-  const stageEntries: [string, number][] = STAGE_KEYS.map((k) => {
+  const stageEntries: [string, number][] = STAGE_KEYS.map((k): [string, number] => {
     const done = (stages as any[]).filter((r) => {
       const v = String(r[k] ?? "").toLowerCase();
       return ["complete","completed","done","approved","signed","valid","passed"].includes(v);
