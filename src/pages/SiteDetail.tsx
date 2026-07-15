@@ -233,6 +233,8 @@ const SiteDetail = () => {
         </Button>
       </div>
 
+      <SiteSurveysPanel siteId={site.id} />
+
       {/* Master Score Banner */}
       {masterScore != null && (
         <Card className={masterVerdict === "INSTALL" ? "border-emerald-300 bg-emerald-50" : masterVerdict === "AVOID" ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}>
