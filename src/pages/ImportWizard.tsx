@@ -317,8 +317,33 @@ export default function ImportWizard() {
           <CardContent className="space-y-4">
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <UploadIcon className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mx-auto" />
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,.pdf,.docx"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                className="mx-auto"
+              />
               {file && <p className="text-sm mt-2">Selected: <span className="font-mono">{file.name}</span></p>}
+              <p className="text-[11px] text-muted-foreground mt-3">
+                CSV / XLSX → parsed directly. PDF / DOCX → extracted by AI into an editable CSV first.
+              </p>
+              {file && detectExtractableType(file) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="mt-3"
+                  onClick={runAiExtraction}
+                  disabled={busy !== null}
+                >
+                  {busy?.startsWith("Reading") || busy?.startsWith("Asking AI") ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 mr-2" />
+                  )}
+                  Extract sites with AI
+                </Button>
+              )}
             </div>
             <div>
               <Label className="text-xs">Or paste rows (CSV with headers)</Label>
