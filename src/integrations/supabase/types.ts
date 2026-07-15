@@ -932,8 +932,12 @@ export type Database = {
       }
       design_submissions: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
+          decision: string | null
           id: string
+          is_current: boolean
           notes: string | null
           revision: number
           status: string
@@ -945,8 +949,12 @@ export type Database = {
           work_package_id: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
+          decision?: string | null
           id?: string
+          is_current?: boolean
           notes?: string | null
           revision?: number
           status?: string
@@ -958,8 +966,12 @@ export type Database = {
           work_package_id: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
+          decision?: string | null
           id?: string
+          is_current?: boolean
           notes?: string | null
           revision?: number
           status?: string
@@ -7176,6 +7188,7 @@ export type Database = {
           delivery_user_id: string | null
           id: string
           import_batch_id: string | null
+          latest_design_submission_id: string | null
           metadata_json: Json
           name: string
           pm_user_id: string | null
@@ -7199,6 +7212,7 @@ export type Database = {
           delivery_user_id?: string | null
           id?: string
           import_batch_id?: string | null
+          latest_design_submission_id?: string | null
           metadata_json?: Json
           name: string
           pm_user_id?: string | null
@@ -7222,6 +7236,7 @@ export type Database = {
           delivery_user_id?: string | null
           id?: string
           import_batch_id?: string | null
+          latest_design_submission_id?: string | null
           metadata_json?: Json
           name?: string
           pm_user_id?: string | null
@@ -7240,6 +7255,13 @@ export type Database = {
             columns: ["import_batch_id"]
             isOneToOne: false
             referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_packages_latest_design_submission_id_fkey"
+            columns: ["latest_design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "design_submissions"
             referencedColumns: ["id"]
           },
           {
