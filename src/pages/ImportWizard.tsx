@@ -113,7 +113,13 @@ export default function ImportWizard() {
     }
   };
 
-  useEffect(() => { if (batchId) loadBatch(batchId); }, [batchId]);
+  useEffect(() => {
+    if (batchId) {
+      loadBatch(batchId);
+      if (step === 0) setStep(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchId]);
 
   useEffect(() => {
     (async () => {
