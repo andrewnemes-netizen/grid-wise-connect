@@ -36,6 +36,11 @@ const SurveyForm = lazy(() => import("./pages/SurveyForm"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const ImportWizard = lazy(() => import("./pages/ImportWizard"));
 const WorkPackageShell = lazy(() => import("./pages/WorkPackageShell"));
+const PartnerLayout = lazy(() => import("./pages/partner/PartnerLayout"));
+const PartnerDashboard = lazy(() => import("./pages/partner/PartnerDashboard"));
+const PartnerSites = lazy(() => import("./pages/partner/PartnerSites"));
+const PartnerHandover = lazy(() => import("./pages/partner/PartnerHandover"));
+const PartnerSnags = lazy(() => import("./pages/partner/PartnerSnags"));
 
 const queryClient = new QueryClient();
 
@@ -153,6 +158,12 @@ const AppRoutes = () => (
       <Route path="/import/wizard" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
       <Route path="/import/wizard/:batchId" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
       <Route path="/wp/:id/*" element={<ProtectedRoute bare><WorkPackageShell /></ProtectedRoute>} />
+      <Route path="/partner" element={<ProtectedRoute bare><PartnerLayout /></ProtectedRoute>}>
+        <Route index element={<PartnerDashboard />} />
+        <Route path="sites" element={<PartnerSites />} />
+        <Route path="handover" element={<PartnerHandover />} />
+        <Route path="snags" element={<PartnerSnags />} />
+      </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
   </Suspense>
