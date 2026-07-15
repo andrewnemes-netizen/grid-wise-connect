@@ -69,29 +69,58 @@ export function InteractiveGantt({
   const dayWidth = zoom === "day" ? 28 : zoom === "week" ? 90 / 7 : 280 / 30;
   const canvasWidth = totalDays * dayWidth;
 
-  // Group by milestone
-  const groups = useMemo(() => {
+  // Decide grouping: Site → Stage (when tasks have site_id) else by milestone
+  const hasSiteHierarchy = tasks.some((t) => t.site_id && t.task_kind);
+
+  const rows: Array<
+    | { kind: "group"; id: string; name: string; count: number; depth?: number; color?: string | null; summaryTask?: any }
+    | { kind: "task"; task: any; depth?: number }
+  > = [];
+
+  if (hasSiteHierarchy) {
+    const siteSummaries = tasks.filter((t) => t.task_kind === "site_summary");
+    const stageSummaries = tasks.filter((t) => t.task_kind === "stage_summary");
+    const workTasks = tasks.filter((t) => (t.task_kind ?? "work") === "work");
+    // Orphan work rows (no site_id) grouped last
+    const orphanWork = workTasks.filter((t) => !t.site_id);
+
+    for (const site of siteSummaries) {
+      const siteId = site.site_id;
+      const stages = stageSummaries.filter((s) => s.site_id === siteId).sort((a, b) => (a.start_date ?? "").localeCompare(b.start_date ?? ""));
+      const siteWork = workTasks.filter((t) => t.site_id === siteId);
+      rows.push({ kind: "group", id: `site-${site.id}`, name: site.title, count: siteWork.length, depth: 0, summaryTask: site });
+      if (collapsed[`site-${site.id}`]) continue;
+      for (const st of stages) {
+        const rowsForStage = siteWork.filter((t) => t.stage_code === st.stage_code);
+        rows.push({ kind: "group", id: `stage-${st.id}`, name: st.title, count: rowsForStage.length, depth: 1, color: st.gantt_color, summaryTask: st });
+        if (collapsed[`stage-${st.id}`]) continue;
+        for (const t of rowsForStage) rows.push({ kind: "task", task: t, depth: 2 });
+      }
+    }
+    if (orphanWork.length) {
+      rows.push({ kind: "group", id: "__orphan", name: "Ungrouped", count: orphanWork.length, depth: 0 });
+      if (!collapsed["__orphan"]) for (const t of orphanWork) rows.push({ kind: "task", task: t, depth: 1 });
+    }
+  } else {
     const groupMap: Record<string, any[]> = { __none: [] };
     for (const t of tasks) {
       const k = t.milestone_id ?? "__none";
       (groupMap[k] ??= []).push(t);
     }
-    return groupMap;
-  }, [tasks]);
-
-  const rows: Array<{ kind: "group"; id: string; name: string; count: number } | { kind: "task"; task: any }> = [];
-  const groupOrder = [
-    ...(milestones ?? []).filter((m) => groups[m.id]).map((m) => ({ id: m.id, name: m.name })),
-    ...(groups["__none"]?.length ? [{ id: "__none", name: "Ungrouped" }] : []),
-  ];
-  for (const g of groupOrder) {
-    const gt = groups[g.id] ?? [];
-    rows.push({ kind: "group", id: g.id, name: g.name, count: gt.length });
-    if (!collapsed[g.id]) for (const t of gt) rows.push({ kind: "task", task: t });
+    const groupOrder = [
+      ...(milestones ?? []).filter((m) => groupMap[m.id]).map((m) => ({ id: m.id, name: m.name })),
+      ...(groupMap["__none"]?.length ? [{ id: "__none", name: "Ungrouped" }] : []),
+    ];
+    for (const g of groupOrder) {
+      const gt = groupMap[g.id] ?? [];
+      rows.push({ kind: "group", id: g.id, name: g.name, count: gt.length });
+      if (!collapsed[g.id]) for (const t of gt) rows.push({ kind: "task", task: t });
+    }
   }
 
   // Positions
   const taskPos: Record<string, { top: number; left: number; width: number }> = {};
+  const groupPos: Record<string, { top: number; left: number; width: number; color?: string | null; task?: any }> = {};
   const rowH = 32;
   let y = 0;
   for (const r of rows) {
@@ -102,6 +131,12 @@ export function InteractiveGantt({
       const left = daysBetween(rangeStart, s) * dayWidth;
       const width = Math.max(dayWidth, (daysBetween(s, e) + 1) * dayWidth);
       taskPos[t.id] = { top: y, left, width };
+    } else if (r.summaryTask?.start_date && r.summaryTask?.due_date) {
+      const s = toDate(r.summaryTask.start_date)!;
+      const e = toDate(r.summaryTask.due_date)!;
+      const left = daysBetween(rangeStart, s) * dayWidth;
+      const width = Math.max(dayWidth, (daysBetween(s, e) + 1) * dayWidth);
+      groupPos[r.id] = { top: y, left, width, color: r.color, task: r.summaryTask };
     }
     y += rowH;
   }
