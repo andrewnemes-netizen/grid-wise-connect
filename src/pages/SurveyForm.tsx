@@ -1,16 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { SURVEY_SECTIONS, collectRowsForPdf, type SurveyField } from "@/lib/survey-schema";
-import { generateSurveyPdf } from "@/lib/survey-pdf";
+import {
+  SURVEY_SECTIONS,
+  SURFACE_TYPES,
+  collectRowsForPdf,
+  computeTotalSockets,
+  sumComposite,
+  type SurveyField,
+  type CompositeDistanceValue,
+} from "@/lib/survey-schema";
+import { generateSurveyPdf, type SurveyPhotoGroup } from "@/lib/survey-pdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { Loader2, CheckCircle2, Upload, X } from "lucide-react";
+import { Loader2, CheckCircle2, Upload, X, Plus, ExternalLink } from "lucide-react";
 
 type Survey = {
   survey_id: string;
@@ -30,7 +39,8 @@ export default function SurveyForm() {
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Record<string, any>>({});
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  // Photos are stored per field key as { files, captions }.
+  const [photoGroups, setPhotoGroups] = useState<Record<string, { files: File[]; captions: string[] }>>({});
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ pdfUrl?: string } | null>(null);
@@ -44,16 +54,27 @@ export default function SurveyForm() {
         setInvalid("This survey link is invalid, expired or has already been completed.");
       } else {
         setSurvey(row as Survey);
+        const [firstName, ...rest] = (row.sent_to_name ?? "").trim().split(/\s+/);
         setValues({
           submitter_email: row.sent_to_email ?? "",
-          submitter_name: row.sent_to_name ?? "",
+          first_name: firstName ?? "",
+          last_name: rest.join(" ") || "",
+          site_name_address: [row.site_name, row.postcode].filter(Boolean).join(", "),
+          site_survey_date: new Date().toISOString().slice(0, 16),
         });
       }
       setLoading(false);
     })();
   }, [token]);
 
-  const setValue = (k: string, v: any) => setValues((prev) => ({ ...prev, [k]: v }));
+  const setValue = (k: string, v: any) =>
+    setValues((prev) => {
+      const next = { ...prev, [k]: v };
+      if (k === "evcp_dual_qty" || k === "evcp_single_qty") {
+        next.total_sockets = computeTotalSockets(next);
+      }
+      return next;
+    });
   const totalSteps = SURVEY_SECTIONS.length;
   const current = SURVEY_SECTIONS[step];
 
@@ -61,10 +82,16 @@ export default function SurveyForm() {
     return current.fields.every((f) => {
       if (!f.required) return true;
       if (f.type === "signature") return !!signatureUrl;
+      if (f.type === "photo_group") return (photoGroups[f.key]?.files.length ?? 0) > 0;
+      if (f.type === "static") return true;
+      if (f.type === "composite_distance") {
+        const v = values[f.key] as CompositeDistanceValue | undefined;
+        return !!v && v.rows?.some((r) => r.distance !== null && r.distance !== undefined && (r.distance as any) !== "");
+      }
       const v = values[f.key];
       return v !== undefined && v !== "" && v !== null;
     });
-  }, [current, values, signatureUrl]);
+  }, [current, values, signatureUrl, photoGroups]);
 
   const uploadFile = async (file: Blob, path: string, contentType: string) => {
     const { error } = await supabase.storage
@@ -83,14 +110,25 @@ export default function SurveyForm() {
     if (!survey || !token) return;
     setSubmitting(true);
     try {
-      // 1) Upload photos
-      const imageUrls: string[] = [];
-      for (let i = 0; i < photoFiles.length; i++) {
-        const f = photoFiles[i];
-        const ext = f.name.split(".").pop() ?? "jpg";
-        const path = `${survey.survey_id}/photos/${Date.now()}-${i}.${ext}`;
-        const url = await uploadFile(f, path, f.type || "image/jpeg");
-        imageUrls.push(url);
+      // 1) Upload photos (per group)
+      const uploadedGroups: SurveyPhotoGroup[] = [];
+      const flatImageUrls: string[] = [];
+      for (const section of SURVEY_SECTIONS) {
+        for (const field of section.fields) {
+          if (field.type !== "photo_group") continue;
+          const group = photoGroups[field.key];
+          if (!group || !group.files.length) continue;
+          const photos: { url: string; caption?: string }[] = [];
+          for (let i = 0; i < group.files.length; i++) {
+            const f = group.files[i];
+            const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
+            const path = `${survey.survey_id}/${field.key}/${Date.now()}-${i}.${ext}`;
+            const url = await uploadFile(f, path, f.type || "image/jpeg");
+            photos.push({ url, caption: group.captions[i] || undefined });
+            flatImageUrls.push(url);
+          }
+          uploadedGroups.push({ key: field.key, title: field.label, photos });
+        }
       }
 
       // 2) Upload signature
@@ -101,15 +139,18 @@ export default function SurveyForm() {
       }
 
       // 3) Generate PDF client-side
+      const submitterName = [values.first_name, values.last_name].filter(Boolean).join(" ").trim();
       const pdfBlob = await generateSurveyPdf({
         siteName: survey.site_name,
         postcode: survey.postcode ?? undefined,
-        submitterName: values.submitter_name,
+        submitterName,
         submitterEmail: values.submitter_email,
         submittedAt: new Date(),
         sections: collectRowsForPdf(values),
-        images: imageUrls,
+        photoGroups: uploadedGroups,
         signatureDataUrl: signatureUrl ?? undefined,
+        relevantDno: values.relevant_dno,
+        surveyDate: values.site_survey_date,
       });
       const pdfPath = `${survey.survey_id}/survey.pdf`;
       const pdfUrl = await uploadFile(pdfBlob, pdfPath, "application/pdf");
@@ -117,11 +158,11 @@ export default function SurveyForm() {
       // 4) RPC submit
       const { data: responseId, error: rpcErr } = await supabase.rpc("submit_survey_by_token", {
         _token: token,
-        _submission: values,
+        _submission: { ...values, _photo_groups: uploadedGroups },
         _signature_url: sigUrl,
-        _image_urls: imageUrls,
+        _image_urls: flatImageUrls,
         _pdf_url: pdfUrl,
-        _submitter_name: values.submitter_name ?? null,
+        _submitter_name: submitterName || null,
         _submitter_email: values.submitter_email ?? null,
       });
       if (rpcErr) throw rpcErr;
@@ -132,7 +173,7 @@ export default function SurveyForm() {
           token,
           response_id: responseId,
           pdf_url: pdfUrl,
-          submitter_name: values.submitter_name,
+          submitter_name: submitterName,
           submitter_email: values.submitter_email,
           overall_status: values.overall_status,
           app_base_url: window.location.origin,
@@ -223,8 +264,8 @@ export default function SurveyForm() {
                 field={f}
                 value={values[f.key]}
                 onChange={(v) => setValue(f.key, v)}
-                photoFiles={photoFiles}
-                onPhotos={setPhotoFiles}
+                photoGroup={photoGroups[f.key]}
+                onPhotoGroup={(g) => setPhotoGroups((prev) => ({ ...prev, [f.key]: g }))}
                 signatureUrl={signatureUrl}
                 onSignature={setSignatureUrl}
               />
@@ -253,28 +294,55 @@ export default function SurveyForm() {
 }
 
 function FieldRow({
-  field, value, onChange, photoFiles, onPhotos, signatureUrl, onSignature,
+  field, value, onChange, photoGroup, onPhotoGroup, signatureUrl, onSignature,
 }: {
   field: SurveyField;
   value: any;
   onChange: (v: any) => void;
-  photoFiles: File[];
-  onPhotos: (files: File[]) => void;
+  photoGroup: { files: File[]; captions: string[] } | undefined;
+  onPhotoGroup: (g: { files: File[]; captions: string[] }) => void;
   signatureUrl: string | null;
   onSignature: (url: string | null) => void;
 }) {
   const id = `f-${field.key}`;
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>
-        {field.label} {field.required && <span className="text-destructive">*</span>}
-      </Label>
+      {field.type !== "static" && (
+        <Label htmlFor={id}>
+          {field.label} {field.required && <span className="text-destructive">*</span>}
+        </Label>
+      )}
       {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
+      {field.helpLink && (
+        <a
+          href={field.helpLink.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          {field.helpLink.label} <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+      {field.type === "static" && field.body && (
+        <div className="rounded border border-dashed bg-muted/40 p-3 text-xs text-muted-foreground whitespace-pre-wrap">
+          {field.body}
+        </div>
+      )}
       {field.type === "text" && (
         <Input id={id} value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
       )}
+      {field.type === "date" && (
+        <Input id={id} type="datetime-local" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+      )}
       {field.type === "number" && (
-        <Input id={id} type="number" inputMode="decimal" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} />
+        <Input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          value={value ?? ""}
+          readOnly={field.key === "total_sockets"}
+          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        />
       )}
       {field.type === "textarea" && (
         <Textarea id={id} value={value ?? ""} onChange={(e) => onChange(e.target.value)} rows={3} />
@@ -299,8 +367,29 @@ function FieldRow({
           </SelectContent>
         </Select>
       )}
-      {field.type === "image" && (
-        <PhotoInput files={photoFiles} onChange={onPhotos} />
+      {field.type === "radio" && (
+        <RadioGroup value={value ?? ""} onValueChange={onChange} className="space-y-1">
+          {(field.options ?? []).map((o) => (
+            <div key={o} className="flex items-center gap-2">
+              <RadioGroupItem value={o} id={`${id}-${o}`} />
+              <Label htmlFor={`${id}-${o}`} className="font-normal">{o}</Label>
+            </div>
+          ))}
+        </RadioGroup>
+      )}
+      {field.type === "composite_distance" && (
+        <CompositeDistanceInput
+          value={value as CompositeDistanceValue | undefined}
+          onChange={onChange}
+          multi={!!field.multi}
+        />
+      )}
+      {field.type === "photo_group" && (
+        <PhotoGroupInput
+          value={photoGroup ?? { files: [], captions: [] }}
+          onChange={onPhotoGroup}
+          max={field.maxPhotos ?? 5}
+        />
       )}
       {field.type === "signature" && (
         <SignaturePad value={signatureUrl} onChange={onSignature} />
@@ -309,8 +398,27 @@ function FieldRow({
   );
 }
 
-function PhotoInput({ files, onChange }: { files: File[]; onChange: (files: File[]) => void }) {
+function PhotoGroupInput({
+  value,
+  onChange,
+  max,
+}: {
+  value: { files: File[]; captions: string[] };
+  onChange: (g: { files: File[]; captions: string[] }) => void;
+  max: number;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const remove = (i: number) =>
+    onChange({
+      files: value.files.filter((_, j) => j !== i),
+      captions: value.captions.filter((_, j) => j !== i),
+    });
+  const setCaption = (i: number, c: string) => {
+    const captions = [...value.captions];
+    captions[i] = c;
+    onChange({ files: value.files, captions });
+  };
+  const remaining = Math.max(0, max - value.files.length);
   return (
     <div className="space-y-2">
       <input
@@ -321,34 +429,117 @@ function PhotoInput({ files, onChange }: { files: File[]; onChange: (files: File
         capture="environment"
         className="hidden"
         onChange={(e) => {
-          const list = Array.from(e.target.files ?? []);
-          onChange([...files, ...list]);
+          const list = Array.from(e.target.files ?? []).slice(0, remaining);
+          onChange({
+            files: [...value.files, ...list],
+            captions: [...value.captions, ...list.map(() => "")],
+          });
           e.target.value = "";
         }}
       />
-      <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-        <Upload className="h-3 w-3 mr-1" /> Add photos
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={remaining === 0}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-3 w-3 mr-1" /> Add photos ({value.files.length}/{max})
       </Button>
-      {files.length > 0 && (
-        <div className="grid grid-cols-3 gap-2">
-          {files.map((f, i) => {
+      {value.files.length > 0 && (
+        <div className="space-y-2">
+          {value.files.map((f, i) => {
             const url = URL.createObjectURL(f);
             return (
-              <div key={i} className="relative aspect-square rounded border overflow-hidden">
-                <img src={url} alt={f.name} className="w-full h-full object-cover" />
+              <div key={i} className="flex gap-2 items-start rounded border p-2">
+                <img src={url} alt={f.name} className="h-20 w-20 rounded object-cover flex-shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Input
+                    placeholder="Caption (optional)"
+                    value={value.captions[i] ?? ""}
+                    onChange={(e) => setCaption(i, e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate">{f.name}</p>
+                </div>
                 <button
                   type="button"
-                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5"
-                  onClick={() => onChange(files.filter((_, j) => j !== i))}
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => remove(i)}
                   aria-label="Remove"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function CompositeDistanceInput({
+  value,
+  onChange,
+  multi,
+}: {
+  value: CompositeDistanceValue | undefined;
+  onChange: (v: CompositeDistanceValue) => void;
+  multi: boolean;
+}) {
+  const v: CompositeDistanceValue = value ?? { rows: [{ surface: "", distance: null }], description: "" };
+  const setRow = (i: number, patch: Partial<{ surface: string; distance: number | null }>) => {
+    const rows = v.rows.map((r, j) => (j === i ? { ...r, ...patch } : r));
+    onChange({ ...v, rows });
+  };
+  const addRow = () => onChange({ ...v, rows: [...v.rows, { surface: "", distance: null }] });
+  const removeRow = (i: number) => onChange({ ...v, rows: v.rows.filter((_, j) => j !== i) });
+  const total = sumComposite(v);
+
+  return (
+    <div className="space-y-2 rounded border p-2">
+      {v.rows.map((r, i) => (
+        <div key={i} className="grid grid-cols-[1fr_120px_auto] gap-2 items-center">
+          <Select value={r.surface} onValueChange={(s) => setRow(i, { surface: s })}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="Surface type" /></SelectTrigger>
+            <SelectContent>
+              {SURFACE_TYPES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input
+            type="number"
+            inputMode="decimal"
+            placeholder="Distance (m)"
+            value={r.distance ?? ""}
+            onChange={(e) => setRow(i, { distance: e.target.value === "" ? null : Number(e.target.value) })}
+            className="h-9"
+          />
+          {multi && v.rows.length > 1 && (
+            <button type="button" onClick={() => removeRow(i)} className="text-muted-foreground hover:text-destructive">
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          {(!multi || v.rows.length === 1) && <div />}
+        </div>
+      ))}
+      {multi && (
+        <div className="flex items-center justify-between">
+          <Button type="button" variant="ghost" size="sm" onClick={addRow}>
+            <Plus className="h-3 w-3 mr-1" /> Add surface
+          </Button>
+          {total !== null && (
+            <span className="text-xs font-medium">Total: {total} m</span>
+          )}
+        </div>
+      )}
+      <Textarea
+        placeholder="Description / notes"
+        value={v.description ?? ""}
+        onChange={(e) => onChange({ ...v, description: e.target.value })}
+        rows={2}
+        className="text-xs"
+      />
     </div>
   );
 }
