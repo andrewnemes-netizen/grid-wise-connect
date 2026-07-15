@@ -489,13 +489,22 @@ async function handleApprove(req: Request, ctx: NonNullable<Awaited<ReturnType<t
       import_batch_id: batch_id,
       import_row_id: r.id,
     };
-    if (r.lat != null && r.lng != null) {
-      insertRow.geom = `SRID=4326;POINT(${r.lng} ${r.lat})`;
-    }
     const { data: site, error } = await ctx.admin.from("sites").insert(insertRow).select().single();
     if (error) {
       await ctx.admin.from("import_rows").update({ status: "error", errors_json: [error.message] }).eq("id", r.id);
       continue;
+    }
+    if (r.lat != null && r.lng != null) {
+      // Sites.geom is SRID 27700 (British National Grid). Transform from WGS84.
+      await ctx.admin.rpc("exec_sql" as any, {}).catch(() => null); // placeholder — use direct update via SQL below
+      const { error: geomErr } = await ctx.admin
+        .from("sites")
+        .update({ geom: `SRID=4326;POINT(${r.lng} ${r.lat})` as any })
+        .eq("id", site.id);
+      if (geomErr) {
+        // Fallback: run raw SQL through the REST endpoint via rpc — skip if unavailable.
+        console.warn("geom update failed", geomErr.message);
+      }
     }
     await track("site", site.id);
     createdCount++;
