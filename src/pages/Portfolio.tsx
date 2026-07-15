@@ -11,13 +11,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2 } from "lucide-react";
+import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2, ClipboardList } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { PortfolioAnalytics, extractOsmFlags } from "@/components/portfolio/PortfolioAnalytics";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { SendSurveyDialog } from "@/components/portfolio/SendSurveyDialog";
 
 const PORTFOLIO_SITE_SELECT = `
   id,
@@ -214,6 +215,7 @@ const Portfolio = () => {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
+  const [surveySiteIds, setSurveySiteIds] = useState<string[] | null>(null);
 
   const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
@@ -342,6 +344,11 @@ const Portfolio = () => {
           {compareIds.size > 0 && (
             <Button variant="destructive" size="sm" onClick={() => setDeleteIds(Array.from(compareIds))}>
               <Trash2 className="mr-1 h-3 w-3" />Delete Selected ({compareIds.size})
+            </Button>
+          )}
+          {compareIds.size > 0 && (
+            <Button variant="default" size="sm" onClick={() => setSurveySiteIds(Array.from(compareIds))}>
+              <ClipboardList className="mr-1 h-3 w-3" />Send Survey ({compareIds.size})
             </Button>
           )}
           {compareIds.size >= 2 && (
@@ -582,6 +589,9 @@ const Portfolio = () => {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/site/${site.id}`)}>
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Send site survey" onClick={() => setSurveySiteIds([site.id])}>
+                        <ClipboardList className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteIds([site.id])}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -606,6 +616,12 @@ const Portfolio = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SendSurveyDialog
+        open={!!surveySiteIds && surveySiteIds.length > 0}
+        onOpenChange={(o) => { if (!o) setSurveySiteIds(null); }}
+        siteIds={surveySiteIds ?? []}
+      />
     </div>
   );
 };

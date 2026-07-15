@@ -92,3 +92,9 @@ verify_jwt = false
 
 [functions.auth-email-hook]
 verify_jwt = false
+
+[functions.send-site-survey]
+verify_jwt = true
+
+[functions.notify-survey-submitted]
+verify_jwt = false

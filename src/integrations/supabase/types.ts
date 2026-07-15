@@ -4648,6 +4648,139 @@ export type Database = {
           },
         ]
       }
+      site_survey_responses: {
+        Row: {
+          created_at: string
+          id: string
+          image_urls: Json
+          org_id: string | null
+          pdf_url: string | null
+          signature_url: string | null
+          site_id: string
+          submission: Json
+          submitted_at: string
+          submitter_email: string | null
+          submitter_name: string | null
+          survey_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_urls?: Json
+          org_id?: string | null
+          pdf_url?: string | null
+          signature_url?: string | null
+          site_id: string
+          submission?: Json
+          submitted_at?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          survey_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_urls?: Json
+          org_id?: string | null
+          pdf_url?: string | null
+          signature_url?: string | null
+          site_id?: string
+          submission?: Json
+          submitted_at?: string
+          submitter_email?: string | null
+          submitter_name?: string | null
+          survey_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_survey_responses_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_survey_responses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_survey_responses_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "site_surveys"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_surveys: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          message: string | null
+          org_id: string | null
+          response_id: string | null
+          sent_by: string
+          sent_to_email: string
+          sent_to_name: string | null
+          site_id: string
+          status: string
+          submitted_at: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          org_id?: string | null
+          response_id?: string | null
+          sent_by: string
+          sent_to_email: string
+          sent_to_name?: string | null
+          site_id: string
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          message?: string | null
+          org_id?: string | null
+          response_id?: string | null
+          sent_by?: string
+          sent_to_email?: string
+          sent_to_name?: string | null
+          site_id?: string
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_surveys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_utilisation: {
         Row: {
           ams_site_asset_id: string | null
@@ -4777,6 +4910,7 @@ export type Database = {
           site_type: string | null
           socket_count: number | null
           status: string
+          surveyor_email: string | null
           updated_at: string
           viability_index: number | null
         }
@@ -4803,6 +4937,7 @@ export type Database = {
           site_type?: string | null
           socket_count?: number | null
           status?: string
+          surveyor_email?: string | null
           updated_at?: string
           viability_index?: number | null
         }
@@ -4829,6 +4964,7 @@ export type Database = {
           site_type?: string | null
           socket_count?: number | null
           status?: string
+          surveyor_email?: string | null
           updated_at?: string
           viability_index?: number | null
         }
@@ -7689,6 +7825,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_survey_by_token: {
+        Args: { _token: string }
+        Returns: {
+          expires_at: string
+          postcode: string
+          sent_to_email: string
+          sent_to_name: string
+          site_id: string
+          site_name: string
+          status: string
+          survey_id: string
+        }[]
+      }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       gettransactionid: { Args: never; Returns: unknown }
       has_role: {
@@ -8522,6 +8671,18 @@ export type Database = {
       st_wrapx: {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
+      }
+      submit_survey_by_token: {
+        Args: {
+          _image_urls: Json
+          _pdf_url: string
+          _signature_url: string
+          _submission: Json
+          _submitter_email: string
+          _submitter_name: string
+          _token: string
+        }
+        Returns: string
       }
       submit_wp_estimate_variation: {
         Args: { _variation_id: string }
