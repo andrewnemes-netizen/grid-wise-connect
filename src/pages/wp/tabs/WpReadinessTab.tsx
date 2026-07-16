@@ -1,14 +1,16 @@
 import { useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, Circle, MinusCircle, Search, ShieldCheck, Filter } from "lucide-react";
+import { CheckCircle2, Circle, MinusCircle, Search, ShieldCheck, Filter, Rocket } from "lucide-react";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
+import { toast } from "sonner";
 
 type GateKey = "poc" | "commercial" | "design_ev" | "design_icp" | "rams" | "final_review";
 type GateState = "open" | "passed" | "waived";
@@ -40,9 +42,11 @@ function progressPct(gateMap: Record<GateKey, GateState>) {
 
 export default function WpReadinessTab() {
   const { id: wpId } = useParams<{ id: string }>();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [onlyBlocked, setOnlyBlocked] = useState(false);
   const [selected, setSelected] = useState<{ siteId: string; siteName?: string } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const statusQ = useQuery({
     queryKey: ["wp-site-precon-status", wpId],
