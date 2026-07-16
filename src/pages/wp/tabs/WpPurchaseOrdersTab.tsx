@@ -18,8 +18,9 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Plus, Receipt, Trash2, FileText } from "lucide-react";
+import { Plus, Receipt, Trash2, FileText, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { SendPurchaseOrderDialog } from "@/components/delivery/SendPurchaseOrderDialog";
 
 const fmt = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(Number(n));
@@ -47,6 +48,21 @@ export default function WpPurchaseOrdersTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const [newOpen, setNewOpen] = useState(false);
+  const [sendPo, setSendPo] = useState<any | null>(null);
+
+  const { data: workPackage } = useQuery({
+    queryKey: ["wp-basic", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("work_packages")
+        .select("id, name, wp_code")
+        .eq("id", wpId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const { data: pos = [], isLoading } = useQuery({
     queryKey: ["wp-purchase-orders", wpId],
@@ -176,6 +192,14 @@ export default function WpPurchaseOrdersTab() {
                   <div className="ml-auto">
                     <Button
                       size="sm"
+                      variant="outline"
+                      className="mr-2"
+                      onClick={() => setSendPo(po)}
+                    >
+                      <Mail className="h-3.5 w-3.5 mr-1" /> Send to supplier
+                    </Button>
+                    <Button
+                      size="sm"
                       variant="ghost"
                       className="text-destructive"
                       onClick={() => {
@@ -201,6 +225,15 @@ export default function WpPurchaseOrdersTab() {
       )}
 
       <NewPoDialog wpId={wpId} open={newOpen} onOpenChange={setNewOpen} onCreated={invalidate} />
+
+      {sendPo && (
+        <SendPurchaseOrderDialog
+          open={!!sendPo}
+          onOpenChange={(o) => { if (!o) setSendPo(null); }}
+          po={sendPo}
+          workPackage={workPackage}
+        />
+      )}
     </div>
   );
 }
