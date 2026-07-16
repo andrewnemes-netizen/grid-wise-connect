@@ -173,6 +173,7 @@ export default function SurveyForm() {
           token,
           response_id: responseId,
           pdf_url: pdfUrl,
+          pdf_storage_path: pdfPath,
           submitter_name: submitterName,
           submitter_email: values.submitter_email,
           overall_status: values.overall_status,
