@@ -1,10 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+import { mirrorToOneDrive } from '../_shared/onedrive.ts'
 
 interface Body {
   token: string
   response_id: string
   pdf_url?: string
+  pdf_storage_path?: string
   submitter_name?: string
   submitter_email?: string
   overall_status?: string
@@ -35,6 +37,31 @@ Deno.serve(async (req) => {
     .from('sites').select('id, site_name, postcode').eq('id', survey.site_id).maybeSingle()
   const { data: owner } = await admin
     .from('profiles').select('email, display_name, full_name').eq('id', survey.sent_by).maybeSingle()
+
+  // Best-effort mirror survey PDF to OneDrive
+  if (body.pdf_storage_path) {
+    try {
+      const { data: blob } = await admin.storage
+        .from('site-surveys')
+        .download(body.pdf_storage_path)
+      if (blob) {
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const siteName = site?.site_name || 'Site'
+        await mirrorToOneDrive(admin, {
+          entity_type: 'survey',
+          entity_id: survey.id,
+          category: 'survey',
+          filename: `${siteName.replace(/[^a-z0-9-_ ]/gi, '_')} - survey ${new Date().toISOString().slice(0,10)}.pdf`,
+          bytes,
+          contentType: 'application/pdf',
+          folder_segments: ['Sites', siteName, 'Surveys'],
+          created_by: survey.sent_by ?? null,
+        })
+      }
+    } catch (e) {
+      console.warn('OneDrive mirror (survey) failed:', e instanceof Error ? e.message : e)
+    }
+  }
 
   if (!owner?.email) return json({ ok: true, skipped: 'no owner email' })
 
