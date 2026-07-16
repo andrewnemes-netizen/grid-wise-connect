@@ -1,0 +1,1 @@
+ALTER VIEW public.v_wp_site_precon_status SET (security_invoker = on);

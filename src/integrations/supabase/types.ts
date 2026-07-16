@@ -180,6 +180,13 @@ export type Database = {
             foreignKeyName: "actual_costs_wp_task_id_fkey"
             columns: ["wp_task_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
+          },
+          {
+            foreignKeyName: "actual_costs_wp_task_id_fkey"
+            columns: ["wp_task_id"]
+            isOneToOne: false
             referencedRelation: "wp_tasks"
             referencedColumns: ["id"]
           },
@@ -368,6 +375,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
         ]
       }
@@ -1185,6 +1199,20 @@ export type Database = {
             referencedRelation: "design_submissions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "design_reviews_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["ev_design_id"]
+          },
+          {
+            foreignKeyName: "design_reviews_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["icp_design_id"]
+          },
         ]
       }
       design_scenarios: {
@@ -1259,10 +1287,12 @@ export type Database = {
           approved_by: string | null
           created_at: string
           decision: string | null
+          design_type: string | null
           id: string
           is_current: boolean
           notes: string | null
           revision: number
+          site_id: string | null
           status: string
           submitted_at: string
           submitted_by_partner_id: string | null
@@ -1276,10 +1306,12 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           decision?: string | null
+          design_type?: string | null
           id?: string
           is_current?: boolean
           notes?: string | null
           revision?: number
+          site_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by_partner_id?: string | null
@@ -1293,10 +1325,12 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           decision?: string | null
+          design_type?: string | null
           id?: string
           is_current?: boolean
           notes?: string | null
           revision?: number
+          site_id?: string | null
           status?: string
           submitted_at?: string
           submitted_by_partner_id?: string | null
@@ -1306,6 +1340,20 @@ export type Database = {
           work_package_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
           {
             foreignKeyName: "design_submissions_submitted_by_partner_id_fkey"
             columns: ["submitted_by_partner_id"]
@@ -1506,11 +1554,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dno_offer_sites_dno_offer_id_fkey"
+            columns: ["dno_offer_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_offer_id"]
+          },
+          {
             foreignKeyName: "dno_offer_sites_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offer_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
         ]
       }
@@ -1527,6 +1589,7 @@ export type Database = {
           org_id: string | null
           received_at: string | null
           revision: number
+          site_id: string | null
           status: string
           updated_at: string
           work_package_id: string | null
@@ -1543,6 +1606,7 @@ export type Database = {
           org_id?: string | null
           received_at?: string | null
           revision?: number
+          site_id?: string | null
           status?: string
           updated_at?: string
           work_package_id?: string | null
@@ -1559,6 +1623,7 @@ export type Database = {
           org_id?: string | null
           received_at?: string | null
           revision?: number
+          site_id?: string | null
           status?: string
           updated_at?: string
           work_package_id?: string | null
@@ -1570,6 +1635,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offers_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offers_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "dno_offers_work_package_id_fkey"
@@ -4037,6 +4116,13 @@ export type Database = {
             referencedRelation: "sites"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "po_line_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
         ]
       }
       po_lines: {
@@ -4798,6 +4884,13 @@ export type Database = {
             referencedRelation: "sites"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "project_tasks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
         ]
       }
       projects: {
@@ -4894,6 +4987,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "projects_study_id_fkey"
@@ -5576,6 +5676,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "resource_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "resource_allocations_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -5588,6 +5695,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "work_packages"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_wp_task_id_fkey"
+            columns: ["wp_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
           },
           {
             foreignKeyName: "resource_allocations_wp_task_id_fkey"
@@ -6225,6 +6339,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "route_amendments_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "route_amendments_study_id_fkey"
             columns: ["study_id"]
             isOneToOne: false
@@ -6305,11 +6426,32 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "site_design_submissions_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["ev_design_id"]
+          },
+          {
+            foreignKeyName: "site_design_submissions_design_submission_id_fkey"
+            columns: ["design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["icp_design_id"]
+          },
+          {
             foreignKeyName: "site_design_submissions_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
         ]
       }
@@ -6360,6 +6502,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "site_estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_exceptions_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
           },
           {
             foreignKeyName: "site_estimate_exceptions_site_estimate_line_id_fkey"
@@ -6471,6 +6620,13 @@ export type Database = {
             referencedRelation: "site_estimates"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "site_estimate_lines_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
+          },
         ]
       }
       site_estimates: {
@@ -6570,6 +6726,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "site_estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "site_estimates_study_id_fkey"
             columns: ["study_id"]
             isOneToOne: false
@@ -6582,6 +6745,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "site_estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_superseded_by_estimate_id_fkey"
+            columns: ["superseded_by_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
           },
         ]
       }
@@ -6640,6 +6810,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "site_handover_docs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "site_handover_docs_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -6684,6 +6861,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_notes_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
         ]
       }
@@ -6773,6 +6957,77 @@ export type Database = {
           },
         ]
       }
+      site_precon_gates: {
+        Row: {
+          created_at: string
+          evidence_ref: string | null
+          gate_key: string
+          id: string
+          notes: string | null
+          passed_at: string | null
+          passed_by: string | null
+          site_id: string
+          state: string
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          created_at?: string
+          evidence_ref?: string | null
+          gate_key: string
+          id?: string
+          notes?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
+          site_id: string
+          state?: string
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          created_at?: string
+          evidence_ref?: string | null
+          gate_key?: string
+          id?: string
+          notes?: string | null
+          passed_at?: string | null
+          passed_by?: string | null
+          site_id?: string
+          state?: string
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_precon_gates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_precon_gates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
+            foreignKeyName: "site_precon_gates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "site_precon_gates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_stage_history: {
         Row: {
           changed_at: string
@@ -6818,6 +7073,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_history_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "site_stage_history_to_stage_id_fkey"
@@ -6878,6 +7140,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "site_stage_status_work_package_id_fkey"
@@ -6954,11 +7223,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "site_survey_responses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "site_survey_responses_survey_id_fkey"
             columns: ["survey_id"]
             isOneToOne: false
             referencedRelation: "site_surveys"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_survey_responses_survey_id_fkey"
+            columns: ["survey_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_survey_id"]
           },
         ]
       }
@@ -7025,6 +7308,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
         ]
       }
@@ -7135,6 +7425,7 @@ export type Database = {
       }
       sites: {
         Row: {
+          blocker_reason: string | null
           build_type: string | null
           client_org: string | null
           connection_options: Json | null
@@ -7148,6 +7439,8 @@ export type Database = {
           id: string
           import_batch_id: string | null
           import_row_id: string | null
+          next_action_due: string | null
+          next_action_label: string | null
           next_steps: Json | null
           org_id: string | null
           postcode: string | null
@@ -7166,6 +7459,7 @@ export type Database = {
           viability_index: number | null
         }
         Insert: {
+          blocker_reason?: string | null
           build_type?: string | null
           client_org?: string | null
           connection_options?: Json | null
@@ -7179,6 +7473,8 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           import_row_id?: string | null
+          next_action_due?: string | null
+          next_action_label?: string | null
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
@@ -7197,6 +7493,7 @@ export type Database = {
           viability_index?: number | null
         }
         Update: {
+          blocker_reason?: string | null
           build_type?: string | null
           client_org?: string | null
           connection_options?: Json | null
@@ -7210,6 +7507,8 @@ export type Database = {
           id?: string
           import_batch_id?: string | null
           import_row_id?: string | null
+          next_action_due?: string | null
+          next_action_label?: string | null
           next_steps?: Json | null
           org_id?: string | null
           postcode?: string | null
@@ -7677,6 +7976,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "studies_wp_id_fkey"
@@ -8739,6 +9045,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "work_packages_latest_design_submission_id_fkey"
+            columns: ["latest_design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["ev_design_id"]
+          },
+          {
+            foreignKeyName: "work_packages_latest_design_submission_id_fkey"
+            columns: ["latest_design_submission_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["icp_design_id"]
+          },
+          {
             foreignKeyName: "work_packages_programme_id_fkey"
             columns: ["programme_id"]
             isOneToOne: false
@@ -8799,6 +9119,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_instances_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "workflow_instances_work_package_id_fkey"
@@ -9077,11 +9404,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "wp_estimate_sites_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
+          },
+          {
             foreignKeyName: "wp_estimate_sites_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "wp_estimate_sites_wp_estimate_id_fkey"
@@ -9161,6 +9502,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sites"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_variation_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "wp_estimate_variation_lines_variation_id_fkey"
@@ -9367,6 +9715,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "wp_partner_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "wp_partner_allocations_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -9426,6 +9781,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "wp_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "wp_sites_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -9477,8 +9839,22 @@ export type Database = {
             foreignKeyName: "wp_task_dependencies_depends_on_task_id_fkey"
             columns: ["depends_on_task_id"]
             isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
+          },
+          {
+            foreignKeyName: "wp_task_dependencies_depends_on_task_id_fkey"
+            columns: ["depends_on_task_id"]
+            isOneToOne: false
             referencedRelation: "wp_tasks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_task_dependencies_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
           },
           {
             foreignKeyName: "wp_task_dependencies_task_id_fkey"
@@ -9596,6 +9972,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "wp_milestones"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
           },
           {
             foreignKeyName: "wp_tasks_parent_task_id_fkey"
@@ -9996,6 +10379,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "projects_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
             foreignKeyName: "projects_study_id_fkey"
             columns: ["study_id"]
             isOneToOne: false
@@ -10200,6 +10590,77 @@ export type Database = {
             columns: ["programme_id"]
             isOneToOne: false
             referencedRelation: "programmes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_wp_site_precon_status: {
+        Row: {
+          blocker_reason: string | null
+          current_stage_id: string | null
+          current_stage_label: string | null
+          estimate_approved_at: string | null
+          estimate_status:
+            | Database["public"]["Enums"]["site_estimate_status"]
+            | null
+          ev_design_id: string | null
+          ev_design_status: string | null
+          final_review_state: string | null
+          icp_design_id: string | null
+          icp_design_status: string | null
+          last_activity_at: string | null
+          latest_offer_at: string | null
+          latest_offer_id: string | null
+          latest_offer_status: string | null
+          latest_offer_value: number | null
+          latest_rams_id: string | null
+          latest_site_estimate_id: string | null
+          latest_survey_id: string | null
+          local_ref: string | null
+          next_action_due: string | null
+          next_action_label: string | null
+          poc_sla_date: string | null
+          poc_status: string | null
+          poc_task_id: string | null
+          postcode: string | null
+          primary_partner_id: string | null
+          rams_status: Database["public"]["Enums"]["rams_status"] | null
+          sequence: number | null
+          site_id: string | null
+          site_name: string | null
+          survey_status: string | null
+          survey_submitted_at: string | null
+          viability_index: number | null
+          work_package_id: string | null
+          wp_site_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sites_current_stage_id_fkey"
+            columns: ["current_stage_id"]
+            isOneToOne: false
+            referencedRelation: "stage_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sites_primary_partner_id_fkey"
+            columns: ["primary_partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_sites_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "wp_sites_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
@@ -11957,7 +12418,19 @@ export type Database = {
         | "commercial"
         | "custom"
       wp_priority: "low" | "medium" | "high" | "critical"
-      wp_task_kind: "site_summary" | "stage_summary" | "work"
+      wp_task_kind:
+        | "site_summary"
+        | "stage_summary"
+        | "work"
+        | "poc"
+        | "estimate"
+        | "client_decision"
+        | "survey_alloc"
+        | "design_ev"
+        | "design_icp"
+        | "rams"
+        | "design_review"
+        | "precon_gate"
     }
     CompositeTypes: {
       geometry_dump: {
@@ -12233,7 +12706,20 @@ export const Constants = {
         "custom",
       ],
       wp_priority: ["low", "medium", "high", "critical"],
-      wp_task_kind: ["site_summary", "stage_summary", "work"],
+      wp_task_kind: [
+        "site_summary",
+        "stage_summary",
+        "work",
+        "poc",
+        "estimate",
+        "client_decision",
+        "survey_alloc",
+        "design_ev",
+        "design_icp",
+        "rams",
+        "design_review",
+        "precon_gate",
+      ],
     },
   },
 } as const
