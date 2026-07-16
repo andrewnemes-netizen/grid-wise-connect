@@ -116,40 +116,82 @@ Deno.serve(async (req) => {
     .single()
   if (logErr) return json({ error: 'Failed to log send', details: logErr.message }, 500)
 
-  // Invoke send-transactional-email
-  const templateData = {
-    recipientName: body.recipient_name,
-    senderName: profile?.display_name ?? undefined,
-    companyName: 'EcoPower UK',
-    estimateName: estimate.name,
-    estimateRef: estimate.ref,
-    grandTotal,
-    message: body.message,
-    pdfUrl: signed.signedUrl,
-    siteName,
+  // Send via Microsoft Outlook connector (PDF attached)
+  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
+  const outlookKey = Deno.env.get('MICROSOFT_OUTLOOK_API_KEY')
+  if (!lovableApiKey || !outlookKey) {
+    await admin
+      .from('quotation_sends')
+      .update({ status: 'failed', error_message: 'Outlook connector not configured' })
+      .eq('id', logRow.id)
+    return json({ error: 'Outlook connector not configured' }, 500)
   }
 
-  const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
+  // Download PDF from storage as bytes
+  const { data: pdfBlob, error: dlErr } = await admin.storage
+    .from('quotations')
+    .download(body.storage_path)
+  if (dlErr || !pdfBlob) {
+    await admin
+      .from('quotation_sends')
+      .update({ status: 'failed', error_message: `PDF download failed: ${dlErr?.message}` })
+      .eq('id', logRow.id)
+    return json({ error: 'Failed to download PDF', details: dlErr?.message }, 500)
+  }
+  const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer())
+  // Base64 encode (chunked to avoid stack overflow on large PDFs)
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < pdfBytes.length; i += chunk) {
+    binary += String.fromCharCode(...pdfBytes.subarray(i, i + chunk))
+  }
+  const pdfB64 = btoa(binary)
+
+  const fileBase = (estimate.ref ?? estimate.name ?? 'quotation').toString().replace(/[^a-z0-9-_]/gi, '_')
+  const attachmentName = `${fileBase}.pdf`
+
+  const greeting = body.recipient_name ? `Hi ${body.recipient_name},` : 'Hello,'
+  const bodyText = (body.message ?? `Please find attached our quotation for ${siteName ?? estimate.name ?? 'your project'}.`).replace(/\n/g, '<br/>')
+  const signature = profile?.display_name ? `<br/><br/>Kind regards,<br/>${profile.display_name}<br/>EcoPower UK` : '<br/><br/>Kind regards,<br/>EcoPower UK'
+  const htmlBody = `<p>${greeting}</p><p>${bodyText}</p><p><strong>Total:</strong> ${grandTotal}</p><p>${signature}</p>`
+
+  const toRecipients = [{ emailAddress: { address: body.recipient_email } }]
+  const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))
+
+  const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${jwt}`,
+      Authorization: `Bearer ${lovableApiKey}`,
+      'X-Connection-Api-Key': outlookKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      templateName: 'quotation',
-      recipientEmail: body.recipient_email,
-      idempotencyKey: `quotation-${logRow.id}`,
-      templateData,
+      message: {
+        subject,
+        body: { contentType: 'HTML', content: htmlBody },
+        toRecipients,
+        ccRecipients,
+        attachments: [
+          {
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: attachmentName,
+            contentType: 'application/pdf',
+            contentBytes: pdfB64,
+          },
+        ],
+      },
+      saveToSentItems: true,
     }),
   })
 
-  if (!sendRes.ok) {
-    const errText = await sendRes.text()
+  if (!outlookRes.ok) {
+    const errText = await outlookRes.text()
+    console.error(`Outlook sendMail failed [${outlookRes.status}]: ${errText}`)
     await admin
       .from('quotation_sends')
-      .update({ status: 'failed', error_message: errText })
+      .update({ status: 'failed', error_message: `[${outlookRes.status}] ${errText}` })
       .eq('id', logRow.id)
-    return json({ error: 'Failed to enqueue email', status: sendRes.status, details: errText }, 502)
+    return json({ error: 'Outlook send failed', status: outlookRes.status, details: errText }, 502)
   }
 
   await admin
