@@ -39,16 +39,16 @@ Deno.serve(async (req) => {
   }
   if (!inv) return json({ error: 'Invoice not found', invoice_id: body.invoice_id }, 404)
 
-  let project: { project_code?: string; project_name?: string; client_id?: string } | null = null
+  let projectRow: { project_code?: string; project_name?: string; client_id?: string } | null = null
   if ((inv as any).project_id) {
     const { data: p } = await admin
       .from('revenue_projects')
       .select('project_code, project_name, client_id')
       .eq('id', (inv as any).project_id)
       .maybeSingle()
-    project = p as any
+    projectRow = p as any
   }
-  ;(inv as any).project = project
+  ;(inv as any).project = projectRow
 
   // Resolve contact name/email
   let contactName = body.contact_name?.trim()
