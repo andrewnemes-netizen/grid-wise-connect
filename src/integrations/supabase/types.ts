@@ -10182,6 +10182,7 @@ export type Database = {
           awarded_grand_total: number | null
           awarded_price: number | null
           budget_amount: number | null
+          budget_amount_manual: number | null
           budget_variance: number | null
           code: string | null
           cost_pct_of_awarded: number | null
