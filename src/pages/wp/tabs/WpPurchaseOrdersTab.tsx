@@ -199,6 +199,7 @@ export default function WpPurchaseOrdersTab() {
                     >
                       <Mail className="h-3.5 w-3.5 mr-1" /> Send to supplier
                     </Button>
+                    <XeroPoButton po={po} onDone={invalidate} />
                     <Button
                       size="sm"
                       variant="ghost"
