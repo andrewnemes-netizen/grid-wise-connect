@@ -123,7 +123,10 @@ const Admin = () => {
           <FeatureFlagsPanel />
         </TabsContent>
         <TabsContent value="xero" className="mt-4">
-          <XeroIntegration />
+          <div className="space-y-4">
+            <XeroIntegration />
+            <OneDriveIntegration />
+          </div>
         </TabsContent>
       </Tabs>
     </div>
