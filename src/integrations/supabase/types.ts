@@ -5024,6 +5024,9 @@ export type Database = {
           status: string
           updated_at: string
           work_package_id: string
+          xero_purchase_order_id: string | null
+          xero_status: string | null
+          xero_synced_at: string | null
         }
         Insert: {
           client_id?: string | null
@@ -5039,6 +5042,9 @@ export type Database = {
           status?: string
           updated_at?: string
           work_package_id: string
+          xero_purchase_order_id?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Update: {
           client_id?: string | null
@@ -5054,6 +5060,9 @@ export type Database = {
           status?: string
           updated_at?: string
           work_package_id?: string
+          xero_purchase_order_id?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Relationships: [
           {
@@ -5860,6 +5869,11 @@ export type Database = {
           updated_at: string
           vat_amount: number
           vat_rate: number
+          xero_amount_due: number | null
+          xero_amount_paid: number | null
+          xero_invoice_id: string | null
+          xero_status: string | null
+          xero_synced_at: string | null
         }
         Insert: {
           certified_amount?: number | null
@@ -5888,6 +5902,11 @@ export type Database = {
           updated_at?: string
           vat_amount?: number
           vat_rate?: number
+          xero_amount_due?: number | null
+          xero_amount_paid?: number | null
+          xero_invoice_id?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Update: {
           certified_amount?: number | null
@@ -5916,6 +5935,11 @@ export type Database = {
           updated_at?: string
           vat_amount?: number
           vat_rate?: number
+          xero_amount_due?: number | null
+          xero_amount_paid?: number | null
+          xero_invoice_id?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Relationships: [
           {
@@ -9634,6 +9658,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      xero_connection: {
+        Row: {
+          access_token: string
+          connected_by: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          refresh_token: string
+          scopes: string | null
+          tenant_id: string
+          tenant_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          connected_by?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          refresh_token: string
+          scopes?: string | null
+          tenant_id: string
+          tenant_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          connected_by?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          refresh_token?: string
+          scopes?: string | null
+          tenant_id?: string
+          tenant_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      xero_contacts: {
+        Row: {
+          contact_status: string | null
+          created_at: string
+          email: string | null
+          id: string
+          is_customer: boolean | null
+          is_supplier: boolean | null
+          last_synced_at: string
+          name: string
+          updated_at: string
+          xero_contact_id: string
+        }
+        Insert: {
+          contact_status?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_customer?: boolean | null
+          is_supplier?: boolean | null
+          last_synced_at?: string
+          name: string
+          updated_at?: string
+          xero_contact_id: string
+        }
+        Update: {
+          contact_status?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_customer?: boolean | null
+          is_supplier?: boolean | null
+          last_synced_at?: string
+          name?: string
+          updated_at?: string
+          xero_contact_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
