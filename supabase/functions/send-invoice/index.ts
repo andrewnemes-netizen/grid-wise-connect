@@ -143,6 +143,24 @@ Deno.serve(async (req) => {
     await admin.from('revenue_invoices').update({ status: 'submitted' }).eq('id', invoice.id)
   }
 
+  // Best-effort push to Xero (never blocks the email)
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/xero-push-invoice`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        invoice_id: invoice.id,
+        contact_name: body.recipient_name,
+        contact_email: body.recipient_email,
+      }),
+    })
+  } catch (e) {
+    console.warn('Xero push (invoice) failed:', e instanceof Error ? e.message : e)
+  }
+
   return json({ success: true })
 })
 
