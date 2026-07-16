@@ -33,6 +33,20 @@ export default function WpSiteRegisterTab() {
 
   const siteIds = useMemo(() => rows.map((r: any) => r.site_id).filter(Boolean), [rows]);
 
+  const { data: precon = [] } = useQuery({
+    queryKey: ["wp-site-precon-status", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("v_wp_site_precon_status")
+        .select("*")
+        .eq("work_package_id", wpId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const preconBySite = new Map<string, any>((precon as any[]).map((p) => [p.site_id, p]));
+
   const { data: partners = [] } = useQuery({
     queryKey: ["wp-site-partners", wpId, siteIds.join(",")],
     enabled: siteIds.length > 0,
@@ -90,6 +104,15 @@ export default function WpSiteRegisterTab() {
                 <TableHead>Stage</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Viability</TableHead>
+                <TableHead>POC</TableHead>
+                <TableHead>Offer</TableHead>
+                <TableHead>Estimate</TableHead>
+                <TableHead>Survey</TableHead>
+                <TableHead>EV design</TableHead>
+                <TableHead>ICP design</TableHead>
+                <TableHead>RAMS</TableHead>
+                <TableHead>Review</TableHead>
+                <TableHead>Next action</TableHead>
                 <TableHead>Last activity</TableHead>
               </TableRow>
             </TableHeader>
@@ -97,12 +120,12 @@ export default function WpSiteRegisterTab() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell colSpan={16}><Skeleton className="h-5 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={16} className="text-center text-muted-foreground py-8">
                     {rows.length === 0 ? "No sites allocated to this work package yet." : "No sites match your search."}
                   </TableCell>
                 </TableRow>
@@ -110,6 +133,10 @@ export default function WpSiteRegisterTab() {
                 const s = r.sites;
                 const partner = s?.primary_partner_id ? partnerById.get(s.primary_partner_id) : null;
                 const stage = s?.current_stage_id ? stageById.get(s.current_stage_id) : null;
+                const pc = s?.id ? preconBySite.get(s.id) : null;
+                const dash = <span className="text-muted-foreground text-xs">—</span>;
+                const laneBadge = (val?: string | null) =>
+                  val ? <Badge variant="outline" className="text-[10px]">{val}</Badge> : dash;
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/40" onClick={() => {
                     if (s?.id) window.open(`/site/${s.id}`, "_blank");
@@ -132,6 +159,26 @@ export default function WpSiteRegisterTab() {
                           {s.viability_index}
                         </Badge>
                       ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </TableCell>
+                    <TableCell>{laneBadge(pc?.poc_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.latest_offer_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.estimate_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.survey_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.ev_design_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.icp_design_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.rams_status)}</TableCell>
+                    <TableCell>{laneBadge(pc?.final_review_state)}</TableCell>
+                    <TableCell className="text-xs">
+                      {pc?.next_action_label ? (
+                        <span>
+                          {pc.next_action_label}
+                          {pc.next_action_due && (
+                            <span className="text-muted-foreground ml-1">· {pc.next_action_due}</span>
+                          )}
+                        </span>
+                      ) : pc?.blocker_reason ? (
+                        <Badge variant="destructive" className="text-[10px]">Blocked</Badge>
+                      ) : dash}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {s?.updated_at ? formatDistanceToNow(new Date(s.updated_at), { addSuffix: true }) : "—"}
