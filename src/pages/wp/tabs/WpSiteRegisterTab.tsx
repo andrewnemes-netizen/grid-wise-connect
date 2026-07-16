@@ -1,18 +1,28 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 export default function WpSiteRegisterTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
+    qc.invalidateQueries({ queryKey: ["wp-site-precon-status", wpId] });
+  };
+  const clearSel = () => setSelected(new Set());
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["wp-site-register", wpId],
@@ -47,6 +57,72 @@ export default function WpSiteRegisterTab() {
   });
   const preconBySite = new Map<string, any>((precon as any[]).map((p) => [p.site_id, p]));
 
+  const bulkSendPoc = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return;
+      const due = new Date(); due.setDate(due.getDate() + 45);
+      const rows = siteIds.map((sid) => ({
+        work_package_id: wpId,
+        site_id: sid,
+        task_kind: "poc" as const,
+        title: "POC application",
+        status: "todo",
+        due_date: due.toISOString().slice(0, 10),
+      }));
+      const { error } = await (supabase as any).from("wp_tasks").insert(rows);
+      if (error) throw error;
+      await (supabase as any).from("audit_log").insert(
+        siteIds.map((sid) => ({ action: "poc.requested", site_id: sid, meta_json: { work_package_id: wpId } })),
+      );
+    },
+    onSuccess: (_d, sids) => { toast.success(`POC task raised for ${sids.length} site${sids.length === 1 ? "" : "s"}`); clearSel(); invalidate(); },
+    onError: (e: any) => toast.error(e.message ?? "Failed to raise POC tasks"),
+  });
+
+  const bulkSurveyAlloc = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return;
+      const due = new Date(); due.setDate(due.getDate() + 14);
+      const rows = siteIds.map((sid) => ({
+        work_package_id: wpId,
+        site_id: sid,
+        task_kind: "survey_alloc" as const,
+        title: "Allocate site survey",
+        status: "todo",
+        due_date: due.toISOString().slice(0, 10),
+      }));
+      const { error } = await (supabase as any).from("wp_tasks").insert(rows);
+      if (error) throw error;
+    },
+    onSuccess: (_d, sids) => { toast.success(`Survey allocation queued for ${sids.length} site${sids.length === 1 ? "" : "s"}`); clearSel(); invalidate(); },
+    onError: (e: any) => toast.error(e.message ?? "Failed to queue survey allocation"),
+  });
+
+  const bulkPassFinalGate = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return;
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes?.user?.id ?? null;
+      const rows = siteIds.map((sid) => ({
+        work_package_id: wpId,
+        site_id: sid,
+        gate_key: "final_review" as const,
+        state: "passed" as const,
+        passed_at: new Date().toISOString(),
+        passed_by: uid,
+      }));
+      const { error } = await (supabase as any)
+        .from("site_precon_gates")
+        .upsert(rows, { onConflict: "work_package_id,site_id,gate_key" });
+      if (error) throw error;
+      await (supabase as any).from("audit_log").insert(
+        siteIds.map((sid) => ({ action: "precon.final_review.passed", site_id: sid, meta_json: { work_package_id: wpId } })),
+      );
+    },
+    onSuccess: (_d, sids) => { toast.success(`Final review passed for ${sids.length} site${sids.length === 1 ? "" : "s"}`); clearSel(); invalidate(); },
+    onError: (e: any) => toast.error(e.message ?? "Failed to pass final review"),
+  });
+
   const { data: partners = [] } = useQuery({
     queryKey: ["wp-site-partners", wpId, siteIds.join(",")],
     enabled: siteIds.length > 0,
@@ -78,6 +154,23 @@ export default function WpSiteRegisterTab() {
     return hay.includes(q.trim().toLowerCase());
   });
 
+  const filteredSiteIds = filtered.map((r: any) => r.site_id).filter(Boolean) as string[];
+  const allChecked = filteredSiteIds.length > 0 && filteredSiteIds.every((id) => selected.has(id));
+  const someChecked = !allChecked && filteredSiteIds.some((id) => selected.has(id));
+  const toggleAll = () => {
+    const next = new Set(selected);
+    if (allChecked) filteredSiteIds.forEach((id) => next.delete(id));
+    else filteredSiteIds.forEach((id) => next.add(id));
+    setSelected(next);
+  };
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
+  const selectedIds = Array.from(selected);
+  const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -93,11 +186,35 @@ export default function WpSiteRegisterTab() {
         </div>
       </div>
 
+      {selectedIds.length > 0 && (
+        <Card className="p-2 flex flex-wrap items-center gap-2 border-primary/40 bg-primary/5">
+          <span className="text-xs font-medium ml-2">{selectedIds.length} selected</span>
+          <div className="flex-1" />
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSendPoc.mutate(selectedIds)}>
+            <Zap className="h-3.5 w-3.5 mr-1" /> Send for POC
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSurveyAlloc.mutate(selectedIds)}>
+            <ClipboardList className="h-3.5 w-3.5 mr-1" /> Queue survey
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkPassFinalGate.mutate(selectedIds)}>
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pass final review
+          </Button>
+          <Button size="sm" variant="ghost" onClick={clearSel}>Clear</Button>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Site</TableHead>
                 <TableHead>Postcode</TableHead>
@@ -120,12 +237,12 @@ export default function WpSiteRegisterTab() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={16}><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell colSpan={17}><Skeleton className="h-5 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={16} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
                     {rows.length === 0 ? "No sites allocated to this work package yet." : "No sites match your search."}
                   </TableCell>
                 </TableRow>
@@ -137,10 +254,18 @@ export default function WpSiteRegisterTab() {
                 const dash = <span className="text-muted-foreground text-xs">—</span>;
                 const laneBadge = (val?: string | null) =>
                   val ? <Badge variant="outline" className="text-[10px]">{val}</Badge> : dash;
+                const isSel = s?.id ? selected.has(s.id) : false;
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/40" onClick={() => {
                     if (s?.id) window.open(`/site/${s.id}`, "_blank");
                   }}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSel}
+                        onCheckedChange={() => s?.id && toggleOne(s.id)}
+                        aria-label="Select site"
+                      />
+                    </TableCell>
                     <TableCell className="text-muted-foreground tabular-nums text-xs">{r.sequence ?? idx + 1}</TableCell>
                     <TableCell className="font-medium">
                       <Link to={`/site/${s?.id}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
