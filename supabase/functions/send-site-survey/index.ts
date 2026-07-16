@@ -105,33 +105,48 @@ Deno.serve(async (req) => {
         continue
       }
 
-      const sendRes = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          templateName: 'site-survey-invite',
-          recipientEmail: r.email,
-          idempotencyKey: `site-survey-invite-${survey.id}`,
-          templateData: {
-            recipientName: r.name,
-            senderName,
-            companyName: 'EcoPower UK',
-            siteName: site.site_name,
-            postcode: site.postcode ?? undefined,
-            message: body.message,
-            surveyUrl,
-            expiresAt: new Date(survey.expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-          },
-        }),
-      })
+      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
+      const outlookKey = Deno.env.get('MICROSOFT_OUTLOOK_API_KEY')
+      const expiresLabel = new Date(survey.expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      const greeting = r.name ? `Hi ${r.name},` : 'Hello,'
+      const intro = body.message ? String(body.message).replace(/\n/g, '<br/>') : `Please complete the site survey for ${site.site_name}${site.postcode ? ` (${site.postcode})` : ''}.`
+      const sig = senderName ? `Kind regards,<br/>${senderName}<br/>EcoPower UK` : 'Kind regards,<br/>EcoPower UK'
+      const htmlBody = `<p>${greeting}</p><p>${intro}</p><p><a href="${surveyUrl}">Open the survey</a></p><p>This link expires on ${expiresLabel}.</p><p>${sig}</p>`
 
-      if (!sendRes.ok) {
-        const errText = await sendRes.text()
+      let sendOk = false
+      let sendErr = ''
+      if (!lovableApiKey || !outlookKey) {
+        sendErr = 'Outlook connector not configured'
+      } else {
+        const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${lovableApiKey}`,
+            'X-Connection-Api-Key': outlookKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: {
+              subject: `Site survey — ${site.site_name}`,
+              body: { contentType: 'HTML', content: htmlBody },
+              toRecipients: [{ emailAddress: { address: r.email } }],
+            },
+            saveToSentItems: true,
+          }),
+        })
+        if (outlookRes.ok) {
+          sendOk = true
+        } else {
+          sendErr = `[${outlookRes.status}] ${(await outlookRes.text()).slice(0, 200)}`
+        }
+      }
+
+      if (!sendOk) {
         // Keep the survey row so the link is still usable — caller can share manually.
         results.push({
           site_id: site.id, site_name: site.site_name, email: r.email,
           ok: true, email_sent: false, survey_id: survey.id, survey_url: surveyUrl,
-          expires_at: survey.expires_at, error: `email failed: ${errText.slice(0, 200)}`,
+          expires_at: survey.expires_at, error: `email failed: ${sendErr}`,
         })
         continue
       }
