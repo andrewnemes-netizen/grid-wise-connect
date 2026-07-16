@@ -25,6 +25,7 @@ import { RecipeLibrary } from "@/components/admin/RecipeLibrary";
 import { FeatureFlagsPanel } from "@/components/admin/FeatureFlagsPanel";
 import { PartnerManagement } from "@/components/admin/PartnerManagement";
 import { XeroIntegration } from "@/components/admin/XeroIntegration";
+import { OneDriveIntegration } from "@/components/admin/OneDriveIntegration";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -67,7 +68,7 @@ const Admin = () => {
           <TabsTrigger value="ratelib"><Library className="h-3.5 w-3.5 mr-1.5" />Rate Library</TabsTrigger>
           <TabsTrigger value="recipelib"><BookOpen className="h-3.5 w-3.5 mr-1.5" />Recipe Library</TabsTrigger>
           <TabsTrigger value="flags"><Beaker className="h-3.5 w-3.5 mr-1.5" />Feature Flags</TabsTrigger>
-          <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Xero</TabsTrigger>
+          <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Integrations</TabsTrigger>
         </TabsList>
 
         <TabsContent value="layers" className="mt-4">
@@ -122,7 +123,10 @@ const Admin = () => {
           <FeatureFlagsPanel />
         </TabsContent>
         <TabsContent value="xero" className="mt-4">
-          <XeroIntegration />
+          <div className="space-y-4">
+            <XeroIntegration />
+            <OneDriveIntegration />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

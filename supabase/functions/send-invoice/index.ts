@@ -3,6 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as invoiceTemplate } from '../_shared/transactional-email-templates/invoice.tsx'
+import { mirrorToOneDrive } from '../_shared/onedrive.ts'
 
 interface Body {
   invoice_id: string
@@ -159,6 +160,22 @@ Deno.serve(async (req) => {
     })
   } catch (e) {
     console.warn('Xero push (invoice) failed:', e instanceof Error ? e.message : e)
+  }
+
+  // Best-effort mirror to OneDrive
+  try {
+    await mirrorToOneDrive(admin, {
+      entity_type: isPA ? 'payment_application' : 'invoice',
+      entity_id: invoice.id,
+      project_id: (invoice as any).project_id ?? null,
+      category: isPA ? 'payment_application' : 'invoice',
+      filename: safeName,
+      bytes: pdfBytes,
+      contentType: 'application/pdf',
+      created_by: userId,
+    })
+  } catch (e) {
+    console.warn('OneDrive mirror (invoice) failed:', e instanceof Error ? e.message : e)
   }
 
   return json({ success: true })

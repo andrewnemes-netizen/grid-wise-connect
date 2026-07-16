@@ -29,15 +29,21 @@ export function ProjectFiles({ projectId }: { projectId: string }) {
       const path = `${projectId}/${crypto.randomUUID()}-${file.name}`;
       const { error: upErr } = await supabase.storage.from("project-files").upload(path, file);
       if (upErr) throw upErr;
-      const { error } = await supabase.from("project_files").insert({
+      const { data: inserted, error } = await supabase.from("project_files").insert({
         project_id: projectId,
         storage_path: path,
         filename: file.name,
         mime: file.type,
         size_bytes: file.size,
         uploaded_by: user!.id,
-      });
+      }).select("id").single();
       if (error) throw error;
+      // Best-effort mirror to OneDrive
+      if (inserted?.id) {
+        supabase.functions
+          .invoke("onedrive-mirror-project-file", { body: { project_file_id: inserted.id } })
+          .catch((e) => console.warn("OneDrive mirror failed", e));
+      }
     },
     onSuccess: () => {
       toast.success("Uploaded");
