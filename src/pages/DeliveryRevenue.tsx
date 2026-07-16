@@ -828,7 +828,7 @@ function InvoicesTab({ orgId }: { orgId: string }) {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 justify-end">
-                        <InvoiceActions invoice={i} />
+                        <InvoiceActions invoice={i} project={projectMap[i.project_id]} />
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => confirm("Delete invoice?") && del.mutate(i.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -845,7 +845,7 @@ function InvoicesTab({ orgId }: { orgId: string }) {
   );
 }
 
-function InvoiceActions({ invoice }: { invoice: Invoice }) {
+function InvoiceActions({ invoice, project }: { invoice: Invoice; project?: any }) {
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["revenue-invoices"] });
@@ -890,6 +890,7 @@ function InvoiceActions({ invoice }: { invoice: Invoice }) {
 
   const [certifyOpen, setCertifyOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
   const [certAmt, setCertAmt] = useState(invoice.net_amount);
   const [certDate, setCertDate] = useState(new Date().toISOString().slice(0, 10));
   const [payAmt, setPayAmt] = useState(Number(invoice.certified_amount ?? invoice.net_amount));
@@ -897,6 +898,10 @@ function InvoiceActions({ invoice }: { invoice: Invoice }) {
 
   return (
     <>
+      <Button size="sm" variant="ghost" className="h-7" title="Send by email" onClick={() => setSendOpen(true)}>
+        <Mail className="w-4 h-4" />
+      </Button>
+      <SendInvoiceDialog open={sendOpen} onOpenChange={setSendOpen} invoice={invoice} project={project} />
       {invoice.status === "draft" && (
         <Button size="sm" variant="outline" className="h-7" onClick={() => setStatus.mutate("submitted")}>Submit</Button>
       )}
