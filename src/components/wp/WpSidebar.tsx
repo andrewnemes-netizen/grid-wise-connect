@@ -4,6 +4,7 @@ import {
   MapPin,
   Map as MapIcon,
   HardHat,
+  ShieldCheck,
   Calculator,
   ShoppingCart,
   FileDiff,
@@ -46,6 +47,7 @@ const NAV: Group[] = [
       { title: "Site Register", slug: "sites/register", icon: MapPin },
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
+      { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
     ],
   },
   {
