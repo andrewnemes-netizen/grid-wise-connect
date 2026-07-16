@@ -12,8 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, ChevronDown, ChevronRight, FileText, CheckCircle2, XCircle, Banknote } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, FileText, CheckCircle2, XCircle, Banknote, Mail } from "lucide-react";
 import { toast } from "sonner";
+import { SendInvoiceDialog } from "@/components/delivery/SendInvoiceDialog";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from "recharts";
