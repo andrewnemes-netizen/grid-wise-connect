@@ -43,7 +43,7 @@ export function XeroIntegration() {
       return data as { authorize_url: string };
     },
     onSuccess: ({ authorize_url }) => {
-      window.location.href = authorize_url;
+      window.open(authorize_url, "_blank", "noopener,noreferrer");
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to start Xero auth"),
   });
