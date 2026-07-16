@@ -217,24 +217,46 @@ function NewOfferDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string;
   const [value, setValue] = useState("");
   const [status, setStatus] = useState("requested");
   const [notes, setNotes] = useState("");
+  const [siteId, setSiteId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
-  const reset = () => { setDno(undefined); setRef(""); setValue(""); setStatus("requested"); setNotes(""); };
+  const reset = () => { setDno(undefined); setRef(""); setValue(""); setStatus("requested"); setNotes(""); setSiteId(undefined); };
+
+  const { data: wpSites = [] } = useQuery({
+    queryKey: ["wp-sites-for-offer", wpId],
+    enabled: !!wpId && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wp_sites")
+        .select("site_id, sites:sites(id, site_name, postcode)")
+        .eq("work_package_id", wpId)
+        .order("sequence", { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const submit = async () => {
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
-      const { error } = await supabase.from("dno_offers").insert({
+      const { data: inserted, error } = await supabase.from("dno_offers").insert({
         work_package_id: wpId,
         dno_key: dno ?? null,
         offer_ref: ref.trim() || null,
         offer_value: value ? Number(value) : null,
         status,
         notes: notes.trim() || null,
+        site_id: siteId ?? null,
         created_by: user.user?.id ?? null,
-      });
+      }).select("id").maybeSingle();
       if (error) throw error;
+      // If a site was picked, also record the link in dno_offer_sites for multi-site consistency.
+      if (siteId && inserted?.id) {
+        await (supabase as any)
+          .from("dno_offer_sites")
+          .upsert({ dno_offer_id: inserted.id, site_id: siteId }, { onConflict: "dno_offer_id,site_id" });
+      }
       toast.success("Offer created");
       reset();
       onOpenChange(false);
@@ -279,6 +301,23 @@ function NewOfferDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string;
           <div>
             <Label>Notes</Label>
             <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </div>
+          <div>
+            <Label>Site (optional)</Label>
+            <Select value={siteId ?? "none"} onValueChange={(v) => setSiteId(v === "none" ? undefined : v)}>
+              <SelectTrigger><SelectValue placeholder="Whole work package" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Whole work package</SelectItem>
+                {(wpSites as any[]).map((r) => (
+                  <SelectItem key={r.site_id} value={r.site_id}>
+                    {r.sites?.site_name ?? "Site"}{r.sites?.postcode ? ` · ${r.sites.postcode}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Linking to a site closes its POC task and opens an estimate task automatically.
+            </p>
           </div>
         </div>
         <DialogFooter>
