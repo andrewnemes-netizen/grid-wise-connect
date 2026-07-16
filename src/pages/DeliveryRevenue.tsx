@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, CheckCircle2, XCircle, Banknote, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { SendInvoiceDialog } from "@/components/delivery/SendInvoiceDialog";
+import { XeroInvoiceButton } from "@/components/delivery/XeroInvoiceButton";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from "recharts";
