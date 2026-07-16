@@ -6633,10 +6633,14 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          client_decision: string | null
           contract_id: string | null
           created_at: string
           created_by: string | null
           currency: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
           id: string
           name: string
           notes: string | null
@@ -6655,10 +6659,14 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          client_decision?: string | null
           contract_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -6677,10 +6685,14 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          client_decision?: string | null
           contract_id?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_notes?: string | null
           id?: string
           name?: string
           notes?: string | null
@@ -10890,10 +10902,14 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          client_decision: string | null
           contract_id: string | null
           created_at: string
           created_by: string | null
           currency: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
           id: string
           name: string
           notes: string | null
@@ -10998,10 +11014,14 @@ export type Database = {
         Returns: {
           approved_at: string | null
           approved_by: string | null
+          client_decision: string | null
           contract_id: string | null
           created_at: string
           created_by: string | null
           currency: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_notes: string | null
           id: string
           name: string
           notes: string | null
