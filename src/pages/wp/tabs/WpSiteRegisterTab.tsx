@@ -12,11 +12,13 @@ import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 
 export default function WpSiteRegisterTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -292,7 +294,15 @@ export default function WpSiteRegisterTab() {
                     <TableCell>{laneBadge(pc?.ev_design_status)}</TableCell>
                     <TableCell>{laneBadge(pc?.icp_design_status)}</TableCell>
                     <TableCell>{laneBadge(pc?.rams_status)}</TableCell>
-                    <TableCell>{laneBadge(pc?.final_review_state)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="inline-flex"
+                        onClick={() => s?.id && setGatesFor({ siteId: s.id, siteName: s.site_name })}
+                        title="Open gates"
+                      >
+                        {laneBadge(pc?.final_review_state)}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-xs">
                       {pc?.next_action_label ? (
                         <span>
@@ -318,6 +328,16 @@ export default function WpSiteRegisterTab() {
 
       {rows.length > 0 && (
         <p className="text-[11px] text-muted-foreground">{filtered.length} of {rows.length} sites shown.</p>
+      )}
+
+      {gatesFor && wpId && (
+        <SitePreconGatesDialog
+          open={!!gatesFor}
+          onOpenChange={(v) => !v && setGatesFor(null)}
+          workPackageId={wpId}
+          siteId={gatesFor.siteId}
+          siteName={gatesFor.siteName}
+        />
       )}
     </div>
   );
