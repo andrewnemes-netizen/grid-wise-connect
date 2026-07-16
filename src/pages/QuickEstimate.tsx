@@ -94,6 +94,15 @@ export default function QuickEstimate() {
     setCoords(null);
   };
 
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current) return;
+    if (searchParams.get("auto") === "1" && postcode && proposedKw) {
+      autoRan.current = true;
+      handleSubmit();
+    }
+  }, [searchParams, postcode, proposedKw, handleSubmit]);
+
   const sc = result ? scoreConfig[result.score] || scoreConfig.AMBER : null;
 
   return (
