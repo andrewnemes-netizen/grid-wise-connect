@@ -6,6 +6,7 @@ import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import {
   WpOverview,
   WpSiteRegister,
@@ -62,6 +63,7 @@ function WpHeader({ wpId }: { wpId: string }) {
           )}
         </div>
       </div>
+      <NotificationsBell />
     </header>
   );
 }
