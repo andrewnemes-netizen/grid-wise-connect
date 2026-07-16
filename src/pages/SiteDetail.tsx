@@ -9,7 +9,16 @@ import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, CheckCircle, AlertTriangle, XCircle, MapPin, Download,
   TrafficCone, Bus, Zap, ShieldAlert, BatteryCharging, Cable, PoundSterling,
+  Calculator, ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
