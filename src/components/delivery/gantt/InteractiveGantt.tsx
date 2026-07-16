@@ -496,14 +496,16 @@ function RowCells({ r, rowIndex, rowH, nameColW, canvasWidth, dayWidth, collapse
               >
                 <div className="mx-auto h-full w-0.5 bg-white/90 shadow" />
               </div>
-              {/* label */}
-              <div className="relative flex items-center h-full px-2 text-[10px] text-primary-foreground font-semibold whitespace-nowrap overflow-hidden">
-                <span className="truncate">{t.title}</span>
-                <span className="ml-2 tabular-nums opacity-90">{pct}%</span>
-              </div>
+              {/* internal label — only when the bar is wide enough */}
+              {(p?.width ?? 0) >= 90 && (
+                <div className="relative flex items-center h-full px-2 text-[10px] text-primary-foreground font-semibold whitespace-nowrap overflow-hidden">
+                  <span className="truncate">{t.title}</span>
+                  <span className="ml-2 tabular-nums opacity-90">{pct}%</span>
+                </div>
+              )}
             </div>
           </PopoverTrigger>
-          {/* External label shown when the bar is too narrow to fit the title */}
+          {/* External label when the bar is too narrow to fit the title inside */}
           {(p?.width ?? 0) < 90 && (
             <div
               className="absolute top-2 h-7 flex items-center pointer-events-none text-[10px] font-medium text-foreground/80 whitespace-nowrap"
