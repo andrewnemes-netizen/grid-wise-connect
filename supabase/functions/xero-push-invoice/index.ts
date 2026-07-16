@@ -30,10 +30,25 @@ Deno.serve(async (req) => {
   const admin = adminClient()
   const { data: inv, error: invErr } = await admin
     .from('revenue_invoices')
-    .select('*, project:revenue_projects(project_code, project_name, client_id)')
+    .select('*')
     .eq('id', body.invoice_id)
     .maybeSingle()
-  if (invErr || !inv) return json({ error: 'Invoice not found' }, 404)
+  if (invErr) {
+    console.error('Invoice lookup error:', invErr)
+    return json({ error: 'Invoice lookup failed', details: invErr.message }, 500)
+  }
+  if (!inv) return json({ error: 'Invoice not found', invoice_id: body.invoice_id }, 404)
+
+  let project: { project_code?: string; project_name?: string; client_id?: string } | null = null
+  if ((inv as any).project_id) {
+    const { data: p } = await admin
+      .from('revenue_projects')
+      .select('project_code, project_name, client_id')
+      .eq('id', (inv as any).project_id)
+      .maybeSingle()
+    project = p as any
+  }
+  ;(inv as any).project = project
 
   // Resolve contact name/email
   let contactName = body.contact_name?.trim()
