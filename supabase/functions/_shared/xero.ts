@@ -6,6 +6,9 @@ export const XERO_CONNECTIONS_URL = 'https://api.xero.com/connections'
 
 export const XERO_SCOPES = [
   'offline_access',
+  'openid',
+  'profile',
+  'email',
   'accounting.transactions',
   'accounting.contacts',
   'accounting.settings',
