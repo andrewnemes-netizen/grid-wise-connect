@@ -3,7 +3,7 @@
 
 import { createClient, SupabaseClient } from 'npm:@supabase/supabase-js@2'
 
-const GRAPH = 'https://connector-gateway.lovable.dev/microsoft_onedrive/v1.0'
+const GRAPH = 'https://connector-gateway.lovable.dev/microsoft_onedrive'
 
 export type OneDriveCategory =
   | 'invoice'
