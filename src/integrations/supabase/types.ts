@@ -11402,6 +11402,10 @@ export type Database = {
         Args: { _id: string; _paid_amount: number; _paid_date: string }
         Returns: undefined
       }
+      maybe_auto_pass_final_review: {
+        Args: { p_site: string; p_wp: string }
+        Returns: undefined
+      }
       move_to_dlq: {
         Args: {
           dlq_name: string
