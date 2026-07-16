@@ -30,10 +30,25 @@ Deno.serve(async (req) => {
   const admin = adminClient()
   const { data: inv, error: invErr } = await admin
     .from('revenue_invoices')
-    .select('*, project:revenue_projects(project_code, project_name, client_id)')
+    .select('*')
     .eq('id', body.invoice_id)
     .maybeSingle()
-  if (invErr || !inv) return json({ error: 'Invoice not found' }, 404)
+  if (invErr) {
+    console.error('Invoice lookup error:', invErr)
+    return json({ error: 'Invoice lookup failed', details: invErr.message }, 500)
+  }
+  if (!inv) return json({ error: 'Invoice not found', invoice_id: body.invoice_id }, 404)
+
+  let projectRow: { project_code?: string; project_name?: string; client_id?: string } | null = null
+  if ((inv as any).project_id) {
+    const { data: p } = await admin
+      .from('revenue_projects')
+      .select('project_code, project_name, client_id')
+      .eq('id', (inv as any).project_id)
+      .maybeSingle()
+    projectRow = p as any
+  }
+  ;(inv as any).project = projectRow
 
   // Resolve contact name/email
   let contactName = body.contact_name?.trim()
@@ -82,11 +97,18 @@ Deno.serve(async (req) => {
   const method = inv.xero_invoice_id ? 'POST' : 'PUT'
   const path = inv.xero_invoice_id ? `/Invoices/${inv.xero_invoice_id}` : '/Invoices'
 
-  const res = await xeroFetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  let res: Response
+  try {
+    res = await xeroFetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    const msg = (e as Error).message ?? 'Xero request failed'
+    const notConnected = /not connected/i.test(msg)
+    return json({ error: notConnected ? 'Xero is not connected. Connect it in Admin → Integrations.' : msg }, notConnected ? 400 : 500)
+  }
   const bodyText = await res.text()
   if (!res.ok) {
     console.error(`Xero push invoice failed [${res.status}]: ${bodyText}`)
