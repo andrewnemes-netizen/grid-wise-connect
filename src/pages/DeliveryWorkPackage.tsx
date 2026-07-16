@@ -156,7 +156,7 @@ export default function DeliveryWorkPackage() {
           .eq("status", "APPROVED"),
         supabase
           .from("estimates" as any)
-          .select("total_price,is_current")
+          .select("total_price,is_current,status")
           .eq("work_package_id", wpId)
           .eq("is_current", true),
       ]);
@@ -177,8 +177,9 @@ export default function DeliveryWorkPackage() {
         .sort((a, b) => Number(b.version_number ?? 0) - Number(a.version_number ?? 0));
       const wpTotal = Number(wpArr[0]?.total_price ?? 0);
 
-      // Estimates v2: sum current
+      // Estimates v2: sum current + approved/awarded/accepted
       const v2Total = ((estV2Res.data as any[]) ?? [])
+        .filter((r) => ["approved", "awarded", "accepted"].includes(String(r.status ?? "").toLowerCase()))
         .reduce((s, r) => s + Number(r.total_price ?? 0), 0);
 
       return {
