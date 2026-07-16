@@ -97,11 +97,18 @@ Deno.serve(async (req) => {
   const method = inv.xero_invoice_id ? 'POST' : 'PUT'
   const path = inv.xero_invoice_id ? `/Invoices/${inv.xero_invoice_id}` : '/Invoices'
 
-  const res = await xeroFetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  let res: Response
+  try {
+    res = await xeroFetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    const msg = (e as Error).message ?? 'Xero request failed'
+    const notConnected = /not connected/i.test(msg)
+    return json({ error: notConnected ? 'Xero is not connected. Connect it in Admin → Integrations.' : msg }, notConnected ? 400 : 500)
+  }
   const bodyText = await res.text()
   if (!res.ok) {
     console.error(`Xero push invoice failed [${res.status}]: ${bodyText}`)
