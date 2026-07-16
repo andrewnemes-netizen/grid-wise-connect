@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, MapPin, FileCheck2, AlertTriangle, LogOut, Handshake } from "lucide-react";
+import { LayoutDashboard, MapPin, FileCheck2, AlertTriangle, LogOut, Handshake, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePartnerMembership } from "@/hooks/usePartnerMembership";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,20 @@ function PartnerSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <NavLink to="/" className="flex items-center gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>Main dashboard</span>
+                  </NavLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>
             <div className="flex items-center gap-2">
