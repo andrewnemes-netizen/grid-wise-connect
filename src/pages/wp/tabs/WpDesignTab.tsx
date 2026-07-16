@@ -109,7 +109,12 @@ export default function WpDesignTab() {
                       {d.approved_at ? ` · Approved ${new Date(d.approved_at).toLocaleDateString()}` : ""}
                     </div>
                   </div>
-                  <Badge variant="outline" className={statusClass(d.status)}>{d.status}</Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {d.design_type && (
+                      <Badge variant="outline" className="text-[10px] uppercase">{d.design_type}</Badge>
+                    )}
+                    <Badge variant="outline" className={statusClass(d.status)}>{d.status}</Badge>
+                  </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 space-y-3">
@@ -206,22 +211,40 @@ function NewDesignDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string
   const [title, setTitle] = useState("");
   const [revision, setRevision] = useState("1");
   const [notes, setNotes] = useState("");
+  const [designType, setDesignType] = useState<"ev" | "icp">("ev");
+  const [siteId, setSiteId] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
 
-  const reset = () => { setTitle(""); setRevision("1"); setNotes(""); };
+  const reset = () => { setTitle(""); setRevision("1"); setNotes(""); setDesignType("ev"); setSiteId(undefined); };
+
+  const { data: wpSites = [] } = useQuery({
+    queryKey: ["wp-sites-for-design", wpId],
+    enabled: !!wpId && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wp_sites")
+        .select("site_id, sites:sites(id, site_name, postcode)")
+        .eq("work_package_id", wpId)
+        .order("sequence", { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
   const submit = async () => {
     if (!title.trim()) { toast.error("Title required"); return; }
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
-      const { error } = await supabase.from("design_submissions").insert({
+      const { error } = await (supabase as any).from("design_submissions").insert({
         work_package_id: wpId,
         title: title.trim(),
         revision: Number(revision) || 1,
         notes: notes.trim() || null,
         status: "draft",
         submitted_by_user_id: user.user?.id ?? null,
+        design_type: designType,
+        site_id: siteId ?? null,
       });
       if (error) throw error;
       toast.success("Design submission created");
@@ -241,6 +264,32 @@ function NewDesignDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string
           <DialogDescription>Log a design revision against this work package.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Design type</Label>
+              <Select value={designType} onValueChange={(v) => setDesignType(v as "ev" | "icp")}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ev">EV</SelectItem>
+                  <SelectItem value="icp">ICP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Site (optional)</Label>
+              <Select value={siteId ?? "none"} onValueChange={(v) => setSiteId(v === "none" ? undefined : v)}>
+                <SelectTrigger><SelectValue placeholder="Whole WP" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Whole work package</SelectItem>
+                  {(wpSites as any[]).map((r) => (
+                    <SelectItem key={r.site_id} value={r.site_id}>
+                      {r.sites?.site_name ?? "Site"}{r.sites?.postcode ? ` · ${r.sites.postcode}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div>
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Detailed design v1" />
@@ -253,6 +302,9 @@ function NewDesignDialog({ wpId, open, onOpenChange, onCreated }: { wpId: string
             <Label>Notes</Label>
             <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Approving an EV or ICP design on a linked site automatically passes the matching pre-construction gate.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
