@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutDashboard, MapPin, FileCheck2, AlertTriangle, LogOut, Handshake } from "lucide-react";
+import { LayoutDashboard, MapPin, FileCheck2, AlertTriangle, LogOut, Handshake, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePartnerMembership } from "@/hooks/usePartnerMembership";
 import { Button } from "@/components/ui/button";
