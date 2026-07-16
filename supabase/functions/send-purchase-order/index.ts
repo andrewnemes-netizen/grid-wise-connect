@@ -136,12 +136,12 @@ Deno.serve(async (req) => {
     return json({ error: 'Outlook send failed', status: outlookRes.status, details: errText }, 502)
   }
 
-  // Flip draft POs to issued
-  const patch: Record<string, unknown> = {}
-  if (!po.issued_at) patch.issued_at = new Date().toISOString()
-  if (po.status === 'draft') patch.status = 'issued'
-  if (Object.keys(patch).length) {
-    await admin.from('purchase_orders').update(patch).eq('id', po.id)
+  // Flip draft POs to issued and set issued_at (best-effort — swallow constraint errors)
+  if (!po.issued_at) {
+    await admin.from('purchase_orders').update({ issued_at: new Date().toISOString() }).eq('id', po.id)
+  }
+  if (po.status === 'draft') {
+    await admin.from('purchase_orders').update({ status: 'issued' }).eq('id', po.id)
   }
 
   return json({ success: true })
