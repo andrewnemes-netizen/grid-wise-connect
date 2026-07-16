@@ -905,6 +905,7 @@ function InvoiceActions({ invoice, project }: { invoice: Invoice; project?: any 
         <Mail className="w-4 h-4" />
       </Button>
       <SendInvoiceDialog open={sendOpen} onOpenChange={setSendOpen} invoice={invoice} project={project} />
+      <XeroInvoiceButton invoice={invoice} onDone={invalidate} />
       {invoice.status === "draft" && (
         <Button size="sm" variant="outline" className="h-7" onClick={() => setStatus.mutate("submitted")}>Submit</Button>
       )}
