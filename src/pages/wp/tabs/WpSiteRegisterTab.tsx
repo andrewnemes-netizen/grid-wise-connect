@@ -68,7 +68,7 @@ export default function WpSiteRegisterTab() {
         site_id: sid,
         task_kind: "poc" as const,
         title: "POC application",
-        status: "todo",
+        status: "not_started",
         due_date: due.toISOString().slice(0, 10),
       }));
       const { error } = await (supabase as any).from("wp_tasks").insert(rows);
@@ -90,7 +90,7 @@ export default function WpSiteRegisterTab() {
         site_id: sid,
         task_kind: "survey_alloc" as const,
         title: "Allocate site survey",
-        status: "todo",
+        status: "not_started",
         due_date: due.toISOString().slice(0, 10),
       }));
       const { error } = await (supabase as any).from("wp_tasks").insert(rows);
