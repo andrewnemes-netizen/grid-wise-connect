@@ -133,6 +133,63 @@ export default function DeliveryWorkPackage() {
     },
   });
 
+  // Auto-computed "Approved value" = sum of subtotals across Site estimates (APPROVED),
+  // Estimate v1 / work_package_estimates (APPROVED) and Estimates v2 (current).
+  const { data: approvedValue } = useQuery({
+    queryKey: ["wp-approved-value", wpId, sites.length],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const siteIds = (sites as any[]).map((s) => s.site_id).filter(Boolean);
+
+      const [siteEstRes, wpEstRes, estV2Res] = await Promise.all([
+        siteIds.length
+          ? supabase
+              .from("site_estimates")
+              .select("total_price,site_id,version_number,status")
+              .in("site_id", siteIds)
+              .eq("status", "APPROVED")
+          : Promise.resolve({ data: [], error: null } as any),
+        supabase
+          .from("work_package_estimates")
+          .select("total_price,version_number,status")
+          .eq("work_package_id", wpId)
+          .eq("status", "APPROVED"),
+        supabase
+          .from("estimates" as any)
+          .select("total_price,is_current")
+          .eq("work_package_id", wpId)
+          .eq("is_current", true),
+      ]);
+
+      // Site estimates: latest APPROVED version per site
+      const latestBySite = new Map<string, any>();
+      for (const r of (siteEstRes.data as any[]) ?? []) {
+        const cur = latestBySite.get(r.site_id);
+        if (!cur || Number(r.version_number ?? 0) > Number(cur.version_number ?? 0)) {
+          latestBySite.set(r.site_id, r);
+        }
+      }
+      const siteTotal = Array.from(latestBySite.values())
+        .reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+
+      // WP estimate v1: latest APPROVED
+      const wpArr = ((wpEstRes.data as any[]) ?? []).slice()
+        .sort((a, b) => Number(b.version_number ?? 0) - Number(a.version_number ?? 0));
+      const wpTotal = Number(wpArr[0]?.total_price ?? 0);
+
+      // Estimates v2: sum current
+      const v2Total = ((estV2Res.data as any[]) ?? [])
+        .reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+
+      return {
+        total: siteTotal + wpTotal + v2Total,
+        siteTotal,
+        wpTotal,
+        v2Total,
+      };
+    },
+  });
+
   const percent = wpTasks.length === 0 ? 0 : Math.round(
     wpTasks.reduce((s: number, t: any) => s + Number(t.percent_complete || 0), 0) / wpTasks.length
   );
@@ -263,7 +320,17 @@ export default function DeliveryWorkPackage() {
               </div>
               <div>
                 <span className="text-muted-foreground">Approved value</span>
-                <div><InlineEdit type="number" value={wp?.budget_amount} onSave={(v) => updateWp.mutate({ budget_amount: v })} pending={updateWp.isPending} prefix="£" formatDisplay={(v) => `£${Number(v).toLocaleString()}`} inputClassName="w-40" /></div>
+                <div
+                  className="font-medium tabular-nums"
+                  title={
+                    approvedValue
+                      ? `Site estimates £${Math.round(approvedValue.siteTotal).toLocaleString()} + Estimate v1 £${Math.round(approvedValue.wpTotal).toLocaleString()} + Estimates £${Math.round(approvedValue.v2Total).toLocaleString()}`
+                      : "Sum of subtotals from Site estimates, Estimate v1 and Estimates"
+                  }
+                >
+                  £{Math.round(approvedValue?.total ?? 0).toLocaleString()}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">auto from estimates</div>
               </div>
               <div>
                 <span className="text-muted-foreground">Start</span>
