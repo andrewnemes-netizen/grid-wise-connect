@@ -503,6 +503,15 @@ function RowCells({ r, rowIndex, rowH, nameColW, canvasWidth, dayWidth, collapse
               </div>
             </div>
           </PopoverTrigger>
+          {/* External label shown when the bar is too narrow to fit the title */}
+          {(p?.width ?? 0) < 90 && (
+            <div
+              className="absolute top-2 h-7 flex items-center pointer-events-none text-[10px] font-medium text-foreground/80 whitespace-nowrap"
+              style={{ left: (p?.left ?? 0) + (p?.width ?? dayWidth) + 6 }}
+            >
+              {t.title} <span className="ml-1 tabular-nums text-muted-foreground">{pct}%</span>
+            </div>
+          )}
           <PopoverContent align="start" className="w-72 p-3 space-y-2" onOpenAutoFocus={(e) => e.preventDefault()}>
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Edit task</div>
             <div>
