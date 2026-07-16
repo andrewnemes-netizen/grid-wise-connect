@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen, Beaker, Handshake } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen, Beaker, Handshake, Link2 } from "lucide-react";
 import { format } from "date-fns";
 
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
@@ -24,6 +24,7 @@ import { RateLibrary } from "@/components/admin/RateLibrary";
 import { RecipeLibrary } from "@/components/admin/RecipeLibrary";
 import { FeatureFlagsPanel } from "@/components/admin/FeatureFlagsPanel";
 import { PartnerManagement } from "@/components/admin/PartnerManagement";
+import { XeroIntegration } from "@/components/admin/XeroIntegration";
 
 const Admin = () => {
   const { hasRole } = useAuth();
@@ -66,6 +67,7 @@ const Admin = () => {
           <TabsTrigger value="ratelib"><Library className="h-3.5 w-3.5 mr-1.5" />Rate Library</TabsTrigger>
           <TabsTrigger value="recipelib"><BookOpen className="h-3.5 w-3.5 mr-1.5" />Recipe Library</TabsTrigger>
           <TabsTrigger value="flags"><Beaker className="h-3.5 w-3.5 mr-1.5" />Feature Flags</TabsTrigger>
+          <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Xero</TabsTrigger>
         </TabsList>
 
         <TabsContent value="layers" className="mt-4">
@@ -118,6 +120,9 @@ const Admin = () => {
         </TabsContent>
         <TabsContent value="flags" className="mt-4">
           <FeatureFlagsPanel />
+        </TabsContent>
+        <TabsContent value="xero" className="mt-4">
+          <XeroIntegration />
         </TabsContent>
       </Tabs>
     </div>

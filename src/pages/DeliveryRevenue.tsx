@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, CheckCircle2, XCircle, Banknote, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { SendInvoiceDialog } from "@/components/delivery/SendInvoiceDialog";
+import { XeroInvoiceButton } from "@/components/delivery/XeroInvoiceButton";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid,
 } from "recharts";
@@ -666,6 +667,8 @@ type Invoice = {
   certified_amount: number | null; certified_date: string | null;
   paid_amount: number | null; paid_date: string | null;
   rejection_reason: string | null; notes: string | null;
+  xero_invoice_id?: string | null; xero_status?: string | null;
+  xero_amount_paid?: number | null; xero_amount_due?: number | null;
 };
 
 const STATUS_TONE: Record<Invoice["status"], string> = {
@@ -903,6 +906,7 @@ function InvoiceActions({ invoice, project }: { invoice: Invoice; project?: any 
         <Mail className="w-4 h-4" />
       </Button>
       <SendInvoiceDialog open={sendOpen} onOpenChange={setSendOpen} invoice={invoice} project={project} />
+      <XeroInvoiceButton invoice={invoice} onDone={invalidate} />
       {invoice.status === "draft" && (
         <Button size="sm" variant="outline" className="h-7" onClick={() => setStatus.mutate("submitted")}>Submit</Button>
       )}

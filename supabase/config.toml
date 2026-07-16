@@ -101,3 +101,27 @@ verify_jwt = false
 
 [functions.gridwise-assistant]
 verify_jwt = true
+
+[functions.xero-oauth-start]
+verify_jwt = true
+
+[functions.xero-oauth-callback]
+verify_jwt = false
+
+[functions.xero-status]
+verify_jwt = true
+
+[functions.xero-disconnect]
+verify_jwt = true
+
+[functions.xero-push-invoice]
+verify_jwt = true
+
+[functions.xero-push-po]
+verify_jwt = true
+
+[functions.xero-sync-contacts]
+verify_jwt = true
+
+[functions.xero-sync-payments]
+verify_jwt = false

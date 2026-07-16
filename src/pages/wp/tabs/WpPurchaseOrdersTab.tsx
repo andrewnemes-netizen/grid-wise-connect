@@ -21,6 +21,7 @@ import {
 import { Plus, Receipt, Trash2, FileText, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { SendPurchaseOrderDialog } from "@/components/delivery/SendPurchaseOrderDialog";
+import { XeroPoButton } from "@/components/delivery/XeroPoButton";
 
 const fmt = (n: number | null | undefined) =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(Number(n));
@@ -198,6 +199,7 @@ export default function WpPurchaseOrdersTab() {
                     >
                       <Mail className="h-3.5 w-3.5 mr-1" /> Send to supplier
                     </Button>
+                    <XeroPoButton po={po} onDone={invalidate} />
                     <Button
                       size="sm"
                       variant="ghost"

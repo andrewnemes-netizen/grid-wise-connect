@@ -144,6 +144,24 @@ Deno.serve(async (req) => {
     await admin.from('purchase_orders').update({ status: 'issued' }).eq('id', po.id)
   }
 
+  // Best-effort push to Xero
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/xero-push-po`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        po_id: po.id,
+        contact_name: body.recipient_company ?? body.recipient_name,
+        contact_email: body.recipient_email,
+      }),
+    })
+  } catch (e) {
+    console.warn('Xero push (PO) failed:', e instanceof Error ? e.message : e)
+  }
+
   return json({ success: true })
 })
 
