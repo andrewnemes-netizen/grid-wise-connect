@@ -25,6 +25,7 @@ import { RecipeLibrary } from "@/components/admin/RecipeLibrary";
 import { FeatureFlagsPanel } from "@/components/admin/FeatureFlagsPanel";
 import { PartnerManagement } from "@/components/admin/PartnerManagement";
 import { XeroIntegration } from "@/components/admin/XeroIntegration";
+import { OneDriveIntegration } from "@/components/admin/OneDriveIntegration";
 
 const Admin = () => {
   const { hasRole } = useAuth();
