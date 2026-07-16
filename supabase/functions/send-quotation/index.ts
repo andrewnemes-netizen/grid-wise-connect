@@ -1,5 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+import * as React from 'npm:react@18.3.1'
+import { renderAsync } from 'npm:@react-email/components@0.0.22'
+import { template as quotationTemplate } from '../_shared/transactional-email-templates/quotation.tsx'
 
 interface Body {
   estimate_id: string
@@ -150,10 +153,20 @@ Deno.serve(async (req) => {
   const fileBase = (estimate.ref ?? estimate.name ?? 'quotation').toString().replace(/[^a-z0-9-_]/gi, '_')
   const attachmentName = `${fileBase}.pdf`
 
-  const greeting = body.recipient_name ? `Hi ${body.recipient_name},` : 'Hello,'
-  const bodyText = (body.message ?? `Please find attached our quotation for ${siteName ?? estimate.name ?? 'your project'}.`).replace(/\n/g, '<br/>')
-  const signature = profile?.display_name ? `<br/><br/>Kind regards,<br/>${profile.display_name}<br/>EcoPower UK` : '<br/><br/>Kind regards,<br/>EcoPower UK'
-  const htmlBody = `<p>${greeting}</p><p>${bodyText}</p><p><strong>Total:</strong> ${grandTotal}</p><p>${signature}</p>`
+  // Render branded React Email template to HTML
+  const htmlBody = await renderAsync(
+    React.createElement(quotationTemplate.component, {
+      recipientName: body.recipient_name,
+      senderName: profile?.display_name,
+      companyName: 'EcoPower UK',
+      estimateName: estimate.name ?? undefined,
+      estimateRef: estimate.ref ?? undefined,
+      grandTotal,
+      message: body.message,
+      siteName,
+      // pdfUrl intentionally omitted — PDF is attached, no download button needed
+    })
+  )
 
   const toRecipients = [{ emailAddress: { address: body.recipient_email } }]
   const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))

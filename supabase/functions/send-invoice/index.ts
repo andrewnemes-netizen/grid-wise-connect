@@ -1,5 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+import * as React from 'npm:react@18.3.1'
+import { renderAsync } from 'npm:@react-email/components@0.0.22'
+import { template as invoiceTemplate } from '../_shared/transactional-email-templates/invoice.tsx'
 
 interface Body {
   invoice_id: string
@@ -47,13 +50,21 @@ Deno.serve(async (req) => {
 
   const { data: invoice, error: invErr } = await admin
     .from('revenue_invoices')
-    .select('id, invoice_number, doc_type, gross_amount, org_id, status')
+    .select('id, invoice_number, doc_type, gross_amount, org_id, status, due_date, project_id')
     .eq('id', body.invoice_id)
     .maybeSingle()
   if (invErr || !invoice) return json({ error: 'Invoice not found' }, 404)
 
   const { data: profile } = await admin
     .from('profiles').select('display_name, email').eq('id', userId).maybeSingle()
+
+  // Best-effort project name for the email header/summary
+  let projectName: string | undefined
+  if ((invoice as any).project_id) {
+    const { data: proj } = await admin
+      .from('projects').select('name').eq('id', (invoice as any).project_id).maybeSingle()
+    if (proj?.name) projectName = proj.name
+  }
 
   // Download PDF and base64-encode (chunked)
   const { data: pdfBlob, error: dlErr } = await admin.storage
@@ -75,12 +86,23 @@ Deno.serve(async (req) => {
   }).format(Number(invoice.gross_amount) || 0)
 
   const subject = body.subject?.trim() || `${label} ${invoice.invoice_number} — EcoPower UK`
-  const greeting = body.recipient_name ? `Hi ${body.recipient_name},` : 'Hello,'
-  const bodyText = (body.message ?? `Please find attached ${label.toLowerCase()} ${invoice.invoice_number}.`).replace(/\n/g, '<br/>')
-  const signature = profile?.display_name
-    ? `Kind regards,<br/>${profile.display_name}<br/>EcoPower UK`
-    : 'Kind regards,<br/>EcoPower UK'
-  const htmlBody = `<p>${greeting}</p><p>${bodyText}</p><p><strong>Total due:</strong> ${grandTotal}</p><p>${signature}</p>`
+  const dueLabel = (invoice as any).due_date
+    ? new Date((invoice as any).due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : undefined
+
+  const htmlBody = await renderAsync(
+    React.createElement(invoiceTemplate.component, {
+      recipientName: body.recipient_name,
+      senderName: profile?.display_name,
+      companyName: 'EcoPower UK',
+      docLabel: label,
+      invoiceNumber: invoice.invoice_number,
+      projectName,
+      grandTotal,
+      dueDate: dueLabel,
+      message: body.message,
+    })
+  )
 
   const safeName = String(invoice.invoice_number ?? 'invoice').replace(/[^a-z0-9-_]/gi, '_') + '.pdf'
 

@@ -1,5 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
+import * as React from 'npm:react@18.3.1'
+import { renderAsync } from 'npm:@react-email/components@0.0.22'
+import { template as surveyInviteTemplate } from '../_shared/transactional-email-templates/site-survey-invite.tsx'
 
 interface Recipient { email: string; name?: string }
 interface Body {
@@ -108,10 +111,18 @@ Deno.serve(async (req) => {
       const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
       const outlookKey = Deno.env.get('MICROSOFT_OUTLOOK_API_KEY')
       const expiresLabel = new Date(survey.expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      const greeting = r.name ? `Hi ${r.name},` : 'Hello,'
-      const intro = body.message ? String(body.message).replace(/\n/g, '<br/>') : `Please complete the site survey for ${site.site_name}${site.postcode ? ` (${site.postcode})` : ''}.`
-      const sig = senderName ? `Kind regards,<br/>${senderName}<br/>EcoPower UK` : 'Kind regards,<br/>EcoPower UK'
-      const htmlBody = `<p>${greeting}</p><p>${intro}</p><p><a href="${surveyUrl}">Open the survey</a></p><p>This link expires on ${expiresLabel}.</p><p>${sig}</p>`
+      const htmlBody = await renderAsync(
+        React.createElement(surveyInviteTemplate.component, {
+          recipientName: r.name,
+          senderName,
+          companyName: 'EcoPower UK',
+          siteName: site.site_name,
+          postcode: site.postcode ?? undefined,
+          message: body.message,
+          surveyUrl,
+          expiresAt: expiresLabel,
+        })
+      )
 
       let sendOk = false
       let sendErr = ''
