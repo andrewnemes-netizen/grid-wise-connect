@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
+import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 
 type LaneFilter = "all" | "active" | "rejected" | "ready";
 
@@ -47,6 +48,7 @@ export default function WpSiteRegisterTab() {
   const [laneFilter, setLaneFilter] = useState<LaneFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
+  const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -347,7 +349,24 @@ export default function WpSiteRegisterTab() {
                     </TableCell>
                     <TableCell>{laneBadge(pc?.poc_status)}</TableCell>
                     <TableCell>{laneBadge(pc?.latest_offer_status)}</TableCell>
-                    <TableCell>{laneBadge(pc?.estimate_status)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="inline-flex items-center gap-1"
+                        title={pc?.latest_site_estimate_id ? "Record client decision" : "No estimate yet"}
+                        disabled={!pc?.latest_site_estimate_id}
+                        onClick={() => s?.id && pc?.latest_site_estimate_id && setDecisionFor({ siteId: s.id, siteName: s.site_name })}
+                      >
+                        {laneBadge(pc?.estimate_status)}
+                        {pc?.client_decision && (
+                          <Badge
+                            variant={pc.client_decision === "accepted" ? "default" : "destructive"}
+                            className="text-[10px]"
+                          >
+                            {pc.client_decision}
+                          </Badge>
+                        )}
+                      </button>
+                    </TableCell>
                     <TableCell>{laneBadge(pc?.survey_status)}</TableCell>
                     <TableCell>{laneBadge(pc?.ev_design_status)}</TableCell>
                     <TableCell>{laneBadge(pc?.icp_design_status)}</TableCell>
@@ -400,6 +419,15 @@ export default function WpSiteRegisterTab() {
           workPackageId={wpId}
           siteId={gatesFor.siteId}
           siteName={gatesFor.siteName}
+        />
+      )}
+
+      {decisionFor && (
+        <ClientDecisionDialog
+          open={!!decisionFor}
+          onOpenChange={(v) => !v && setDecisionFor(null)}
+          siteId={decisionFor.siteId}
+          siteName={decisionFor.siteName}
         />
       )}
     </div>
