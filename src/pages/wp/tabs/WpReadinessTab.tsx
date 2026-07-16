@@ -1,14 +1,16 @@
 import { useParams } from "react-router-dom";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, Circle, MinusCircle, Search, ShieldCheck, Filter } from "lucide-react";
+import { CheckCircle2, Circle, MinusCircle, Search, ShieldCheck, Filter, Rocket } from "lucide-react";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
+import { toast } from "sonner";
 
 type GateKey = "poc" | "commercial" | "design_ev" | "design_icp" | "rams" | "final_review";
 type GateState = "open" | "passed" | "waived";
@@ -40,9 +42,11 @@ function progressPct(gateMap: Record<GateKey, GateState>) {
 
 export default function WpReadinessTab() {
   const { id: wpId } = useParams<{ id: string }>();
+  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [onlyBlocked, setOnlyBlocked] = useState(false);
   const [selected, setSelected] = useState<{ siteId: string; siteName?: string } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const statusQ = useQuery({
     queryKey: ["wp-site-precon-status", wpId],
@@ -116,6 +120,63 @@ export default function WpReadinessTab() {
 
   const loading = statusQ.isLoading || gatesQ.isLoading;
 
+  const releasable = useMemo(
+    () => rows.filter((r) => r.gateMap.final_review !== "passed"),
+    [rows],
+  );
+  const pickedReleasable = useMemo(
+    () => releasable.filter((r) => picked.has(r.site_id)),
+    [releasable, picked],
+  );
+  const allReleasablePicked =
+    releasable.length > 0 && pickedReleasable.length === releasable.length;
+
+  const toggleAll = () => {
+    setPicked((prev) => {
+      if (allReleasablePicked) return new Set();
+      const next = new Set(prev);
+      releasable.forEach((r) => next.add(r.site_id));
+      return next;
+    });
+  };
+  const togglePick = (siteId: string) => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(siteId)) next.delete(siteId);
+      else next.add(siteId);
+      return next;
+    });
+  };
+
+  const releaseMut = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return;
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes?.user?.id ?? null;
+      const now = new Date().toISOString();
+      const rows = siteIds.map((site_id) => ({
+        work_package_id: wpId,
+        site_id,
+        gate_key: "final_review",
+        state: "passed",
+        passed_at: now,
+        passed_by: uid,
+        notes: "Bulk release from Readiness dashboard",
+      }));
+      const { error } = await (supabase as any)
+        .from("site_precon_gates")
+        .upsert(rows, { onConflict: "work_package_id,site_id,gate_key" });
+      if (error) throw error;
+    },
+    onSuccess: (_data, siteIds) => {
+      toast.success(`Released ${siteIds.length} site${siteIds.length === 1 ? "" : "s"} to delivery`);
+      setPicked(new Set());
+      qc.invalidateQueries({ queryKey: ["wp-site-precon-status", wpId] });
+      qc.invalidateQueries({ queryKey: ["wp-precon-gates-all", wpId] });
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to release sites"),
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -166,12 +227,43 @@ export default function WpReadinessTab() {
           <Filter className="h-3.5 w-3.5 mr-1" />
           Blocked only
         </Button>
+        <div className="flex-1" />
+        {picked.size > 0 && (
+          <>
+            <span className="text-xs text-muted-foreground">
+              {picked.size} selected
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setPicked(new Set())}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => releaseMut.mutate(Array.from(picked))}
+              disabled={releaseMut.isPending}
+            >
+              <Rocket className="h-3.5 w-3.5 mr-1" />
+              Release {picked.size} to delivery
+            </Button>
+          </>
+        )}
       </div>
 
       <Card className="overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <Checkbox
+                  checked={allReleasablePicked}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all releasable sites"
+                  disabled={releasable.length === 0}
+                />
+              </TableHead>
               <TableHead className="w-10">#</TableHead>
               <TableHead>Site</TableHead>
               <TableHead>Stage</TableHead>
@@ -187,19 +279,27 @@ export default function WpReadinessTab() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5 + GATES.length} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={6 + GATES.length} className="text-center text-sm text-muted-foreground py-8">
                   Loading readiness…
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5 + GATES.length} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={6 + GATES.length} className="text-center text-sm text-muted-foreground py-8">
                   No sites match the current filter.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => (
                 <TableRow key={r.wp_site_id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={picked.has(r.site_id)}
+                      onCheckedChange={() => togglePick(r.site_id)}
+                      disabled={r.gateMap.final_review === "passed"}
+                      aria-label={`Select ${r.site_name ?? "site"}`}
+                    />
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground tabular-nums">
                     {r.sequence ?? "—"}
                   </TableCell>
