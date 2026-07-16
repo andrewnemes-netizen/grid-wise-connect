@@ -195,18 +195,21 @@ export type Database = {
       app_settings: {
         Row: {
           id: string
+          onedrive_root_folder: string
           require_approval: boolean
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           id?: string
+          onedrive_root_folder?: string
           require_approval?: boolean
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           id?: string
+          onedrive_root_folder?: string
           require_approval?: boolean
           updated_at?: string
           updated_by?: string | null
@@ -3786,6 +3789,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      onedrive_folder_cache: {
+        Row: {
+          category: string
+          created_at: string
+          folder_path: string
+          id: string
+          onedrive_item_id: string
+          project_id: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          folder_path: string
+          id?: string
+          onedrive_item_id: string
+          project_id?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          folder_path?: string
+          id?: string
+          onedrive_item_id?: string
+          project_id?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: []
+      }
+      onedrive_uploads: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          entity_id: string | null
+          entity_type: string
+          error: string | null
+          filename: string | null
+          id: string
+          onedrive_item_id: string | null
+          path: string
+          project_id: string | null
+          status: string
+          web_url: string | null
+          work_package_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string | null
+          entity_type: string
+          error?: string | null
+          filename?: string | null
+          id?: string
+          onedrive_item_id?: string | null
+          path: string
+          project_id?: string | null
+          status: string
+          web_url?: string | null
+          work_package_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          error?: string | null
+          filename?: string | null
+          id?: string
+          onedrive_item_id?: string | null
+          path?: string
+          project_id?: string | null
+          status?: string
+          web_url?: string | null
+          work_package_id?: string | null
+        }
+        Relationships: []
       }
       org_members: {
         Row: {
