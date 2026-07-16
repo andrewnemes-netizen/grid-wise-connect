@@ -102,7 +102,7 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
             <Mail className="h-4 w-4 text-primary" /> Send quotation to client
           </DialogTitle>
           <DialogDescription>
-            Generates a branded PDF from this estimate and emails a download link to the client.
+            Generates a branded PDF from this estimate and emails it as an attachment from your connected Outlook mailbox.
           </DialogDescription>
         </DialogHeader>
 
