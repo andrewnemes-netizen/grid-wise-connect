@@ -307,7 +307,7 @@ export function InteractiveGantt({
       </div>
 
       <div ref={containerRef} className="overflow-auto max-h-[70vh]" style={{ maxWidth: "100%" }}>
-        <div className="grid" style={{ gridTemplateColumns: `${nameColW}px ${canvasWidth}px` }}>
+        <div className="grid relative" style={{ gridTemplateColumns: `${nameColW}px ${canvasWidth}px` }}>
           {/* Sticky task name col header */}
           <div className="sticky top-0 left-0 z-30 bg-muted/60 border-b border-r px-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground" style={{ height: HEADER_H }}>
             <CalendarDays className="h-3.5 w-3.5" /> Task
@@ -344,9 +344,12 @@ export function InteractiveGantt({
               }} />
           ))}
 
-          {/* Dependency arrows overlay */}
-          <div className="col-start-2 relative" style={{ gridRow: `2 / span ${rows.length}`, marginTop: -rows.length * rowH }}>
-            <svg width={canvasWidth} height={rows.length * rowH} className="pointer-events-none absolute top-0 left-0">
+          {/* Dependency arrows overlay — absolute so it doesn't consume grid cells */}
+          <div
+            className="pointer-events-none absolute"
+            style={{ left: nameColW, top: HEADER_H, width: canvasWidth, height: rows.length * rowH }}
+          >
+            <svg width={canvasWidth} height={rows.length * rowH} className="absolute top-0 left-0">
               {/* Today line */}
               {todayLeft > 0 && todayLeft < canvasWidth && (
                 <line x1={todayLeft} y1={0} x2={todayLeft} y2={rows.length * rowH} stroke="hsl(var(--primary))" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.55} />
