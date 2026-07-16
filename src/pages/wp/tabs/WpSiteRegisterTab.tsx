@@ -14,9 +14,37 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 
+type LaneFilter = "all" | "active" | "rejected" | "ready";
+
+function deriveNextAction(pc: any): string | null {
+  if (!pc) return "Awaiting POC";
+  if (pc.final_review_state === "passed") return null;
+  if (pc.client_decision === "rejected") return null;
+  if (!pc.poc_task_id && !pc.latest_offer_id) return "Send for POC";
+  if (pc.poc_status && pc.poc_status !== "done" && !pc.latest_offer_id) return "Chase POC";
+  if (pc.latest_offer_id && !pc.latest_site_estimate_id) return "Create estimate";
+  if (pc.estimate_status && String(pc.estimate_status).toLowerCase() !== "approved" && !pc.client_decision) return "Approve estimate";
+  if (pc.latest_site_estimate_id && !pc.client_decision) return "Await client decision";
+  if (pc.client_decision === "accepted" && !pc.latest_survey_id) return "Allocate survey";
+  if (pc.latest_survey_id && String(pc.survey_status).toLowerCase() !== "completed") return "Complete survey";
+  if (!pc.ev_design_id && !pc.icp_design_id) return "Submit design";
+  if ((pc.ev_design_status && String(pc.ev_design_status).toLowerCase() !== "approved") ||
+      (pc.icp_design_status && String(pc.icp_design_status).toLowerCase() !== "approved")) return "Approve design";
+  if (!pc.latest_rams_id || String(pc.rams_status).toLowerCase() !== "approved") return "Approve RAMS";
+  if (pc.final_review_state !== "passed") return "Pass final review";
+  return null;
+}
+
+function laneState(pc: any): "ready" | "rejected" | "active" {
+  if (pc?.final_review_state === "passed") return "ready";
+  if (pc?.client_decision === "rejected") return "rejected";
+  return "active";
+}
+
 export default function WpSiteRegisterTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const [q, setQ] = useState("");
+  const [laneFilter, setLaneFilter] = useState<LaneFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const qc = useQueryClient();
@@ -150,11 +178,26 @@ export default function WpSiteRegisterTab() {
   const stageById = new Map(stages.map((s: any) => [s.id, s]));
 
   const filtered = rows.filter((r: any) => {
-    if (!q.trim()) return true;
     const s = r.sites;
-    const hay = [s?.site_name, s?.postcode, r.local_ref].filter(Boolean).join(" ").toLowerCase();
-    return hay.includes(q.trim().toLowerCase());
+    if (q.trim()) {
+      const hay = [s?.site_name, s?.postcode, r.local_ref].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(q.trim().toLowerCase())) return false;
+    }
+    if (laneFilter !== "all") {
+      const pc = s?.id ? preconBySite.get(s.id) : null;
+      if (laneState(pc) !== laneFilter) return false;
+    }
+    return true;
   });
+
+  const counts = useMemo(() => {
+    const c: Record<LaneFilter, number> = { all: rows.length, active: 0, rejected: 0, ready: 0 };
+    for (const r of rows as any[]) {
+      const pc = r.site_id ? preconBySite.get(r.site_id) : null;
+      c[laneState(pc)]++;
+    }
+    return c;
+  }, [rows, preconBySite]);
 
   const filteredSiteIds = filtered.map((r: any) => r.site_id).filter(Boolean) as string[];
   const allChecked = filteredSiteIds.length > 0 && filteredSiteIds.every((id) => selected.has(id));
@@ -186,6 +229,21 @@ export default function WpSiteRegisterTab() {
           <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, postcode, ref" className="pl-8 h-9" />
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1">
+        {(["all", "active", "rejected", "ready"] as LaneFilter[]).map((k) => (
+          <Button
+            key={k}
+            size="sm"
+            variant={laneFilter === k ? "default" : "outline"}
+            className="h-7 text-xs capitalize"
+            onClick={() => setLaneFilter(k)}
+          >
+            {k === "ready" ? "Ready for delivery" : k}
+            <span className="ml-1.5 text-[10px] opacity-70 tabular-nums">{counts[k]}</span>
+          </Button>
+        ))}
       </div>
 
       {selectedIds.length > 0 && (
@@ -304,16 +362,21 @@ export default function WpSiteRegisterTab() {
                       </button>
                     </TableCell>
                     <TableCell className="text-xs">
-                      {pc?.next_action_label ? (
-                        <span>
-                          {pc.next_action_label}
-                          {pc.next_action_due && (
-                            <span className="text-muted-foreground ml-1">· {pc.next_action_due}</span>
-                          )}
-                        </span>
-                      ) : pc?.blocker_reason ? (
-                        <Badge variant="destructive" className="text-[10px]">Blocked</Badge>
-                      ) : dash}
+                      {(() => {
+                        const ls = laneState(pc);
+                        if (ls === "ready") return <Badge className="text-[10px]">Ready for delivery</Badge>;
+                        if (ls === "rejected") return <Badge variant="destructive" className="text-[10px]">Rejected</Badge>;
+                        if (pc?.blocker_reason) return <Badge variant="destructive" className="text-[10px]">Blocked</Badge>;
+                        const label = pc?.next_action_label ?? deriveNextAction(pc);
+                        return label ? (
+                          <span>
+                            {label}
+                            {pc?.next_action_due && (
+                              <span className="text-muted-foreground ml-1">· {pc.next_action_due}</span>
+                            )}
+                          </span>
+                        ) : dash;
+                      })()}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {s?.updated_at ? formatDistanceToNow(new Date(s.updated_at), { addSuffix: true }) : "—"}
