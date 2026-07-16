@@ -12278,6 +12278,10 @@ export type Database = {
         }
         Returns: string
       }
+      upsert_precon_gate: {
+        Args: { p_gate: string; p_site: string; p_state: string; p_wp: string }
+        Returns: undefined
+      }
       user_can_access_study: {
         Args: { _study_id: string; _user_id: string }
         Returns: boolean
