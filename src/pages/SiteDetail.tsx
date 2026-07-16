@@ -9,7 +9,16 @@ import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, CheckCircle, AlertTriangle, XCircle, MapPin, Download,
   TrafficCone, Bus, Zap, ShieldAlert, BatteryCharging, Cable, PoundSterling,
+  Calculator, ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { generateAssessmentPdf } from "@/lib/generateAssessmentPdf";
 import { useUnitRates } from "@/hooks/useUnitRates";
 import { useToast } from "@/hooks/use-toast";
@@ -231,6 +240,67 @@ const SiteDetail = () => {
         <Button variant="outline" size="sm" onClick={handleExportPdf} className="gap-1.5">
           <Download className="h-4 w-4" /> Export PDF
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Calculator className="h-4 w-4" /> Estimate
+              <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>Cost estimate</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={async () => {
+                const rawLat = raw.lat ?? raw.latitude;
+                const rawLng = raw.lng ?? raw.longitude;
+                if (!rawLat || !rawLng) {
+                  toast({ title: "No coordinates", description: "This site has no location data for a detailed estimate.", variant: "destructive" });
+                  return;
+                }
+                const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
+                const { data: latestStudy } = await supabase
+                  .from("studies")
+                  .select("id")
+                  .eq("site_id", site.id)
+                  .order("updated_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                const params = new URLSearchParams({
+                  lat: String(coords.lat),
+                  lng: String(coords.lng),
+                  siteName: site.site_name,
+                  kw: String(site.proposed_kw || 0),
+                  siteId: site.id,
+                  openEstimate: "1",
+                });
+                if (latestStudy?.id) params.set("study", latestStudy.id);
+                navigate(`/?${params.toString()}`);
+              }}
+            >
+              <Cable className="h-4 w-4 mr-2" />
+              <div className="flex flex-col">
+                <span>Detailed estimate</span>
+                <span className="text-xs text-muted-foreground">Route-based on the map</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                const params = new URLSearchParams();
+                if (site.postcode) params.set("postcode", site.postcode);
+                if (site.proposed_kw) params.set("kw", String(site.proposed_kw));
+                if (site.postcode && site.proposed_kw) params.set("auto", "1");
+                navigate(`/quick-estimate?${params.toString()}`);
+              }}
+            >
+              <PoundSterling className="h-4 w-4 mr-2" />
+              <div className="flex flex-col">
+                <span>Fixed-rate synthetic</span>
+                <span className="text-xs text-muted-foreground">Instant unit-rate budget</span>
+              </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <SiteSurveysPanel siteId={site.id} />

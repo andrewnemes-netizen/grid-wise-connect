@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { MapPin, Zap, Loader2, CheckCircle, AlertTriangle, XCircle, PoundSterling, ArrowRight, RotateCcw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,8 +36,9 @@ function formatGBP(amount: number): string {
 export default function QuickEstimate() {
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
-  const [postcode, setPostcode] = useState("");
-  const [proposedKw, setProposedKw] = useState("");
+  const [searchParams] = useSearchParams();
+  const [postcode, setPostcode] = useState(searchParams.get("postcode")?.toUpperCase() ?? "");
+  const [proposedKw, setProposedKw] = useState(searchParams.get("kw") ?? "");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<QuickResult | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
@@ -91,6 +93,15 @@ export default function QuickEstimate() {
     setCostEstimate(null);
     setCoords(null);
   };
+
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current) return;
+    if (searchParams.get("auto") === "1" && postcode && proposedKw) {
+      autoRan.current = true;
+      handleSubmit();
+    }
+  }, [searchParams, postcode, proposedKw, handleSubmit]);
 
   const sc = result ? scoreConfig[result.score] || scoreConfig.AMBER : null;
 
