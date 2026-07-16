@@ -666,6 +666,8 @@ type Invoice = {
   certified_amount: number | null; certified_date: string | null;
   paid_amount: number | null; paid_date: string | null;
   rejection_reason: string | null; notes: string | null;
+  xero_invoice_id?: string | null; xero_status?: string | null;
+  xero_amount_paid?: number | null; xero_amount_due?: number | null;
 };
 
 const STATUS_TONE: Record<Invoice["status"], string> = {
