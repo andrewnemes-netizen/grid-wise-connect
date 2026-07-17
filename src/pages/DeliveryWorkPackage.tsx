@@ -22,9 +22,6 @@ import { InteractiveGantt } from "@/components/delivery/gantt/InteractiveGantt";
 import { TaskBoard } from "@/components/delivery/board/TaskBoard";
 import { StatusOption } from "@/lib/board/types";
 import { InlineEdit } from "@/components/InlineEdit";
-import { DeliverySplitLayout } from "@/components/delivery/DeliverySplitLayout";
-import { ProgrammeMapPane } from "@/components/delivery/ProgrammeMapPane";
-import { useNavigate } from "react-router-dom";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 
 const WP_LIFECYCLE = [
