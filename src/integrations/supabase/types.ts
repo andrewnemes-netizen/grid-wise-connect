@@ -7194,6 +7194,131 @@ export type Database = {
       }
       site_stage_status: {
         Row: {
+          actual_finish_date: string | null
+          actual_start_date: string | null
+          blocked_reason: string | null
+          created_at: string
+          id: string
+          owner_id: string | null
+          planned_finish_date: string | null
+          planned_start_date: string | null
+          review_notes: string | null
+          site_id: string
+          stage: Database["public"]["Enums"]["site_stage_key"]
+          updated_at: string
+          updated_by: string | null
+          work_package_id: string
+          workflow_status: Database["public"]["Enums"]["site_stage_state"]
+        }
+        Insert: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
+          blocked_reason?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string | null
+          planned_finish_date?: string | null
+          planned_start_date?: string | null
+          review_notes?: string | null
+          site_id: string
+          stage: Database["public"]["Enums"]["site_stage_key"]
+          updated_at?: string
+          updated_by?: string | null
+          work_package_id: string
+          workflow_status?: Database["public"]["Enums"]["site_stage_state"]
+        }
+        Update: {
+          actual_finish_date?: string | null
+          actual_start_date?: string | null
+          blocked_reason?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string | null
+          planned_finish_date?: string | null
+          planned_start_date?: string | null
+          review_notes?: string | null
+          site_id?: string
+          stage?: Database["public"]["Enums"]["site_stage_key"]
+          updated_at?: string
+          updated_by?: string | null
+          work_package_id?: string
+          workflow_status?: Database["public"]["Enums"]["site_stage_state"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey1"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey1"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_work_package_id_fkey1"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_work_package_id_fkey1"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_stage_status_audit: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_status: Database["public"]["Enums"]["site_stage_state"]
+          previous_status:
+            | Database["public"]["Enums"]["site_stage_state"]
+            | null
+          reason: string | null
+          site_id: string
+          stage: Database["public"]["Enums"]["site_stage_key"]
+          work_package_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_status: Database["public"]["Enums"]["site_stage_state"]
+          previous_status?:
+            | Database["public"]["Enums"]["site_stage_state"]
+            | null
+          reason?: string | null
+          site_id: string
+          stage: Database["public"]["Enums"]["site_stage_key"]
+          work_package_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_status?: Database["public"]["Enums"]["site_stage_state"]
+          previous_status?:
+            | Database["public"]["Enums"]["site_stage_state"]
+            | null
+          reason?: string | null
+          site_id?: string
+          stage?: Database["public"]["Enums"]["site_stage_key"]
+          work_package_id?: string
+        }
+        Relationships: []
+      }
+      site_stage_status_legacy: {
+        Row: {
           civils: Database["public"]["Enums"]["site_stage_state"]
           design: Database["public"]["Enums"]["site_stage_state"]
           dno: Database["public"]["Enums"]["site_stage_state"]
@@ -12494,6 +12619,15 @@ export type Database = {
         | "other"
       site_estimate_exception_severity: "info" | "warning" | "blocker"
       site_estimate_status: "DRAFT" | "APPROVED" | "SUPERSEDED"
+      site_stage_key:
+        | "survey"
+        | "design"
+        | "dno"
+        | "permit"
+        | "civils"
+        | "electrical"
+        | "meter"
+        | "handover"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -12777,6 +12911,16 @@ export const Constants = {
       ],
       site_estimate_exception_severity: ["info", "warning", "blocker"],
       site_estimate_status: ["DRAFT", "APPROVED", "SUPERSEDED"],
+      site_stage_key: [
+        "survey",
+        "design",
+        "dno",
+        "permit",
+        "civils",
+        "electrical",
+        "meter",
+        "handover",
+      ],
       site_stage_state: [
         "not_started",
         "in_progress",

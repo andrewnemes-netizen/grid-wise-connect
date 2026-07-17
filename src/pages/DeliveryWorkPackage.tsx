@@ -95,8 +95,9 @@ export default function DeliveryWorkPackage() {
   const { data: stageRows = [] } = useQuery({
     queryKey: ["wp-site-stage", wpId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("site_stage_status")
-        .select("*").eq("work_package_id", wpId);
+      const { data, error } = await (supabase as any).from("site_stage_status")
+        .select("site_id, stage, workflow_status, blocked_reason")
+        .eq("work_package_id", wpId);
       if (error) throw error;
       return data ?? [];
     },
@@ -574,9 +575,9 @@ const STAGE_LABEL: Record<string, string> = {
 
 function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; stageRows: any[] }) {
   const qc = useQueryClient();
-  const stageBySite = useMemo(() => {
-    const m: Record<string, any> = {};
-    stageRows.forEach((r) => { m[r.site_id] = r; });
+  const stageByKey = useMemo(() => {
+    const m = new Map<string, any>();
+    stageRows.forEach((r) => m.set(`${r.site_id}:${r.stage}`, r));
     return m;
   }, [stageRows]);
 
@@ -585,25 +586,26 @@ function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; st
     const c: Record<string, Record<string, number>> = {};
     STAGES.forEach((s) => { c[s] = { not_started: 0, in_progress: 0, review: 0, blocked: 0, done: 0 }; });
     sites.forEach((s: any) => {
-      const row = stageBySite[s.site_id];
       STAGES.forEach((st) => {
-        const v = row?.[st] ?? "not_started";
+        const row = stageByKey.get(`${s.site_id}:${st}`);
+        const v = row?.workflow_status ?? "not_started";
         c[st][v] = (c[st][v] ?? 0) + 1;
       });
     });
     return c;
-  }, [sites, stageBySite]);
+  }, [sites, stageByKey]);
 
   const setStage = useMutation({
     mutationFn: async ({ site_id, stage, value }: { site_id: string; stage: string; value: string }) => {
-      const existing = stageBySite[site_id];
+      const existing = stageByKey.get(`${site_id}:${stage}`);
       if (existing) {
-        const { error } = await supabase.from("site_stage_status").update({ [stage]: value as any }).eq("id", existing.id);
+        const { error } = await (supabase as any).from("site_stage_status")
+          .update({ workflow_status: value }).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("site_stage_status").insert({
-          work_package_id: wpId, site_id, [stage]: value as any,
-        } as any);
+        const { error } = await (supabase as any).from("site_stage_status").insert({
+          work_package_id: wpId, site_id, stage, workflow_status: value,
+        });
         if (error) throw error;
       }
     },
@@ -636,14 +638,14 @@ function SiteMatrix({ wpId, sites, stageRows }: { wpId: string; sites: any[]; st
           </thead>
           <tbody>
             {sites.map((s: any) => {
-              const row = stageBySite[s.site_id];
               return (
                 <tr key={s.id} className="border-t">
                   <td className="p-2 sticky left-0 bg-background font-medium whitespace-nowrap">
                     {s.local_ref ? `${s.local_ref} · ` : ""}{s.sites?.site_name}
                   </td>
                   {STAGES.map((st) => {
-                    const v = row?.[st] ?? "not_started";
+                    const row = stageByKey.get(`${s.site_id}:${st}`);
+                    const v = row?.workflow_status ?? "not_started";
                     return (
                       <td key={st} className="p-1">
                         <Select value={v} onValueChange={(nv) => setStage.mutate({ site_id: s.site_id, stage: st, value: nv })}>
