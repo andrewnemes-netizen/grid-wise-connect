@@ -28,15 +28,76 @@ Deno.serve(async (req) => {
 
   const { data: survey } = await admin
     .from('site_surveys')
-    .select('id, site_id, sent_by, sent_to_name')
+    .select('id, site_id, org_id, sent_by, sent_to_name')
     .eq('token', body.token)
     .maybeSingle()
   if (!survey) return json({ error: 'Survey not found' }, 404)
 
   const { data: site } = await admin
-    .from('sites').select('id, site_name, postcode').eq('id', survey.site_id).maybeSingle()
+    .from('sites').select('id, site_name, postcode, org_id').eq('id', survey.site_id).maybeSingle()
   const { data: owner } = await admin
     .from('profiles').select('email, display_name, full_name').eq('id', survey.sent_by).maybeSingle()
+
+  // Register submitted photos into site_photos so they surface in WP Photos tab.
+  try {
+    const { data: response } = await admin
+      .from('site_survey_responses')
+      .select('id, submission, submitted_at')
+      .eq('id', body.response_id)
+      .maybeSingle()
+    const groups = (response?.submission as any)?._photo_groups as
+      | Array<{ key?: string; title?: string; photos?: Array<{ url?: string; caption?: string }> }>
+      | undefined
+    if (response && Array.isArray(groups) && groups.length > 0) {
+      // Resolve an active WP for the site (first non-archived membership)
+      const { data: memberships } = await admin
+        .from('wp_sites')
+        .select('work_package_id, work_packages!inner(id, status)')
+        .eq('site_id', survey.site_id)
+      const activeWp = (memberships ?? []).find((m: any) => {
+        const s = String(m.work_packages?.status ?? '').toUpperCase()
+        return s && s !== 'ARCHIVED' && s !== 'CANCELLED'
+      }) ?? (memberships ?? [])[0]
+      const workPackageId = activeWp?.work_package_id ?? null
+      const orgId = survey.org_id ?? site?.org_id ?? null
+
+      if (orgId) {
+        // Idempotency: skip if already registered for this response
+        const { data: existing } = await admin
+          .from('site_photos')
+          .select('id')
+          .eq('site_survey_response_id', response.id)
+          .limit(1)
+        if (!existing || existing.length === 0) {
+          const rows: any[] = []
+          for (const g of groups) {
+            for (const p of g.photos ?? []) {
+              if (!p?.url) continue
+              const parts = [g.title ?? g.key, p.caption].filter(Boolean)
+              rows.push({
+                org_id: orgId,
+                work_package_id: workPackageId,
+                site_id: survey.site_id,
+                photo_url: p.url,
+                caption: parts.join(' — ') || null,
+                tags: g.key ? [g.key] : null,
+                taken_at: response.submitted_at ?? new Date().toISOString(),
+                source: 'site_survey',
+                site_survey_response_id: response.id,
+                created_by: survey.sent_by ?? null,
+              })
+            }
+          }
+          if (rows.length > 0) {
+            const { error: insErr } = await admin.from('site_photos').insert(rows)
+            if (insErr) console.warn('site_photos insert failed:', insErr.message)
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('site_photos registration failed:', e instanceof Error ? e.message : e)
+  }
 
   // Best-effort mirror survey PDF to OneDrive
   if (body.pdf_storage_path) {
