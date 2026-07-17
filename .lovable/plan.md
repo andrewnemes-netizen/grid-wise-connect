@@ -1,132 +1,87 @@
-## Goal
+# Advisory Deliverables — E.ON Response + EPA AO Approval
 
-Every outgoing PDF (invoice, payment application, purchase order, quotation) and every uploaded surveys/project file is automatically mirrored to a **single company Microsoft OneDrive** account, filed into a predictable **Project → Work Package → Category** folder tree. New documents only — no historical backfill.
+Two written artefacts, delivered in this order. Neither involves changes to the Gridwise Connect codebase.
 
-## 1. Connector
+---
 
-- Link the existing workspace connection **"Microsoft OneDrive"** (`std_01kp0dz103ekdr7vs124a8q4ee`) to the project via `standard_connectors--connect` with `connector_id: microsoft_onedrive`. This injects `MICROSOFT_ONEDRIVE_API_KEY` alongside the existing `LOVABLE_API_KEY` — no user secret entry needed.
-- All Graph calls go through `https://connector-gateway.lovable.dev/microsoft_onedrive/v1.0/...` with `Authorization: Bearer ${LOVABLE_API_KEY}` and `X-Connection-Api-Key: ${MICROSOFT_ONEDRIVE_API_KEY}`.
+## 1. Competitive Positioning: EPE vs E.ON (HV/LV Connections)
 
-## 2. Folder layout
+**Context locked in from your answers:** Live EPE framework/contract is at risk. Gary Gummins sits inside E.ON. Jamie Charles has surfaced this via the client. Goal is a one-page, evidence-led positioning document you can hand to the client account owner and use in a retention conversation.
 
-Root is configurable in `app_settings` (default `EcoPower UK`). Structure:
+**Structure of the one-pager**
 
-```text
-/{root}/Projects/
-  {ProjectName} [{project_id-short}]/
-    _General/
-    {WP-Code} {WP-Name}/
-      Invoices/
-      Payment Applications/
-      Purchase Orders/
-      Quotations/
-      Surveys/
-      Project Files/
-```
+1. **Headline** — "Why EPE remains the right delivery partner for [Client]'s high-volume connections programme."
+2. **Head-to-head table** — EPE vs E.ON across the criteria the client actually buys on:
+   - NERS accreditation scope (LV / HV / EHV) and current active registrations
+   - Track record on this framework: sites energised, on-time %, defect rate
+   - Commercial model: fixed-price ICP vs DNO cost-plus / regulated pricing
+   - Programme control: EPE dedicated delivery team vs E.ON shared utility workforce
+   - Speed to energisation (typical weeks from POC to live)
+   - Design ownership and G81/G12 compliance route
+   - Single point of accountability vs split DNO/ICP interface risk
+3. **Risk framing for the client** — the switching costs and programme risk of moving mid-framework to a DNO-affiliated ICP (conflict-of-interest on POC allocation, loss of independent challenge, re-mobilisation lag).
+4. **Proof points** — 3 named site references from the current framework with metrics.
+5. **Commercial reassurance** — a specific commitment (e.g. rate hold, SLA uplift, or scope guarantee) to give the account owner something to trade.
+6. **Recommended next step** — a joint review meeting with the client sponsor within 10 working days, chaired by Andrew.
 
-Rules:
-- Names sanitised (strip `/ \ : * ? " < > |`, collapse whitespace, cap 120 chars).
-- Short id suffix keeps folders unique when project names collide.
-- Documents not tied to a work package (project-level uploads) go under `{Project}/_General/{Category}/`.
-- Folders are created on-demand using Graph `PATCH /me/drive/root:/{path}:` with `folder` + `conflictBehavior: replace` (idempotent), or `POST /children` per segment. Path IDs cached in a new `onedrive_folder_cache` table to avoid re-lookups.
+**What I need from you to write it accurately**
+- The client name and framework reference (Connected Kerb, Char.gy, LEVI lot, other).
+- 3 site references with dates, kW connected, and any headline metric.
+- Your current NERS scope certificate (or confirmation of scope).
+- Any existing rate card or SLA you're willing to reaffirm.
 
-## 3. New shared edge function: `onedrive-upload`
+I will draft the one-pager as a Markdown document you can drop into Word or a branded template.
 
-Server-only helper called by other edge functions. Not called from the browser.
+---
 
-Input:
-```ts
-{ project_id?: uuid, work_package_id?: uuid, category:
-  'invoice'|'payment_application'|'purchase_order'|'quotation'|'survey'|'project_file',
-  filename: string, source: { bucket: string, path: string } | { base64: string, mime: string } }
-```
+## 2. EPA Awarding Organisation Approval Plan (Phase 1 Critical Path)
 
-Steps:
-1. Verify caller JWT (service-to-service invocations pass user JWT through).
-2. Resolve project/WP names → build folder path → ensure folders exist (uses cache).
-3. Download bytes from Supabase Storage (if `bucket/path`) or decode base64.
-4. `PUT /me/drive/root:/{full/path/filename}:/content` (files ≤ 4 MB) or upload-session (larger). Include conflict behaviour `rename` so re-sends don't overwrite.
-5. Return `{ onedrive_item_id, web_url, path }`.
-6. Log to new `onedrive_uploads` audit table (see §5).
+**Objective:** AO approval secured in time to certify the first cohort at Birmingham launch, January 2027. Working back from that date, the plan needs to be in submission-ready state by early Q4 2026.
 
-## 4. Wiring existing flows
+**Plan sections**
 
-Each place additively calls `onedrive-upload` **after** the primary action succeeds. Failure is logged but never blocks the user flow (toast: "OneDrive sync failed — will retry").
+1. **Target AO** — recommendation between the realistic options for an EV/electrical-connections technical qualification: Highfield, NOCN, City & Guilds, or Innovate Awarding. Chosen on scope fit, application lead time, and fee structure.
+2. **Submission scope** — which qualification(s) EPA is seeking recognition to deliver and assess. Anchored on the curriculum outline in the EPA Strategy document.
+3. **Evidence pack requirements** — the standard AO due-diligence checklist:
+   - Legal entity, financial standing, insurance
+   - Governance and quality assurance policies
+   - Assessor and IQA CVs and occupational competence evidence
+   - Malpractice, appeals, RPL, reasonable adjustments policies
+   - Sample assessment materials and marking schemes
+   - Centre facilities and equipment inventory (Birmingham site)
+4. **Owner and RACI** — named owner per workstream, with Callum/Andrew as accountable sponsors.
+5. **Timeline** — reverse-planned from Jan 2027 launch:
+   - Submission: end September 2026
+   - AO review and Q&A: October–November 2026
+   - Centre approval visit: November 2026
+   - Approval decision: mid-December 2026
+   - Buffer: 2 weeks
+6. **Dependencies and risks** — flags the JV governance dependency (AO will ask for the Shareholders' Agreement and confirmed directors), Birmingham facility lease, and assessor recruitment lead time.
+7. **Budget** — application fees, centre approval fee, first-year annual fee, assessor qualification costs.
+8. **Weekly cadence** — standing 30-minute review, single RAG tracker, exception reporting to the board.
 
-| Flow | File touched | Category | Notes |
-|---|---|---|---|
-| Send invoice / payment application | `supabase/functions/send-invoice/index.ts` | `invoice` / `payment_application` | Uses already-downloaded PDF bytes; call after Outlook send succeeds. Resolve project via `invoice.project_id`, WP via `invoice.work_package_id` if present. |
-| Send purchase order | `supabase/functions/send-purchase-order/index.ts` | `purchase_order` | Resolve WP via `po.work_package_id`; project via WP. |
-| Send quotation | `supabase/functions/send-quotation/index.ts` (existing behind `SendQuotationDialog`) | `quotation` | Same pattern. |
-| Site surveys | wherever survey PDF is generated + saved (search `survey-pdf`/survey submit path) | `survey` | Fire on survey completion. |
-| Project files upload | `src/components/delivery/ProjectFiles.tsx` → call new `project-file-mirror` edge fn after `storage.upload` + row insert | `project_file` | Client passes `project_files.id`; edge fn streams from `project-files` bucket into OneDrive. |
+**What I need from you to write it accurately**
+- Preferred AO (or authority to recommend).
+- Confirmed qualification titles/levels EPA intends to deliver.
+- Named assessors and IQAs (even provisional).
+- Birmingham facility status (leased / offer / under negotiation).
+- Board sign-off route for the budget line.
 
-No changes to the primary storage buckets — OneDrive is a mirror, not a replacement, so signed-URL downloads keep working.
+I'll produce this as a Markdown plan with a one-page RAG tracker template appended.
 
-## 5. Schema (single small migration)
+---
 
-```sql
--- Folder path cache (keyed on category + project + wp)
-create table public.onedrive_folder_cache (
-  id uuid primary key default gen_random_uuid(),
-  project_id uuid,
-  work_package_id uuid,
-  category text not null,
-  folder_path text not null,
-  onedrive_item_id text not null,
-  created_at timestamptz not null default now(),
-  unique (project_id, work_package_id, category)
-);
+## Sequencing
 
--- Per-upload audit
-create table public.onedrive_uploads (
-  id uuid primary key default gen_random_uuid(),
-  entity_type text not null,           -- 'invoice' | 'purchase_order' | ...
-  entity_id uuid,
-  project_id uuid,
-  work_package_id uuid,
-  onedrive_item_id text,
-  web_url text,
-  path text not null,
-  status text not null,                -- 'ok' | 'error'
-  error text,
-  created_at timestamptz not null default now(),
-  created_by uuid
-);
+- Draft the E.ON positioning one-pager first — it's time-critical and unblocks the client conversation.
+- AO approval plan follows immediately after, since the Jan 2027 gate is fixed and every week of Q3 matters.
+- The JV governance / Callum shareholding piece is called out as a hard dependency inside the AO plan; happy to spin it into its own workstream plan once you're ready.
 
--- App-settings row for root folder name (upsert 'onedrive.root_folder')
-```
+## Out of scope
 
-Grants + RLS: `authenticated` SELECT own-org rows (via project → org), `service_role` ALL. Only edge functions insert.
+- No Gridwise Connect code changes.
+- No changes to the current pre-construction, intelligence, or portfolio modules.
 
-## 6. Admin UI
+## Approve to proceed
 
-Add a small **OneDrive Integration** card alongside `XeroIntegration` in `src/pages/Admin.tsx`:
-- Connection status (calls a `onedrive-status` edge fn → `GET /me/drive` for display name & quota).
-- Editable "Root folder" input (default `EcoPower UK`).
-- "Test upload" button (sends a placeholder text file).
-- Recent uploads table (last 20 rows from `onedrive_uploads`).
-
-No per-user OAuth UI — this is a single company connector, linked once by admin via the standard connect flow.
-
-## 7. Out of scope (explicit)
-
-- No historical backfill.
-- No per-user OneDrive accounts.
-- No two-way sync / file browsing inside the app.
-- No changes to Xero, Outlook, or the existing storage buckets.
-
-## Migration plan
-
-1. Migration: create `onedrive_folder_cache`, `onedrive_uploads`, seed `app_settings` row.
-2. Edge fns: `onedrive-upload` (shared), `onedrive-status`, `project-file-mirror`.
-3. Wire `send-invoice`, `send-purchase-order`, `send-quotation`, survey submit path.
-4. Wire `ProjectFiles.tsx` post-upload call.
-5. Add `OneDriveIntegration.tsx` admin card.
-6. Link the connector (`standard_connectors--connect` for `microsoft_onedrive`).
-
-## Open confirmations before I build
-
-- OK to use the existing workspace **"Microsoft OneDrive"** connection (not "Andrew's Microsoft OneDrive")?
-- Root folder name **"EcoPower UK"** OK as default?
-- For invoices/POs without a project link, file under `/{root}/Unassigned/{Category}/` — acceptable?
+Confirm and share the inputs listed under each section. I'll return the E.ON one-pager first, then the AO plan.
