@@ -25,6 +25,10 @@ import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 import { SiteSurveysPanel } from "@/components/site/SiteSurveysPanel";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
+type EstimateMode = "detailed" | "synthetic" | "history";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
