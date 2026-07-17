@@ -25,6 +25,10 @@ import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 import { SiteSurveysPanel } from "@/components/site/SiteSurveysPanel";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
+type EstimateMode = "detailed" | "synthetic" | "history";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
@@ -47,6 +51,35 @@ const SiteDetail = () => {
   const { toast } = useToast();
   const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");
+
+  const [wpChooser, setWpChooser] = useState<{ mode: EstimateMode; wps: any[] } | null>(null);
+  const [noWpOpen, setNoWpOpen] = useState<EstimateMode | null>(null);
+
+  async function launchEstimate(mode: EstimateMode) {
+    if (!id) return;
+    // 1. Active WP memberships for this site (exclude archived/cancelled WPs).
+    const { data: rows, error } = await supabase
+      .from("wp_sites")
+      .select("work_package_id, work_packages:work_packages(id, name, code, status)")
+      .eq("site_id", id);
+    if (error) {
+      toast({ title: "Couldn't load Work Packages", description: error.message, variant: "destructive" });
+      return;
+    }
+    const active = (rows ?? [])
+      .map((r: any) => r.work_packages)
+      .filter((w: any) => w && !["ARCHIVED", "CANCELLED", "archived", "cancelled"].includes(String(w.status ?? "")));
+
+    if (active.length === 0) { setNoWpOpen(mode); return; }
+    if (active.length === 1) { navigateToEstimate(active[0].id, mode); return; }
+    setWpChooser({ mode, wps: active });
+  }
+
+  function navigateToEstimate(wpId: string, mode: EstimateMode) {
+    const params = new URLSearchParams({ siteId: id!, mode, source: "portfolio" });
+    if (mode === "detailed") params.set("openEstimate", "new");
+    navigate(`/wp/${wpId}/commercial/estimating?${params.toString()}`);
+  }
 
   const { data: site, isLoading } = useQuery({
     queryKey: ["site", id],
@@ -251,57 +284,74 @@ const SiteDetail = () => {
             <DropdownMenuLabel>Cost estimate</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={async () => {
-                const rawLat = raw.lat ?? raw.latitude;
-                const rawLng = raw.lng ?? raw.longitude;
-                if (!rawLat || !rawLng) {
-                  toast({ title: "No coordinates", description: "This site has no location data for a detailed estimate.", variant: "destructive" });
-                  return;
-                }
-                const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
-                const { data: latestStudy } = await supabase
-                  .from("studies")
-                  .select("id")
-                  .eq("site_id", site.id)
-                  .order("updated_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                const params = new URLSearchParams({
-                  lat: String(coords.lat),
-                  lng: String(coords.lng),
-                  siteName: site.site_name,
-                  kw: String(site.proposed_kw || 0),
-                  siteId: site.id,
-                  openEstimate: "1",
-                });
-                if (latestStudy?.id) params.set("study", latestStudy.id);
-                navigate(`/?${params.toString()}`);
-              }}
+              onSelect={() => launchEstimate("detailed")}
             >
               <Cable className="h-4 w-4 mr-2" />
               <div className="flex flex-col">
-                <span>Detailed estimate</span>
-                <span className="text-xs text-muted-foreground">Route-based on the map</span>
+                <span>Detailed Estimate</span>
+                <span className="text-xs text-muted-foreground">Opens Delivery Estimate Editor</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => {
-                const params = new URLSearchParams();
-                if (site.postcode) params.set("postcode", site.postcode);
-                if (site.proposed_kw) params.set("kw", String(site.proposed_kw));
-                if (site.postcode && site.proposed_kw) params.set("auto", "1");
-                navigate(`/quick-estimate?${params.toString()}`);
-              }}
+              onSelect={() => launchEstimate("synthetic")}
             >
               <PoundSterling className="h-4 w-4 mr-2" />
               <div className="flex flex-col">
-                <span>Fixed-rate synthetic</span>
-                <span className="text-xs text-muted-foreground">Instant unit-rate budget</span>
+                <span>Fixed-rate Synthetic</span>
+                <span className="text-xs text-muted-foreground">Rate-card + recipe engine</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => launchEstimate("history")}>
+              <Calculator className="h-4 w-4 mr-2" />
+              <div className="flex flex-col">
+                <span>Estimate History</span>
+                <span className="text-xs text-muted-foreground">All revisions for this site</span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={!!wpChooser} onOpenChange={(o) => !o && setWpChooser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a Work Package</DialogTitle>
+            <DialogDescription>This site is on more than one active Work Package. Pick where the estimate belongs.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {wpChooser?.wps.map((w: any) => (
+              <Button key={w.id} variant="outline" className="w-full justify-start"
+                onClick={() => { const m = wpChooser.mode; setWpChooser(null); navigateToEstimate(w.id, m); }}>
+                <span className="font-medium mr-2">{w.code ?? "WP"}</span>
+                <span className="text-muted-foreground truncate">{w.name}</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!noWpOpen} onOpenChange={(o) => !o && setNoWpOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Site not attached to a Work Package</DialogTitle>
+            <DialogDescription>
+              This site is not attached to an active Work Package, so a Delivery estimate can't be opened yet.
+              {isInternal
+                ? " Attach it from the Delivery Work Package page, then try again."
+                : " Ask an engineer or admin to attach it to a Work Package."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {isInternal && (
+              <Button onClick={() => { setNoWpOpen(null); navigate("/delivery/work-packages"); }}>
+                Go to Work Packages
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setNoWpOpen(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SiteSurveysPanel siteId={site.id} />
 
