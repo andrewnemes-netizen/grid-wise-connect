@@ -68,7 +68,7 @@ export function EstimateBreadcrumb({
       )}
       {site?.id && (
         <>
-          <Crumb to={`/portfolio/${site.id}`}>{site.site_name ?? "Site"}</Crumb>
+          <Crumb to={`/site/${site.id}`}>{site.site_name ?? "Site"}</Crumb>
           <ChevronRight className="h-3 w-3" />
         </>
       )}
