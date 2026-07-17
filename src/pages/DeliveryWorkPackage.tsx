@@ -95,8 +95,9 @@ export default function DeliveryWorkPackage() {
   const { data: stageRows = [] } = useQuery({
     queryKey: ["wp-site-stage", wpId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("site_stage_status")
-        .select("*").eq("work_package_id", wpId);
+      const { data, error } = await (supabase as any).from("site_stage_status")
+        .select("site_id, stage, workflow_status, blocked_reason")
+        .eq("work_package_id", wpId);
       if (error) throw error;
       return data ?? [];
     },
