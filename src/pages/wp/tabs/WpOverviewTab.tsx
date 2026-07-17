@@ -53,7 +53,7 @@ export default function WpOverviewTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("site_stage_status")
-        .select("survey, design, dno, permit, civils, electrical, meter, handover")
+        .select("site_id, stage, workflow_status")
         .eq("work_package_id", wpId!);
       if (error) throw error;
       return data ?? [];
@@ -86,10 +86,7 @@ export default function WpOverviewTab() {
     civils:"Civils", electrical:"Electrical", meter:"Meter", handover:"Handover",
   };
   const stageEntries: [string, number][] = STAGE_KEYS.map((k): [string, number] => {
-    const done = (stages as any[]).filter((r) => {
-      const v = String(r[k] ?? "").toLowerCase();
-      return ["complete","completed","done","approved","signed","valid","passed"].includes(v);
-    }).length;
+    const done = (stages as any[]).filter((r) => r.stage === k && r.workflow_status === "done").length;
     return [STAGE_LABELS[k], done];
   }).filter(([, n]) => n > 0);
 
