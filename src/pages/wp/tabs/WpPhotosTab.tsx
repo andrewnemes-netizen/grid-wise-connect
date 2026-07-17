@@ -124,7 +124,9 @@ export default function WpPhotosTab() {
             <h2 className="text-sm font-medium text-muted-foreground">{key} · {items.length}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {items.map((p) => {
-                const url = p.project_files?.storage_path ? urls[p.project_files.storage_path] : null;
+                const url = p.project_files?.storage_path
+                  ? urls[p.project_files.storage_path]
+                  : p.photo_url ?? null;
                 return (
                   <button
                     key={p.id}
