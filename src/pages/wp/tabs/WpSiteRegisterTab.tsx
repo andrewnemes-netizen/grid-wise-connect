@@ -391,10 +391,42 @@ export default function WpSiteRegisterTab() {
                         )}
                       </button>
                     </TableCell>
-                    <TableCell>{laneBadge(pc?.survey_status)}</TableCell>
-                    <TableCell>{laneBadge(pc?.ev_design_status)}</TableCell>
-                    <TableCell>{laneBadge(pc?.icp_design_status)}</TableCell>
-                    <TableCell>{laneBadge(pc?.rams_status)}</TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const summary = summariseSiteStages(s?.id ? stagesBySite.get(s.id) ?? [] : []);
+                        return (
+                          <button
+                            className="text-left w-full"
+                            title="Open the Delivery Matrix filtered to this site"
+                            onClick={() => s?.id && navigate(`/wp/${wpId}/sites/matrix?site=${s.id}`)}
+                          >
+                            <div className="text-[11px] font-medium">
+                              {summary.currentStageLabel} · {summary.currentStatusLabel}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground tabular-nums">
+                              {summary.done}/{summary.total} complete
+                              {summary.blocked > 0 && (
+                                <span className="text-rose-600 ml-1">· {summary.blocked} blocked</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex flex-col gap-0.5">
+                        {pc?.ev_design_status && (
+                          <span className="text-[10px] text-muted-foreground">EV doc: <span className="text-foreground">{pc.ev_design_status}</span></span>
+                        )}
+                        {pc?.icp_design_status && (
+                          <span className="text-[10px] text-muted-foreground">ICP doc: <span className="text-foreground">{pc.icp_design_status}</span></span>
+                        )}
+                        {pc?.rams_status && (
+                          <span className="text-[10px] text-muted-foreground">RAMS doc: <span className="text-foreground">{pc.rams_status}</span></span>
+                        )}
+                        {!pc?.ev_design_status && !pc?.icp_design_status && !pc?.rams_status && dash}
+                      </div>
+                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <button
                         className="inline-flex"
