@@ -275,6 +275,7 @@ function SiteRow({
       {newOpen && (
         <NewSiteEstimateDialog
           siteId={site.id}
+          initialSeedFromRecipe={newSeedFromRecipe}
           onClose={() => setNewOpen(false)}
           onCreated={(id) => { setNewOpen(false); invalidate(); setEditorId(id); }}
         />
