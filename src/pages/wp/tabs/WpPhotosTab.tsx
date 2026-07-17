@@ -161,6 +161,9 @@ export default function WpPhotosTab() {
               {selected.project_files?.storage_path && urls[selected.project_files.storage_path] && (
                 <img src={urls[selected.project_files.storage_path]} alt="" className="w-full rounded-md" />
               )}
+              {!selected.project_files?.storage_path && selected.photo_url && (
+                <img src={selected.photo_url} alt="" className="w-full rounded-md" />
+              )}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-xs text-muted-foreground">Site</div>
