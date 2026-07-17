@@ -193,203 +193,186 @@ export default function DeliveryWorkPackage() {
   );
 
   return (
-    <DeliverySplitLayout
-      storageKey="delivery.split.ratio.wp"
-      defaultRatio={0.32}
-      left={
-        <ProgrammeMapPane
-          title={wp?.name ?? "Work package"}
-          subtitle={[wp?.code, wp?.programmes?.name].filter(Boolean).join(" · ")}
-          items={(sites as any[]).map((s: any) => ({
-            id: s.id,
-            label: s.local_ref ? `${s.local_ref} · ${s.sites?.site_name ?? "Site"}` : (s.sites?.site_name ?? "Site"),
-            sub: s.sites?.postcode ?? undefined,
-          }))}
-          emptyLabel="No sites added yet"
-          onOpenMap={() => navigate("/")}
-        />
-      }
-      right={
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
-          <div>
-        {wp?.programmes && (
-          <Link to={`/delivery/programme/${wp.programmes.id}`} className="text-sm text-muted-foreground flex items-center gap-1 mb-2 hover:text-foreground">
-            <ArrowLeft className="h-3 w-3" /> {wp.programmes.name}
-          </Link>
-        )}
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            {editingName ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  className="text-2xl font-semibold h-10"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && nameDraft.trim()) updateWp.mutate({ name: nameDraft.trim() });
-                    if (e.key === "Escape") setEditingName(false);
-                  }}
-                />
-                <Button size="icon" variant="ghost" disabled={!nameDraft.trim() || updateWp.isPending} onClick={() => updateWp.mutate({ name: nameDraft.trim() })}><Check className="h-4 w-4" /></Button>
-                <Button size="icon" variant="ghost" onClick={() => setEditingName(false)}><X className="h-4 w-4" /></Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 group">
-                <h1 className="text-2xl font-semibold truncate">{wp?.name ?? "Work package"}</h1>
-                <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setNameDraft(wp?.name ?? ""); setEditingName(true); }}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
-              {editingCode ? (
-                <>
+    <div className="min-h-[calc(100vh-3.5rem)] overflow-auto bg-background">
+      <div className="p-6 max-w-6xl mx-auto space-y-6">
+        <div>
+          {wp?.programmes && (
+            <Link to={`/delivery/programme/${wp.programmes.id}`} className="text-sm text-muted-foreground flex items-center gap-1 mb-2 hover:text-foreground">
+              <ArrowLeft className="h-3 w-3" /> {wp.programmes.name}
+            </Link>
+          )}
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              {editingName ? (
+                <div className="flex items-center gap-2">
                   <Input
                     autoFocus
-                    value={codeDraft}
-                    onChange={(e) => setCodeDraft(e.target.value)}
-                    className="h-7 w-32 text-sm"
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    className="text-2xl font-semibold h-10"
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") updateWp.mutate({ code: codeDraft.trim() });
-                      if (e.key === "Escape") setEditingCode(false);
+                      if (e.key === "Enter" && nameDraft.trim()) updateWp.mutate({ name: nameDraft.trim() });
+                      if (e.key === "Escape") setEditingName(false);
                     }}
                   />
-                  <Button size="icon" variant="ghost" className="h-6 w-6" disabled={updateWp.isPending} onClick={() => updateWp.mutate({ code: codeDraft.trim() })}><Check className="h-3 w-3" /></Button>
-                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingCode(false)}><X className="h-3 w-3" /></Button>
-                </>
+                  <Button size="icon" variant="ghost" disabled={!nameDraft.trim() || updateWp.isPending} onClick={() => updateWp.mutate({ name: nameDraft.trim() })}><Check className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="ghost" onClick={() => setEditingName(false)}><X className="h-4 w-4" /></Button>
+                </div>
               ) : (
-                <button className="hover:text-foreground inline-flex items-center gap-1" onClick={() => { setCodeDraft(wp?.code ?? ""); setEditingCode(true); }}>
-                  {wp?.code ?? "add code"} <Pencil className="h-3 w-3 opacity-60" />
-                </button>
+                <div className="flex items-center gap-2 group">
+                  <h1 className="text-2xl font-semibold truncate">{wp?.name ?? "Work package"}</h1>
+                  <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { setNameDraft(wp?.name ?? ""); setEditingName(true); }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               )}
-              {wp?.programmes?.accounts?.name && <span>· {wp.programmes.accounts.name}</span>}
+              <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
+                {editingCode ? (
+                  <>
+                    <Input
+                      autoFocus
+                      value={codeDraft}
+                      onChange={(e) => setCodeDraft(e.target.value)}
+                      className="h-7 w-32 text-sm"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") updateWp.mutate({ code: codeDraft.trim() });
+                        if (e.key === "Escape") setEditingCode(false);
+                      }}
+                    />
+                    <Button size="icon" variant="ghost" className="h-6 w-6" disabled={updateWp.isPending} onClick={() => updateWp.mutate({ code: codeDraft.trim() })}><Check className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingCode(false)}><X className="h-3 w-3" /></Button>
+                  </>
+                ) : (
+                  <button className="hover:text-foreground inline-flex items-center gap-1" onClick={() => { setCodeDraft(wp?.code ?? ""); setEditingCode(true); }}>
+                    {wp?.code ?? "add code"} <Pencil className="h-3 w-3 opacity-60" />
+                  </button>
+                )}
+                {wp?.programmes?.accounts?.name && <span>· {wp.programmes.accounts.name}</span>}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Sites" value={sites.length} icon={<MapPin className="h-4 w-4" />} />
-        <Kpi label="WP tasks" value={wpTasks.length} icon={<ListTodo className="h-4 w-4" />} />
-        <Kpi label="Milestones" value={wpMilestones.length} icon={<MilestoneIcon className="h-4 w-4" />} />
-        <Card className="p-4">
-          <div className="text-xs text-muted-foreground mb-1">WP progress</div>
-          <div className="text-2xl font-semibold mb-2">{percent}%</div>
-          <Progress value={percent} className="h-1.5" />
-        </Card>
-      </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Kpi label="Sites" value={sites.length} icon={<MapPin className="h-4 w-4" />} />
+          <Kpi label="WP tasks" value={wpTasks.length} icon={<ListTodo className="h-4 w-4" />} />
+          <Kpi label="Milestones" value={wpMilestones.length} icon={<MilestoneIcon className="h-4 w-4" />} />
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground mb-1">WP progress</div>
+            <div className="text-2xl font-semibold mb-2">{percent}%</div>
+            <Progress value={percent} className="h-1.5" />
+          </Card>
+        </div>
 
-      <div className="flex justify-end">
-        {gridwiseOsEnabled && (
-          <Button asChild variant="default" size="sm" className="mr-2">
-            <Link to={`/wp/${wpId}`}>
-              <Sparkles className="h-4 w-4 mr-2" /> Open in Gridwise OS
+        <div className="flex justify-end">
+          {gridwiseOsEnabled && (
+            <Button asChild variant="default" size="sm" className="mr-2">
+              <Link to={`/wp/${wpId}`}>
+                <Sparkles className="h-4 w-4 mr-2" /> Open in Gridwise OS
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/import/wizard?wp=${wpId}${wp?.programme_id ? `&programme=${wp.programme_id}` : ""}`}>
+              <Upload className="h-4 w-4 mr-2" /> Import sites
             </Link>
           </Button>
-        )}
-        <Button asChild variant="outline" size="sm">
-          <Link to={`/import/wizard?wp=${wpId}${wp?.programme_id ? `&programme=${wp.programme_id}` : ""}`}>
-            <Upload className="h-4 w-4 mr-2" /> Import sites
-          </Link>
-        </Button>
-      </div>
-
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="sites">Sites</TabsTrigger>
-          <TabsTrigger value="tasks">WP Tasks</TabsTrigger>
-          <TabsTrigger value="milestones">Milestones</TabsTrigger>
-          <TabsTrigger value="matrix">Matrix</TabsTrigger>
-          <TabsTrigger value="gantt">Master Gantt</TabsTrigger>
-          <TabsTrigger value="igantt">Interactive Gantt</TabsTrigger>
-          <TabsTrigger value="site-estimates">Site estimates</TabsTrigger>
-          <TabsTrigger value="estimate"><Receipt className="h-3.5 w-3.5 mr-1" />Estimate v1</TabsTrigger>
-          <TabsTrigger value="estimates-v2"><Receipt className="h-3.5 w-3.5 mr-1" />Estimates</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <Card className="p-4 space-y-2">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-muted-foreground">Status</span>
-                <div><InlineEdit value={wp?.status} options={WP_LIFECYCLE} onSave={(v) => updateWp.mutate({ status: v })} pending={updateWp.isPending} /></div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Approved value</span>
-                <div
-                  className="font-medium tabular-nums"
-                  title={
-                    approvedValue
-                      ? `Site estimates £${Math.round(approvedValue.siteTotal).toLocaleString()} + Estimate v1 £${Math.round(approvedValue.wpTotal).toLocaleString()} + Estimates £${Math.round(approvedValue.v2Total).toLocaleString()}`
-                      : "Sum of subtotals from Site estimates, Estimate v1 and Estimates"
-                  }
-                >
-                  £{Math.round(approvedValue?.total ?? 0).toLocaleString()}
-                </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">auto from estimates</div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Start</span>
-                <div><InlineEdit type="date" value={wp?.start_date} onSave={(v) => updateWp.mutate({ start_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Target end</span>
-                <div><InlineEdit type="date" value={wp?.target_end_date} onSave={(v) => updateWp.mutate({ target_end_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
-              </div>
-            </div>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="sites">
-          <SitesPanel wpId={wpId} sites={sites as any} />
-        </TabsContent>
-
-        <TabsContent value="tasks">
-          <WpTasksPanel wpId={wpId} tasks={wpTasks as any} milestones={wpMilestones as any} />
-        </TabsContent>
-
-        <TabsContent value="milestones">
-          <WpMilestonesPanel wpId={wpId} milestones={wpMilestones as any} />
-        </TabsContent>
-
-        <TabsContent value="matrix">
-          <SiteMatrix wpId={wpId} sites={sites as any} stageRows={stageRows as any} />
-        </TabsContent>
-
-        <TabsContent value="gantt">
-          <MasterGantt
-            sites={sites as any}
-            sitePrograms={sitePrograms as any}
-            milestones={wpMilestones as any}
-            wpStart={wp?.start_date}
-            wpEnd={wp?.target_end_date}
-          />
-        </TabsContent>
-
-        <TabsContent value="igantt">
-          <InteractiveGantt
-            scope={{ table: "wp_tasks", depsTable: "wp_task_dependencies", scopeCol: "work_package_id", scopeId: wpId }}
-            milestones={wpMilestones as any}
-          />
-        </TabsContent>
-
-        <TabsContent value="site-estimates">
-          <SiteEstimatesPanel wpId={wpId} />
-        </TabsContent>
-
-        <TabsContent value="estimate">
-          <WpEstimatePanel wpId={wpId} />
-        </TabsContent>
-
-        <TabsContent value="estimates-v2">
-          <EstimatesTab scope={{ work_package_id: wpId }} />
-        </TabsContent>
-      </Tabs>
         </div>
-      }
-    />
+
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="sites">Sites</TabsTrigger>
+            <TabsTrigger value="tasks">WP Tasks</TabsTrigger>
+            <TabsTrigger value="milestones">Milestones</TabsTrigger>
+            <TabsTrigger value="matrix">Matrix</TabsTrigger>
+            <TabsTrigger value="gantt">Master Gantt</TabsTrigger>
+            <TabsTrigger value="igantt">Interactive Gantt</TabsTrigger>
+            <TabsTrigger value="site-estimates">Site estimates</TabsTrigger>
+            <TabsTrigger value="estimate"><Receipt className="h-3.5 w-3.5 mr-1" />Estimate v1</TabsTrigger>
+            <TabsTrigger value="estimates-v2"><Receipt className="h-3.5 w-3.5 mr-1" />Estimates</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview">
+            <Card className="p-4 space-y-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Status</span>
+                  <div><InlineEdit value={wp?.status} options={WP_LIFECYCLE} onSave={(v) => updateWp.mutate({ status: v })} pending={updateWp.isPending} /></div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Approved value</span>
+                  <div
+                    className="font-medium tabular-nums"
+                    title={
+                      approvedValue
+                        ? `Site estimates £${Math.round(approvedValue.siteTotal).toLocaleString()} + Estimate v1 £${Math.round(approvedValue.wpTotal).toLocaleString()} + Estimates £${Math.round(approvedValue.v2Total).toLocaleString()}`
+                        : "Sum of subtotals from Site estimates, Estimate v1 and Estimates"
+                    }
+                  >
+                    £{Math.round(approvedValue?.total ?? 0).toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">auto from estimates</div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Start</span>
+                  <div><InlineEdit type="date" value={wp?.start_date} onSave={(v) => updateWp.mutate({ start_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Target end</span>
+                  <div><InlineEdit type="date" value={wp?.target_end_date} onSave={(v) => updateWp.mutate({ target_end_date: v })} pending={updateWp.isPending} inputClassName="w-40" /></div>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="sites">
+            <SitesPanel wpId={wpId} sites={sites as any} />
+          </TabsContent>
+
+          <TabsContent value="tasks">
+            <WpTasksPanel wpId={wpId} tasks={wpTasks as any} milestones={wpMilestones as any} />
+          </TabsContent>
+
+          <TabsContent value="milestones">
+            <WpMilestonesPanel wpId={wpId} milestones={wpMilestones as any} />
+          </TabsContent>
+
+          <TabsContent value="matrix">
+            <SiteMatrix wpId={wpId} sites={sites as any} stageRows={stageRows as any} />
+          </TabsContent>
+
+          <TabsContent value="gantt">
+            <MasterGantt
+              sites={sites as any}
+              sitePrograms={sitePrograms as any}
+              milestones={wpMilestones as any}
+              wpStart={wp?.start_date}
+              wpEnd={wp?.target_end_date}
+            />
+          </TabsContent>
+
+          <TabsContent value="igantt">
+            <InteractiveGantt
+              scope={{ table: "wp_tasks", depsTable: "wp_task_dependencies", scopeCol: "work_package_id", scopeId: wpId }}
+              milestones={wpMilestones as any}
+            />
+          </TabsContent>
+
+          <TabsContent value="site-estimates">
+            <SiteEstimatesPanel wpId={wpId} />
+          </TabsContent>
+
+          <TabsContent value="estimate">
+            <WpEstimatePanel wpId={wpId} />
+          </TabsContent>
+
+          <TabsContent value="estimates-v2">
+            <EstimatesTab scope={{ work_package_id: wpId }} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
   );
 }
 
