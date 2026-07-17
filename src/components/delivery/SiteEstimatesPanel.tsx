@@ -59,7 +59,15 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className={map[status] ?? ""}>{status}</Badge>;
 }
 
-export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
+export default function SiteEstimatesPanel({
+  wpId,
+  focusSiteId,
+  autoMode,
+}: {
+  wpId: string;
+  focusSiteId?: string;
+  autoMode?: "detailed" | "synthetic" | "history";
+}) {
   const qc = useQueryClient();
   const [bulkOpen, setBulkOpen] = useState(false);
   const { data: wpSites = [] } = useQuery({
@@ -74,7 +82,11 @@ export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
     },
   });
 
-  if (wpSites.length === 0) {
+  const visibleSites = focusSiteId
+    ? (wpSites as any[]).filter((ws) => ws.site_id === focusSiteId)
+    : (wpSites as any[]);
+
+  if (visibleSites.length === 0) {
     return <Card className="p-6 text-sm text-muted-foreground">No sites on this work package yet.</Card>;
   }
 
@@ -85,13 +97,24 @@ export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
           Manage per-site estimates. Each site can have multiple versions; only APPROVED site estimates
           can be included in a WP estimate.
         </div>
-        <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-          <Layers className="h-4 w-4 mr-1" /> Bulk apply recipe
-        </Button>
+        {!focusSiteId && (
+          <Button size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+            <Layers className="h-4 w-4 mr-1" /> Bulk apply recipe
+          </Button>
+        )}
       </div>
-      <Accordion type="multiple" className="space-y-2">
-        {wpSites.map((ws: any) => (
-          <SiteRow key={ws.id} site={ws.sites} />
+      <Accordion
+        type="multiple"
+        className="space-y-2"
+        defaultValue={focusSiteId ? [focusSiteId] : []}
+      >
+        {visibleSites.map((ws: any) => (
+          <SiteRow
+            key={ws.id}
+            site={ws.sites}
+            autoNew={focusSiteId === ws.site_id && (autoMode === "detailed" || autoMode === "synthetic")}
+            newSeedFromRecipe={autoMode === "synthetic"}
+          />
         ))}
       </Accordion>
       {bulkOpen && (
@@ -110,10 +133,19 @@ export default function SiteEstimatesPanel({ wpId }: { wpId: string }) {
   );
 }
 
-function SiteRow({ site }: { site: any }) {
+function SiteRow({
+  site,
+  autoNew,
+  newSeedFromRecipe,
+}: {
+  site: any;
+  autoNew?: boolean;
+  newSeedFromRecipe?: boolean;
+}) {
   const qc = useQueryClient();
   const [editorId, setEditorId] = useState<string | null>(null);
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(!!autoNew);
+  useEffect(() => { if (autoNew) setNewOpen(true); }, [autoNew]);
 
   const { data: estimates = [] } = useQuery({
     queryKey: ["site-estimates", site?.id],
