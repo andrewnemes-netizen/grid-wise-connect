@@ -30,6 +30,10 @@ const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail")
 const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
 const DeliveryProposalDetail = lazy(() => import("./pages/DeliveryProposalDetail"));
 const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
+const IntelligenceLayout = lazy(() => import("./pages/intelligence/IntelligenceLayout"));
+const ExecutiveDashboard = lazy(() => import("./pages/intelligence/ExecutiveDashboard"));
+const ClientMonthlyReport = lazy(() => import("./pages/intelligence/ClientMonthlyReport"));
+const IntelligenceComingSoon = lazy(() => import("./pages/intelligence/ComingSoon"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 const SurveyForm = lazy(() => import("./pages/SurveyForm"));
@@ -153,6 +157,13 @@ const AppRoutes = () => (
       <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+      <Route path="/intelligence" element={<ProtectedRoute><IntelligenceLayout /></ProtectedRoute>}>
+        <Route index element={<ExecutiveDashboard />} />
+        <Route path="client-report" element={<ClientMonthlyReport />} />
+        <Route path="wp-report" element={<IntelligenceComingSoon title="WP Reports" note="Per-work-package passport report — ships in slice 4." />} />
+        <Route path="site-report" element={<IntelligenceComingSoon title="Site Reports" note="Per-site passport report — ships in slice 4." />} />
+        <Route path="ask" element={<IntelligenceComingSoon title="Ask Gridwise" note="Natural-language programme Q&A — ships in slice 5." />} />
+      </Route>
       <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
       <Route path="/assistant/:threadId" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
       <Route path="/import/wizard" element={<ProtectedRoute><ImportWizard /></ProtectedRoute>} />
