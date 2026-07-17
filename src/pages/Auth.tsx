@@ -72,6 +72,7 @@ const Auth = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <h1 className="sr-only">Gridwise Connect — Sign in</h1>
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-3">
