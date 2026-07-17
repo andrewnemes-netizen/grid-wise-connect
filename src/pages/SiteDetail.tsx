@@ -52,6 +52,35 @@ const SiteDetail = () => {
   const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");
 
+  const [wpChooser, setWpChooser] = useState<{ mode: EstimateMode; wps: any[] } | null>(null);
+  const [noWpOpen, setNoWpOpen] = useState<EstimateMode | null>(null);
+
+  async function launchEstimate(mode: EstimateMode) {
+    if (!id) return;
+    // 1. Active WP memberships for this site (exclude archived/cancelled WPs).
+    const { data: rows, error } = await supabase
+      .from("wp_sites")
+      .select("work_package_id, work_packages:work_packages(id, name, code, status)")
+      .eq("site_id", id);
+    if (error) {
+      toast({ title: "Couldn't load Work Packages", description: error.message, variant: "destructive" });
+      return;
+    }
+    const active = (rows ?? [])
+      .map((r: any) => r.work_packages)
+      .filter((w: any) => w && !["ARCHIVED", "CANCELLED", "archived", "cancelled"].includes(String(w.status ?? "")));
+
+    if (active.length === 0) { setNoWpOpen(mode); return; }
+    if (active.length === 1) { navigateToEstimate(active[0].id, mode); return; }
+    setWpChooser({ mode, wps: active });
+  }
+
+  function navigateToEstimate(wpId: string, mode: EstimateMode) {
+    const params = new URLSearchParams({ siteId: id!, mode, source: "portfolio" });
+    if (mode === "detailed") params.set("openEstimate", "new");
+    navigate(`/wp/${wpId}/commercial/estimating?${params.toString()}`);
+  }
+
   const { data: site, isLoading } = useQuery({
     queryKey: ["site", id],
     queryFn: async () => {
