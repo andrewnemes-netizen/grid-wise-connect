@@ -6985,8 +6985,11 @@ export type Database = {
           latitude: number | null
           longitude: number | null
           org_id: string
+          photo_url: string | null
           project_file_id: string | null
           site_id: string | null
+          site_survey_response_id: string | null
+          source: string | null
           tags: string[] | null
           taken_at: string | null
           updated_at: string
@@ -7003,8 +7006,11 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           org_id: string
+          photo_url?: string | null
           project_file_id?: string | null
           site_id?: string | null
+          site_survey_response_id?: string | null
+          source?: string | null
           tags?: string[] | null
           taken_at?: string | null
           updated_at?: string
@@ -7021,8 +7027,11 @@ export type Database = {
           latitude?: number | null
           longitude?: number | null
           org_id?: string
+          photo_url?: string | null
           project_file_id?: string | null
           site_id?: string | null
+          site_survey_response_id?: string | null
+          source?: string | null
           tags?: string[] | null
           taken_at?: string | null
           updated_at?: string
