@@ -1,0 +1,10 @@
+# Gridwise Connect
+
+> Eco Power Energy's grid intelligence platform for planning, estimating and delivering EV charging and ICP connections across the UK.
+
+Gridwise Connect combines DNO datasets, PostGIS spatial analysis, and workflow tooling to take EV and ICP projects from feasibility through pre-construction and delivery. The application is authenticated; only the marketing landing page and sign-in are public.
+
+## Pages
+
+- [Home](/): Product overview and sign-in entry point.
+- [Sign in](/auth): Authentication for Eco Power Energy staff, clients, and consultants.
