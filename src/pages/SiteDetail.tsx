@@ -284,57 +284,74 @@ const SiteDetail = () => {
             <DropdownMenuLabel>Cost estimate</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={async () => {
-                const rawLat = raw.lat ?? raw.latitude;
-                const rawLng = raw.lng ?? raw.longitude;
-                if (!rawLat || !rawLng) {
-                  toast({ title: "No coordinates", description: "This site has no location data for a detailed estimate.", variant: "destructive" });
-                  return;
-                }
-                const coords = normalizeUkCoords(Number(rawLat), Number(rawLng));
-                const { data: latestStudy } = await supabase
-                  .from("studies")
-                  .select("id")
-                  .eq("site_id", site.id)
-                  .order("updated_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                const params = new URLSearchParams({
-                  lat: String(coords.lat),
-                  lng: String(coords.lng),
-                  siteName: site.site_name,
-                  kw: String(site.proposed_kw || 0),
-                  siteId: site.id,
-                  openEstimate: "1",
-                });
-                if (latestStudy?.id) params.set("study", latestStudy.id);
-                navigate(`/?${params.toString()}`);
-              }}
+              onSelect={() => launchEstimate("detailed")}
             >
               <Cable className="h-4 w-4 mr-2" />
               <div className="flex flex-col">
-                <span>Detailed estimate</span>
-                <span className="text-xs text-muted-foreground">Route-based on the map</span>
+                <span>Detailed Estimate</span>
+                <span className="text-xs text-muted-foreground">Opens Delivery Estimate Editor</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => {
-                const params = new URLSearchParams();
-                if (site.postcode) params.set("postcode", site.postcode);
-                if (site.proposed_kw) params.set("kw", String(site.proposed_kw));
-                if (site.postcode && site.proposed_kw) params.set("auto", "1");
-                navigate(`/quick-estimate?${params.toString()}`);
-              }}
+              onSelect={() => launchEstimate("synthetic")}
             >
               <PoundSterling className="h-4 w-4 mr-2" />
               <div className="flex flex-col">
-                <span>Fixed-rate synthetic</span>
-                <span className="text-xs text-muted-foreground">Instant unit-rate budget</span>
+                <span>Fixed-rate Synthetic</span>
+                <span className="text-xs text-muted-foreground">Rate-card + recipe engine</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => launchEstimate("history")}>
+              <Calculator className="h-4 w-4 mr-2" />
+              <div className="flex flex-col">
+                <span>Estimate History</span>
+                <span className="text-xs text-muted-foreground">All revisions for this site</span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={!!wpChooser} onOpenChange={(o) => !o && setWpChooser(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Choose a Work Package</DialogTitle>
+            <DialogDescription>This site is on more than one active Work Package. Pick where the estimate belongs.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {wpChooser?.wps.map((w: any) => (
+              <Button key={w.id} variant="outline" className="w-full justify-start"
+                onClick={() => { const m = wpChooser.mode; setWpChooser(null); navigateToEstimate(w.id, m); }}>
+                <span className="font-medium mr-2">{w.code ?? "WP"}</span>
+                <span className="text-muted-foreground truncate">{w.name}</span>
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!noWpOpen} onOpenChange={(o) => !o && setNoWpOpen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Site not attached to a Work Package</DialogTitle>
+            <DialogDescription>
+              This site is not attached to an active Work Package, so a Delivery estimate can't be opened yet.
+              {isInternal
+                ? " Attach it from the Delivery Work Package page, then try again."
+                : " Ask an engineer or admin to attach it to a Work Package."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            {isInternal && (
+              <Button onClick={() => { setNoWpOpen(null); navigate("/delivery/work-packages"); }}>
+                Go to Work Packages
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setNoWpOpen(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SiteSurveysPanel siteId={site.id} />
 
