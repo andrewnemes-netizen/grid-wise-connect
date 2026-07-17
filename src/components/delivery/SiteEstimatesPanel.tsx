@@ -292,13 +292,13 @@ function SiteRow({
 
 // -------- New site estimate dialog --------
 function NewSiteEstimateDialog({
-  siteId, onClose, onCreated,
-}: { siteId: string; onClose: () => void; onCreated: (id: string) => void; }) {
+  siteId, onClose, onCreated, initialSeedFromRecipe,
+}: { siteId: string; onClose: () => void; onCreated: (id: string) => void; initialSeedFromRecipe?: boolean; }) {
   const [name, setName] = useState("Baseline");
   const [contractId, setContractId] = useState<string | undefined>();
   const [rateCardVersionId, setRateCardVersionId] = useState<string | undefined>();
   const [recipeId, setRecipeId] = useState<string | undefined>();
-  const [seedFromRecipe, setSeedFromRecipe] = useState(true);
+  const [seedFromRecipe, setSeedFromRecipe] = useState(initialSeedFromRecipe ?? true);
   const [saving, setSaving] = useState(false);
   const { data: unitRates } = useUnitRates();
   const [hubCombo, setHubCombo] = useState<string>("none"); // "none" | "buildout-4" | ...
