@@ -557,16 +557,17 @@ const Portfolio = () => {
                 <TableHead>Constraints</TableHead>
                 <TableHead>OSM</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Work Package</TableHead>
                 <SortHeader label="Created" k="created_at" />
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={16} className="py-8">
+                  <TableCell colSpan={17} className="py-8">
                     <div className="flex flex-col items-center gap-3 text-center">
                       <p className="text-sm font-medium text-destructive">Portfolio failed to load.</p>
                       <p className="text-xs text-muted-foreground">
@@ -579,7 +580,7 @@ const Portfolio = () => {
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={16} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={17} className="text-center text-muted-foreground py-8">No sites found. Use the map to run a feasibility check and save a site.</TableCell></TableRow>
               ) : (
                 filtered.map((site: any) => (
                   <TableRow key={site.id} className="cursor-pointer hover:bg-muted/50">
@@ -653,6 +654,33 @@ const Portfolio = () => {
                       })()}
                     </TableCell>
                     <TableCell onClick={() => navigate(`/site/${site.id}`)}><Badge variant="secondary" className="capitalize">{site.status}</Badge></TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const wps = wpsBySite.get(site.id) ?? [];
+                        if (wps.length === 0) {
+                          return <Badge variant="outline" className="text-[10px] text-muted-foreground">Loose</Badge>;
+                        }
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {wps.slice(0, 2).map((w) => (
+                              <Badge
+                                key={w.id}
+                                variant="secondary"
+                                className="text-[10px] cursor-pointer hover:bg-secondary/80"
+                                onClick={() => navigate(`/wp/${w.id}/sites/register`)}
+                                title={`Open ${w.name}`}
+                              >
+                                <Package className="h-3 w-3 mr-1" />
+                                {w.code ?? w.name}
+                              </Badge>
+                            ))}
+                            {wps.length > 2 && (
+                              <Badge variant="outline" className="text-[10px]">+{wps.length - 2}</Badge>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-xs" onClick={() => navigate(`/site/${site.id}`)}>{format(new Date(site.created_at), "dd MMM yyyy")}</TableCell>
                     <TableCell className="flex gap-0.5" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate(`/site/${site.id}`)}>
