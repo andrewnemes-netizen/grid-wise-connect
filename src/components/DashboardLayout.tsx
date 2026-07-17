@@ -10,7 +10,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <main className="flex-1 flex flex-col">
           <header className="sticky top-0 z-40 flex h-14 items-center border-b border-border/60 bg-background/85 backdrop-blur px-4">
-            <SidebarTrigger className="text-foreground/70 hover:text-foreground" />
+            <SidebarTrigger aria-label="Toggle sidebar" className="text-foreground/70 hover:text-foreground" />
             <div className="ml-3 flex items-center gap-2.5">
               <img src={epeLogo} alt="Eco Power Energy" className="h-5 object-contain" />
               <span className="font-display text-sm font-semibold tracking-tight text-foreground">Gridwise Connect</span>
