@@ -121,7 +121,7 @@ export default function WpMatrixTab() {
           {focusSiteId && (
             <div className="mt-2 text-xs">
               <Badge variant="outline">Filtered to 1 site</Badge>
-              <Link to={`../sites/matrix`} className="ml-2 text-primary hover:underline">Show all sites</Link>
+              <Link to={`/wp/${wpId}/sites/matrix`} className="ml-2 text-primary hover:underline">Show all sites</Link>
             </div>
           )}
         </div>
