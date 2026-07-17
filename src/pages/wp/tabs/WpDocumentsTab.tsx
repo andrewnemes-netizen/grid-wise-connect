@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FolderOpen, Download, FileText, Image as ImageIcon, FileArchive } from "lucide-react";
+import { FolderOpen, Download, FileText, Image as ImageIcon, FileArchive, ExternalLink, Cloud } from "lucide-react";
 import { toast } from "sonner";
 
 function iconFor(mime?: string | null) {
@@ -61,16 +61,53 @@ export default function WpDocumentsTab() {
     },
   });
 
+  const onedrive = useQuery({
+    queryKey: ["wp-onedrive-docs", wpId, siteIds.data],
+    enabled: !!wpId && !!siteIds.data,
+    queryFn: async () => {
+      const ids = siteIds.data ?? [];
+      const orParts = [
+        `work_package_id.eq.${wpId}`,
+        ids.length ? `entity_id.in.(${ids.join(",")})` : null,
+      ].filter(Boolean).join(",");
+      const { data, error } = await supabase
+        .from("onedrive_uploads")
+        .select("id, entity_type, entity_id, filename, path, web_url, status, created_at")
+        .eq("status", "ok")
+        .or(orParts)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []).map((r: any) => ({
+        id: `od-${r.id}`,
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        filename: r.filename ?? r.path?.split("/").pop() ?? "file",
+        mime: null,
+        size_bytes: null,
+        created_at: r.created_at,
+        web_url: r.web_url,
+        storage_path: null,
+        __onedrive: true,
+      }));
+    },
+  });
+
   const filtered = useMemo(() => {
-    const rows = (files.data ?? []) as any[];
+    const rows = [...((files.data ?? []) as any[]), ...((onedrive.data ?? []) as any[])];
     return rows.filter((r) => {
       if (entityFilter !== "all" && r.entity_type !== entityFilter) return false;
       if (q && !(`${r.filename ?? ""}`.toLowerCase().includes(q.toLowerCase()))) return false;
       return true;
     });
-  }, [files.data, q, entityFilter]);
+  }, [files.data, onedrive.data, q, entityFilter]);
 
   const download = async (row: any) => {
+    if (row.__onedrive) {
+      if (row.web_url) window.open(row.web_url, "_blank");
+      else toast.error("No OneDrive link available");
+      return;
+    }
     if (!row.storage_path) return;
     const { data, error } = await supabase.storage.from("project-files").createSignedUrl(row.storage_path, 60);
     if (error) { toast.error(error.message); return; }
@@ -78,11 +115,11 @@ export default function WpDocumentsTab() {
   };
 
   const counts = useMemo(() => {
-    const rows = (files.data ?? []) as any[];
+    const rows = [...((files.data ?? []) as any[]), ...((onedrive.data ?? []) as any[])];
     const c: Record<string, number> = { all: rows.length };
     for (const r of rows) c[r.entity_type ?? "unknown"] = (c[r.entity_type ?? "unknown"] ?? 0) + 1;
     return c;
-  }, [files.data]);
+  }, [files.data, onedrive.data]);
 
   return (
     <div className="space-y-4">
@@ -98,7 +135,7 @@ export default function WpDocumentsTab() {
 
       <div className="flex flex-wrap items-center gap-2">
         <Input placeholder="Search filename…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
-        {["all", "work_package", "site", "purchase_order", "design_submission"].map((k) => (
+        {["all", "work_package", "site", "purchase_order", "invoice", "quotation", "survey", "design_submission"].map((k) => (
           <Button key={k} size="sm" variant={entityFilter === k ? "default" : "outline"} onClick={() => setEntityFilter(k)}>
             {k.replace("_", " ")} ({counts[k] ?? 0})
           </Button>
@@ -126,11 +163,11 @@ export default function WpDocumentsTab() {
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                        {r.__onedrive ? <Cloud className="h-4 w-4 text-muted-foreground shrink-0" /> : <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
                         <span className="truncate max-w-[280px]">{r.filename ?? "—"}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.mime ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.__onedrive ? "OneDrive" : (r.mime ?? "—")}</TableCell>
                     <TableCell className="text-xs">
                       <Badge variant="outline">{r.entity_type ?? "—"}</Badge>
                     </TableCell>
@@ -139,8 +176,8 @@ export default function WpDocumentsTab() {
                       {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
                     </TableCell>
                     <TableCell>
-                      <Button size="icon" variant="ghost" onClick={() => download(r)} title="Download">
-                        <Download className="h-4 w-4" />
+                      <Button size="icon" variant="ghost" onClick={() => download(r)} title={r.__onedrive ? "Open in OneDrive" : "Download"}>
+                        {r.__onedrive ? <ExternalLink className="h-4 w-4" /> : <Download className="h-4 w-4" />}
                       </Button>
                     </TableCell>
                   </TableRow>
