@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     }
 
     // Publishable key (same as client-side)
-    const key = "AIzaSyAmWxB25LnJgpULZRuBHG4CjlrEKMcQlTs";
+    const key = Deno.env.get("GOOGLE_MAPS_KEY") ?? "";
 
     const url = `https://maps.googleapis.com/maps/api/streetview?size=${width}x${height}&location=${lat},${lng}&heading=${heading}&pitch=${pitch}&fov=${fov}&key=${key}`;
 

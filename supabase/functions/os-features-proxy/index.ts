@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const OS_API_KEY = "j7vwIPqoPOj5tiwNsJGlQ1SDD2GpsehD";
+const OS_API_KEY = Deno.env.get("OS_API_KEY") ?? "";
 
 /**
  * OS Features API (WFS) Proxy — with retry + cache headers
