@@ -312,10 +312,8 @@ export default function WpSiteRegisterTab() {
                 <TableHead>POC</TableHead>
                 <TableHead>Offer</TableHead>
                 <TableHead>Estimate</TableHead>
-                <TableHead>Survey</TableHead>
-                <TableHead>EV design</TableHead>
-                <TableHead>ICP design</TableHead>
-                <TableHead>RAMS</TableHead>
+                <TableHead>Stage progress</TableHead>
+                <TableHead>Docs</TableHead>
                 <TableHead>Review</TableHead>
                 <TableHead>Next action</TableHead>
                 <TableHead>Last activity</TableHead>
@@ -325,12 +323,12 @@ export default function WpSiteRegisterTab() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={17}><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell colSpan={14}><Skeleton className="h-5 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
                     {rows.length === 0 ? "No sites allocated to this work package yet." : "No sites match your search."}
                   </TableCell>
                 </TableRow>
