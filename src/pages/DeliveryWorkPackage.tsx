@@ -44,7 +44,6 @@ export default function DeliveryWorkPackage() {
   const { id } = useParams();
   const wpId = id!;
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const { enabled: gridwiseOsEnabled } = useFeatureFlag("gridwise_os_shell");
   const [editingName, setEditingName] = useState(false);
   const [editingCode, setEditingCode] = useState(false);
