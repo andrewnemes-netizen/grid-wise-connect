@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { FolderOpen, Search, Eye, Download, ArrowUpDown, BarChart3, X, Train, Droplets, TrafficCone, Crosshair, Trash2, ClipboardList, Upload } from "lucide-react";
+import { Package } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -216,6 +217,7 @@ const Portfolio = () => {
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
   const [surveySiteIds, setSurveySiteIds] = useState<string[] | null>(null);
+  const [filterWp, setFilterWp] = useState<string>("all"); // "all" | "unassigned" | "assigned" | <wpId>
 
   const { data: sites = [], isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["sites", user?.id],
@@ -241,6 +243,40 @@ const Portfolio = () => {
     refetchOnWindowFocus: false,
   });
 
+  // Site -> Work Package memberships (active only)
+  const { data: wpMemberships = [] } = useQuery({
+    queryKey: ["portfolio-wp-memberships", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("wp_sites")
+        .select("site_id, work_package_id, work_packages:work_packages(id, name, code, status)");
+      if (error) throw error;
+      return (data ?? []).filter((r: any) => {
+        const st = String(r.work_packages?.status ?? "").toUpperCase();
+        return r.work_packages && st !== "ARCHIVED" && st !== "CANCELLED";
+      });
+    },
+  });
+
+  const wpsBySite = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; code?: string | null }[]>();
+    for (const r of wpMemberships as any[]) {
+      const arr = m.get(r.site_id) ?? [];
+      arr.push(r.work_packages);
+      m.set(r.site_id, arr);
+    }
+    return m;
+  }, [wpMemberships]);
+
+  const allWps = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; code?: string | null }>();
+    for (const r of wpMemberships as any[]) {
+      if (r.work_packages && !seen.has(r.work_packages.id)) seen.set(r.work_packages.id, r.work_packages);
+    }
+    return Array.from(seen.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  }, [wpMemberships]);
+
   const filtered = useMemo(() => {
     let list = sites.filter((s: any) => {
       if (filterScore !== "all" && s.score !== filterScore) return false;
@@ -249,6 +285,12 @@ const Portfolio = () => {
       if (filterCost !== "all" && s.cost_band !== filterCost) return false;
       if (filterDeploy !== "all" && s.deployment_class !== filterDeploy) return false;
       if (search && !s.site_name?.toLowerCase().includes(search.toLowerCase()) && !s.postcode?.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterWp !== "all") {
+        const wps = wpsBySite.get(s.id) ?? [];
+        if (filterWp === "unassigned" && wps.length > 0) return false;
+        if (filterWp === "assigned" && wps.length === 0) return false;
+        if (filterWp !== "unassigned" && filterWp !== "assigned" && !wps.some((w) => w.id === filterWp)) return false;
+      }
       return true;
     });
 
@@ -268,7 +310,15 @@ const Portfolio = () => {
     });
 
     return list;
-  }, [sites, filterScore, filterStatus, filterGrid, filterCost, filterDeploy, search, sortKey, sortDir]);
+  }, [sites, filterScore, filterStatus, filterGrid, filterCost, filterDeploy, filterWp, wpsBySite, search, sortKey, sortDir]);
+
+  const wpCounts = useMemo(() => {
+    let assigned = 0, unassigned = 0;
+    for (const s of sites as any[]) {
+      if ((wpsBySite.get(s.id) ?? []).length > 0) assigned++; else unassigned++;
+    }
+    return { assigned, unassigned };
+  }, [sites, wpsBySite]);
 
   const compareSites = useMemo(() => sites.filter((s: any) => compareIds.has(s.id)), [sites, compareIds]);
 
