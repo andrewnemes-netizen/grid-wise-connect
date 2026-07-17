@@ -1,6 +1,7 @@
 import WpOverviewTab from "./tabs/WpOverviewTab";
 import WpSiteRegisterTab from "./tabs/WpSiteRegisterTab";
 import WpMapTab from "./tabs/WpMapTab";
+import WpMatrixTab from "./tabs/WpMatrixTab";
 import WpEstimatingTab from "./tabs/WpEstimatingTab";
 import WpPurchaseOrdersTab from "./tabs/WpPurchaseOrdersTab";
 import WpVariationsTab from "./tabs/WpVariationsTab";
@@ -20,6 +21,7 @@ import WpCommissioningTab from "./tabs/WpCommissioningTab";
 export const WpOverview = WpOverviewTab;
 export const WpSiteRegister = WpSiteRegisterTab;
 export const WpMap = WpMapTab;
+export const WpMatrix = WpMatrixTab;
 export const WpPreCon = WpPreConTab;
 export const WpReadiness = WpReadinessTab;
 export const WpEstimating = WpEstimatingTab;

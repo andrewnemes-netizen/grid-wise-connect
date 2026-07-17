@@ -13,6 +13,7 @@ import {
   WpMap,
   WpPreCon,
   WpReadiness,
+  WpMatrix,
   WpEstimating,
   WpPurchaseOrders,
   WpVariations,
@@ -109,6 +110,7 @@ export default function WorkPackageShell() {
               <Route path="sites/map" element={<WpMap />} />
               <Route path="sites/pre-construction" element={<WpPreCon />} />
               <Route path="sites/readiness" element={<WpReadiness />} />
+              <Route path="sites/matrix" element={<WpMatrix />} />
               <Route path="commercial/estimating" element={<WpEstimating />} />
               <Route path="commercial/purchase-orders" element={<WpPurchaseOrders />} />
               <Route path="commercial/variations" element={<WpVariations />} />

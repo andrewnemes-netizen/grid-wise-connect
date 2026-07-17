@@ -5,6 +5,7 @@ import {
   Map as MapIcon,
   HardHat,
   ShieldCheck,
+  LayoutGrid,
   Calculator,
   ShoppingCart,
   FileDiff,
@@ -45,6 +46,7 @@ const NAV: Group[] = [
     label: "Sites",
     items: [
       { title: "Site Register", slug: "sites/register", icon: MapPin },
+      { title: "Delivery Matrix", slug: "sites/matrix", icon: LayoutGrid },
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
       { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
