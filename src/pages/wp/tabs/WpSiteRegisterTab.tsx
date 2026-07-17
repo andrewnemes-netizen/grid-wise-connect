@@ -14,6 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
+import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { useNavigate } from "react-router-dom";
 
 type LaneFilter = "all" | "active" | "rejected" | "ready";
 
@@ -44,6 +46,7 @@ function laneState(pc: any): "ready" | "rejected" | "active" {
 
 export default function WpSiteRegisterTab() {
   const { id: wpId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [laneFilter, setLaneFilter] = useState<LaneFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -53,6 +56,7 @@ export default function WpSiteRegisterTab() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
     qc.invalidateQueries({ queryKey: ["wp-site-precon-status", wpId] });
+    qc.invalidateQueries({ queryKey: ["wp-site-stage-summary", wpId] });
   };
   const clearSel = () => setSelected(new Set());
 
@@ -88,6 +92,28 @@ export default function WpSiteRegisterTab() {
     },
   });
   const preconBySite = new Map<string, any>((precon as any[]).map((p) => [p.site_id, p]));
+
+  const { data: stageStatusRows = [] } = useQuery({
+    queryKey: ["wp-site-stage-summary", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("site_stage_status")
+        .select("site_id, stage, workflow_status")
+        .eq("work_package_id", wpId!);
+      if (error) throw error;
+      return (data ?? []) as { site_id: string; stage: StageKey; workflow_status: StageStatus }[];
+    },
+  });
+  const stagesBySite = useMemo(() => {
+    const m = new Map<string, { stage: StageKey; workflow_status: StageStatus }[]>();
+    (stageStatusRows as any[]).forEach((r) => {
+      const arr = m.get(r.site_id) ?? [];
+      arr.push({ stage: r.stage, workflow_status: r.workflow_status });
+      m.set(r.site_id, arr);
+    });
+    return m;
+  }, [stageStatusRows]);
 
   const bulkSendPoc = useMutation({
     mutationFn: async (siteIds: string[]) => {
