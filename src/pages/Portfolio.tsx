@@ -468,6 +468,22 @@ const Portfolio = () => {
             <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filterWp} onValueChange={setFilterWp}>
+          <SelectTrigger className="w-56 h-9"><SelectValue placeholder="Work Package" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All sites</SelectItem>
+            <SelectItem value="unassigned">Loose — no WP ({wpCounts.unassigned})</SelectItem>
+            <SelectItem value="assigned">Assigned to any WP ({wpCounts.assigned})</SelectItem>
+            {allWps.length > 0 && (
+              <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">By work package</div>
+            )}
+            {allWps.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.code ? `${w.code} · ` : ""}{w.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Analytics Dashboard */}
