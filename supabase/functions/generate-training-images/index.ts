@@ -68,6 +68,20 @@ serve(async (req) => {
       });
     }
 
+    // Admin-only: this generates paid AI images and overwrites shared
+    // public training assets. The UI hides the button for non-admins, but
+    // enforce it here so the endpoint can't be called directly.
+    const { data: isAdmin } = await supabase.rpc("has_role", {
+      _user_id: user.id,
+      _role: "admin",
+    });
+    if (!isAdmin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden — admin role required" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const { sectionId } = await req.json();
     const prompt = IMAGE_PROMPTS[sectionId];
     if (!prompt) {

@@ -11597,6 +11597,7 @@ export type Database = {
         Returns: boolean
       }
       is_gridwise_staff: { Args: { _user_id: string }; Returns: boolean }
+      is_open_site_survey: { Args: { _survey_id: string }; Returns: boolean }
       is_org_member: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean

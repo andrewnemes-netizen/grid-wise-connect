@@ -221,6 +221,20 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Validate JWT — reject the public anon key or forged tokens.
+    const token = authHeader.replace("Bearer ", "");
+    const authClient = createClient(
+      SUPABASE_URL,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: userData, error: userErr } = await authClient.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { messages: userMessages } = await req.json();
     if (!Array.isArray(userMessages)) throw new Error("messages array required");
 

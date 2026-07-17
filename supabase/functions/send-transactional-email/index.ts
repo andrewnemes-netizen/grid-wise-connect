@@ -49,6 +49,33 @@ Deno.serve(async (req) => {
     )
   }
 
+  // Auth gate: allow only service-role callers (internal edge-function → edge-function
+  // invocations) or a signed-in end user. Reject callers that only present the public
+  // anon key — otherwise anyone on the internet can trigger templated emails.
+  const authHeader = req.headers.get('Authorization') || ''
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  const serviceRoleKey = supabaseServiceKey
+  const isServiceRole = !!bearer && bearer === serviceRoleKey
+  if (!isServiceRole) {
+    if (!bearer) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
+    const authClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${bearer}` } },
+    })
+    const { data: userData, error: userErr } = await authClient.auth.getUser(bearer)
+    if (userErr || !userData?.user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+  }
+
   // Parse request body
   let templateName: string
   let recipientEmail: string
