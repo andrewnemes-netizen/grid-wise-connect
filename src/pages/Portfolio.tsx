@@ -387,7 +387,7 @@ const Portfolio = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <FolderOpen className="h-5 w-5 text-primary" />
-          <h2 className="text-xl font-bold text-foreground">Portfolio</h2>
+          <h1 className="text-xl font-bold text-foreground">Portfolio</h1>
           <Badge variant="secondary" className="ml-2">{filtered.length} sites</Badge>
         </div>
         <div className="flex gap-2">
