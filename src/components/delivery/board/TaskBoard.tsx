@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   ChevronDown, ChevronRight, MoreHorizontal, Search, Trash2, Plus, EyeOff, GripVertical,
+  ArrowUpRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useBoardConfig, BoardScopeColumn } from "@/hooks/useBoardConfig";
@@ -50,6 +51,7 @@ export function TaskBoard({
   invalidateKeys,
   addRowPlaceholder,
   buildNewRow,
+  onOpenRow,
 }: {
   projectId: string;
   tasks: any[];
@@ -59,6 +61,7 @@ export function TaskBoard({
   invalidateKeys?: string[][];
   addRowPlaceholder?: string;
   buildNewRow?: (title: string) => Record<string, any>;
+  onOpenRow?: (row: any) => void;
 }) {
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -428,6 +431,17 @@ export function TaskBoard({
                     </div>
                   ))}
                   <div className="flex items-center justify-center">
+                    {onOpenRow && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 mr-0.5"
+                        title="Open"
+                        onClick={(e) => { e.stopPropagation(); onOpenRow(row); }}
+                      >
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-6 w-6">

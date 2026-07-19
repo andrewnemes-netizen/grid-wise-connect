@@ -186,17 +186,8 @@ export default function DeliveryProgrammeDetail() {
             scope={{ table: "work_packages", scopeCol: "programme_id", scopeId: id!, builtinSet: "work_packages" }}
             invalidateKeys={[["programme-wps", id!]]}
             addRowPlaceholder="+ Add work package"
+            onOpenRow={(row) => navigate(`/delivery/wp/${row.id}`)}
           />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Tip: click a work package below to open its full delivery board.</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(wps as any[]).map((w) => (
-              <Button key={w.id} size="sm" variant="outline" onClick={() => navigate(`/delivery/wp/${w.id}`)}>
-                Open {w.code || w.name} →
-              </Button>
-            ))}
-          </div>
         </>
       )}
         </div>
