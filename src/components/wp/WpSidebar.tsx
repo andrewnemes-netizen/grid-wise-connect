@@ -6,6 +6,7 @@ import {
   HardHat,
   ShieldCheck,
   LayoutGrid,
+  ClipboardList,
   Calculator,
   Zap as ZapIcon,
   ShoppingCart,
@@ -51,6 +52,7 @@ const NAV: Group[] = [
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
       { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
+      { title: "Surveys", slug: "sites/surveys", icon: ClipboardList },
     ],
   },
   {

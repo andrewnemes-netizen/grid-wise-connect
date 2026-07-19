@@ -54,6 +54,10 @@ export default function SurveyForm() {
         setInvalid("This survey link is invalid, expired or has already been completed.");
       } else {
         setSurvey(row as Survey);
+        // Mark this survey as opened (best-effort; token-scoped RPC, no auth required)
+        void (async () => {
+          try { await supabase.rpc("mark_survey_opened" as any, { _token: token }); } catch { /* ignore */ }
+        })();
         const [firstName, ...rest] = (row.sent_to_name ?? "").trim().split(/\s+/);
         setValues({
           submitter_email: row.sent_to_email ?? "",

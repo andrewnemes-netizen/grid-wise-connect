@@ -15,6 +15,7 @@ import PendingApproval from "./pages/PendingApproval";
 
 const MapView = lazy(() => import("./pages/MapView"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
+const SurveysOversight = lazy(() => import("./pages/SurveysOversight"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ArchiveConsole = lazy(() => import("./pages/admin/ArchiveConsole"));
@@ -149,6 +150,7 @@ const AppRoutes = () => (
       <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+      <Route path="/surveys" element={<ProtectedRoute><SurveysOversight /></ProtectedRoute>} />
       <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
       <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
