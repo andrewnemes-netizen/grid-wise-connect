@@ -67,6 +67,15 @@ export default function SurveyForm() {
     })();
   }, [token]);
 
+  // Prevent search engines from indexing external survey links.
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    document.head.appendChild(meta);
+    return () => { document.head.removeChild(meta); };
+  }, []);
+
   const setValue = (k: string, v: any) =>
     setValues((prev) => {
       const next = { ...prev, [k]: v };
