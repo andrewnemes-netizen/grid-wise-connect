@@ -603,6 +603,16 @@ export default function WpSiteRegisterTab() {
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
 
+      {wpId && (
+        <QueueSurveyDialog
+          open={queueSurveyOpen}
+          onOpenChange={setQueueSurveyOpen}
+          siteIds={selectedIds}
+          workPackageId={wpId}
+          onDone={() => { clearSel(); invalidate(); }}
+        />
+      )}
+
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
