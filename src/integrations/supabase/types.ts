@@ -7264,8 +7264,12 @@ export type Database = {
           expires_at: string
           id: string
           message: string | null
+          opened_at: string | null
           org_id: string | null
+          resent_from_id: string | null
           response_id: string | null
+          revoked_at: string | null
+          revoked_by: string | null
           sent_by: string
           sent_to_email: string
           sent_to_name: string | null
@@ -7280,8 +7284,12 @@ export type Database = {
           expires_at?: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id?: string | null
+          resent_from_id?: string | null
           response_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           sent_by: string
           sent_to_email: string
           sent_to_name?: string | null
@@ -7296,8 +7304,12 @@ export type Database = {
           expires_at?: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id?: string | null
+          resent_from_id?: string | null
           response_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           sent_by?: string
           sent_to_email?: string
           sent_to_name?: string | null
@@ -7314,6 +7326,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_resent_from_id_fkey"
+            columns: ["resent_from_id"]
+            isOneToOne: false
+            referencedRelation: "site_surveys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_resent_from_id_fkey"
+            columns: ["resent_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_survey_id"]
           },
           {
             foreignKeyName: "site_surveys_site_id_fkey"
@@ -10853,6 +10879,10 @@ export type Database = {
         Returns: number
       }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      extend_survey_expiry: {
+        Args: { _days: number; _survey_id: string }
+        Returns: string
+      }
       find_nearest_compatible_lv_main: {
         Args: { p_lat: number; p_lon: number; p_search_m?: number }
         Returns: {
@@ -11133,6 +11163,7 @@ export type Database = {
         Args: { _id: string; _paid_amount: number; _paid_date: string }
         Returns: undefined
       }
+      mark_survey_opened: { Args: { _token: string }; Returns: undefined }
       maybe_auto_pass_final_review: {
         Args: { p_site: string; p_wp: string }
         Returns: undefined
@@ -11330,6 +11361,10 @@ export type Database = {
           month: number
           stream: string
         }[]
+      }
+      revoke_survey: {
+        Args: { _reason?: string; _survey_id: string }
+        Returns: undefined
       }
       rollup_project_progress: {
         Args: { _project_id: string }
