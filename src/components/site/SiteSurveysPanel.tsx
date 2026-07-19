@@ -42,6 +42,7 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const [openingPdf, setOpeningPdf] = useState<string | null>(null);
 
   const openPdf = async (response: ResponseRow) => {
+    const pdfWindow = window.open("", "_blank", "noopener,noreferrer");
     setOpeningPdf(response.id);
     try {
       const submission = response.submission ?? {};
@@ -59,10 +60,15 @@ export function SiteSurveysPanel({ siteId }: Props) {
         surveyDate: submission.site_survey_date,
       });
       const objUrl = URL.createObjectURL(blob);
-      window.open(objUrl, "_blank", "noopener,noreferrer");
+      if (pdfWindow) {
+        pdfWindow.location.href = objUrl;
+      } else {
+        window.location.href = objUrl;
+      }
       setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
     } catch (e) {
       console.error(e);
+      pdfWindow?.close();
       toast.error("Could not open PDF");
     } finally {
       setOpeningPdf(null);
