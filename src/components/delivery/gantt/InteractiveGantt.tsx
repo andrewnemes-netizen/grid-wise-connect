@@ -24,7 +24,7 @@ function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); re
 export function InteractiveGantt({
   scope, milestones = [],
 }: {
-  scope: { table: "wp_tasks" | "project_tasks"; depsTable: "wp_task_dependencies" | "project_task_dependencies"; scopeCol: "work_package_id" | "project_id"; scopeId: string };
+  scope: { table: "wp_tasks"; depsTable: "wp_task_dependencies"; scopeCol: "work_package_id"; scopeId: string };
   milestones?: any[];
 }) {
   const qc = useQueryClient();
