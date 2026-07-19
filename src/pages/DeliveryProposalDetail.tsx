@@ -113,7 +113,7 @@ export default function DeliveryProposalDetail() {
       toast.success("Proposal accepted");
       qc.invalidateQueries({ queryKey: ["proposal", proposalId] });
       qc.invalidateQueries({ queryKey: ["delivery-proposals"] });
-      if (res?.work_package_id) nav(`/delivery/wp/${res.work_package_id}`);
+      if (res?.work_package_id) nav(`/wp/${res.work_package_id}/overview`);
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to accept proposal"),
   });
@@ -152,7 +152,7 @@ export default function DeliveryProposalDetail() {
               <div className="text-sm text-muted-foreground">
                 Accepted {proposal?.accepted_at ? new Date(proposal.accepted_at).toLocaleString() : ""}.
                 {proposal?.snapshot_json?.work_package_id && (
-                  <> <Link className="underline" to={`/delivery/wp/${proposal.snapshot_json.work_package_id}`}>Open work package</Link>.</>
+                  <> <Link className="underline" to={`/wp/${proposal.snapshot_json.work_package_id}/overview`}>Open work package</Link>.</>
                 )}
               </div>
             </div>
