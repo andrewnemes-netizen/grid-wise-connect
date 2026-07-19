@@ -42,35 +42,23 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const openPdf = async (responseId: string, fallbackUrl: string | null) => {
     setOpeningPdf(responseId);
     try {
-      const { data, error } = await supabase.functions.invoke("survey-pdf", {
-        method: "GET" as any,
-        // functions.invoke serializes to POST by default; force GET with query below
-      } as any);
-      // supabase-js v2 functions.invoke does not support GET query params reliably —
-      // build the URL manually and fetch with the session token.
-      throw error ?? new Error("fallback to manual fetch");
-    } catch {
-      try {
-        const { data: sess } = await supabase.auth.getSession();
-        const accessToken = sess.session?.access_token;
-        const projectId = (import.meta as any).env.VITE_SUPABASE_PROJECT_ID as string;
-        const baseUrl =
-          (import.meta as any).env.VITE_SUPABASE_URL ||
-          `https://${projectId}.supabase.co`;
-        const res = await fetch(`${baseUrl}/functions/v1/survey-pdf?response_id=${responseId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const objUrl = URL.createObjectURL(blob);
-        window.open(objUrl, "_blank", "noopener,noreferrer");
-        setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
-      } catch (e) {
-        if (fallbackUrl) {
-          window.open(fallbackUrl, "_blank", "noopener,noreferrer");
-        } else {
-          toast.error("Could not open PDF");
-        }
+      const { data: sess } = await supabase.auth.getSession();
+      const accessToken = sess.session?.access_token;
+      const baseUrl = (import.meta as any).env.VITE_SUPABASE_URL as string;
+      const res = await fetch(
+        `${baseUrl}/functions/v1/survey-pdf?response_id=${responseId}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      window.open(objUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+    } catch (e) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("Could not open PDF");
       }
     } finally {
       setOpeningPdf(null);
