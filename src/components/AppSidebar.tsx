@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { title: "Map", url: "/", icon: Map },
   { title: "Studies", url: "/studies", icon: FlaskConical },
-  { title: "Delivery", url: "/delivery", icon: Briefcase },
+  { title: "Delivery", url: "/programmes", icon: Briefcase },
   { title: "Intelligence", url: "/intelligence", icon: Sparkles },
   { title: "Revenue", url: "/delivery/revenue", icon: PoundSterling },
   { title: "Portfolio", url: "/portfolio", icon: FolderOpen },
