@@ -1,11 +1,20 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate, useParams, Link } from "react-router-dom";
+import { Routes, Route, Navigate, useParams, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WpSidebar } from "@/components/wp/WpSidebar";
 import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import {
   WpOverview,
@@ -31,6 +40,9 @@ import {
 
 function WpHeader({ wpId }: { wpId: string }) {
   const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
+  const [reason, setReason] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const navigate = useNavigate();
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -45,6 +57,18 @@ function WpHeader({ wpId }: { wpId: string }) {
       cancelled = true;
     };
   }, [wpId]);
+
+  const handleDelete = async () => {
+    if (!reason.trim()) { toast.error("Reason is required"); return; }
+    setDeleting(true);
+    const { error } = await supabase.rpc("delete_work_package" as any, {
+      _wp_id: wpId, _reason: reason.trim(),
+    });
+    setDeleting(false);
+    if (error) { toast.error(error.message ?? "Failed to archive"); return; }
+    toast.success("Work package archived (90-day retention). Restore from /admin/archive.");
+    navigate("/delivery");
+  };
 
   return (
     <header className="h-14 border-b bg-background/95 backdrop-blur sticky top-0 z-30 flex items-center gap-3 px-3 sm:px-4">
@@ -64,6 +88,38 @@ function WpHeader({ wpId }: { wpId: string }) {
           )}
         </div>
       </div>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1">
+            <Trash2 className="h-4 w-4" /> <span className="hidden sm:inline">Archive WP</span>
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this work package?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the work package and all its scoped records (tasks, estimates, POs,
+              permits, RAMS, photos, etc.). A snapshot is kept in the archive for 90 days, after
+              which it is purged permanently. Linked sites remain in the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="wp-archive-reason">Reason (required)</Label>
+            <Input id="wp-archive-reason" value={reason} onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. duplicate of WY-04, cancelled by client" />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting || !reason.trim()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+            >
+              {deleting ? "Archiving…" : "Archive work package"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <NotificationsBell />
     </header>
   );
