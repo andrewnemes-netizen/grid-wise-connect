@@ -36,6 +36,18 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const [responses, setResponses] = useState<Record<string, ResponseRow>>({});
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [publicBase, setPublicBase] = useState<string>("");
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("public_app_base_url")
+        .limit(1)
+        .maybeSingle();
+      setPublicBase((data?.public_app_base_url ?? "").replace(/\/$/, ""));
+    })();
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -92,7 +104,8 @@ export function SiteSurveysPanel({ siteId }: Props) {
             <div className="space-y-2">
               {surveys.map((s) => {
                 const response = s.response_id ? responses[s.response_id] : undefined;
-                const surveyUrl = `${window.location.origin}/survey/${s.token}`;
+                const base = publicBase || window.location.origin;
+                const surveyUrl = `${base}/survey/${s.token}`;
                 return (
                   <div key={s.id} className="border rounded p-2 text-xs space-y-1">
                     <div className="flex items-center justify-between">
