@@ -399,6 +399,9 @@ export default function WpSiteRegisterTab() {
           <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkPassFinalGate.mutate(selectedIds)}>
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pass final review
           </Button>
+          <Button size="sm" variant="destructive" disabled={busy || removeBusy} onClick={() => setRemoveDialogOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove from WP
+          </Button>
           <Button size="sm" variant="ghost" onClick={clearSel}>Clear</Button>
         </Card>
       )}
