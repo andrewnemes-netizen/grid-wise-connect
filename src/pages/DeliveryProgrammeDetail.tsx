@@ -186,7 +186,7 @@ export default function DeliveryProgrammeDetail() {
             scope={{ table: "work_packages", scopeCol: "programme_id", scopeId: id!, builtinSet: "work_packages" }}
             invalidateKeys={[["programme-wps", id!]]}
             addRowPlaceholder="+ Add work package"
-            onOpenRow={(row) => navigate(`/delivery/wp/${row.id}`)}
+            onOpenRow={(row) => navigate(`/wp/${row.id}/overview`)}
           />
         </>
       )}
