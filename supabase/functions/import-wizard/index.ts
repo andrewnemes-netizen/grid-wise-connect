@@ -19,7 +19,7 @@ function json(body: unknown, status = 200) {
 type CanonicalKey =
   | "site_name" | "address" | "postcode" | "uprn"
   | "lat" | "lng" | "client_ref" | "charger_type"
-  | "proposed_kw" | "socket_count" | "dno" | "lpa" | "notes";
+  | "proposed_kw" | "kw_per_socket" | "socket_count" | "dno" | "lpa" | "notes";
 
 const SYNONYMS: Record<CanonicalKey, string[]> = {
   site_name: ["site name", "name", "site", "location name", "site title"],
@@ -30,7 +30,8 @@ const SYNONYMS: Record<CanonicalKey, string[]> = {
   lng: ["lng", "long", "longitude", "lon", "x"],
   client_ref: ["client ref", "client reference", "reference", "ref", "site ref", "external id"],
   charger_type: ["charger", "charger type", "type", "ev type", "connector"],
-  proposed_kw: ["kw", "power", "demand", "proposed kw", "power demand", "load", "kva"],
+  proposed_kw: ["total kw", "site kw", "proposed kw", "total demand", "site load", "total site kw", "kva"],
+  kw_per_socket: ["kw per socket", "kw each", "kw/socket", "socket kw", "socket power", "power per socket", "power rating", "rating", "charger kw", "charger power", "kw", "power"],
   socket_count: ["sockets", "socket count", "chargers", "no. of chargers", "num chargers"],
   dno: ["dno", "network operator"],
   lpa: ["lpa", "local authority", "council"],
@@ -94,9 +95,28 @@ function validateRow(mapped: Record<string, any>): { status: "ok" | "warning" | 
     else if (kw <= 0 || kw > 20000) warnings.push("Proposed kW outside expected range");
     else mapped.proposed_kw = kw;
   }
+  if (mapped.kw_per_socket !== undefined) {
+    const kw = Number(mapped.kw_per_socket);
+    if (!Number.isFinite(kw)) errors.push("kW per socket is not a number");
+    else if (kw <= 0 || kw > 1000) warnings.push("kW per socket outside expected range");
+    else mapped.kw_per_socket = kw;
+  }
   if (mapped.socket_count !== undefined) {
     const s = parseInt(String(mapped.socket_count), 10);
     if (Number.isFinite(s)) mapped.socket_count = s; else warnings.push("Socket count is not a whole number");
+  }
+  // If per-socket kW is provided, derive the total site kW so downstream summaries
+  // (and the sites.proposed_kw column) reflect actual site demand rather than a
+  // single-socket rating that was accidentally treated as total.
+  if (typeof mapped.kw_per_socket === "number") {
+    const qty = typeof mapped.socket_count === "number" && mapped.socket_count > 0 ? mapped.socket_count : 1;
+    const derived = Number((mapped.kw_per_socket * qty).toFixed(2));
+    if (mapped.proposed_kw === undefined) {
+      mapped.proposed_kw = derived;
+    } else if (Math.abs(Number(mapped.proposed_kw) - derived) > 0.5) {
+      warnings.push(`Total kW (${mapped.proposed_kw}) differs from ${qty} × ${mapped.kw_per_socket}kW per socket (${derived}) — using per-socket total`);
+      mapped.proposed_kw = derived;
+    }
   }
 
   let lat: number | undefined;
@@ -493,6 +513,29 @@ async function handleApprove(req: Request, ctx: NonNullable<Awaited<ReturnType<t
     if (error) {
       await ctx.admin.from("import_rows").update({ status: "error", errors_json: [error.message] }).eq("id", r.id);
       continue;
+    }
+    // Create a canonical Socket Group so the phase-balance / PoC pipeline
+    // treats imported sites the same as manually-entered ones.
+    {
+      const qty = Number(m.socket_count) > 0 ? Number(m.socket_count) : (m.kw_per_socket ? 1 : 0);
+      let kwEach = Number(m.kw_per_socket);
+      if (!Number.isFinite(kwEach) || kwEach <= 0) {
+        // Fall back to total kW / sockets if only proposed_kw was supplied.
+        if (Number(m.proposed_kw) > 0 && qty > 0) {
+          kwEach = Number((Number(m.proposed_kw) / qty).toFixed(2));
+        }
+      }
+      if (qty > 0 && Number.isFinite(kwEach) && kwEach > 0) {
+        const phases = kwEach >= 10 ? 3 : 1;
+        const { error: grpErr } = await ctx.admin.from("site_socket_groups").insert({
+          site_id: site.id,
+          quantity: qty,
+          power_rating_kw: kwEach,
+          phases,
+          sort_order: 0,
+        });
+        if (grpErr) console.warn("socket group insert failed", grpErr.message);
+      }
     }
     if (r.lat != null && r.lng != null) {
       // sites.geom is SRID 27700 — use RPC helper to transform WGS84 → BNG.
