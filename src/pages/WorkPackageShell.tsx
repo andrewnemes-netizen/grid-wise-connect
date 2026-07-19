@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useParams, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WpSidebar } from "@/components/wp/WpSidebar";
-import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -128,30 +127,7 @@ function WpHeader({ wpId }: { wpId: string }) {
 
 export default function WorkPackageShell() {
   const { id } = useParams<{ id: string }>();
-  const { enabled, loading } = useFeatureFlag("gridwise_os_shell");
-
-  if (!id) return <Navigate to="/delivery" replace />;
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">Loading Work Package…</div>
-    );
-  }
-  if (!enabled) {
-    return (
-      <div className="mx-auto max-w-lg p-6">
-        <div className="rounded-lg border p-6 text-center space-y-3">
-          <h1 className="text-lg font-semibold">Gridwise OS shell is off</h1>
-          <p className="text-sm text-muted-foreground">
-            The new Work Package workspace is behind the <code>gridwise_os_shell</code> feature flag. Ask an
-            administrator to enable it for your account or organisation.
-          </p>
-          <Button asChild variant="outline">
-            <Link to={`/delivery/wp/${id}`}>Open legacy Work Package</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  if (!id) return <Navigate to="/programmes" replace />;
 
   return (
     <SidebarProvider>
