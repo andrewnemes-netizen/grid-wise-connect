@@ -322,7 +322,7 @@ export default function WpSiteRegisterTab() {
     });
     return m;
   }, [rows]);
-  const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
+  const busy = bulkSendPoc.isPending || bulkPassFinalGate.isPending;
 
   const bulkRemoveFromWp = useMutation({
     mutationFn: async (siteIds: string[]) => {
@@ -383,7 +383,7 @@ export default function WpSiteRegisterTab() {
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setPocDialogOpen(true)}>
             <Zap className="h-3.5 w-3.5 mr-1" /> Send for POC
           </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSurveyAlloc.mutate(selectedIds)}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => setQueueSurveyOpen(true)}>
             <ClipboardList className="h-3.5 w-3.5 mr-1" /> Queue survey
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkPassFinalGate.mutate(selectedIds)}>
