@@ -108,6 +108,62 @@ Deno.serve(async (req) => {
     console.warn('site_photos registration failed:', e instanceof Error ? e.message : e)
   }
 
+  // Auto-advance delivery matrix "Survey" stage to Review and notify the allocator.
+  try {
+    const { data: memberships } = await admin
+      .from('wp_sites')
+      .select('work_package_id, work_packages!inner(id, status)')
+      .eq('site_id', survey.site_id)
+    const activeWp = (memberships ?? []).find((m: any) => {
+      const s = String(m.work_packages?.status ?? '').toUpperCase()
+      return s && s !== 'ARCHIVED' && s !== 'CANCELLED'
+    }) ?? (memberships ?? [])[0]
+    const workPackageId = activeWp?.work_package_id ?? null
+
+    if (workPackageId) {
+      const { data: existingStage } = await admin
+        .from('site_stage_status')
+        .select('id, workflow_status')
+        .eq('work_package_id', workPackageId)
+        .eq('site_id', survey.site_id)
+        .eq('stage', 'survey')
+        .maybeSingle()
+
+      // Only advance if not already Done — don't regress completed stages.
+      if (!existingStage || existingStage.workflow_status !== 'done') {
+        if (existingStage?.id) {
+          await admin.from('site_stage_status')
+            .update({ workflow_status: 'review' })
+            .eq('id', existingStage.id)
+        } else {
+          await admin.from('site_stage_status').insert({
+            work_package_id: workPackageId,
+            site_id: survey.site_id,
+            stage: 'survey',
+            workflow_status: 'review',
+          })
+        }
+      }
+    }
+
+    if (survey.sent_by) {
+      const siteName = site?.site_name ?? 'site'
+      const link = workPackageId
+        ? `/wp/${workPackageId}/sites/matrix?site=${survey.site_id}`
+        : `/site/${survey.site_id}`
+      await admin.from('notifications').insert({
+        user_id: survey.sent_by,
+        type: 'survey_submitted',
+        message: `Survey submitted for ${siteName} — ready for your review.`,
+        link,
+        entity_type: 'site_survey_response',
+        entity_id: body.response_id,
+      })
+    }
+  } catch (e) {
+    console.warn('stage/notify update failed:', e instanceof Error ? e.message : e)
+  }
+
   // Best-effort mirror survey PDF to OneDrive
   if (body.pdf_storage_path) {
     try {
