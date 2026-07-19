@@ -559,7 +559,7 @@ export default function WpSiteRegisterTab() {
       <SendForPocDialog
         open={pocDialogOpen}
         onOpenChange={setPocDialogOpen}
-        siteCount={selectedIds.length}
+        siteIds={selectedIds}
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
