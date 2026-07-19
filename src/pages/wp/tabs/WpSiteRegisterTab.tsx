@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Zap, ClipboardList, CheckCircle2 } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,16 @@ import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { validateSiteForPoc } from "@/lib/wp/pocValidation";
 import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +65,7 @@ export default function WpSiteRegisterTab() {
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -324,6 +335,27 @@ export default function WpSiteRegisterTab() {
   }, [rows]);
   const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
 
+  const bulkRemoveFromWp = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return { removed: 0, blocked: [] as string[] };
+      const { data, error } = await (supabase as any).rpc("remove_sites_from_wp", {
+        _wp_id: wpId,
+        _site_ids: siteIds,
+      });
+      if (error) throw error;
+      return (data ?? { removed: 0, blocked: [] }) as { removed: number; blocked: string[] };
+    },
+    onSuccess: (res) => {
+      const removed = res?.removed ?? 0;
+      toast.success(`Removed ${removed} site${removed === 1 ? "" : "s"} from this Work Package`);
+      setRemoveDialogOpen(false);
+      clearSel();
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed to remove sites"),
+  });
+  const removeBusy = bulkRemoveFromWp.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -366,6 +398,9 @@ export default function WpSiteRegisterTab() {
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkPassFinalGate.mutate(selectedIds)}>
             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Pass final review
+          </Button>
+          <Button size="sm" variant="destructive" disabled={busy || removeBusy} onClick={() => setRemoveDialogOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove from WP
           </Button>
           <Button size="sm" variant="ghost" onClick={clearSel}>Clear</Button>
         </Card>
@@ -574,6 +609,40 @@ export default function WpSiteRegisterTab() {
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
+
+      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {selectedIds.length} site{selectedIds.length === 1 ? "" : "s"} from this Work Package?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This unlinks the selected site{selectedIds.length === 1 ? "" : "s"} from this Work Package and archives their WP-scoped tasks and Pre-Con gates. The Site records and their estimates, surveys, photos, designs and offers remain unchanged, and sites can be re-added later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {selectedIds.length > 0 && (
+            <div className="max-h-40 overflow-y-auto rounded border bg-muted/30 p-2 text-xs space-y-1">
+              {selectedIds.map((sid) => {
+                const m = siteMetaById.get(sid);
+                return (
+                  <div key={sid} className="flex justify-between gap-2">
+                    <span className="truncate">{m?.site_name ?? sid}</span>
+                    <span className="text-muted-foreground">{m?.local_ref ?? m?.postcode ?? ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removeBusy}
+              onClick={(e) => { e.preventDefault(); bulkRemoveFromWp.mutate(selectedIds); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removeBusy ? "Removing..." : "Remove from WP"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
