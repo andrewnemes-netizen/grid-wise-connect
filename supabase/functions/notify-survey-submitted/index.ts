@@ -33,6 +33,15 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (!survey) return json({ error: 'Survey not found' }, 404)
 
+  // Persist pdf_storage_path so the app-origin proxy can stream the PDF without
+  // hitting the ad-blocker-prone supabase.co host.
+  if (body.pdf_storage_path) {
+    await admin
+      .from('site_survey_responses')
+      .update({ pdf_storage_path: body.pdf_storage_path })
+      .eq('id', body.response_id)
+  }
+
   const { data: site } = await admin
     .from('sites').select('id, site_name, postcode, org_id').eq('id', survey.site_id).maybeSingle()
   const { data: owner } = await admin
