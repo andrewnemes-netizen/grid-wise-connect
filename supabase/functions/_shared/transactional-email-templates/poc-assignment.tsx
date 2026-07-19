@@ -13,6 +13,11 @@ interface SiteLine {
   lng?: number | null
   sockets?: number | null
   kwPerSocket?: number | null
+  breakdown?: string | null
+  totalConnectedKw?: number | null
+  phaseTotals?: { L1: number; L2: number; L3: number } | null
+  phaseAssignments?: { L1: string[]; L2: string[]; L3: string[] } | null
+  socketGroups?: Array<{ quantity: number; power_rating_kw: number; phases: number }> | null
 }
 
 interface Props {
@@ -50,8 +55,30 @@ const Email = ({
                 <Text style={cardRow}><span style={label}>Postcode</span><span style={value}>{s.postcode ?? '—'}</span></Text>
                 <Text style={cardRow}><span style={label}>Feeder Pillar Latitude</span><span style={value}>{s.lat ?? '—'}</span></Text>
                 <Text style={cardRow}><span style={label}>Feeder Pillar Longitude</span><span style={value}>{s.lng ?? '—'}</span></Text>
-                <Text style={cardRow}><span style={label}>Number of Sockets</span><span style={value}>{s.sockets ?? '—'}</span></Text>
-                <Text style={cardRow}><span style={label}>Socket Power Rating</span><span style={value}>{s.kwPerSocket != null ? `${s.kwPerSocket} kW` : '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Total Sockets</span><span style={value}>{s.sockets ?? '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Socket Groups</span><span style={value}>{s.breakdown ?? (s.kwPerSocket != null ? `${s.sockets ?? 0}× ${s.kwPerSocket}kW` : '—')}</span></Text>
+                <Text style={cardRow}><span style={label}>Total Connected Load</span><span style={value}>{s.totalConnectedKw != null ? `${Math.round(s.totalConnectedKw * 100) / 100} kW` : (s.kwPerSocket != null && s.sockets != null ? `${Math.round(s.kwPerSocket * s.sockets * 100) / 100} kW` : '—')}</span></Text>
+                {s.phaseTotals && (
+                  <>
+                    <Text style={{ ...label, marginTop: 10, marginBottom: 4 }}>Phase Load Balance</Text>
+                    <Section style={phaseGrid}>
+                      {(['L1','L2','L3'] as const).map((p) => (
+                        <div key={p} style={phaseCell}>
+                          <Text style={phaseLabel}>{p}</Text>
+                          <Text style={phaseValue}>{Math.round((s.phaseTotals?.[p] ?? 0) * 100) / 100} kW</Text>
+                          <Text style={phaseSockets}>
+                            {s.phaseAssignments && s.phaseAssignments[p].length > 0
+                              ? s.phaseAssignments[p].join(', ')
+                              : '—'}
+                          </Text>
+                        </div>
+                      ))}
+                    </Section>
+                    <Text style={{ color: '#888', fontSize: '11px', margin: '4px 0 0' }}>
+                      * indicates a 3-phase socket split evenly across L1/L2/L3.
+                    </Text>
+                  </>
+                )}
               </Section>
             ))}
             {dueDate && (
@@ -97,8 +124,17 @@ export const template = {
     message: 'Please submit within 5 working days and copy me on the acknowledgement.',
     dueDate: '02 Sep 2026',
     sites: [
-      { address: 'High Street Car Park, Westminster', siteId: 'EP-001', postcode: 'SW1A 1AA', lat: 51.5014, lng: -0.1419, sockets: 6, kwPerSocket: 22 },
-      { address: 'Station Yard, Plymouth', siteId: null, postcode: 'PL4 6AB', lat: 50.3778, lng: -4.1436, sockets: 4, kwPerSocket: 50 },
+      {
+        address: 'High Street Car Park, Westminster', siteId: 'EP-001', postcode: 'SW1A 1AA',
+        lat: 51.5014, lng: -0.1419, sockets: 4, kwPerSocket: 10.75,
+        breakdown: '3× 7kW (1φ), 1× 22kW (3φ)', totalConnectedKw: 43,
+        phaseTotals: { L1: 14.33, L2: 14.33, L3: 14.33 },
+        phaseAssignments: {
+          L1: ['7.33kW*', '7kW'],
+          L2: ['7.33kW*', '7kW'],
+          L3: ['7.33kW*', '7kW'],
+        },
+      },
     ],
     actionUrl: 'https://example.com/wp/abc/sites/register',
   },
@@ -119,3 +155,8 @@ const button = {
 }
 const hr = { borderColor: '#e5e5e5', margin: '24px 0' }
 const footer = { color: '#888888', fontSize: '12px', lineHeight: '18px' }
+const phaseGrid = { display: 'flex', gap: '8px', marginTop: '4px' }
+const phaseCell = { flex: '1 1 0', backgroundColor: '#ffffff', borderRadius: '6px', padding: '8px', textAlign: 'center' as const, border: '1px solid #e5e0d3' }
+const phaseLabel = { color: '#888', fontSize: '10px', textTransform: 'uppercase' as const, letterSpacing: '0.05em', margin: 0 }
+const phaseValue = { color: '#0d7a5f', fontSize: '14px', fontWeight: 700, margin: '2px 0' }
+const phaseSockets = { color: '#555', fontSize: '11px', margin: 0 }

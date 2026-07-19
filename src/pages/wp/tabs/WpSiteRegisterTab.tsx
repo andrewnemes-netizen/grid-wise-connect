@@ -186,6 +186,11 @@ export default function WpSiteRegisterTab() {
             lng: s?.lng ?? null,
             sockets: s?.socket_count ?? null,
             kwPerSocket: s?.kwPerSocket ?? null,
+            breakdown: s?.breakdownLabel ?? null,
+            totalConnectedKw: s?.totalConnectedKw ?? null,
+            phaseTotals: s?.phaseTotals ?? null,
+            phaseAssignments: s?.phaseAssignments ?? null,
+            socketGroups: s?.socketGroups ?? [],
           };
         });
         const origin = typeof window !== "undefined" ? window.location.origin : "";

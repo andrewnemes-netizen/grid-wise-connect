@@ -198,6 +198,18 @@ export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName,
                         Missing: {validation.missing.join(", ")}
                       </div>
                     )}
+                    {validation.ok && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5 space-y-0.5">
+                        <div>
+                          {record.totalSockets} sockets · {record.breakdownLabel || "—"} · Total {Math.round(record.totalConnectedKw * 100) / 100} kW
+                        </div>
+                        <div>
+                          L1 {Math.round(record.phaseTotals.L1 * 100) / 100}kW ·
+                          L2 {Math.round(record.phaseTotals.L2 * 100) / 100}kW ·
+                          L3 {Math.round(record.phaseTotals.L3 * 100) / 100}kW
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {!validation.ok && (
                     <Link
