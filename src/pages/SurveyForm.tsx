@@ -105,7 +105,7 @@ export default function SurveyForm() {
   const uploadFile = async (file: Blob, path: string, contentType: string) => {
     const { error } = await supabase.storage
       .from("site-surveys")
-      .upload(path, file, { contentType, upsert: false });
+      .upload(path, file, { contentType, upsert: true });
     if (error) throw error;
     const { data } = await supabase.storage.from("site-surveys").getPublicUrl(path);
     // Bucket is private; use signed URL for reliable access
