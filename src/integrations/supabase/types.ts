@@ -11578,6 +11578,19 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_sites_for_poc: {
+        Args: { _site_ids: string[] }
+        Returns: {
+          client_site_code: string
+          id: string
+          lat: number
+          lng: number
+          postcode: string
+          proposed_kw: number
+          site_name: string
+          socket_count: number
+        }[]
+      }
       get_survey_by_token: {
         Args: { _token: string }
         Returns: {
