@@ -609,6 +609,40 @@ export default function WpSiteRegisterTab() {
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
+
+      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {selectedIds.length} site{selectedIds.length === 1 ? "" : "s"} from this Work Package?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This unlinks the selected site{selectedIds.length === 1 ? "" : "s"} from this Work Package and archives their WP-scoped tasks and Pre-Con gates. The Site records and their estimates, surveys, photos, designs and offers remain unchanged, and sites can be re-added later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {selectedIds.length > 0 && (
+            <div className="max-h-40 overflow-y-auto rounded border bg-muted/30 p-2 text-xs space-y-1">
+              {selectedIds.map((sid) => {
+                const m = siteMetaById.get(sid);
+                return (
+                  <div key={sid} className="flex justify-between gap-2">
+                    <span className="truncate">{m?.site_name ?? sid}</span>
+                    <span className="text-muted-foreground">{m?.local_ref ?? m?.postcode ?? ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removeBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={removeBusy}
+              onClick={(e) => { e.preventDefault(); bulkRemoveFromWp.mutate(selectedIds); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removeBusy ? "Removing..." : "Remove from WP"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
