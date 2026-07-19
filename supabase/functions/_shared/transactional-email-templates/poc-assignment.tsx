@@ -6,9 +6,13 @@ import {
 import type { TemplateEntry } from './registry.ts'
 
 interface SiteLine {
-  name?: string
-  postcode?: string
-  ref?: string
+  address?: string | null
+  siteId?: string | null
+  postcode?: string | null
+  lat?: number | null
+  lng?: number | null
+  sockets?: number | null
+  kwPerSocket?: number | null
 }
 
 interface Props {
@@ -37,20 +41,27 @@ const Email = ({
         </Text>
 
         {sites.length > 0 && (
-          <Section style={card}>
-            <Text style={{ ...label, marginBottom: 8 }}>Sites ({sites.length})</Text>
+          <>
+            <Text style={{ ...label, marginBottom: 4 }}>Sites ({sites.length})</Text>
             {sites.map((s, i) => (
-              <Text key={i} style={cardRow}>
-                <span style={value}>{s.name ?? 'Site'}</span>
-                <span style={label}>{[s.ref, s.postcode].filter(Boolean).join(' · ')}</span>
-              </Text>
+              <Section key={i} style={card}>
+                <Text style={siteHeading}>{s.address ?? 'Site'}</Text>
+                <Text style={cardRow}><span style={label}>Site ID</span><span style={value}>{s.siteId ?? 'Not assigned'}</span></Text>
+                <Text style={cardRow}><span style={label}>Postcode</span><span style={value}>{s.postcode ?? '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Feeder Pillar Latitude</span><span style={value}>{s.lat ?? '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Feeder Pillar Longitude</span><span style={value}>{s.lng ?? '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Number of Sockets</span><span style={value}>{s.sockets ?? '—'}</span></Text>
+                <Text style={cardRow}><span style={label}>Socket Power Rating</span><span style={value}>{s.kwPerSocket != null ? `${s.kwPerSocket} kW` : '—'}</span></Text>
+              </Section>
             ))}
             {dueDate && (
-              <Text style={{ ...cardRow, marginTop: 12 }}>
-                <span style={label}>Target return</span><span style={value}>{dueDate}</span>
-              </Text>
+              <Section style={card}>
+                <Text style={cardRow}>
+                  <span style={label}>Target return</span><span style={value}>{dueDate}</span>
+                </Text>
+              </Section>
             )}
-          </Section>
+          </>
         )}
 
         {message && <Text style={text}>{message}</Text>}
@@ -86,8 +97,8 @@ export const template = {
     message: 'Please submit within 5 working days and copy me on the acknowledgement.',
     dueDate: '02 Sep 2026',
     sites: [
-      { name: 'High Street Car Park', postcode: 'SW1A 1AA', ref: 'S-001' },
-      { name: 'Station Yard', postcode: 'PL4 6AB', ref: 'S-002' },
+      { address: 'High Street Car Park, Westminster', siteId: 'EP-001', postcode: 'SW1A 1AA', lat: 51.5014, lng: -0.1419, sockets: 6, kwPerSocket: 22 },
+      { address: 'Station Yard, Plymouth', siteId: null, postcode: 'PL4 6AB', lat: 50.3778, lng: -4.1436, sockets: 4, kwPerSocket: 50 },
     ],
     actionUrl: 'https://example.com/wp/abc/sites/register',
   },
@@ -98,6 +109,7 @@ const container = { padding: '32px 24px', maxWidth: '560px', margin: '0 auto' }
 const h1 = { color: '#0d7a5f', fontSize: '24px', fontWeight: 700, margin: '0 0 16px' }
 const text = { color: '#333333', fontSize: '15px', lineHeight: '22px', margin: '0 0 12px' }
 const card = { backgroundColor: '#f5f2ea', borderRadius: '8px', padding: '16px 20px', margin: '20px 0' }
+const siteHeading = { color: '#0d7a5f', fontSize: '15px', fontWeight: 700, margin: '0 0 8px' }
 const cardRow = { color: '#333333', fontSize: '14px', margin: '4px 0', display: 'flex', justifyContent: 'space-between' as const }
 const label = { color: '#666666', fontSize: '12px', textTransform: 'uppercase' as const, letterSpacing: '0.05em' }
 const value = { color: '#111111', fontSize: '14px', fontWeight: 600 }

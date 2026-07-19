@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import { validateSiteForPoc } from "@/lib/wp/pocValidation";
 import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { useNavigate } from "react-router-dom";
 
@@ -120,6 +121,12 @@ export default function WpSiteRegisterTab() {
   const bulkSendPoc = useMutation({
     mutationFn: async ({ siteIds, assignment }: { siteIds: string[]; assignment: PocAssignment }) => {
       if (!wpId || siteIds.length === 0) return;
+      // Defence in depth: revalidate site records from the enriched payload
+      const invalid = (assignment.sites ?? []).filter((s) => !validateSiteForPoc(s as any).ok);
+      if (invalid.length > 0) {
+        throw new Error(`${invalid.length} site${invalid.length === 1 ? "" : "s"} missing required PoC fields`);
+      }
+      const bySiteId = new Map((assignment.sites ?? []).map((s) => [s.id, s]));
       const rows = siteIds.map((sid) => ({
         work_package_id: wpId,
         site_id: sid,
@@ -138,6 +145,7 @@ export default function WpSiteRegisterTab() {
             email: assignment.assigneeEmail ?? null,
             user_id: assignment.assigneeUserId ?? null,
           },
+          poc_site: bySiteId.get(sid) ?? null,
         },
       }));
       const { error } = await (supabase as any).from("wp_tasks").insert(rows);
@@ -157,13 +165,16 @@ export default function WpSiteRegisterTab() {
       );
 
       if (assignment.sendEmail && assignment.assigneeEmail) {
-        const siteLines = (rows as any[]).map((_r, i) => {
-          const sid = siteIds[i];
-          const meta = (siteMetaById as any).get?.(sid) ?? {};
+        const siteLines = siteIds.map((sid) => {
+          const s = bySiteId.get(sid) as any;
           return {
-            name: meta.site_name ?? "Site",
-            postcode: meta.postcode ?? undefined,
-            ref: meta.local_ref ?? undefined,
+            address: s?.address ?? null,
+            siteId: s?.siteId ?? null,
+            postcode: s?.postcode ?? null,
+            lat: s?.lat ?? null,
+            lng: s?.lng ?? null,
+            sockets: s?.socket_count ?? null,
+            kwPerSocket: s?.kwPerSocket ?? null,
           };
         });
         const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -559,7 +570,7 @@ export default function WpSiteRegisterTab() {
       <SendForPocDialog
         open={pocDialogOpen}
         onOpenChange={setPocDialogOpen}
-        siteCount={selectedIds.length}
+        siteIds={selectedIds}
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
