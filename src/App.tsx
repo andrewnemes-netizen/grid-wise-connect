@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -114,6 +114,15 @@ function AuthRoute() {
   if (loading) return null;
   if (user) return <Navigate to="/" replace />;
   return <Auth />;
+}
+
+function LegacyProgrammeRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/programme/${id}`} replace />;
+}
+function LegacyWpRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/wp/${id}/overview`} replace />;
 }
 
 /** Catches unhandled promise rejections globally so they don't crash the app */
