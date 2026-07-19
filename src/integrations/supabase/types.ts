@@ -7589,6 +7589,7 @@ export type Database = {
           id: string
           image_urls: Json
           org_id: string | null
+          pdf_storage_path: string | null
           pdf_url: string | null
           signature_url: string | null
           site_id: string
@@ -7603,6 +7604,7 @@ export type Database = {
           id?: string
           image_urls?: Json
           org_id?: string | null
+          pdf_storage_path?: string | null
           pdf_url?: string | null
           signature_url?: string | null
           site_id: string
@@ -7617,6 +7619,7 @@ export type Database = {
           id?: string
           image_urls?: Json
           org_id?: string | null
+          pdf_storage_path?: string | null
           pdf_url?: string | null
           signature_url?: string | null
           site_id?: string

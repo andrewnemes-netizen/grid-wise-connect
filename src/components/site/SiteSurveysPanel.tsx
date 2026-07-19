@@ -37,6 +37,33 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [publicBase, setPublicBase] = useState<string>("");
+  const [openingPdf, setOpeningPdf] = useState<string | null>(null);
+
+  const openPdf = async (responseId: string, fallbackUrl: string | null) => {
+    setOpeningPdf(responseId);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const accessToken = sess.session?.access_token;
+      const baseUrl = (import.meta as any).env.VITE_SUPABASE_URL as string;
+      const res = await fetch(
+        `${baseUrl}/functions/v1/survey-pdf?response_id=${responseId}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      window.open(objUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+    } catch (e) {
+      if (fallbackUrl) {
+        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
+      } else {
+        toast.error("Could not open PDF");
+      }
+    } finally {
+      setOpeningPdf(null);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -124,13 +151,20 @@ export function SiteSurveysPanel({ siteId }: Props) {
                           Submitted by {response.submitter_name ?? response.submitter_email ?? "—"}
                           {response.submission?.overall_status ? ` · ${response.submission.overall_status}` : ""}
                         </span>
-                        {response.pdf_url && (
-                          <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                            <a href={response.pdf_url} target="_blank" rel="noreferrer">
-                              <FileText className="h-3 w-3 mr-1" /> PDF
-                            </a>
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          disabled={openingPdf === response.id}
+                          onClick={() => openPdf(response.id, response.pdf_url)}
+                        >
+                          {openingPdf === response.id ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <FileText className="h-3 w-3 mr-1" />
+                          )}
+                          PDF
+                        </Button>
                       </div>
                     ) : s.status === "pending" ? (
                       <div className="flex items-center gap-2 pt-1">
