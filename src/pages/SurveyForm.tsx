@@ -115,6 +115,15 @@ export default function SurveyForm() {
     return signed?.signedUrl ?? data.publicUrl;
   };
 
+  const uniqueSurveyPath = (fileName: string) => {
+    if (!survey) return fileName;
+    const suffix = `${Date.now()}-${crypto.randomUUID()}`;
+    const dot = fileName.lastIndexOf(".");
+    const base = dot >= 0 ? fileName.slice(0, dot) : fileName;
+    const ext = dot >= 0 ? fileName.slice(dot) : "";
+    return `${survey.survey_id}/${base}-${suffix}${ext}`;
+  };
+
   const handleSubmit = async () => {
     if (!survey || !token) return;
     setSubmitting(true);
@@ -131,7 +140,7 @@ export default function SurveyForm() {
           for (let i = 0; i < group.files.length; i++) {
             const f = group.files[i];
             const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
-            const path = `${survey.survey_id}/${field.key}/${Date.now()}-${i}.${ext}`;
+            const path = `${survey.survey_id}/${field.key}/${Date.now()}-${crypto.randomUUID()}-${i}.${ext}`;
             const url = await uploadFile(f, path, f.type || "image/jpeg");
             photos.push({ url, caption: group.captions[i] || undefined });
             flatImageUrls.push(url);
@@ -144,7 +153,7 @@ export default function SurveyForm() {
       let sigUrl: string | null = null;
       if (signatureUrl) {
         const blob = await (await fetch(signatureUrl)).blob();
-        sigUrl = await uploadFile(blob, `${survey.survey_id}/signature.png`, "image/png");
+        sigUrl = await uploadFile(blob, uniqueSurveyPath("signature.png"), "image/png");
       }
 
       // 3) Generate PDF client-side
@@ -161,7 +170,7 @@ export default function SurveyForm() {
         relevantDno: values.relevant_dno,
         surveyDate: values.site_survey_date,
       });
-      const pdfPath = `${survey.survey_id}/survey.pdf`;
+      const pdfPath = uniqueSurveyPath("survey.pdf");
       const pdfUrl = await uploadFile(pdfBlob, pdfPath, "application/pdf");
 
       // 4) RPC submit
