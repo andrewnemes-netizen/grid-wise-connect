@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Send, X, Copy, Link as LinkIcon, Mail } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { sendSurveyToSites, type SendSurveyLink } from "@/lib/sendSurveyToSites";
 
 interface Props {
   open: boolean;
@@ -24,14 +25,7 @@ interface SiteRow {
   surveyor_email: string | null;
 }
 
-interface GeneratedLink {
-  site_id: string;
-  site_name?: string;
-  email: string;
-  survey_url: string;
-  email_sent: boolean;
-  error?: string;
-}
+type GeneratedLink = SendSurveyLink;
 
 export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
   const [sites, setSites] = useState<SiteRow[]>([]);
@@ -85,78 +79,23 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
     setSending(true);
     setGenerated([]);
     try {
-      const results: any[] = [];
+      const { results: links, emailedCount, linksOnlyCount, failedCount } = await sendSurveyToSites({
+        sites,
+        deliveryMode,
+        useSiteContact,
+        extraEmails: parsedExtras,
+        surveyorName,
+        message,
+        saveAsDefaultForExtras: saveDefault,
+      });
 
-      // Link-only mode: one placeholder recipient per site so each site gets a unique token.
-      if (deliveryMode === "link_only") {
-        for (const s of sites) {
-          const recipients = [{
-            email: s.surveyor_email || `link-only+${s.id.slice(0, 8)}@ecopoweruk.local`,
-            name: surveyorName || "Site surveyor",
-          }];
-          const { data, error } = await supabase.functions.invoke("send-site-survey", {
-            body: {
-              site_ids: [s.id],
-              recipients,
-              delivery_mode: "link_only",
-              save_as_default: false,
-
-            },
-          });
-          if (error) throw error;
-          results.push(data);
-        }
-      } else {
-      // Per-site sends if using saved contacts (each site gets its own recipient)
-      if (useSiteContact) {
-        for (const s of sitesWithContact) {
-          const recipients = [{ email: s.surveyor_email!, name: surveyorName || undefined }];
-          const { data, error } = await supabase.functions.invoke("send-site-survey", {
-            body: {
-              site_ids: [s.id],
-              recipients,
-              message: message || undefined,
-              save_as_default: false,
-
-              delivery_mode: "email",
-            },
-          });
-          if (error) throw error;
-          results.push(data);
-        }
+      if (emailedCount > 0) toast.success(`Sent ${emailedCount} survey invitation${emailedCount === 1 ? "" : "s"}`);
+      if (linksOnlyCount > 0 && deliveryMode === "email") {
+        toast.warning(`${linksOnlyCount} link(s) generated but email delivery failed — copy the links below`);
+      } else if (linksOnlyCount > 0) {
+        toast.success(`Generated ${linksOnlyCount} link${linksOnlyCount === 1 ? "" : "s"}`);
       }
-
-      // Bulk extras across all sites
-      if (parsedExtras.length > 0) {
-        const recipients = parsedExtras.map((email) => ({ email, name: surveyorName || undefined }));
-        const { data, error } = await supabase.functions.invoke("send-site-survey", {
-          body: {
-            site_ids: siteIds,
-            recipients,
-            message: message || undefined,
-            save_as_default: saveDefault,
-
-            delivery_mode: "email",
-          },
-        });
-        if (error) throw error;
-        results.push(data);
-      }
-      }
-
-      // Flatten link results
-      const links: GeneratedLink[] = results.flatMap((r) => (r?.results ?? []).filter((x: any) => x.ok));
-      const emailSent = links.filter((l) => l.email_sent).length;
-      const linksOnly = links.filter((l) => !l.email_sent).length;
-      const failedTotal = results.reduce((n, r) => n + (r?.failed ?? 0), 0);
-
-      if (emailSent > 0) toast.success(`Sent ${emailSent} survey invitation${emailSent === 1 ? "" : "s"}`);
-      if (linksOnly > 0 && deliveryMode === "email") {
-        toast.warning(`${linksOnly} link(s) generated but email delivery failed — copy the links below`);
-      } else if (linksOnly > 0) {
-        toast.success(`Generated ${linksOnly} link${linksOnly === 1 ? "" : "s"}`);
-      }
-      if (failedTotal > 0) toast.error(`${failedTotal} failed`);
+      if (failedCount > 0) toast.error(`${failedCount} failed`);
 
       if (links.length > 0) {
         setGenerated(links);
