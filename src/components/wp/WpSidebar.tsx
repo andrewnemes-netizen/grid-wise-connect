@@ -113,7 +113,7 @@ export function WpSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Back to Work Package">
-                  <NavLink to={`/delivery/wp/${id}`} className="flex items-center gap-2">
+                  <NavLink to={`/wp/${id}/overview`} className="flex items-center gap-2">
                     <ChevronLeft className="h-4 w-4" />
                     {!collapsed && <span className="text-xs text-muted-foreground">Work Package</span>}
                   </NavLink>
