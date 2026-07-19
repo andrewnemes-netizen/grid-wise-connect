@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Zap, ClipboardList, CheckCircle2 } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,16 @@ import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { validateSiteForPoc } from "@/lib/wp/pocValidation";
 import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +65,7 @@ export default function WpSiteRegisterTab() {
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -323,6 +334,27 @@ export default function WpSiteRegisterTab() {
     return m;
   }, [rows]);
   const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
+
+  const bulkRemoveFromWp = useMutation({
+    mutationFn: async (siteIds: string[]) => {
+      if (!wpId || siteIds.length === 0) return { removed: 0, blocked: [] as string[] };
+      const { data, error } = await (supabase as any).rpc("remove_sites_from_wp", {
+        _wp_id: wpId,
+        _site_ids: siteIds,
+      });
+      if (error) throw error;
+      return (data ?? { removed: 0, blocked: [] }) as { removed: number; blocked: string[] };
+    },
+    onSuccess: (res) => {
+      const removed = res?.removed ?? 0;
+      toast.success(`Removed ${removed} site${removed === 1 ? "" : "s"} from this Work Package`);
+      setRemoveDialogOpen(false);
+      clearSel();
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed to remove sites"),
+  });
+  const removeBusy = bulkRemoveFromWp.isPending;
 
   return (
     <div className="space-y-4">
