@@ -67,7 +67,7 @@ function WpHeader({ wpId }: { wpId: string }) {
     setDeleting(false);
     if (error) { toast.error(error.message ?? "Failed to archive"); return; }
     toast.success("Work package archived (90-day retention). Restore from /admin/archive.");
-    navigate("/delivery");
+    navigate("/programmes");
   };
 
   return (
@@ -75,7 +75,7 @@ function WpHeader({ wpId }: { wpId: string }) {
       <SidebarTrigger />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/delivery" className="hover:underline">Programmes</Link>
+          <Link to="/programmes" className="hover:underline">Programmes</Link>
           <span>/</span>
           <span className="truncate">Work Package</span>
         </div>
