@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardList, FileText, Send, Mail, Copy, Loader2 } from "lucide-react";
+import { ClipboardList, FileText, Send, Mail, Copy, Loader2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { SendSurveyDialog } from "@/components/portfolio/SendSurveyDialog";
 import { collectRowsForPdf } from "@/lib/survey-schema";
 import { generateSurveyPdf, type SurveyPhotoGroup } from "@/lib/survey-pdf";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Props { siteId: string; }
 
@@ -40,9 +41,9 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [publicBase, setPublicBase] = useState<string>("");
   const [openingPdf, setOpeningPdf] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; filename: string } | null>(null);
 
   const openPdf = async (response: ResponseRow) => {
-    const pdfWindow = window.open("", "_blank", "noopener,noreferrer");
     setOpeningPdf(response.id);
     try {
       const submission = response.submission ?? {};
@@ -60,15 +61,12 @@ export function SiteSurveysPanel({ siteId }: Props) {
         surveyDate: submission.site_survey_date,
       });
       const objUrl = URL.createObjectURL(blob);
-      if (pdfWindow) {
-        pdfWindow.location.href = objUrl;
-      } else {
-        window.location.href = objUrl;
-      }
-      setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
+      setPdfPreview((current) => {
+        if (current?.url) URL.revokeObjectURL(current.url);
+        return { url: objUrl, filename: `site-survey-${response.id}.pdf` };
+      });
     } catch (e) {
       console.error(e);
-      pdfWindow?.close();
       toast.error("Could not open PDF");
     } finally {
       setOpeningPdf(null);
@@ -204,6 +202,40 @@ export function SiteSurveysPanel({ siteId }: Props) {
         onOpenChange={(o) => { setDialogOpen(o); if (!o) load(); }}
         siteIds={[siteId]}
       />
+
+      <Dialog
+        open={!!pdfPreview}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPdfPreview((current) => {
+              if (current?.url) URL.revokeObjectURL(current.url);
+              return null;
+            });
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3 pr-8">
+              <DialogTitle>Survey PDF</DialogTitle>
+              {pdfPreview ? (
+                <Button asChild size="sm" variant="outline">
+                  <a href={pdfPreview.url} download={pdfPreview.filename}>
+                    <Download className="h-3 w-3 mr-1" /> Download
+                  </a>
+                </Button>
+              ) : null}
+            </div>
+          </DialogHeader>
+          {pdfPreview ? (
+            <iframe
+              title="Survey PDF preview"
+              src={pdfPreview.url}
+              className="min-h-0 flex-1 w-full rounded border bg-background"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
