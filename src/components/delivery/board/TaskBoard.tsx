@@ -211,6 +211,7 @@ export function TaskBoard({
       // Generic (non-task) system columns write directly to a DB column matching builtinKey
       const dbKey = bkey ?? col.key;
       const writeGeneric = (v: any) => setBuiltin({ [dbKey]: v });
+      const isNameColumn = isWpBoard && bkey === "name";
       switch (bkey) {
         case "title":
           return <TextCell value={row.title} onChange={(v) => setBuiltin({ title: v })} />;
@@ -233,7 +234,7 @@ export function TaskBoard({
       }
       // Fallback: render by column type against the DB column named by builtinKey
       switch (col.type) {
-        case "text": return <TextCell value={row[dbKey]} onChange={writeGeneric} />;
+        case "text": return <TextCell value={row[dbKey]} onChange={writeGeneric} onOpen={isNameColumn && onOpenRow ? () => onOpenRow(row) : undefined} />;
         case "number": return <NumberCell value={row[dbKey]} onChange={writeGeneric} />;
         case "currency": return <NumberCell value={row[dbKey]} onChange={writeGeneric} prefix={col.options_json.currency ?? "£"} />;
         case "date": return <DateCell value={row[dbKey]} onChange={writeGeneric} />;
