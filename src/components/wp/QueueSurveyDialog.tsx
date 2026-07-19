@@ -148,7 +148,7 @@ export function QueueSurveyDialog({ open, onOpenChange, siteIds, workPackageId, 
                 recipients,
                 delivery_mode: "link_only",
                 save_as_default: false,
-                survey_base_url: window.location.origin,
+
               },
             });
             if (error) throw error;
@@ -164,7 +164,7 @@ export function QueueSurveyDialog({ open, onOpenChange, siteIds, workPackageId, 
                   recipients,
                   message: message || undefined,
                   save_as_default: false,
-                  survey_base_url: window.location.origin,
+
                   delivery_mode: "email",
                 },
               });
@@ -180,7 +180,7 @@ export function QueueSurveyDialog({ open, onOpenChange, siteIds, workPackageId, 
                 recipients,
                 message: message || undefined,
                 save_as_default: false,
-                survey_base_url: window.location.origin,
+
                 delivery_mode: "email",
               },
             });

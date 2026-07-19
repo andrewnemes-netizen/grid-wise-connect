@@ -100,7 +100,7 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
               recipients,
               delivery_mode: "link_only",
               save_as_default: false,
-              survey_base_url: window.location.origin,
+
             },
           });
           if (error) throw error;
@@ -117,7 +117,7 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
               recipients,
               message: message || undefined,
               save_as_default: false,
-              survey_base_url: window.location.origin,
+
               delivery_mode: "email",
             },
           });
@@ -135,7 +135,7 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
             recipients,
             message: message || undefined,
             save_as_default: saveDefault,
-            survey_base_url: window.location.origin,
+
             delivery_mode: "email",
           },
         });
