@@ -87,6 +87,13 @@ export function MoveSiteDialog({ open, onOpenChange, siteIds, currentWpId, onMov
       if (moved) toast.success(`${moved} site${moved > 1 ? "s" : ""} moved`);
       if (blocked) toast.warning(`${blocked} blocked by locked records`);
       if (errored) toast.error(`${errored} failed`);
+      // Fire-and-forget: pre-create destination OneDrive folder tree so future
+      // uploads land in the right place immediately.
+      if (moved && toWpId) {
+        supabase.functions.invoke("onedrive-prepare-wp-folders", {
+          body: { work_package_id: toWpId },
+        }).catch(() => { /* non-blocking */ });
+      }
       qc.invalidateQueries();
       if (onMoved) onMoved();
     },
