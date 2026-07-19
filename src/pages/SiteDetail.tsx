@@ -229,7 +229,15 @@ const SiteDetail = () => {
     <div className="p-6 space-y-6 h-full overflow-auto max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/portfolio")} className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/portfolio");
+          }}
+          className="h-8 w-8"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
