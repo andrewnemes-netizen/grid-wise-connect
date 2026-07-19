@@ -1,38 +1,68 @@
-## Why the PDF fails to open
+# PoC Estimate — separate entity alongside EV Build Estimate
 
-The "Open PDF" link on the site dashboard points at a raw Supabase Storage URL on `xqmrnfimcuktyyltikoy.supabase.co`. Chrome ad-blockers (uBlock, Brave shields, corporate DNS filters, etc.) commonly block the `*.supabase.co` host, which produces the `ERR_BLOCKED_BY_CLIENT` page shown in the screenshot. The file isn't missing — the browser refuses to fetch it.
+## Guardrails
+- The existing `estimates` / `estimate_groups` / `estimate_lines` engine (EV Build) is **not** modified. No new columns on it, no shared code paths, no shared totals.
+- PoC Estimate is a brand-new, standalone entity with its own table, its own line items, its own rate card reference, and its own status.
 
-Two things make this worse today:
-- `notify-survey-submitted` writes a Storage public/signed URL straight into `site_survey_responses.pdf_url`, so the link is permanently pinned to `supabase.co`.
-- Signed URLs also expire, so old survey rows will eventually 400 even when the host isn't blocked.
+## Data model (new tables only)
 
-## Fix: same-origin PDF proxy
+1. `public.poc_estimates`
+   - `id`, `work_package_id` (FK), `site_id` (FK, nullable — WP-level PoC estimate also allowed), `dno_offer_id` (FK, nullable — the trigger source)
+   - `ref` (auto), `name`, `rate_card_version_id` (FK to existing `rate_card_versions`, nullable)
+   - `status` `poc_estimate_status` enum: `draft | sent | accepted | rejected` (no billing/milestones)
+   - `currency` default `GBP`, `notes`, `total_cost` / `total_price` computed columns from lines
+   - Standard `created_at/updated_at/created_by`
+   - RLS: WP membership (same pattern as `estimates`), plus GRANTs to `authenticated` + `service_role`
 
-Add a small Edge Function that streams the PDF from Storage, and have the UI link at that function instead of at Storage directly. On the published domain the Edge Function is served via `<ref>.lovable.cloud`, which is not on ad-block lists, so the link opens for every user.
+2. `public.poc_estimate_lines`
+   - `id`, `poc_estimate_id` (FK, cascade), `sort_index`
+   - `rate_item_id` (FK, nullable), `description`, `unit`, `quantity`, `unit_cost`, `unit_price`, `line_cost`, `line_price` (generated)
+   - RLS via parent membership; standard GRANTs
 
-### Changes
+3. Trigger `poc_estimates_totals_refresh` on `poc_estimate_lines` insert/update/delete → recomputes parent totals.
 
-1. **New Edge Function `survey-pdf`** (`supabase/functions/survey-pdf/index.ts`)
-   - `GET /functions/v1/survey-pdf?response_id=<uuid>`
-   - Validates the caller with `supabase.auth.getClaims(token)` (Authorization header required).
-   - Looks up `site_survey_responses.pdf_storage_path` (+ `site_id`) with the service-role client.
-   - Enforces access: user must (a) have a role of admin/engineer, or (b) be a member of the site's project via `project_members`. Reject otherwise with 403.
-   - Downloads from the `surveys` bucket with the service client and returns the bytes with `Content-Type: application/pdf` and `Content-Disposition: inline; filename="survey-<id>.pdf"`. Standard `corsHeaders` on every response.
+No changes to `estimates`, `estimate_groups`, `estimate_lines`, `site_estimates`, `wp_estimate_*`.
 
-2. **Persist the storage path** (`supabase/functions/notify-survey-submitted/index.ts`)
-   - Continue writing `pdf_url` for backward compatibility, but also set `pdf_storage_path` on `site_survey_responses` so the proxy can locate the file without parsing URLs. (Column already exists — verified via schema.)
+## Auto-creation trigger
 
-3. **UI: point the link at the proxy** (`src/components/site/SiteSurveysPanel.tsx`)
-   - Replace the `<a href={response.pdf_url}>` with a button that calls the proxy with the current session's access token and opens the returned blob in a new tab (`URL.createObjectURL`). This keeps the request same-origin from the browser's perspective and carries auth without exposing tokens in the URL.
-   - Fallback: if `pdf_storage_path` is missing on legacy rows, fall back to the old `pdf_url` link.
+Extend the existing `trg_dno_offers_precon` chain (or add a sibling trigger on `public.dno_offers`) so that when a DNO offer row is inserted/updated to a "PoC offer received" state (e.g. `status = 'received'` with `offer_kind = 'poc'` or the current column your DNO Offers tab writes — verified against `dno_offers` schema at build time):
+- Create one `poc_estimates` row per linked site (from `dno_offer_sites`), or a single WP-level row if no site linkage.
+- Idempotent: skip if a `poc_estimates` row already exists for `(work_package_id, site_id, dno_offer_id)`.
+- Notify the WP owner with a deep-link to the new PoC Estimate.
 
-4. **No schema migration needed** — `pdf_storage_path` already exists on `site_survey_responses`.
+Existing EV Build estimate creation flow is untouched.
 
-### Out of scope
+## UI
 
-- No changes to survey submission, external `/survey/:token` flow, or Phase 2/3/4 of the earlier survey plan.
-- No changes to the `surveys` bucket's RLS — access stays gated by the proxy, not by public storage rules.
+New route + tab so PoC and EV Build sit visibly side by side, never merged:
 
-### Verification
+- New tab `WpPocEstimatesTab` at `/wp/:id/commercial/poc-estimates` (added to WP sidebar under Commercial, next to existing "Estimating").
+- New component `src/components/delivery/poc-estimate/PocEstimatesTab.tsx` — list + create + open editor.
+- New component `src/components/delivery/poc-estimate/PocEstimateEditor.tsx` — line editor reusing the existing `RateItemPicker` for rate card selection (read-only reuse; no changes to it).
+- Existing `WpEstimatingTab` remains exactly as-is (EV Build only).
 
-- Playwright: sign in, open a site with a completed survey, click "Open PDF", confirm the tab opens the PDF served from `*.lovable.cloud` (not `*.supabase.co`) and that an unauthenticated request to the function returns 401.
+Work Package Overview (`WpOverviewTab`) gets a new "Commercial" summary block showing two clearly separated cards:
+
+```text
+┌──────────────────────────┐  ┌──────────────────────────┐
+│  EV Build Estimates      │  │  PoC Estimates           │
+│  3 estimates · £142,500  │  │  2 estimates · £8,750    │
+│  [Open Estimating]       │  │  [Open PoC Estimates]    │
+└──────────────────────────┘  └──────────────────────────┘
+```
+
+Each card links to its own tab. No combined total is ever shown. Labels on every screen explicitly say "EV Build" or "PoC" so neither implies the other.
+
+Site Register / Site Detail: add a small "PoC Estimate" chip next to the existing "Estimate" chip for the site, each linking to its own record.
+
+## Out of scope (explicit)
+- No billing milestones, no % splits, no invoice generation on PoC estimates.
+- No changes to EV Build estimate schema, code, PDFs, or rate logic.
+- No auto-conversion between PoC and EV Build.
+
+## Verification
+After build, open the Work Package detail view and confirm:
+1. Overview shows the two separate Commercial cards with independent counts/totals.
+2. Sidebar has both "Estimating" (EV Build) and "PoC Estimates" tabs.
+3. Creating a DNO PoC offer row auto-creates a PoC Estimate without touching any EV Build estimate.
+4. A site with both types shows two distinct records, never a combined figure.

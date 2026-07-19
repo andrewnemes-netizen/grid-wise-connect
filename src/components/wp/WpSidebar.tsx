@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   Calculator,
+  Zap as ZapIcon,
   ShoppingCart,
   FileDiff,
   FlaskConical,
@@ -55,7 +56,8 @@ const NAV: Group[] = [
   {
     label: "Commercial",
     items: [
-      { title: "Estimating", slug: "commercial/estimating", icon: Calculator },
+      { title: "EV Build Estimating", slug: "commercial/estimating", icon: Calculator },
+      { title: "PoC Estimates", slug: "commercial/poc-estimates", icon: ZapIcon },
       { title: "Purchase Orders", slug: "commercial/purchase-orders", icon: ShoppingCart },
       { title: "Variations", slug: "commercial/variations", icon: FileDiff },
     ],

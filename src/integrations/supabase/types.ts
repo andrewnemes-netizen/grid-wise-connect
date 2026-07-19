@@ -4392,6 +4392,173 @@ export type Database = {
           },
         ]
       }
+      poc_estimate_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          line_cost: number | null
+          line_price: number | null
+          poc_estimate_id: string
+          quantity: number
+          rate_item_id: string | null
+          sort_index: number
+          unit: string
+          unit_cost: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          line_cost?: number | null
+          line_price?: number | null
+          poc_estimate_id: string
+          quantity?: number
+          rate_item_id?: string | null
+          sort_index?: number
+          unit?: string
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          line_cost?: number | null
+          line_price?: number | null
+          poc_estimate_id?: string
+          quantity?: number
+          rate_item_id?: string | null
+          sort_index?: number
+          unit?: string
+          unit_cost?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poc_estimate_lines_poc_estimate_id_fkey"
+            columns: ["poc_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "poc_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poc_estimate_lines_rate_item_id_fkey"
+            columns: ["rate_item_id"]
+            isOneToOne: false
+            referencedRelation: "rate_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poc_estimates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          currency: string
+          dno_offer_id: string | null
+          id: string
+          name: string
+          notes: string | null
+          rate_card_version_id: string | null
+          ref: string | null
+          site_id: string | null
+          status: Database["public"]["Enums"]["poc_estimate_status"]
+          total_cost: number
+          total_price: number
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          dno_offer_id?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          ref?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["poc_estimate_status"]
+          total_cost?: number
+          total_price?: number
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          dno_offer_id?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          rate_card_version_id?: string | null
+          ref?: string | null
+          site_id?: string | null
+          status?: Database["public"]["Enums"]["poc_estimate_status"]
+          total_cost?: number
+          total_price?: number
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poc_estimates_dno_offer_id_fkey"
+            columns: ["dno_offer_id"]
+            isOneToOne: false
+            referencedRelation: "dno_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_dno_offer_id_fkey"
+            columns: ["dno_offer_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_offer_id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_rate_card_version_id_fkey"
+            columns: ["rate_card_version_id"]
+            isOneToOne: false
+            referencedRelation: "rate_card_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "poc_estimates_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       primary_substations_33kv: {
         Row: {
           asset_id: string
@@ -12846,6 +13013,7 @@ export type Database = {
         | "rejected"
         | "expired"
         | "cancelled"
+      poc_estimate_status: "draft" | "sent" | "accepted" | "rejected"
       project_health: "green" | "amber" | "red"
       project_member_role:
         | "owner"
@@ -13134,6 +13302,7 @@ export const Constants = {
         "expired",
         "cancelled",
       ],
+      poc_estimate_status: ["draft", "sent", "accepted", "rejected"],
       project_health: ["green", "amber", "red"],
       project_member_role: [
         "owner",

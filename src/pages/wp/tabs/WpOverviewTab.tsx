@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PoundSterling, Wallet, ReceiptText, TrendingUp, Zap, CheckCircle2, PackageCheck, AlertTriangle } from "lucide-react";
+import { PoundSterling, Wallet, ReceiptText, TrendingUp, Zap, CheckCircle2, PackageCheck, AlertTriangle, Calculator, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function gbp(v: number | null | undefined) {
   if (v == null) return "—";
@@ -73,6 +74,36 @@ export default function WpOverviewTab() {
     },
   });
 
+  const { data: evBuild } = useQuery({
+    queryKey: ["wp-ev-build-estimate-summary", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("estimates" as any)
+        .select("id,total_price,grand_total,currency,status")
+        .eq("work_package_id", wpId!);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
+      return { count: rows.length, total };
+    },
+  });
+
+  const { data: pocEst } = useQuery({
+    queryKey: ["wp-poc-estimate-summary", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("poc_estimates" as any)
+        .select("id,total_price,currency,status")
+        .eq("work_package_id", wpId!);
+      if (error) throw error;
+      const rows = (data ?? []) as any[];
+      const total = rows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+      return { count: rows.length, total };
+    },
+  });
+
   const totalSites = siteCount ?? 0;
   const energisedCount = readiness.filter((r: any) => r.is_energised).length;
   const commissionedCount = readiness.filter((r: any) => r.is_commissioned).length;
@@ -130,6 +161,53 @@ export default function WpOverviewTab() {
       </div>
 
       {/* Delivery health */}
+      {/* Estimate types — kept explicitly separate */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Estimate types</h2>
+        <div className="grid md:grid-cols-2 gap-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Calculator className="h-4 w-4" /> EV Build Estimates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              <div className="text-2xl font-semibold tabular-nums">
+                {gbp(evBuild?.total)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {evBuild?.count ?? 0} estimate{(evBuild?.count ?? 0) === 1 ? "" : "s"} · install / build scope
+              </div>
+              <Button asChild size="sm" variant="outline" className="mt-1">
+                <Link to="../commercial/estimating">Open EV Build Estimating <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Zap className="h-4 w-4 text-primary" /> PoC Estimates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2">
+              <div className="text-2xl font-semibold tabular-nums text-primary">
+                {gbp(pocEst?.total)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {pocEst?.count ?? 0} estimate{(pocEst?.count ?? 0) === 1 ? "" : "s"} · DNO Point-of-Connection application
+              </div>
+              <Button asChild size="sm" variant="outline" className="mt-1">
+                <Link to="../commercial/poc-estimates">Open PoC Estimates <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2">
+          PoC and EV Build estimates are tracked independently. Totals above are shown per type and are
+          never combined into a single figure.
+        </p>
+      </div>
+
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Delivery health</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
