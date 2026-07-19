@@ -514,6 +514,29 @@ async function handleApprove(req: Request, ctx: NonNullable<Awaited<ReturnType<t
       await ctx.admin.from("import_rows").update({ status: "error", errors_json: [error.message] }).eq("id", r.id);
       continue;
     }
+    // Create a canonical Socket Group so the phase-balance / PoC pipeline
+    // treats imported sites the same as manually-entered ones.
+    {
+      const qty = Number(m.socket_count) > 0 ? Number(m.socket_count) : (m.kw_per_socket ? 1 : 0);
+      let kwEach = Number(m.kw_per_socket);
+      if (!Number.isFinite(kwEach) || kwEach <= 0) {
+        // Fall back to total kW / sockets if only proposed_kw was supplied.
+        if (Number(m.proposed_kw) > 0 && qty > 0) {
+          kwEach = Number((Number(m.proposed_kw) / qty).toFixed(2));
+        }
+      }
+      if (qty > 0 && Number.isFinite(kwEach) && kwEach > 0) {
+        const phases = kwEach >= 10 ? 3 : 1;
+        const { error: grpErr } = await ctx.admin.from("site_socket_groups").insert({
+          site_id: site.id,
+          quantity: qty,
+          power_rating_kw: kwEach,
+          phases,
+          sort_order: 0,
+        });
+        if (grpErr) console.warn("socket group insert failed", grpErr.message);
+      }
+    }
     if (r.lat != null && r.lng != null) {
       // sites.geom is SRID 27700 — use RPC helper to transform WGS84 → BNG.
       const { error: geomErr } = await ctx.admin.rpc("set_site_geom_wgs84", {
