@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
+import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
 import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { useNavigate } from "react-router-dom";
 
@@ -52,6 +53,7 @@ export default function WpSiteRegisterTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
+  const [pocDialogOpen, setPocDialogOpen] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -116,24 +118,80 @@ export default function WpSiteRegisterTab() {
   }, [stageStatusRows]);
 
   const bulkSendPoc = useMutation({
-    mutationFn: async (siteIds: string[]) => {
+    mutationFn: async ({ siteIds, assignment }: { siteIds: string[]; assignment: PocAssignment }) => {
       if (!wpId || siteIds.length === 0) return;
-      const due = new Date(); due.setDate(due.getDate() + 45);
       const rows = siteIds.map((sid) => ({
         work_package_id: wpId,
         site_id: sid,
         task_kind: "poc" as const,
-        title: "POC application",
+        title: assignment.assigneeName
+          ? `POC application — ${assignment.assigneeName}`
+          : "POC application",
         status: "not_started",
-        due_date: due.toISOString().slice(0, 10),
+        due_date: assignment.dueDate,
+        owner_user_id: assignment.assigneeUserId ?? null,
+        description: assignment.message ?? null,
+        metadata_json: {
+          poc_assignee: {
+            mode: assignment.mode,
+            name: assignment.assigneeName ?? null,
+            email: assignment.assigneeEmail ?? null,
+            user_id: assignment.assigneeUserId ?? null,
+          },
+        },
       }));
       const { error } = await (supabase as any).from("wp_tasks").insert(rows);
       if (error) throw error;
       await (supabase as any).from("audit_log").insert(
-        siteIds.map((sid) => ({ action: "poc.requested", site_id: sid, meta_json: { work_package_id: wpId } })),
+        siteIds.map((sid) => ({
+          action: "poc.requested",
+          site_id: sid,
+          meta_json: {
+            work_package_id: wpId,
+            assignee_mode: assignment.mode,
+            assignee_name: assignment.assigneeName,
+            assignee_email: assignment.assigneeEmail,
+            assignee_user_id: assignment.assigneeUserId,
+          },
+        })),
       );
+
+      if (assignment.sendEmail && assignment.assigneeEmail) {
+        const siteLines = (rows as any[]).map((_r, i) => {
+          const sid = siteIds[i];
+          const meta = (siteMetaById as any).get?.(sid) ?? {};
+          return {
+            name: meta.site_name ?? "Site",
+            postcode: meta.postcode ?? undefined,
+            ref: meta.local_ref ?? undefined,
+          };
+        });
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const { error: emailErr } = await supabase.functions.invoke("send-transactional-email", {
+          body: {
+            templateName: "poc-assignment",
+            recipientEmail: assignment.assigneeEmail,
+            templateData: {
+              recipientName: assignment.assigneeName ?? undefined,
+              workPackageName: undefined,
+              message: assignment.message,
+              dueDate: assignment.dueDate,
+              sites: siteLines,
+              actionUrl: origin ? `${origin}/wp/${wpId}/sites/register` : undefined,
+            },
+          },
+        });
+        if (emailErr) throw emailErr;
+      }
     },
-    onSuccess: (_d, sids) => { toast.success(`POC task raised for ${sids.length} site${sids.length === 1 ? "" : "s"}`); clearSel(); invalidate(); },
+    onSuccess: (_d, vars) => {
+      const n = vars.siteIds.length;
+      const emailed = vars.assignment.sendEmail ? ` — emailed ${vars.assignment.assigneeEmail}` : "";
+      toast.success(`POC assigned for ${n} site${n === 1 ? "" : "s"}${emailed}`);
+      setPocDialogOpen(false);
+      clearSel();
+      invalidate();
+    },
     onError: (e: any) => toast.error(e.message ?? "Failed to raise POC tasks"),
   });
 
@@ -242,6 +300,17 @@ export default function WpSiteRegisterTab() {
     setSelected(next);
   };
   const selectedIds = Array.from(selected);
+  const siteMetaById = useMemo(() => {
+    const m = new Map<string, { site_name?: string; postcode?: string; local_ref?: string }>();
+    (rows as any[]).forEach((r) => {
+      if (r.site_id) m.set(r.site_id, {
+        site_name: r.sites?.site_name,
+        postcode: r.sites?.postcode,
+        local_ref: r.local_ref,
+      });
+    });
+    return m;
+  }, [rows]);
   const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
 
   return (
@@ -278,7 +347,7 @@ export default function WpSiteRegisterTab() {
         <Card className="p-2 flex flex-wrap items-center gap-2 border-primary/40 bg-primary/5">
           <span className="text-xs font-medium ml-2">{selectedIds.length} selected</span>
           <div className="flex-1" />
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSendPoc.mutate(selectedIds)}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => setPocDialogOpen(true)}>
             <Zap className="h-3.5 w-3.5 mr-1" /> Send for POC
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSurveyAlloc.mutate(selectedIds)}>
@@ -486,6 +555,14 @@ export default function WpSiteRegisterTab() {
           siteName={decisionFor.siteName}
         />
       )}
+
+      <SendForPocDialog
+        open={pocDialogOpen}
+        onOpenChange={setPocDialogOpen}
+        siteCount={selectedIds.length}
+        submitting={bulkSendPoc.isPending}
+        onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
+      />
     </div>
   );
 }
