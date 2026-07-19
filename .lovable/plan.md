@@ -1,104 +1,126 @@
-## Goal
-Support mixed socket ratings per Site via repeating Socket Groups, drive **phase-aware** load-balanced assignment (single-phase sockets go to one phase; three-phase sockets split evenly across all three), and surface both in the Site detail view and PoC designer notification. Existing WP/Site structure otherwise untouched.
+# Archive & Delete Engine + Site Lifecycle Engine
 
-## 1. Socket phase model (foundational correction)
+Single coordinated build. No duplicate Site/WP/Programme tables. Reuse `audit_log`, `notifications`, `onedrive_uploads`, `mirrorToOneDrive`, existing soft-delete columns, and `remove_sites_from_wp` patterns.
 
-A socket's phase count is a property of the rating, not a user choice. Defaults, editable per group:
+---
 
-| Power rating | Phases | Per-phase load |
-|---|---|---|
-| ≤ 7.4 kW (7, 7.4) | 1-phase | full rating on one phase |
-| 11 kW | 3-phase | rating ÷ 3 (≈ 3.67 kW/phase) |
-| 22 kW | 3-phase | rating ÷ 3 (≈ 7.33 kW/phase) |
-| ≥ 25 kW (50, 150, 350) | 3-phase | rating ÷ 3 |
+## 1. Schema (one migration)
 
-Stored as `phases` (1 or 3) on each socket group with a sensible default derived from `power_rating_kw`; user can override.
+**New tables**
+- `deleted_entities` — snapshot store
+  - `entity_type` (site | work_package | programme | estimate | design | survey | permit | rams | tm | document | purchase_order | variation | milestone | task | photo | offer)
+  - `entity_id` (original UUID, preserved)
+  - `parent_type`, `parent_id` (for cascade grouping)
+  - `snapshot` jsonb (full row + child rows serialised)
+  - `status` (archived | restored | purged)
+  - `archived_by`, `archived_at`, `restored_by`, `restored_at`, `purged_at`
+  - `retention_expires_at` (default `archived_at + 90 days`)
+  - `reason` text, `onedrive_archive_path` text
+- `entity_move_log` — Site Lifecycle audit
+  - `site_id`, `from_wp_id`, `to_wp_id`, `moved_by`, `moved_at`
+  - `reason` text NOT NULL, `partner_change` jsonb, `records_moved` jsonb (counts per table)
+- `capability_grants` — capability-based RBAC (no enum extension)
+  - `user_id`, `capability` text, `granted_by`, `granted_at`
+  - Capabilities: `site.move`, `site.bulk_move`, `entity.archive`, `entity.restore`, `entity.delete_forever`
+- Seed defaults: all `admin` role users get every capability; `engineer` gets `site.move` only.
 
-## 2. Data model — `site_socket_groups`
+**Grants / RLS**: standard `authenticated` + `service_role`; policies gate by `public.has_capability(auth.uid(), '...')` security-definer helper.
 
-New child table (canonical source of truth for sockets). Legacy `sites.socket_count` and `sites.proposed_kw` remain in place but become **derived** — populated from the sum of the groups via a trigger so existing map/cost logic keeps working.
+**Locking flags** (reused where they already exist, added where missing as boolean columns, NOT new tables):
+- `revenue_invoices.locked` (approved/issued)
+- `commissioning_records.completed_at`
+- `handover_packs.final_signoff_at`
+- `contracts.closed_at`
+- `app_settings.financial_period_lock_before` (date)
 
-```
-public.site_socket_groups
-  id uuid pk
-  site_id uuid fk sites(id) on delete cascade
-  quantity int > 0
-  power_rating_kw numeric > 0    -- e.g. 7, 22, 50
-  phases smallint check (phases in (1,3))   -- default from rating
-  sort_order int default 0
-  created_at, updated_at
-```
+---
 
-- GRANTs to `authenticated` / `service_role`; RLS mirrors `sites` via `EXISTS` join.
-- Trigger recomputes `sites.socket_count = SUM(quantity)` and `sites.proposed_kw = SUM(quantity * power_rating_kw)`.
-- One-time backfill: existing sites → single group `(quantity = socket_count, power_rating_kw = proposed_kw / socket_count, phases = default-from-rating)`.
+## 2. Archive & Delete Engine
 
-## 3. Shared helper — `src/lib/wp/socketPhaseBalance.ts`
+**RPCs (SECURITY DEFINER, capability-gated)**
+- `archive_entity(_type, _id, _reason)` — recursively snapshots entity + all children into `deleted_entities`, marks source rows `archived_at = now()` (soft delete), mirrors snapshot JSON to OneDrive under `/Archive/{entity_type}/{id}-{timestamp}.json`, writes `audit_log`, emits `notifications` to owners.
+- `restore_entity(_deleted_id)` — reads snapshot, reinserts using original UUIDs, clears `archived_at`, writes audit + notification. Blocks if any parent still archived.
+- `purge_entity(_deleted_id)` — hard delete rows + snapshot; capability `entity.delete_forever` only; irreversible; writes audit.
+- Nightly cron edge function `archive-retention-sweep` flags expired archives (does not auto-purge — requires explicit purge).
 
-Pure TS, unit-tested.
+**Dependency scan**: `scan_entity_dependencies(_type, _id)` returns counts of dependent rows per table so the UI can show a pre-archive summary.
 
-- `expandGroups(groups) → Socket[]` where `Socket = { kw, phases }` — `[{qty:3,kW:7,phases:1},{qty:1,kW:22,phases:3}]` → `[{7,1},{7,1},{7,1},{22,3}]`.
-- `balancePhases(sockets) → { assignments, loads: {L1,L2,L3}, totalKw, imbalancePct }`
-  - Sort sockets by kW descending.
-  - **3-phase socket**: add `kw/3` to each of L1, L2, L3 (no choice — it draws on all three).
-  - **1-phase socket**: assign to the phase with the lowest current cumulative load (ties → lowest index).
-  - `assignments` records, per phase, the sockets contributing (with a marker for shared 3-phase entries).
-- `summariseGroups(groups) → "3× 7kW (1φ), 1× 22kW (3φ)"`.
+**UI**
+- `src/components/archive/ArchiveDialog.tsx` — dependency preview, reason field, confirm.
+- `src/pages/admin/ArchiveConsole.tsx` — list archived entities, filter by type/date, Restore, Purge (capability-gated), retention countdown.
+- Row action `Archive` added to Site/WP/Programme kebab menus (capability-gated).
 
-Worked example (matches your correction): `3× 7kW single-phase + 1× 22kW three-phase` →
-- 22 kW splits into 7.33 kW on each of L1/L2/L3.
-- 7 kW sockets go one per phase (round-robin by lowest load).
-- Result: L1 = 14.33 kW, L2 = 14.33 kW, L3 = 14.33 kW. Total = 43 kW. Perfectly balanced.
+---
 
-## 4. CSV import — `CsvIntakePanel.tsx`
+## 3. Site Lifecycle Engine (Move / Bulk Move)
 
-Accept multiple socket-group rows per site, linked by `site_id` **or** `site_address` (trimmed, case-insensitive).
+**RPC** `move_sites_between_wps(_site_ids uuid[], _to_wp_id uuid, _reason text, _adopt_destination_partner boolean)`
 
-- New optional columns: `socket_qty`, `socket_kw`, `socket_phases` (defaults from rating if omitted).
-- Aliases: `quantity`, `power_rating`, `kw_each`, `phase_count`.
-- Group rows by site key → `socket_groups: [{quantity, power_rating_kw, phases}]`.
-- Backward compatible: rows with only `proposed_kw` still produce a single group with default phases.
-- Preview shows the group breakdown per site.
+Behaviour per site:
+1. **Lock check** — abort with structured error if any of:
+   - open approved `revenue_invoices` for the site
+   - completed `commissioning_records`
+   - signed `handover_packs`
+   - closed `contracts`
+   - artefact dated before `financial_period_lock_before`
+2. **Move everything belonging to the site** by updating `wp_id` on:
+   - `wp_tasks`, `site_estimates`, `site_estimate_lines`, `site_estimate_exceptions`
+   - `site_surveys`, `site_survey_responses`, `design_submissions`, `dno_offers` (via `dno_offer_sites`)
+   - `permits`, `rams_documents`, `traffic_management_plans`
+   - `site_photos`, `project_files`, `onedrive_uploads`
+   - `po_line_sites` (site-specific PO lines), site-specific `wp_estimate_variation_lines`
+   - `site_precon_gates`, `site_stage_status`, `wp_milestones` scoped to the site
+   - `site_handover_docs`, `snagging_items`, `inspections`, `daily_logs`, `materials_deliveries`, `test_certificates`, `commissioning_records` (if not locked)
+3. **`wp_sites` link** — update `wp_id`; keep `partner_id` unless `_adopt_destination_partner = true`.
+4. **OneDrive** — Graph API move of site folder from source WP folder to destination WP folder (mirrored async via `onedrive-mirror` edge function; failure logged, not blocking).
+5. **Audit** — one `entity_move_log` row per site; counts of records moved; `notifications` to source + destination WP owners; `audit_log` entry.
 
-## 5. Site detail view — `src/pages/SiteDetail.tsx`
+**Bulk Move** = same RPC with multiple ids; per-site errors reported, successful sites still commit (transaction per site).
 
-New **Sockets & Phase Balance** card:
+**UI**
+- `src/components/site/MoveSiteDialog.tsx` — destination WP picker, mandatory reason, partner conflict warning + "Adopt destination partner" checkbox, lock-check preview.
+- Bulk toolbar button in `WpSiteRegisterTab.tsx` — `Move to Work Package` (capability-gated `site.bulk_move`).
+- Site Detail action `Move Site` (capability `site.move`).
 
-- Editable Socket Groups list (add / remove / edit qty, kW, phases-with-smart-default).
-- Live-computed panel:
-  - Total sockets, Total Connected Load (kW), group breakdown string.
-  - Per-phase block for L1 / L2 / L3 showing the load (kW) and contributing sockets as chips (e.g. `7.33kW (from 22kW/3φ)`, `7kW`).
-  - Imbalance %.
-- No changes to any other card.
+---
 
-## 6. PoC validation + notification wiring
+## 4. Capability matrix (seeded)
 
-- `pocValidation.ts`: replace socket_count/proposed_kw checks with `socket_groups.length > 0 && every(qty>0 && kw>0 && phases∈{1,3})`. Missing-field label: "Socket Groups (quantity + power rating)".
-- `get_sites_for_poc` RPC: also return `socket_groups` JSON array.
-- `SendForPocDialog.tsx`: readiness panel shows group breakdown + phase balance summary; blocks if any site has no groups.
-- `WpSiteRegisterTab.tsx`: pass `socketGroups`, `phaseBalance`, `totalKw` into the email payload.
+| Capability            | Default roles                                                    |
+|-----------------------|------------------------------------------------------------------|
+| `site.move`           | admin, engineer                                                  |
+| `site.bulk_move`      | admin                                                            |
+| `entity.archive`      | admin                                                            |
+| `entity.restore`      | admin                                                            |
+| `entity.delete_forever` | admin (system administrator only via extra `is_platform_admin`) |
 
-## 7. Designer notification template — `poc-assignment.tsx`
+Admin console screen to grant/revoke capabilities per user (no enum churn).
 
-Replace the two rows "Number of Sockets" / "Socket Power Rating" with a **Sockets & Phase Balance** block per site:
+---
 
-- Total Sockets: `4`
-- Socket Groups: `3× 7kW (1φ), 1× 22kW (3φ)`
-- Total Connected Load: `43 kW`
-- Phase L1: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
-- Phase L2: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
-- Phase L3: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
+## 5. Notifications, OneDrive, Audit reuse
 
-Site ID stays optional. Address, Postcode, Feeder Pillar Lat/Lng unchanged.
+- All flows write to `audit_log` (existing).
+- Owner notifications via existing `notifications` table + `NotificationsBell`.
+- OneDrive mirroring via existing `mirrorToOneDrive` helper — new folder targets `/Archive/...` and `/WorkPackages/{wp}/Sites/{site}/`.
+- No new email templates required initially; reuse existing transactional infra if user later asks.
 
-## 8. Review gate before go-live
+---
 
-Produce two screenshots for sign-off before anything ships:
+## 6. Delivery order
 
-1. Site detail view with a mixed-rating site (3× 7kW/1φ + 1× 22kW/3φ) showing the Socket Groups editor and the phase-balance panel.
-2. Rendered PoC designer email preview for the same site.
+1. Migration: `deleted_entities`, `entity_move_log`, `capability_grants`, helper functions, RLS, grants, seed.
+2. Archive RPCs + `ArchiveDialog` + `ArchiveConsole`.
+3. Site Move RPC + `MoveSiteDialog` + bulk toolbar entry.
+4. Retention sweep edge function + admin purge action.
+5. E2E test with screenshots (archive site, restore, move site between WPs, blocked move on locked invoice).
 
-## Out of scope
+---
 
-- WP/Site relationships, stage machine, cost/feasibility engines, map layers — untouched.
-- Full three-phase electrical validation (per-phase max current, neutral loading, phase rotation) — this slice is load balancing for designer information only.
+## Technical details
+
+- All RPCs `SECURITY DEFINER`, `SET search_path = public`, capability-checked at top.
+- Snapshots stored as `jsonb` with `{table, rows: [...]}` per child table; restore uses `jsonb_populate_recordset`.
+- Move is per-site subtransaction (`SAVEPOINT`) so a locked site in a bulk request does not roll back others.
+- OneDrive move via Graph `PATCH /me/drive/items/{id}` with new `parentReference.id` — resolved via `onedrive_folder_cache`.
+- Rollback: any failure inside a per-site savepoint releases with no partial move; the site stays on source WP and error is surfaced in the dialog.

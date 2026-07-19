@@ -194,6 +194,7 @@ export type Database = {
       }
       app_settings: {
         Row: {
+          financial_period_lock_before: string | null
           id: string
           onedrive_root_folder: string
           require_approval: boolean
@@ -201,6 +202,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          financial_period_lock_before?: string | null
           id?: string
           onedrive_root_folder?: string
           require_approval?: boolean
@@ -208,6 +210,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          financial_period_lock_before?: string | null
           id?: string
           onedrive_root_folder?: string
           require_approval?: boolean
@@ -745,6 +748,30 @@ export type Database = {
         }
         Relationships: []
       }
+      capability_grants: {
+        Row: {
+          capability: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          capability: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          capability?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           created_at: string
@@ -947,6 +974,7 @@ export type Database = {
       contracts: {
         Row: {
           client_id: string
+          closed_at: string | null
           code: string | null
           created_at: string
           currency: string
@@ -960,6 +988,7 @@ export type Database = {
         }
         Insert: {
           client_id: string
+          closed_at?: string | null
           code?: string | null
           created_at?: string
           currency?: string
@@ -973,6 +1002,7 @@ export type Database = {
         }
         Update: {
           client_id?: string
+          closed_at?: string | null
           code?: string | null
           created_at?: string
           currency?: string
@@ -1068,6 +1098,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      deleted_entities: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          onedrive_archive_path: string | null
+          parent_id: string | null
+          parent_type: string | null
+          purged_at: string | null
+          reason: string | null
+          restored_at: string | null
+          restored_by: string | null
+          retention_expires_at: string
+          snapshot: Json
+          status: string
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          onedrive_archive_path?: string | null
+          parent_id?: string | null
+          parent_type?: string | null
+          purged_at?: string | null
+          reason?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          retention_expires_at?: string
+          snapshot: Json
+          status?: string
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          onedrive_archive_path?: string | null
+          parent_id?: string | null
+          parent_type?: string | null
+          purged_at?: string | null
+          reason?: string | null
+          restored_at?: string | null
+          restored_by?: string | null
+          retention_expires_at?: string
+          snapshot?: Json
+          status?: string
+        }
+        Relationships: []
       }
       design_cables: {
         Row: {
@@ -1783,6 +1867,48 @@ export type Database = {
           id?: string
           token?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      entity_move_log: {
+        Row: {
+          error_message: string | null
+          from_wp_id: string | null
+          id: string
+          moved_at: string
+          moved_by: string | null
+          partner_change: Json | null
+          reason: string
+          records_moved: Json
+          site_id: string
+          status: string
+          to_wp_id: string
+        }
+        Insert: {
+          error_message?: string | null
+          from_wp_id?: string | null
+          id?: string
+          moved_at?: string
+          moved_by?: string | null
+          partner_change?: Json | null
+          reason: string
+          records_moved?: Json
+          site_id: string
+          status?: string
+          to_wp_id: string
+        }
+        Update: {
+          error_message?: string | null
+          from_wp_id?: string | null
+          id?: string
+          moved_at?: string
+          moved_by?: string | null
+          partner_change?: Json | null
+          reason?: string
+          records_moved?: Json
+          site_id?: string
+          status?: string
+          to_wp_id?: string
         }
         Relationships: []
       }
@@ -6058,6 +6184,7 @@ export type Database = {
           id: string
           invoice_number: string
           issue_date: string | null
+          locked: boolean
           milestone_id: string | null
           net_amount: number
           notes: string | null
@@ -6091,6 +6218,7 @@ export type Database = {
           id?: string
           invoice_number: string
           issue_date?: string | null
+          locked?: boolean
           milestone_id?: string | null
           net_amount?: number
           notes?: string | null
@@ -6124,6 +6252,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           issue_date?: string | null
+          locked?: boolean
           milestone_id?: string | null
           net_amount?: number
           notes?: string | null
@@ -11243,6 +11372,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      archive_entity: {
+        Args: { _entity_id: string; _entity_type: string; _reason: string }
+        Returns: string
+      }
       auto_create_dno_layers: {
         Args: { p_dno: string; p_force?: boolean }
         Returns: Json
@@ -11658,6 +11791,10 @@ export type Database = {
       }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       gettransactionid: { Args: never; Returns: unknown }
+      has_capability: {
+        Args: { _capability: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -11698,6 +11835,20 @@ export type Database = {
       maybe_auto_pass_final_review: {
         Args: { p_site: string; p_wp: string }
         Returns: undefined
+      }
+      move_sites_between_wps: {
+        Args: {
+          _adopt_destination_partner?: boolean
+          _reason: string
+          _site_ids: string[]
+          _to_wp_id: string
+        }
+        Returns: {
+          message: string
+          records_moved: Json
+          site_id: string
+          status: string
+        }[]
       }
       move_to_dlq: {
         Args: {
@@ -11802,6 +11953,7 @@ export type Database = {
         Args: { _proposal_id: string; _template_key?: string; _wp_id?: string }
         Returns: Json
       }
+      purge_entity: { Args: { _archive_id: string }; Returns: boolean }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
@@ -11860,6 +12012,7 @@ export type Database = {
         Args: { _site_ids: string[]; _wp_id: string }
         Returns: Json
       }
+      restore_entity: { Args: { _archive_id: string }; Returns: string }
       revenue_monthly_rollup: {
         Args: { _org_id: string; _year: number }
         Returns: {
@@ -11914,6 +12067,10 @@ export type Database = {
           surface_type: string
         }[]
       }
+      scan_entity_dependencies: {
+        Args: { _entity_id: string; _entity_type: string }
+        Returns: Json
+      }
       score_site: {
         Args: { _proposed_kw?: number; _site_geom: unknown }
         Returns: Json
@@ -11941,6 +12098,13 @@ export type Database = {
       set_site_geom_wgs84: {
         Args: { _lat: number; _lng: number; _site_id: string }
         Returns: undefined
+      }
+      site_move_blockers: {
+        Args: { _site_id: string }
+        Returns: {
+          blocker: string
+          detail: string
+        }[]
       }
       ssen_substation_capacity_lookup: {
         Args: { _name: string }

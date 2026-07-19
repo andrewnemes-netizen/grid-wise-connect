@@ -38,6 +38,7 @@ const commonItems = [
 
 const adminItems = [
   { title: "Admin", url: "/admin", icon: Settings },
+  { title: "Archive Console", url: "/admin/archive", icon: Settings },
 ];
 
 export function AppSidebar() {

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Zap, ClipboardList, CheckCircle2, Trash2 } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2, Trash2, ArrowRightLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import { MoveSiteDialog } from "@/components/site/MoveSiteDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -360,6 +361,7 @@ export default function WpSiteRegisterTab() {
     onError: (e: any) => toast.error(e?.message ?? "Failed to remove sites"),
   });
   const removeBusy = bulkRemoveFromWp.isPending;
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -406,6 +408,9 @@ export default function WpSiteRegisterTab() {
           </Button>
           <Button size="sm" variant="destructive" disabled={busy || removeBusy} onClick={() => setRemoveDialogOpen(true)}>
             <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove from WP
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => setMoveDialogOpen(true)}>
+            <ArrowRightLeft className="h-3.5 w-3.5 mr-1" /> Move to WP
           </Button>
           <Button size="sm" variant="ghost" onClick={clearSel}>Clear</Button>
         </Card>
@@ -648,6 +653,16 @@ export default function WpSiteRegisterTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {wpId && (
+        <MoveSiteDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          siteIds={selectedIds}
+          currentWpId={wpId}
+          onMoved={() => { clearSel(); invalidate(); }}
+        />
+      )}
     </div>
   );
 }
