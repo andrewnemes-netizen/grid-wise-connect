@@ -54,7 +54,7 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
         .eq("poc_estimate_id", estimateId)
         .order("sort_index", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as Line[];
+      return (data ?? []) as unknown as Line[];
     },
   });
 
