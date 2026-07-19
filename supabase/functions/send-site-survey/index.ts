@@ -66,7 +66,23 @@ Deno.serve(async (req) => {
 
   const expiresDays = Math.max(1, Math.min(180, body.expires_in_days ?? 30))
   const expiresAt = new Date(Date.now() + expiresDays * 86400_000)
-  const baseUrl = (body.survey_base_url ?? '').replace(/\/$/, '')
+
+  // Resolve public base URL: app_settings first, then request override, then request origin.
+  // Preview/editor origins (id-preview--…lovable.app) require Lovable login for external
+  // recipients, so we always prefer the published domain configured by the admin.
+  const { data: settingsRow } = await admin
+    .from('app_settings')
+    .select('public_app_base_url')
+    .limit(1)
+    .maybeSingle()
+  const settingsBase = (settingsRow?.public_app_base_url ?? '').trim().replace(/\/$/, '')
+  const requestBase = (body.survey_base_url ?? '').trim().replace(/\/$/, '')
+  const originBase = (req.headers.get('origin') ?? '').trim().replace(/\/$/, '')
+  const isPreviewHost = (u: string) => /(^|\/\/)(id-preview--|preview--)/i.test(u)
+  const baseUrl =
+    settingsBase ||
+    (requestBase && !isPreviewHost(requestBase) ? requestBase : '') ||
+    (originBase && !isPreviewHost(originBase) ? originBase : '')
 
   const results: any[] = []
 

@@ -197,6 +197,7 @@ export type Database = {
           financial_period_lock_before: string | null
           id: string
           onedrive_root_folder: string
+          public_app_base_url: string | null
           require_approval: boolean
           updated_at: string
           updated_by: string | null
@@ -205,6 +206,7 @@ export type Database = {
           financial_period_lock_before?: string | null
           id?: string
           onedrive_root_folder?: string
+          public_app_base_url?: string | null
           require_approval?: boolean
           updated_at?: string
           updated_by?: string | null
@@ -213,6 +215,7 @@ export type Database = {
           financial_period_lock_before?: string | null
           id?: string
           onedrive_root_folder?: string
+          public_app_base_url?: string | null
           require_approval?: boolean
           updated_at?: string
           updated_by?: string | null

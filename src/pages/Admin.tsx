@@ -5,8 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen, Beaker, Handshake, Link2 } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen, Beaker, Handshake, Link2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 import { UnitRatesSettings } from "@/components/admin/UnitRatesSettings";
 import { LayerManagement } from "@/components/admin/LayerManagement";
@@ -124,6 +129,7 @@ const Admin = () => {
         </TabsContent>
         <TabsContent value="xero" className="mt-4">
           <div className="space-y-4">
+            <PublicUrlSettings />
             <XeroIntegration />
             <OneDriveIntegration />
           </div>
@@ -132,6 +138,77 @@ const Admin = () => {
     </div>
   );
 };
+
+function PublicUrlSettings() {
+  const [id, setId] = useState<string | null>(null);
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("id, public_app_base_url")
+        .limit(1)
+        .maybeSingle();
+      if (data) { setId(data.id); setUrl(data.public_app_base_url ?? ""); }
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async () => {
+    if (!id) return;
+    let clean = url.trim().replace(/\/$/, "");
+    if (clean && !/^https?:\/\//i.test(clean)) clean = `https://${clean}`;
+    if (clean && /(id-preview--|preview--)/i.test(clean)) {
+      toast.error("Use the published domain, not a preview URL.");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase
+      .from("app_settings")
+      .update({ public_app_base_url: clean || null })
+      .eq("id", id);
+    setSaving(false);
+    if (error) toast.error(error.message);
+    else { setUrl(clean); toast.success("Public URL saved"); }
+  };
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div>
+          <h3 className="font-semibold text-sm">Public app base URL</h3>
+          <p className="text-xs text-muted-foreground">
+            Used to build external survey links sent to installers and surveyors. Must be the
+            published Gridwise domain — preview URLs require a Lovable login and will not work
+            for external users.
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex items-center text-xs text-muted-foreground"><Loader2 className="h-3 w-3 mr-2 animate-spin" />Loading…</div>
+        ) : (
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <Label htmlFor="public-url" className="text-xs">Base URL</Label>
+              <Input
+                id="public-url"
+                placeholder="https://grid-wise-connect.lovable.app"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+            </div>
+            <Button onClick={save} disabled={saving} size="sm">
+              {saving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+              Save
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // UserRolesTab moved to src/components/admin/UserRolesManagement.tsx
 
