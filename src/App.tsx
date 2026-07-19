@@ -24,9 +24,8 @@ const QuickEstimate = lazy(() => import("./pages/QuickEstimate"));
 const Training = lazy(() => import("./pages/Training"));
 const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
-const DeliveryProgrammes = lazy(() => import("./pages/DeliveryProgrammes"));
-const DeliveryProgrammeDetail = lazy(() => import("./pages/DeliveryProgrammeDetail"));
-const DeliveryWorkPackage = lazy(() => import("./pages/DeliveryWorkPackage"));
+const ProgrammesList = lazy(() => import("./pages/gridwise/ProgrammesList"));
+const ProgrammeDetail = lazy(() => import("./pages/gridwise/ProgrammeDetail"));
 const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
 const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
 const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
@@ -149,9 +148,12 @@ const AppRoutes = () => (
       <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
       <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
-      <Route path="/delivery" element={<ProtectedRoute><DeliveryProgrammes /></ProtectedRoute>} />
-      <Route path="/delivery/programme/:id" element={<ProtectedRoute><DeliveryProgrammeDetail /></ProtectedRoute>} />
-      <Route path="/delivery/wp/:id" element={<ProtectedRoute><DeliveryWorkPackage /></ProtectedRoute>} />
+      <Route path="/programmes" element={<ProtectedRoute><ProgrammesList /></ProtectedRoute>} />
+      <Route path="/programme/:id" element={<ProtectedRoute><ProgrammeDetail /></ProtectedRoute>} />
+      {/* Legacy redirects — bookmarks and shared links */}
+      <Route path="/delivery" element={<Navigate to="/programmes" replace />} />
+      <Route path="/delivery/programme/:id" element={<LegacyProgrammeRedirect />} />
+      <Route path="/delivery/wp/:id" element={<LegacyWpRedirect />} />
       <Route path="/delivery/proposals" element={<ProtectedRoute><DeliveryProposals /></ProtectedRoute>} />
       <Route path="/delivery/proposal/:id" element={<ProtectedRoute><DeliveryProposalDetail /></ProtectedRoute>} />
       <Route path="/delivery/revenue" element={<ProtectedRoute><DeliveryRevenue /></ProtectedRoute>} />
