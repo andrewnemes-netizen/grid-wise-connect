@@ -7070,6 +7070,7 @@ export type Database = {
       }
       site_precon_gates: {
         Row: {
+          archived_at: string | null
           created_at: string
           evidence_ref: string | null
           gate_key: string
@@ -7083,6 +7084,7 @@ export type Database = {
           work_package_id: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           evidence_ref?: string | null
           gate_key: string
@@ -7096,6 +7098,7 @@ export type Database = {
           work_package_id: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           evidence_ref?: string | null
           gate_key?: string
@@ -11803,6 +11806,10 @@ export type Database = {
       reject_invoice: {
         Args: { _id: string; _reason: string }
         Returns: undefined
+      }
+      remove_sites_from_wp: {
+        Args: { _site_ids: string[]; _wp_id: string }
+        Returns: Json
       }
       revenue_monthly_rollup: {
         Args: { _org_id: string; _year: number }
