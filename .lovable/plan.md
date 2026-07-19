@@ -1,47 +1,104 @@
 ## Goal
-Let any Engineer with WP access unlink selected sites from a Work Package via the Site Register bulk toolbar, and archive the WP-scoped work for those sites so they disappear from Readiness/Matrix. The Site record and all cross-WP data stay intact and the site can be re-added later.
+Support mixed socket ratings per Site via repeating Socket Groups, drive **phase-aware** load-balanced assignment (single-phase sockets go to one phase; three-phase sockets split evenly across all three), and surface both in the Site detail view and PoC designer notification. Existing WP/Site structure otherwise untouched.
 
-## What "unlink + archive" means
-For each selected site on this WP:
-1. Delete the `wp_sites` row (removes it from the WP).
-2. Archive WP-scoped derived state for that `(wp_id, site_id)` pair:
-   - `wp_tasks` → set `status = 'archived'` (keep row for audit).
-   - `site_stage_status` → set `state = 'archived'` on rows scoped to this WP.
-   - `site_precon_gates` → mark `archived_at = now()`.
-3. Leave untouched (canonical / cross-WP):
-   - `sites`, `site_estimates`, `site_photos`, `site_surveys`, `design_submissions`, `dno_offers`/`dno_offer_sites`, `notifications`, `audit_log`.
-4. Write an `audit_log` entry per site: `action = 'wp_site_removed'` with the removing user, WP id, site id, timestamp.
+## 1. Socket phase model (foundational correction)
 
-Re-adding the site later re-creates a fresh `wp_sites` row and re-seeds stages via the existing `wp_sites_ensure_stage()` trigger. Archived tasks/gates stay archived so the audit history reads correctly.
+A socket's phase count is a property of the rating, not a user choice. Defaults, editable per group:
 
-## Backend
-New RPC `public.remove_sites_from_wp(_wp_id uuid, _site_ids uuid[])`:
-- `SECURITY DEFINER`, `search_path = public`.
-- Auth check: caller must have a row in `wp_access` for `_wp_id`, OR `has_role(auth.uid(),'admin')`. Otherwise raise.
-- Runs the delete + archive steps above in a single transaction.
-- Returns `{ removed: int, blocked: uuid[] }` (blocked = ids not attached to this WP).
-- Grant `EXECUTE` to `authenticated`.
+| Power rating | Phases | Per-phase load |
+|---|---|---|
+| ≤ 7.4 kW (7, 7.4) | 1-phase | full rating on one phase |
+| 11 kW | 3-phase | rating ÷ 3 (≈ 3.67 kW/phase) |
+| 22 kW | 3-phase | rating ÷ 3 (≈ 7.33 kW/phase) |
+| ≥ 25 kW (50, 150, 350) | 3-phase | rating ÷ 3 |
 
-No schema changes needed beyond adding `archived_at timestamptz` to `site_precon_gates` if not already present.
+Stored as `phases` (1 or 3) on each socket group with a sensible default derived from `power_rating_kw`; user can override.
 
-## UI (WpSiteRegisterTab.tsx only)
-- Bulk toolbar already appears when `selectedSiteIds.size > 0` (next to "Send for PoC"). Add a **"Remove from WP"** button (destructive variant, trash icon).
-- Clicking opens a confirm dialog listing the selected site names + count, with copy:
-  > "This unlinks N site(s) from this Work Package and archives their WP-scoped tasks and gates. The Site records and their estimates, surveys, photos, designs, and offers remain unchanged and the sites can be re-added later."
-- On confirm: call the RPC, toast the result, clear selection, refetch the site list + counts.
-- No row-menu action, no Site Detail change (per your answer).
+## 2. Data model — `site_socket_groups`
 
-## Permissions summary
-- Any user with a `wp_access` row on this WP (Engineer or above) can remove.
-- Admins can always remove.
-- Button is hidden if the user has no `wp_access` row and is not admin.
+New child table (canonical source of truth for sockets). Legacy `sites.socket_count` and `sites.proposed_kw` remain in place but become **derived** — populated from the sum of the groups via a trigger so existing map/cost logic keeps working.
+
+```
+public.site_socket_groups
+  id uuid pk
+  site_id uuid fk sites(id) on delete cascade
+  quantity int > 0
+  power_rating_kw numeric > 0    -- e.g. 7, 22, 50
+  phases smallint check (phases in (1,3))   -- default from rating
+  sort_order int default 0
+  created_at, updated_at
+```
+
+- GRANTs to `authenticated` / `service_role`; RLS mirrors `sites` via `EXISTS` join.
+- Trigger recomputes `sites.socket_count = SUM(quantity)` and `sites.proposed_kw = SUM(quantity * power_rating_kw)`.
+- One-time backfill: existing sites → single group `(quantity = socket_count, power_rating_kw = proposed_kw / socket_count, phases = default-from-rating)`.
+
+## 3. Shared helper — `src/lib/wp/socketPhaseBalance.ts`
+
+Pure TS, unit-tested.
+
+- `expandGroups(groups) → Socket[]` where `Socket = { kw, phases }` — `[{qty:3,kW:7,phases:1},{qty:1,kW:22,phases:3}]` → `[{7,1},{7,1},{7,1},{22,3}]`.
+- `balancePhases(sockets) → { assignments, loads: {L1,L2,L3}, totalKw, imbalancePct }`
+  - Sort sockets by kW descending.
+  - **3-phase socket**: add `kw/3` to each of L1, L2, L3 (no choice — it draws on all three).
+  - **1-phase socket**: assign to the phase with the lowest current cumulative load (ties → lowest index).
+  - `assignments` records, per phase, the sockets contributing (with a marker for shared 3-phase entries).
+- `summariseGroups(groups) → "3× 7kW (1φ), 1× 22kW (3φ)"`.
+
+Worked example (matches your correction): `3× 7kW single-phase + 1× 22kW three-phase` →
+- 22 kW splits into 7.33 kW on each of L1/L2/L3.
+- 7 kW sockets go one per phase (round-robin by lowest load).
+- Result: L1 = 14.33 kW, L2 = 14.33 kW, L3 = 14.33 kW. Total = 43 kW. Perfectly balanced.
+
+## 4. CSV import — `CsvIntakePanel.tsx`
+
+Accept multiple socket-group rows per site, linked by `site_id` **or** `site_address` (trimmed, case-insensitive).
+
+- New optional columns: `socket_qty`, `socket_kw`, `socket_phases` (defaults from rating if omitted).
+- Aliases: `quantity`, `power_rating`, `kw_each`, `phase_count`.
+- Group rows by site key → `socket_groups: [{quantity, power_rating_kw, phases}]`.
+- Backward compatible: rows with only `proposed_kw` still produce a single group with default phases.
+- Preview shows the group breakdown per site.
+
+## 5. Site detail view — `src/pages/SiteDetail.tsx`
+
+New **Sockets & Phase Balance** card:
+
+- Editable Socket Groups list (add / remove / edit qty, kW, phases-with-smart-default).
+- Live-computed panel:
+  - Total sockets, Total Connected Load (kW), group breakdown string.
+  - Per-phase block for L1 / L2 / L3 showing the load (kW) and contributing sockets as chips (e.g. `7.33kW (from 22kW/3φ)`, `7kW`).
+  - Imbalance %.
+- No changes to any other card.
+
+## 6. PoC validation + notification wiring
+
+- `pocValidation.ts`: replace socket_count/proposed_kw checks with `socket_groups.length > 0 && every(qty>0 && kw>0 && phases∈{1,3})`. Missing-field label: "Socket Groups (quantity + power rating)".
+- `get_sites_for_poc` RPC: also return `socket_groups` JSON array.
+- `SendForPocDialog.tsx`: readiness panel shows group breakdown + phase balance summary; blocks if any site has no groups.
+- `WpSiteRegisterTab.tsx`: pass `socketGroups`, `phaseBalance`, `totalKw` into the email payload.
+
+## 7. Designer notification template — `poc-assignment.tsx`
+
+Replace the two rows "Number of Sockets" / "Socket Power Rating" with a **Sockets & Phase Balance** block per site:
+
+- Total Sockets: `4`
+- Socket Groups: `3× 7kW (1φ), 1× 22kW (3φ)`
+- Total Connected Load: `43 kW`
+- Phase L1: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
+- Phase L2: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
+- Phase L3: `14.33 kW` — `[7kW, 7.33kW from 22kW/3φ]`
+
+Site ID stays optional. Address, Postcode, Feeder Pillar Lat/Lng unchanged.
+
+## 8. Review gate before go-live
+
+Produce two screenshots for sign-off before anything ships:
+
+1. Site detail view with a mixed-rating site (3× 7kW/1φ + 1× 22kW/3φ) showing the Socket Groups editor and the phase-balance panel.
+2. Rendered PoC designer email preview for the same site.
 
 ## Out of scope
-- Deleting the underlying `sites` record.
-- Cascading changes to estimates, offers, designs, or notifications.
-- Row-level or Site Detail entry points.
 
-## Technical notes
-- All logic is additive; no existing triggers or tabs change behaviour.
-- Readiness/Matrix already filter by `wp_sites`, so removed sites drop out automatically once the `wp_sites` row is gone.
-- Verification: Playwright — select 2 sites on a test WP, click Remove, confirm, assert they vanish from Site Register, Readiness Matrix, and Delivery Matrix; assert `audit_log` rows and archived `wp_tasks`/`site_precon_gates`.
+- WP/Site relationships, stage machine, cost/feasibility engines, map layers — untouched.
+- Full three-phase electrical validation (per-phase max current, neutral loading, phase rotation) — this slice is load balancing for designer information only.
