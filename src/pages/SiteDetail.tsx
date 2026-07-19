@@ -411,7 +411,8 @@ const SiteDetail = () => {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Details</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant="secondary" className="capitalize">{site.status}</Badge></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Proposed kW</span><span>{site.proposed_kw || "—"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Total Connected Load</span><span>{site.proposed_kw ? `${site.proposed_kw} kW` : "—"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Total Sockets</span><span>{site.socket_count ?? "—"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Client Org</span><span>{site.client_org || "—"}</span></div>
             {deploymentClass && <div className="flex justify-between"><span className="text-muted-foreground">Deployment Class</span><span>{deploymentClass}</span></div>}
             {gridReadiness && <div className="flex justify-between"><span className="text-muted-foreground">Grid Readiness</span><span>{gridReadiness}</span></div>}
@@ -433,6 +434,9 @@ const SiteDetail = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Sockets & Phase Balance */}
+      {id && <SocketPhaseBalanceCard siteId={id} canEdit={isInternal} />}
 
       {/* Reasons + Next Steps */}
       <div className="grid gap-4 md:grid-cols-2">
