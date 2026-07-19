@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import { QueueSurveyDialog } from "@/components/wp/QueueSurveyDialog";
 import { MoveSiteDialog } from "@/components/site/MoveSiteDialog";
 import {
   AlertDialog,
@@ -66,6 +67,7 @@ export default function WpSiteRegisterTab() {
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
+  const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const qc = useQueryClient();
   const invalidate = () => {
@@ -223,25 +225,6 @@ export default function WpSiteRegisterTab() {
     onError: (e: any) => toast.error(e.message ?? "Failed to raise POC tasks"),
   });
 
-  const bulkSurveyAlloc = useMutation({
-    mutationFn: async (siteIds: string[]) => {
-      if (!wpId || siteIds.length === 0) return;
-      const due = new Date(); due.setDate(due.getDate() + 14);
-      const rows = siteIds.map((sid) => ({
-        work_package_id: wpId,
-        site_id: sid,
-        task_kind: "survey_alloc" as const,
-        title: "Allocate site survey",
-        status: "not_started",
-        due_date: due.toISOString().slice(0, 10),
-      }));
-      const { error } = await (supabase as any).from("wp_tasks").insert(rows);
-      if (error) throw error;
-    },
-    onSuccess: (_d, sids) => { toast.success(`Survey allocation queued for ${sids.length} site${sids.length === 1 ? "" : "s"}`); clearSel(); invalidate(); },
-    onError: (e: any) => toast.error(e.message ?? "Failed to queue survey allocation"),
-  });
-
   const bulkPassFinalGate = useMutation({
     mutationFn: async (siteIds: string[]) => {
       if (!wpId || siteIds.length === 0) return;
@@ -339,7 +322,7 @@ export default function WpSiteRegisterTab() {
     });
     return m;
   }, [rows]);
-  const busy = bulkSendPoc.isPending || bulkSurveyAlloc.isPending || bulkPassFinalGate.isPending;
+  const busy = bulkSendPoc.isPending || bulkPassFinalGate.isPending;
 
   const bulkRemoveFromWp = useMutation({
     mutationFn: async (siteIds: string[]) => {
@@ -400,7 +383,7 @@ export default function WpSiteRegisterTab() {
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setPocDialogOpen(true)}>
             <Zap className="h-3.5 w-3.5 mr-1" /> Send for POC
           </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkSurveyAlloc.mutate(selectedIds)}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => setQueueSurveyOpen(true)}>
             <ClipboardList className="h-3.5 w-3.5 mr-1" /> Queue survey
           </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => bulkPassFinalGate.mutate(selectedIds)}>
@@ -619,6 +602,16 @@ export default function WpSiteRegisterTab() {
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
+
+      {wpId && (
+        <QueueSurveyDialog
+          open={queueSurveyOpen}
+          onOpenChange={setQueueSurveyOpen}
+          siteIds={selectedIds}
+          workPackageId={wpId}
+          onDone={() => { clearSel(); invalidate(); }}
+        />
+      )}
 
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
