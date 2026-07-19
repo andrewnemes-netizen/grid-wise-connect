@@ -7664,6 +7664,7 @@ export type Database = {
           blocker_reason: string | null
           build_type: string | null
           client_org: string | null
+          client_site_code: string | null
           connection_options: Json | null
           cost_band: string | null
           created_at: string
@@ -7698,6 +7699,7 @@ export type Database = {
           blocker_reason?: string | null
           build_type?: string | null
           client_org?: string | null
+          client_site_code?: string | null
           connection_options?: Json | null
           cost_band?: string | null
           created_at?: string
@@ -7732,6 +7734,7 @@ export type Database = {
           blocker_reason?: string | null
           build_type?: string | null
           client_org?: string | null
+          client_site_code?: string | null
           connection_options?: Json | null
           cost_band?: string | null
           created_at?: string
