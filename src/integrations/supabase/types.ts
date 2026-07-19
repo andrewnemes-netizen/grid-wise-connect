@@ -12719,6 +12719,13 @@ export type Database = {
         Args: { _variation_id: string }
         Returns: undefined
       }
+      sweep_expired_archives: {
+        Args: never
+        Returns: {
+          failed_count: number
+          purged_count: number
+        }[]
+      }
       ukpn_circuits_for_substation: {
         Args: { p_name: string }
         Returns: {
