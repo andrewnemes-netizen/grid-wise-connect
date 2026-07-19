@@ -1,25 +1,25 @@
-## Problem
+## Plan: remove the remaining survey “resource already exists” failure
 
-When a surveyor's submit fails partway (e.g. earlier "permission denied for function submit_survey_by_token"), the storage uploads for signature/photos/PDF have already been written to the `site-surveys` bucket under deterministic paths (`${survey_id}/signature.png`, `${survey_id}/survey.pdf`, `${survey_id}/{fieldKey}/…`). Retrying the submit re-uploads to the same paths with `upsert: false`, so Supabase Storage returns **"The resource already exists"** and the whole submit aborts.
+I checked the current survey submission flow. The photo/signature/PDF uploads in `SurveyForm.tsx` now use overwrite mode, so the remaining conflict is likely from the storage policy not allowing overwrite/update for anonymous survey submitters even though insert/upload is allowed.
 
-## Fix
+### What I will change
 
-Single-file change in `src/pages/SurveyForm.tsx`:
+1. **Keep the existing survey UX unchanged**
+   - No dialog/page redesign.
+   - No change to survey questions, PDF generation, or submission flow.
 
-- Change the shared `uploadFile()` helper to use `upsert: true`.
-  - Signature and PDF paths are deterministic per survey token — overwriting them on retry is the correct behaviour (latest submit wins).
-  - Photo paths already include `Date.now()` and an index, so upsert doesn't cause collisions there; it only helps if a user clicks Submit twice in the same millisecond.
-- Regenerate the signed URL after the (re)upload, which the code already does.
+2. **Make survey file overwrite actually work for external survey links**
+   - Add a small backend migration for the `site-surveys` storage bucket policies.
+   - Ensure anonymous token-based survey submitters can update existing objects in `site-surveys`, not just create them.
+   - Keep access scoped to the survey bucket only.
 
-No schema, RPC, RLS, or edge function changes. No UX change.
+3. **Keep the existing retry behaviour**
+   - If a first submit partially uploaded files and then failed, the retry should replace stale files instead of failing with `resource already exists`.
 
-## Verification
+4. **Verify the affected code path**
+   - Confirm `SurveyForm.tsx` still calls upload with overwrite enabled.
+   - Confirm no UX or behaviour changes outside the upload conflict fix.
 
-After the change:
-1. Retry the submit that previously failed for Andrew Nemes — should now succeed and land a fresh row in `site_survey_responses` with a valid `pdf_url` / `pdf_storage_path`.
-2. Confirm the owner notification email fires and the PDF is mirrored to OneDrive under `Sites / {Site} / Surveys / …`.
+### Expected result
 
-## Out of scope
-
-- No cleanup of orphan files from previous failed attempts (they'll be overwritten on the next submit for that token).
-- No change to survey token lifecycle or RPC.
+When you retry the same survey submission after a partial failure, it should continue through upload, save the survey response, generate/register the PDF, and notify the owner instead of stopping at `resource already exists`.
