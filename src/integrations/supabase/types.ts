@@ -7142,6 +7142,54 @@ export type Database = {
           },
         ]
       }
+      site_socket_groups: {
+        Row: {
+          created_at: string
+          id: string
+          phases: number
+          power_rating_kw: number
+          quantity: number
+          site_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phases: number
+          power_rating_kw: number
+          quantity: number
+          site_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phases?: number
+          power_rating_kw?: number
+          quantity?: number
+          site_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_socket_groups_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_socket_groups_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+        ]
+      }
       site_stage_history: {
         Row: {
           changed_at: string
@@ -11592,6 +11640,7 @@ export type Database = {
           proposed_kw: number
           site_name: string
           socket_count: number
+          socket_groups: Json
         }[]
       }
       get_survey_by_token: {
