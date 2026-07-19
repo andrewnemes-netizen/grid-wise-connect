@@ -7,6 +7,8 @@ import { ClipboardList, FileText, Send, Mail, Copy, Loader2 } from "lucide-react
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { SendSurveyDialog } from "@/components/portfolio/SendSurveyDialog";
+import { collectRowsForPdf } from "@/lib/survey-schema";
+import { generateSurveyPdf, type SurveyPhotoGroup } from "@/lib/survey-pdf";
 
 interface Props { siteId: string; }
 
@@ -39,27 +41,29 @@ export function SiteSurveysPanel({ siteId }: Props) {
   const [publicBase, setPublicBase] = useState<string>("");
   const [openingPdf, setOpeningPdf] = useState<string | null>(null);
 
-  const openPdf = async (responseId: string, fallbackUrl: string | null) => {
-    setOpeningPdf(responseId);
+  const openPdf = async (response: ResponseRow) => {
+    setOpeningPdf(response.id);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const accessToken = sess.session?.access_token;
-      const baseUrl = (import.meta as any).env.VITE_SUPABASE_URL as string;
-      const res = await fetch(
-        `${baseUrl}/functions/v1/survey-pdf?response_id=${responseId}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const submission = response.submission ?? {};
+      const photoGroups = Array.isArray(submission._photo_groups)
+        ? (submission._photo_groups as SurveyPhotoGroup[])
+        : [];
+      const blob = await generateSurveyPdf({
+        siteName: submission.site_name_address ?? "Site Survey",
+        submitterName: response.submitter_name ?? undefined,
+        submitterEmail: response.submitter_email ?? undefined,
+        submittedAt: response.submitted_at ? new Date(response.submitted_at) : new Date(),
+        sections: collectRowsForPdf(submission),
+        photoGroups,
+        relevantDno: submission.relevant_dno,
+        surveyDate: submission.site_survey_date,
+      });
       const objUrl = URL.createObjectURL(blob);
       window.open(objUrl, "_blank", "noopener,noreferrer");
       setTimeout(() => URL.revokeObjectURL(objUrl), 60_000);
     } catch (e) {
-      if (fallbackUrl) {
-        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
-      } else {
-        toast.error("Could not open PDF");
-      }
+      console.error(e);
+      toast.error("Could not open PDF");
     } finally {
       setOpeningPdf(null);
     }
@@ -156,7 +160,7 @@ export function SiteSurveysPanel({ siteId }: Props) {
                           size="sm"
                           className="h-6 px-2 text-xs"
                           disabled={openingPdf === response.id}
-                          onClick={() => openPdf(response.id, response.pdf_url)}
+                          onClick={() => openPdf(response)}
                         >
                           {openingPdf === response.id ? (
                             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
