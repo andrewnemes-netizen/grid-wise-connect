@@ -26,10 +26,6 @@ const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
 const ProgrammesList = lazy(() => import("./pages/gridwise/ProgrammesList"));
 const ProgrammeDetail = lazy(() => import("./pages/gridwise/ProgrammeDetail"));
-const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
-const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
-const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
-const DeliveryProposalDetail = lazy(() => import("./pages/DeliveryProposalDetail"));
 const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
 const IntelligenceLayout = lazy(() => import("./pages/intelligence/IntelligenceLayout"));
 const ExecutiveDashboard = lazy(() => import("./pages/intelligence/ExecutiveDashboard"));
@@ -163,11 +159,7 @@ const AppRoutes = () => (
       <Route path="/delivery" element={<Navigate to="/programmes" replace />} />
       <Route path="/delivery/programme/:id" element={<LegacyProgrammeRedirect />} />
       <Route path="/delivery/wp/:id" element={<LegacyWpRedirect />} />
-      <Route path="/delivery/proposals" element={<ProtectedRoute><DeliveryProposals /></ProtectedRoute>} />
-      <Route path="/delivery/proposal/:id" element={<ProtectedRoute><DeliveryProposalDetail /></ProtectedRoute>} />
       <Route path="/delivery/revenue" element={<ProtectedRoute><DeliveryRevenue /></ProtectedRoute>} />
-      <Route path="/delivery/projects" element={<ProtectedRoute><DeliveryProjects /></ProtectedRoute>} />
-      <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/admin/archive" element={<ProtectedRoute><ArchiveConsole /></ProtectedRoute>} />

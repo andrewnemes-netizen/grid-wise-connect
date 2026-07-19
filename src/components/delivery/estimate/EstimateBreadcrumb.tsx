@@ -56,7 +56,7 @@ export function EstimateBreadcrumb({
       {client?.name && (<><Crumb>{client.name}</Crumb><ChevronRight className="h-3 w-3" /></>)}
       {programme?.id && (
         <>
-          <Crumb to={`/delivery/programmes/${programme.id}`}>{programme.name ?? "Programme"}</Crumb>
+          <Crumb to={`/programme/${programme.id}`}>{programme.name ?? "Programme"}</Crumb>
           <ChevronRight className="h-3 w-3" />
         </>
       )}
