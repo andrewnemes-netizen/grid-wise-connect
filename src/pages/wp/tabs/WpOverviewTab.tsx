@@ -179,7 +179,7 @@ export default function WpOverviewTab() {
                 {evBuild?.count ?? 0} estimate{(evBuild?.count ?? 0) === 1 ? "" : "s"} · install / build scope
               </div>
               <Button asChild size="sm" variant="outline" className="mt-1">
-                <Link to="../commercial/estimating">Open EV Build Estimating <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+               <Link to="../commercial/estimating">Open EV Build Estimates <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
               </Button>
             </CardContent>
           </Card>
