@@ -95,8 +95,11 @@ function RateLibraryImport() {
   const { data: contracts = [] } = useContracts();
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<{ rows: RateRow[]; errors: string[] } | null>(null);
+  const [mode, setMode] = useState<"library" | "contract" | "version">("library");
   const [contractId, setContractId] = useState<string | undefined>();
   const [rateCardName, setRateCardName] = useState("");
+  const [category, setCategory] = useState("");
+  const [existingCardId, setExistingCardId] = useState<string | undefined>();
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [importedVersionId, setImportedVersionId] = useState<string | null>(null);
@@ -105,6 +108,24 @@ function RateLibraryImport() {
   const [importedName, setImportedName] = useState<string>("");
   const [approving, setApproving] = useState(false);
   const [approved, setApproved] = useState(false);
+
+  const { data: allCards = [] } = useQuery({
+    queryKey: ["rate-cards-all-for-import"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("rate_cards")
+        .select("id, name, category, contract_id, contract:contracts(name)")
+        .order("name");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
+  const existingCategories = useMemo(() => {
+    const s = new Set<string>();
+    (allCards as any[]).forEach((c) => c.category && s.add(c.category));
+    return Array.from(s).sort();
+  }, [allCards]);
 
   const onFile = async (f: File) => {
     setFile(f); setParsed(null); setResult(null);
@@ -120,20 +141,41 @@ function RateLibraryImport() {
 
   const doImport = async () => {
     if (!parsed || parsed.rows.length === 0) return;
-    if (!rateCardName.trim()) { toast.error("Rate card name required"); return; }
-    if (!contractId) { toast.error("Choose a contract"); return; }
     setImporting(true); setResult(null);
     try {
       const { data: user } = await supabase.auth.getUser();
-      const cid = contractId;
-      // Insert rate_card
-      const { data: rc, error: e1 } = await supabase.from("rate_cards").insert({
-        contract_id: cid, name: rateCardName.trim(),
-      }).select().single();
-      if (e1) throw e1;
-      // Insert rate_card_version (DRAFT v1)
+      let rateCardId: string;
+      let versionNumber = 1;
+      let displayName = rateCardName.trim();
+
+      if (mode === "version") {
+        if (!existingCardId) { toast.error("Choose an existing rate card"); setImporting(false); return; }
+        rateCardId = existingCardId;
+        const card = (allCards as any[]).find((c) => c.id === existingCardId);
+        displayName = card?.name ?? "rate card";
+        const { data: maxRow, error: eMax } = await supabase
+          .from("rate_card_versions")
+          .select("version_number")
+          .eq("rate_card_id", rateCardId)
+          .order("version_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (eMax) throw eMax;
+        versionNumber = ((maxRow as any)?.version_number ?? 0) + 1;
+      } else {
+        if (!displayName) { toast.error("Rate card name required"); setImporting(false); return; }
+        if (mode === "contract" && !contractId) { toast.error("Choose a contract"); setImporting(false); return; }
+        const { data: rc, error: e1 } = await supabase.from("rate_cards").insert({
+          contract_id: mode === "contract" ? contractId : null,
+          name: displayName,
+          category: category.trim() || null,
+        } as any).select().single();
+        if (e1) throw e1;
+        rateCardId = (rc as any).id;
+      }
+
       const { data: rv, error: e2 } = await supabase.from("rate_card_versions").insert({
-        rate_card_id: (rc as any).id, version_number: 1, status: "DRAFT",
+        rate_card_id: rateCardId, version_number: versionNumber, status: "DRAFT",
         source_workbook: file?.name ?? null, imported_at: new Date().toISOString(),
         imported_by: user.user?.id ?? null,
       }).select().single();
@@ -160,13 +202,15 @@ function RateLibraryImport() {
         const { error } = await supabase.from("rate_items").insert(rows.slice(i, i + chunk));
         if (error) throw error;
       }
-      setResult(`Imported ${rows.length} rate items into "${rateCardName.trim()}" v1 (DRAFT). ${needsPricingCount} flagged as needs_pricing.`);
+      setResult(`Imported ${rows.length} rate items into "${displayName}" v${versionNumber} (DRAFT). ${needsPricingCount} flagged as needs_pricing.`);
       setImportedVersionId(versionId);
       setImportedNeedsPricing(needsPricingCount);
       setImportedTotal(rows.length);
-      setImportedName(rateCardName.trim());
+      setImportedName(`${displayName} v${versionNumber}`);
       toast.success("Rate library imported");
       qc.invalidateQueries({ queryKey: ["contracts-import"] });
+      qc.invalidateQueries({ queryKey: ["rate-cards-all-for-import"] });
+      qc.invalidateQueries({ queryKey: ["rate-library-versions"] });
     } catch (e: any) {
       toast.error(e.message ?? "Import failed");
     } finally { setImporting(false); }
@@ -212,24 +256,77 @@ function RateLibraryImport() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div>
-                <Label>Contract</Label>
-                <Select value={contractId} onValueChange={setContractId}>
-                  <SelectTrigger><SelectValue placeholder="Existing contract" /></SelectTrigger>
-                  <SelectContent>
-                    {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Contracts are created from the client / commercial screens.
+                <Label>Import as</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {([
+                    { k: "library", label: "Library card (no contract)" },
+                    { k: "contract", label: "New card for a contract" },
+                    { k: "version", label: "New version of existing card" },
+                  ] as const).map((opt) => (
+                    <Button
+                      key={opt.k}
+                      type="button"
+                      size="sm"
+                      variant={mode === opt.k ? "default" : "outline"}
+                      onClick={() => setMode(opt.k)}
+                    >
+                      {opt.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
-              <div>
-                <Label>Rate card name</Label>
-                <Input value={rateCardName} onChange={(e) => setRateCardName(e.target.value)} />
-                <div className="text-xs text-muted-foreground mt-1">Will be created as v1 (DRAFT).</div>
-              </div>
+
+              {mode === "version" ? (
+                <div>
+                  <Label>Existing rate card</Label>
+                  <Select value={existingCardId} onValueChange={setExistingCardId}>
+                    <SelectTrigger><SelectValue placeholder="Choose a rate card" /></SelectTrigger>
+                    <SelectContent>
+                      {(allCards as any[]).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} — {c.category ?? (c.contract?.name ?? "Library")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    A new DRAFT version will be added to this card.
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Rate card name</Label>
+                    <Input value={rateCardName} onChange={(e) => setRateCardName(e.target.value)} />
+                    <div className="text-xs text-muted-foreground mt-1">Will be created as v1 (DRAFT).</div>
+                  </div>
+                  <div>
+                    <Label>Category {mode === "contract" && <span className="text-muted-foreground text-xs">(optional)</span>}</Label>
+                    <Input
+                      list="rate-card-categories"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="e.g. ICP, Build, LV Civils"
+                    />
+                    <datalist id="rate-card-categories">
+                      {existingCategories.map((c) => <option key={c} value={c} />)}
+                    </datalist>
+                  </div>
+                  {mode === "contract" && (
+                    <div className="col-span-2">
+                      <Label>Contract</Label>
+                      <Select value={contractId} onValueChange={setContractId}>
+                        <SelectTrigger><SelectValue placeholder="Existing contract" /></SelectTrigger>
+                        <SelectContent>
+                          {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="rounded-md border overflow-hidden max-h-64 overflow-y-auto">
