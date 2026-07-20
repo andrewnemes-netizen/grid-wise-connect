@@ -16,6 +16,35 @@ const fmt = (n: number, c = "GBP") =>
 
 type Draft = Record<string, any>;
 
+export type EstimateLineTable = "estimate_lines" | "site_estimate_lines" | "poc_estimate_lines";
+
+type TableMap = {
+  parentIdCol: "estimate_id" | "site_estimate_id" | "poc_estimate_id";
+  nameCol: "boq_item_name" | "description";
+  qtyCol: "qty" | "quantity";
+  uomCol: "uom" | "unit";
+  hasGroup: boolean;
+  computeLineTotals: boolean; // set line_cost/line_price on save
+};
+
+const TABLE_CONFIG: Record<EstimateLineTable, TableMap> = {
+  estimate_lines: {
+    parentIdCol: "estimate_id",
+    nameCol: "boq_item_name", qtyCol: "qty", uomCol: "uom",
+    hasGroup: true, computeLineTotals: false,
+  },
+  site_estimate_lines: {
+    parentIdCol: "site_estimate_id",
+    nameCol: "description", qtyCol: "quantity", uomCol: "unit",
+    hasGroup: true, computeLineTotals: true,
+  },
+  poc_estimate_lines: {
+    parentIdCol: "poc_estimate_id",
+    nameCol: "description", qtyCol: "quantity", uomCol: "unit",
+    hasGroup: false, computeLineTotals: true,
+  },
+};
+
 const DEFAULT: Draft = {
   boq_item_name: "", boq_description: "", pricing_notes: "",
   item_logic: "SUPPLY_AND_INSTALL", qty: 1, uom: "ea",
@@ -35,6 +64,7 @@ const DEFAULT: Draft = {
 
 export function EstimateLineDialog({
   estimateId, lineId, groupId, currency, onOpenChange, onSaved,
+  table = "estimate_lines", nextSortIndex,
 }: {
   estimateId: string;
   lineId: string | null;
@@ -42,24 +72,34 @@ export function EstimateLineDialog({
   currency: string;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
+  table?: EstimateLineTable;
+  nextSortIndex?: number;
 }) {
+  const cfg = TABLE_CONFIG[table];
   const [d, setD] = useState<Draft>(DEFAULT);
   const [saving, setSaving] = useState(false);
 
   const existing = useQuery({
-    queryKey: ["estimate-line", lineId],
+    queryKey: ["estimate-line", table, lineId],
     enabled: !!lineId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("estimate_lines" as any).select("*").eq("id", lineId!).single();
+      const { data, error } = await supabase.from(table as any).select("*").eq("id", lineId!).single();
       if (error) throw error;
       return data as any;
     },
   });
 
   useEffect(() => {
-    if (existing.data) setD({ ...DEFAULT, ...existing.data });
-    else if (!lineId) setD(DEFAULT);
-  }, [existing.data, lineId]);
+    if (existing.data) {
+      // Map storage columns → dialog draft fields (name/qty/uom aliases).
+      const row: any = existing.data;
+      const draft: Draft = { ...DEFAULT, ...row };
+      if (cfg.nameCol !== "boq_item_name") draft.boq_item_name = row[cfg.nameCol] ?? draft.boq_item_name ?? "";
+      if (cfg.qtyCol !== "qty") draft.qty = row[cfg.qtyCol] ?? draft.qty ?? 0;
+      if (cfg.uomCol !== "uom") draft.uom = row[cfg.uomCol] ?? draft.uom ?? "";
+      setD(draft);
+    } else if (!lineId) setD(DEFAULT);
+  }, [existing.data, lineId, cfg]);
 
   const set = (k: string, v: any) => setD((prev) => ({ ...prev, [k]: v }));
   const num = (k: string) => Number(d[k] ?? 0);
@@ -81,14 +121,37 @@ export function EstimateLineDialog({
   async function save() {
     setSaving(true);
     try {
-      const payload = { ...d, estimate_id: estimateId, group_id: groupId ?? d.group_id ?? null };
-      // strip readonly totals
-      ["total_cost","total_markup","total_price","unit_price","net_markup_pct","sub_total","vat_amount","grand_total","created_at","updated_at","id"].forEach((k) => delete (payload as any)[k]);
+      const payload: Record<string, any> = { ...d };
+      // Map dialog draft → storage columns for alias tables.
+      if (cfg.nameCol !== "boq_item_name") { payload[cfg.nameCol] = d.boq_item_name; delete payload.boq_item_name; }
+      if (cfg.qtyCol !== "qty") { payload[cfg.qtyCol] = d.qty; delete payload.qty; }
+      if (cfg.uomCol !== "uom") { payload[cfg.uomCol] = d.uom; delete payload.uom; }
+      payload[cfg.parentIdCol] = estimateId;
+      if (cfg.hasGroup) payload.group_id = groupId ?? d.group_id ?? null;
+      else delete payload.group_id;
+      // Persist stored line totals for site/poc tables (estimate_lines uses triggers).
+      if (cfg.computeLineTotals) {
+        payload.line_cost = Number(baseCost.toFixed(2));
+        payload.line_price = Number(totalPrice.toFixed(2));
+        payload.unit_price = Number(unitPrice.toFixed(2));
+      }
+      if (!lineId && payload.sort_index == null && nextSortIndex != null) {
+        payload.sort_index = nextSortIndex;
+      }
+      // strip readonly / non-existent columns
+      [
+        "total_cost","total_markup","total_price","net_markup_pct","sub_total","vat_amount","grand_total",
+        "created_at","updated_at","id",
+      ].forEach((k) => delete payload[k]);
+      if (!cfg.computeLineTotals) {
+        // For estimate_lines, unit_price is derived by trigger.
+        delete payload.unit_price;
+      }
       if (lineId) {
-        const { error } = await supabase.from("estimate_lines" as any).update(payload as any).eq("id", lineId);
+        const { error } = await supabase.from(table as any).update(payload as any).eq("id", lineId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("estimate_lines" as any).insert(payload as any);
+        const { error } = await supabase.from(table as any).insert(payload as any);
         if (error) throw error;
       }
       toast.success(lineId ? "Line updated" : "Line added");
