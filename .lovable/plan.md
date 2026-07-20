@@ -1,42 +1,21 @@
-## Goal
-Retire the legacy Work Package page (`/delivery/wp/:id`, `src/pages/DeliveryWorkPackage.tsx`) so the app goes straight from the Delivery/Programme lists into the Gridwise OS shell (`/wp/:id`). No functionality loss: Estimate v1 and Master Gantt are consciously dropped per user decision.
+# Delivery Matrix — "duplicate key" fix
 
-## What's already in Gridwise OS (no work needed)
-Overview, Sites (Site Register), Matrix, Interactive Gantt (Programme tab), Site Estimates, Estimates (v2), PoC Estimates, WP Tasks, Milestones (WP Tasks tab), Import sites + Add site (Site Register), inline WP name/code/dates edit (Overview tab).
+## Root cause (confirmed)
 
-## What's being dropped (user-confirmed)
-- **Estimate v1 tab** (`WpEstimatePanel` / `work_package_estimates`) — superseded by Site Estimates + Estimates + PoC Estimates. Table rows stay in DB; UI is removed.
-- **Master Gantt view** — Interactive Gantt in OS Programme tab covers it.
+`site_stage_status` has a **global** unique index on `(site_id, stage)` — not scoped by work package. However `WpMatrixTab` loads existing rows filtered by `work_package_id = <current WP>`, then decides insert-vs-update from that cache. If a site's stage row is attached to a different WP (which is the case for 17 Bircham View — its rows live under WP `f66a264f…` while the user is viewing WP `fbaa6ae3…`, most likely after a Move Site or a legacy `wp_sites_ensure_stage` run), the cache misses, the code takes the `insert` branch, and the (site_id, stage) unique index rejects it — surfacing as the toast in the screenshot.
 
-## Changes
+The same issue also exists in the per-cell editor dialog further down `WpMatrixTab.tsx` (mirrors the insert/update branch).
 
-### 1. Remove the legacy route and page
-- `src/App.tsx`: delete the `DeliveryWorkPackage` lazy import and the `<Route path="/delivery/wp/:id" ...>` entry.
-- `rm src/pages/DeliveryWorkPackage.tsx`.
+## Fix
 
-### 2. Rewrite every internal link `/delivery/wp/:id` → `/wp/:id`
-Files to update (all currently point at the legacy path):
-- `src/pages/ImportWizard.tsx` (2 links — inline "open WP" + "Open Work Package" button)
-- `src/pages/DeliveryProposalDetail.tsx` (2 places — post-conversion `nav()` + snapshot link)
-- `src/pages/DeliveryProgrammeDetail.tsx` (`onOpenRow` in TaskBoard)
-- `src/components/wp/WpSidebar.tsx` line 118 — remove the "Open legacy Work Package" link entirely (it lives in the OS sidebar itself, pointless once legacy is gone).
-- `src/pages/WorkPackageShell.tsx` line 150 — remove the "Open legacy Work Package" link in the fallback/feature-flag-off branch.
+In `src/pages/wp/tabs/WpMatrixTab.tsx`:
 
-### 3. Feature flag cleanup
-- `src/components/admin/FeatureFlagsPanel.tsx` — update the `gridwise_os_shell` description so it no longer promises a legacy fallback. Keep the flag itself (other code may branch on it), just rewrite the copy to reflect that OS is now the only shell.
-- `src/pages/WorkPackageShell.tsx` — the flag-disabled branch currently offers to open the legacy page; change it to a plain "This work package uses Gridwise OS" note (or just always render the shell, since there's nowhere else to send them).
-
-### 4. Verify nothing else imports the deleted page
-`rg "DeliveryWorkPackage|/delivery/wp/"` after edits should return zero hits. If anything else surfaces, redirect it to `/wp/:id`.
-
-## Explicitly NOT changing
-- `work_package_estimates` table, `WpEstimatePanel.tsx` component file, or `WpVariationsTab` (which still reads `work_package_estimates` for variation history) — dropping the tab doesn't require deleting the underlying data or the variations read path.
-- OS tab set, sidebar structure, or any OS component.
-- Legacy `MasterGantt` helper lives inside `DeliveryWorkPackage.tsx` and dies with it — no separate cleanup needed.
+1. Replace the insert/update branching in the `setStatus` mutation with a single `.upsert(..., { onConflict: "site_id,stage" })`, always writing the **current** `work_package_id` so the row re-attaches to the WP the user is editing from.
+2. Do the same in the cell-editor `save` mutation (`patch` upsert with `onConflict: "site_id,stage"`).
+3. No schema change — the existing unique index is exactly what upsert needs.
 
 ## Verification
-1. `rg "DeliveryWorkPackage|/delivery/wp/"` → no matches.
-2. Typecheck passes.
-3. Load `/delivery/programmes/:id`, click a WP row → lands on `/wp/:id` OS shell.
-4. Load `/import/wizard` post-import "Open Work Package" → `/wp/:id`.
-5. Convert a proposal → nav lands on `/wp/:id`.
+
+- Change a DNO cell on 17 Bircham View from the Matrix → no toast, cell persists, and the row's `work_package_id` in `site_stage_status` flips to the current WP.
+- Change a cell on a site whose row is already attached to this WP → still updates in place.
+- Open the cell editor (dates / owner / notes) on any site → save works without duplicate-key errors.

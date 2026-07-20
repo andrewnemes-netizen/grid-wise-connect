@@ -89,17 +89,12 @@ export default function WpMatrixTab() {
 
   const setStatus = useMutation({
     mutationFn: async (p: { site_id: string; stage: StageKey; value: StageStatus }) => {
-      const existing = byKey.get(`${p.site_id}:${p.stage}`);
-      if (existing) {
-        const { error } = await (supabase as any).from("site_stage_status")
-          .update({ workflow_status: p.value }).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await (supabase as any).from("site_stage_status").insert({
-          work_package_id: wpId!, site_id: p.site_id, stage: p.stage, workflow_status: p.value,
-        });
-        if (error) throw error;
-      }
+      const { error } = await (supabase as any).from("site_stage_status")
+        .upsert(
+          { work_package_id: wpId!, site_id: p.site_id, stage: p.stage, workflow_status: p.value },
+          { onConflict: "site_id,stage" },
+        );
+      if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] }),
     onError: (e: any) => toast.error(e.message ?? "Failed to update stage"),
@@ -268,14 +263,9 @@ function StageDetailDialog({
         blocked_reason: blockedReason || null,
         review_notes: reviewNotes || null,
       };
-      if (row?.id) {
-        const { error } = await (supabase as any).from("site_stage_status")
-          .update(patch).eq("id", row.id);
-        if (error) throw error;
-      } else {
-        const { error } = await (supabase as any).from("site_stage_status").insert(patch);
-        if (error) throw error;
-      }
+      const { error } = await (supabase as any).from("site_stage_status")
+        .upsert(patch, { onConflict: "site_id,stage" });
+      if (error) throw error;
       toast.success("Stage updated");
       onSaved();
       onClose();
