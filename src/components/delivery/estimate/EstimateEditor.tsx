@@ -239,7 +239,14 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
               <Button size="sm" onClick={() => addGroup.mutate("Civils")}><Plus className="h-3.5 w-3.5 mr-1" />Add first group</Button>
             </div>
           )}
-          {groups.data?.map((g) => {
+          {[...(groups.data ?? [])]
+            .sort((a, b) => {
+              const aHas = (linesByGroup[a.id]?.length ?? 0) > 0 ? 0 : 1;
+              const bHas = (linesByGroup[b.id]?.length ?? 0) > 0 ? 0 : 1;
+              if (aHas !== bHas) return aHas - bHas;
+              return (a.sort_index ?? 0) - (b.sort_index ?? 0);
+            })
+            .map((g) => {
             const gLines = linesByGroup[g.id] ?? [];
             const groupCost = gLines.reduce((s, l) => s + Number(l.total_cost || 0), 0);
             const groupPrice = gLines.reduce((s, l) => s + Number(l.total_price || 0), 0);
