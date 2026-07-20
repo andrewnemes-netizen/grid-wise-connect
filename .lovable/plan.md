@@ -1,22 +1,20 @@
-## Bulk delete for estimates
+## Fix: Surveys panel shows zero records in Gridwise OS
 
-Extend `src/components/delivery/estimate/EstimatesTab.tsx` (and the equivalent list in `SiteEstimatesPanel.tsx` if applicable) so users can select multiple estimates and delete them in one action, reusing the existing soft-delete → recycle bin flow.
+### Root cause (verified)
+`SurveysPanel.tsx` queries `wp_sites` using the column name `wp_id`, but the actual column is `work_package_id` (confirmed via schema query). Result:
 
-### UI changes
-- Add a checkbox to each estimate card (top-left corner).
-- Add a "Select all" checkbox in the list header with a tri-state (none / some / all).
-- When ≥1 is selected, show a sticky bulk-action bar with:
-  - Selected count ("3 selected")
-  - "Clear" button
-  - "Delete selected" button (destructive)
-- Clicking "Delete selected" opens a single `AlertDialog` asking for one shared reason, listing the estimates to be removed.
+- WP-scoped mount (`/wp/:id/sites/surveys`) filters by a non-existent column → returns `[]` → "No surveys match these filters."
+- Org-wide mount (`/surveys`) still loads survey rows, but the WP-name enrichment/join silently fails, so the WP column is always blank.
 
-### Behaviour
-- Confirm → call the existing `archive_entity` RPC once per selected estimate (chunked, e.g. 5 at a time) with `entity_type = 'estimate'` and the shared reason.
-- On success: toast "N estimates moved to recycle bin", clear selection, invalidate the estimates query.
-- On partial failure: toast the count that failed and keep failed rows selected.
-- Deleted estimates appear in **Admin → Archive** (already generic) and can be restored/purged there — no changes required to the archive console.
+### Change
+Single file: `src/components/surveys/SurveysPanel.tsx`
 
-### Non-goals
-- No changes to the archive/restore RPCs, snapshot format, or single-item delete flow.
-- No changes to PoC vs EV Build estimate logic.
+Replace the three `wp_sites` references so they use `work_package_id`:
+1. Scoped fetch: `.eq("work_package_id", workPackageId)` (line ~101)
+2. Enrichment select: `sb.from("wp_sites").select("site_id, work_package_id").in("site_id", uniqueSiteIds)` (line ~122)
+3. `siteWp` map builder: read `r.work_package_id` instead of `r.wp_id` (line ~137)
+
+No schema changes, no other files touched.
+
+### Verify
+Reload `/wp/fbaa6ae3-.../sites/surveys` — the Gloucestershire WP should now list its site surveys, and the org-wide `/surveys` page should show the WP name column populated.
