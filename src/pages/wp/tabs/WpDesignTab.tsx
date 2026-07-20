@@ -231,7 +231,7 @@ export function DesignSites({ submissionId }: { submissionId: string }) {
   );
 }
 
-function DesignReviews({ submissionId }: { submissionId: string }) {
+export function DesignReviews({ submissionId }: { submissionId: string }) {
   const { data: rows = [] } = useQuery({
     queryKey: ["design-reviews", submissionId],
     queryFn: async () => {
