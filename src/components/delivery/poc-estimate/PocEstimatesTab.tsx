@@ -30,7 +30,7 @@ export function PocEstimatesTab({ workPackageId, siteId }: { workPackageId: stri
     queryFn: async () => {
       let q = supabase
         .from("poc_estimates" as any)
-        .select("*, sites:site_id(name, address)")
+        .select("*, sites:site_id(site_name, postcode)")
         .eq("work_package_id", workPackageId)
         .order("created_at", { ascending: false });
       if (siteId) q = q.eq("site_id", siteId);
@@ -111,8 +111,8 @@ export function PocEstimatesTab({ workPackageId, siteId }: { workPackageId: stri
                     <Badge variant="outline" className={"text-[10px] uppercase " + (STATUS_STYLE[e.status] ?? "")}>
                       {e.status}
                     </Badge>
-                    {e.sites?.name && (
-                      <span className="text-xs text-muted-foreground truncate">· {e.sites.name}</span>
+                    {e.sites?.site_name && (
+                      <span className="text-xs text-muted-foreground truncate">· {e.sites.site_name}</span>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground">
