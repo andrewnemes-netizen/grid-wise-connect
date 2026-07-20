@@ -1,28 +1,25 @@
 ## Goal
-Replace the "EV Build Estimating" experience in the Gridwise OS WP shell with the **Site estimates** experience (`SiteEstimatesPanel`) that already works in the legacy WP view — same component, same functionality (per-site versions, approve, Bulk apply recipe).
-
-Scope is UI wiring only. No changes to `SiteEstimatesPanel`, no schema changes, no touching of the `Estimates` tab (group-based editor) or the `PoC Estimates` tab.
+Bring the two site-onboarding entry points from the legacy `DeliveryWorkPackage` shell into Gridwise OS, on the Site Register tab. No new backend — reuse the existing `/import/wizard` route (Portfolio Import) and the existing `wp_sites` insert path.
 
 ## Changes
 
-1. **`src/pages/wp/tabs/WpEstimatingTab.tsx`**
-   - Default view now renders `<SiteEstimatesPanel wpId={id} />` instead of `<WpEstimatePanel wpId={id} />`.
-   - Update the heading/subtitle to "Site Estimates" with a description matching the legacy tab ("Manage per-site estimates. Each site can have multiple versions; only APPROVED site estimates can be included in a WP estimate").
-   - Keep the existing site-scoped deep-link branch (`siteId + mode`) unchanged — it already renders `SiteEstimatesPanel`.
-   - Drop the "Phase 4" badge and the trailing WP-Estimate reference card (no longer relevant on this tab).
-   - Remove the now-unused `WpEstimatePanel` import.
+### 1. `src/pages/wp/tabs/WpSiteRegisterTab.tsx` — add a toolbar with two actions
+At the top of the tab (above the search/filter chips), add a right-aligned action group:
 
-2. **`src/components/wp/WpSidebar.tsx`**
-   - Rename the Commercial nav item at slug `commercial/estimating` from **"EV Build Estimating"** to **"Site Estimates"**. Keep the slug/route unchanged so existing deep-links (Portfolio, breadcrumbs, notifications) keep working.
-   - Icon stays `Calculator`.
+- **Import sites** — outline button, `Upload` icon, links to `/import/wizard?wp={wpId}&programme={programme_id}`. Fetch the WP's `programme_id` once via a small `useQuery` (`work_packages` → `programme_id`). Same URL shape the legacy shell uses so the wizard's existing wp/programme handling works unchanged.
+- **Add site** — primary button, `Plus` icon, opens an "Add site to work package" dialog that mirrors the legacy `SitesPanel`:
+  - Query `sites` (id, site_name, postcode) limited to 500, filter out ids already in the current WP's `rows`.
+  - Fields: `Site` (Select with "Pick a site" placeholder), `Local ref (optional)` input.
+  - On submit: `insert` into `wp_sites` with `{ work_package_id, site_id, local_ref, sequence: rows.length + 1 }`, toast, close, invalidate the tab's queries (`wp-site-register`, `wp-site-precon-status`, `wp-site-stage-summary`).
 
-## Not changing
-- `SiteEstimatesPanel.tsx` — used as-is.
-- `Estimates` tab (`commercial/estimates`) and `PoC Estimates` tab (`commercial/poc-estimates`) — untouched.
-- Routes, DB, RLS, edge functions — untouched.
-- `WpEstimatePanel` remains in the codebase (still referenced by the legacy `DeliveryWorkPackage.tsx` shell); only the Gridwise OS mount switches away from it.
+Empty state: when `rows.length === 0`, replace the current empty message with a card that offers both actions inline (Import sites / Add site) so a fresh WP has a clear starting point.
+
+### 2. No other files change
+- `WpSidebar`, routing, DB, RLS, `ImportWizard.tsx`, `wp_sites_ensure_stage` trigger — all untouched. The wizard already accepts `?wp=` + `?programme=` params.
+- Legacy `DeliveryWorkPackage.tsx` is left as-is (still the fallback shell).
 
 ## Verification
-- Open `/wp/:id/commercial/estimating` → confirm Site estimates list (per-site cards, "Bulk apply recipe", version drawer) renders — matches the screenshot.
-- Sidebar label reads "Site Estimates".
-- Portfolio deep-link (`?siteId=…&mode=detailed`) still opens the site-scoped editor.
+- Open a WP in Gridwise OS → Sites › Site Register. Toolbar shows "Import sites" and "Add site".
+- "Import sites" navigates to `/import/wizard?wp=<id>&programme=<id>` matching the screenshot.
+- "Add site" opens the dialog matching the screenshot, inserts a `wp_sites` row, and the new site appears in the register without a page reload.
+- Empty WP shows both actions in the empty-state card.
