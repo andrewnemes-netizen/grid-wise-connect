@@ -278,8 +278,8 @@ export function RateItemPicker({
                 const allSel = rows.every((i) => selected[i.id] != null);
                 const someSel = rows.some((i) => selected[i.id] != null);
                 return (
-                  <>
-                    <tr key={`hdr-${cat}`} className="bg-muted/40 border-b sticky">
+                  <React.Fragment key={`cat-${cat}`}>
+                    <tr className="bg-muted/40 border-b">
                       <td className="px-3 py-1.5">
                         <Checkbox
                           checked={allSel ? true : (someSel ? "indeterminate" : false)}
@@ -319,7 +319,7 @@ export function RateItemPicker({
                   </tr>
                 );
                     })}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
