@@ -34,6 +34,7 @@ function statusClass(s?: string) {
 export default function WpDesignTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [newOpen, setNewOpen] = useState(false);
 
   const { data: submissions = [], isLoading } = useQuery({
@@ -119,6 +120,15 @@ export default function WpDesignTab() {
                       <Badge variant="outline" className="text-[10px] uppercase">{d.design_type}</Badge>
                     )}
                     <Badge variant="outline" className={statusClass(d.status)}>{d.status}</Badge>
+                    <DesignEstimateMenu wpId={wpId!} siteId={d.site_id} />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7"
+                      onClick={(e) => { e.stopPropagation(); navigate(`/wp/${wpId}/engineering/design/${d.id}`); }}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open
+                    </Button>
                   </div>
                 </div>
               </AccordionTrigger>
