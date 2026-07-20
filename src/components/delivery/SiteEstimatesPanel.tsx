@@ -583,6 +583,18 @@ function NewSiteEstimateDialog({
               </SelectContent>
             </Select>
           </div>
+          {missingRateCardSelection && !hasAnyApprovedRateCards && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              No rate card selected — items will be unfiltered until one is chosen.
+              Set up an approved rate card via <span className="font-medium">Admin → Estimating Import</span> then{" "}
+              <span className="font-medium">Rate Library</span> to fix this.
+            </div>
+          )}
+          {missingRateCardSelection && hasAnyApprovedRateCards && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              Choose a contract and rate card version before creating the draft.
+            </div>
+          )}
           {contractId && (
             <>
               <div>
