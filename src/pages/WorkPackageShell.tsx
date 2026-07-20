@@ -38,6 +38,7 @@ import {
   WpCommissioning,
   WpSurveys,
 } from "./wp/WpTabs";
+import WpDesignDetail from "./wp/WpDesignDetail";
 
 function WpHeader({ wpId }: { wpId: string }) {
   const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
@@ -153,6 +154,7 @@ export default function WorkPackageShell() {
               <Route path="engineering/grid-studies" element={<WpGridStudies />} />
               <Route path="engineering/dno-offers" element={<WpDnoOffers />} />
               <Route path="engineering/design" element={<WpDesign />} />
+              <Route path="engineering/design/:submissionId" element={<WpDesignDetail />} />
               <Route path="delivery/programme" element={<WpProgramme />} />
               <Route path="delivery/tasks" element={<WpTasks />} />
               <Route path="delivery/partners" element={<WpPartners />} />
