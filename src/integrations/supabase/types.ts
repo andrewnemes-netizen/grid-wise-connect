@@ -440,20 +440,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "board_automations_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "board_automations_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "board_automations_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -524,20 +510,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "board_columns_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "board_columns_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "board_columns_work_package_id_fkey"
             columns: ["work_package_id"]
             isOneToOne: false
@@ -596,20 +568,6 @@ export type Database = {
             columns: ["programme_id"]
             isOneToOne: false
             referencedRelation: "programmes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "board_views_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "board_views_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
             referencedColumns: ["id"]
           },
           {
@@ -2482,20 +2440,6 @@ export type Database = {
             columns: ["parent_estimate_id"]
             isOneToOne: false
             referencedRelation: "estimates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "estimates_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "estimates_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
             referencedColumns: ["id"]
           },
           {
@@ -4394,49 +4338,172 @@ export type Database = {
       }
       poc_estimate_lines: {
         Row: {
+          attribute_group: string | null
+          boq_description: string | null
+          boq_item_name: string | null
+          calculate_time: boolean | null
+          charge_out_rate_used: string | null
+          compare_list: string | null
+          compare_title: string | null
+          contingency_pct: number | null
+          conversion_type: string | null
+          cost_category: string | null
+          cost_code: string | null
           created_at: string
           description: string
+          discount: number | null
+          fixed_price: boolean | null
+          flexible_qty: boolean | null
           id: string
+          image_link: string | null
+          include_in_create_task: boolean | null
+          is_allowance: boolean | null
+          item_logic: string | null
+          itemised: boolean | null
           line_cost: number | null
           line_price: number | null
+          lock_markup_dollar: boolean | null
+          markup_dollar: number | null
+          markup_pct: number | null
+          markup_type: string | null
+          milestone_for_sync: string | null
+          no_resources: number | null
           poc_estimate_id: string
+          pricing_notes: string | null
+          product_service: string | null
+          product_type: string | null
+          project_description: string | null
+          project_stage: string | null
+          project_sync_type: string | null
+          project_task_name: string | null
           quantity: number
           rate_item_id: string | null
+          rfq_required: boolean | null
+          show_image_in_proposal: boolean | null
+          solution_link: string | null
           sort_index: number
+          split_labour_materials: boolean | null
+          stage: string | null
+          supplier: string | null
+          time_measure: string | null
+          time_value: number | null
           unit: string
           unit_cost: number
           unit_price: number
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number | null
           line_price?: number | null
+          lock_markup_dollar?: boolean | null
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
           poc_estimate_id: string
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
           sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number | null
           line_price?: number | null
+          lock_markup_dollar?: boolean | null
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
           poc_estimate_id?: string
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
           sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -4804,22 +4871,7 @@ export type Database = {
           project_id?: string
           summary?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "project_activity_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_activity_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       project_comments: {
         Row: {
@@ -4855,50 +4907,7 @@ export type Database = {
           task_id?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "project_comments_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "project_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "site_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_comments_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       project_files: {
         Row: {
@@ -4940,469 +4949,7 @@ export type Database = {
           task_id?: string | null
           uploaded_by?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "project_files_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_files_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_files_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_files_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_members: {
-        Row: {
-          added_at: string
-          added_by: string | null
-          id: string
-          project_id: string
-          role: Database["public"]["Enums"]["project_member_role"]
-          user_id: string
-        }
-        Insert: {
-          added_at?: string
-          added_by?: string | null
-          id?: string
-          project_id: string
-          role?: Database["public"]["Enums"]["project_member_role"]
-          user_id: string
-        }
-        Update: {
-          added_at?: string
-          added_by?: string | null
-          id?: string
-          project_id?: string
-          role?: Database["public"]["Enums"]["project_member_role"]
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_members_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_members_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_milestones: {
-        Row: {
-          actual_date: string | null
-          created_at: string
-          description: string | null
-          gate_notes: string | null
-          gate_status: Database["public"]["Enums"]["milestone_gate_status"]
-          gate_type: Database["public"]["Enums"]["milestone_gate_type"]
-          id: string
-          name: string
-          owner_user_id: string | null
-          passed_at: string | null
-          passed_by: string | null
-          percent_complete: number
-          phase: Database["public"]["Enums"]["milestone_phase"]
-          planned_date: string | null
-          project_id: string
-          sequence: number
-          status: Database["public"]["Enums"]["milestone_status"]
-          updated_at: string
-        }
-        Insert: {
-          actual_date?: string | null
-          created_at?: string
-          description?: string | null
-          gate_notes?: string | null
-          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
-          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
-          id?: string
-          name: string
-          owner_user_id?: string | null
-          passed_at?: string | null
-          passed_by?: string | null
-          percent_complete?: number
-          phase?: Database["public"]["Enums"]["milestone_phase"]
-          planned_date?: string | null
-          project_id: string
-          sequence?: number
-          status?: Database["public"]["Enums"]["milestone_status"]
-          updated_at?: string
-        }
-        Update: {
-          actual_date?: string | null
-          created_at?: string
-          description?: string | null
-          gate_notes?: string | null
-          gate_status?: Database["public"]["Enums"]["milestone_gate_status"]
-          gate_type?: Database["public"]["Enums"]["milestone_gate_type"]
-          id?: string
-          name?: string
-          owner_user_id?: string | null
-          passed_at?: string | null
-          passed_by?: string | null
-          percent_complete?: number
-          phase?: Database["public"]["Enums"]["milestone_phase"]
-          planned_date?: string | null
-          project_id?: string
-          sequence?: number
-          status?: Database["public"]["Enums"]["milestone_status"]
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_milestones_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_milestones_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_task_dependencies: {
-        Row: {
-          created_at: string
-          depends_on_task_id: string
-          id: string
-          lag_days: number
-          task_id: string
-          type: Database["public"]["Enums"]["task_dep_type"]
-        }
-        Insert: {
-          created_at?: string
-          depends_on_task_id: string
-          id?: string
-          lag_days?: number
-          task_id: string
-          type?: Database["public"]["Enums"]["task_dep_type"]
-        }
-        Update: {
-          created_at?: string
-          depends_on_task_id?: string
-          id?: string
-          lag_days?: number
-          task_id?: string
-          type?: Database["public"]["Enums"]["task_dep_type"]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_task_dependencies_depends_on_task_id_fkey"
-            columns: ["depends_on_task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_task_dependencies_depends_on_task_id_fkey"
-            columns: ["depends_on_task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_task_dependencies_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_task_dependencies_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      project_tasks: {
-        Row: {
-          actual_hours: number | null
-          boq_ref: string | null
-          created_at: string
-          created_by: string
-          description: string | null
-          due_date: string | null
-          estimated_hours: number | null
-          id: string
-          metadata_json: Json
-          milestone_id: string | null
-          owner_user_id: string | null
-          parent_task_id: string | null
-          percent_complete: number
-          priority: Database["public"]["Enums"]["project_priority"]
-          project_id: string
-          scope: string
-          site_id: string | null
-          sort_index: number
-          start_date: string | null
-          status: Database["public"]["Enums"]["task_status"]
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          actual_hours?: number | null
-          boq_ref?: string | null
-          created_at?: string
-          created_by: string
-          description?: string | null
-          due_date?: string | null
-          estimated_hours?: number | null
-          id?: string
-          metadata_json?: Json
-          milestone_id?: string | null
-          owner_user_id?: string | null
-          parent_task_id?: string | null
-          percent_complete?: number
-          priority?: Database["public"]["Enums"]["project_priority"]
-          project_id: string
-          scope?: string
-          site_id?: string | null
-          sort_index?: number
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["task_status"]
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          actual_hours?: number | null
-          boq_ref?: string | null
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          due_date?: string | null
-          estimated_hours?: number | null
-          id?: string
-          metadata_json?: Json
-          milestone_id?: string | null
-          owner_user_id?: string | null
-          parent_task_id?: string | null
-          percent_complete?: number
-          priority?: Database["public"]["Enums"]["project_priority"]
-          project_id?: string
-          scope?: string
-          site_id?: string | null
-          sort_index?: number
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["task_status"]
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_tasks_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "project_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "site_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "v_wp_site_precon_status"
-            referencedColumns: ["site_id"]
-          },
-        ]
-      }
-      projects: {
-        Row: {
-          account_id: string | null
-          actual_end_date: string | null
-          code: string | null
-          config_json: Json
-          created_at: string
-          created_by: string
-          description: string | null
-          health: Database["public"]["Enums"]["project_health"]
-          id: string
-          name: string
-          org_id: string | null
-          percent_complete: number
-          priority: Database["public"]["Enums"]["project_priority"]
-          proposal_id: string | null
-          site_id: string | null
-          start_date: string | null
-          status: Database["public"]["Enums"]["project_status"]
-          study_id: string | null
-          target_end_date: string | null
-          template_id: string | null
-          updated_at: string
-          work_package_id: string | null
-        }
-        Insert: {
-          account_id?: string | null
-          actual_end_date?: string | null
-          code?: string | null
-          config_json?: Json
-          created_at?: string
-          created_by: string
-          description?: string | null
-          health?: Database["public"]["Enums"]["project_health"]
-          id?: string
-          name: string
-          org_id?: string | null
-          percent_complete?: number
-          priority?: Database["public"]["Enums"]["project_priority"]
-          proposal_id?: string | null
-          site_id?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          study_id?: string | null
-          target_end_date?: string | null
-          template_id?: string | null
-          updated_at?: string
-          work_package_id?: string | null
-        }
-        Update: {
-          account_id?: string | null
-          actual_end_date?: string | null
-          code?: string | null
-          config_json?: Json
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          health?: Database["public"]["Enums"]["project_health"]
-          id?: string
-          name?: string
-          org_id?: string | null
-          percent_complete?: number
-          priority?: Database["public"]["Enums"]["project_priority"]
-          proposal_id?: string | null
-          site_id?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["project_status"]
-          study_id?: string | null
-          target_end_date?: string | null
-          template_id?: string | null
-          updated_at?: string
-          work_package_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_proposal_id_fkey"
-            columns: ["proposal_id"]
-            isOneToOne: true
-            referencedRelation: "proposals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "v_wp_site_precon_status"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "projects_study_id_fkey"
-            columns: ["study_id"]
-            isOneToOne: false
-            referencedRelation: "studies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_work_package_id_fkey"
-            columns: ["work_package_id"]
-            isOneToOne: false
-            referencedRelation: "v_wp_commercial_position"
-            referencedColumns: ["work_package_id"]
-          },
-          {
-            foreignKeyName: "projects_work_package_id_fkey"
-            columns: ["work_package_id"]
-            isOneToOne: false
-            referencedRelation: "work_packages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       proposals: {
         Row: {
@@ -5586,7 +5133,7 @@ export type Database = {
           cc_emails: string[] | null
           created_at: string
           error_message: string | null
-          estimate_id: string
+          estimate_id: string | null
           id: string
           message: string | null
           pdf_signed_url: string | null
@@ -5595,6 +5142,7 @@ export type Database = {
           recipient_name: string | null
           sent_at: string | null
           sent_by: string | null
+          site_estimate_id: string | null
           status: string
           subject: string
           updated_at: string
@@ -5603,7 +5151,7 @@ export type Database = {
           cc_emails?: string[] | null
           created_at?: string
           error_message?: string | null
-          estimate_id: string
+          estimate_id?: string | null
           id?: string
           message?: string | null
           pdf_signed_url?: string | null
@@ -5612,6 +5160,7 @@ export type Database = {
           recipient_name?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          site_estimate_id?: string | null
           status?: string
           subject: string
           updated_at?: string
@@ -5620,7 +5169,7 @@ export type Database = {
           cc_emails?: string[] | null
           created_at?: string
           error_message?: string | null
-          estimate_id?: string
+          estimate_id?: string | null
           id?: string
           message?: string | null
           pdf_signed_url?: string | null
@@ -5629,6 +5178,7 @@ export type Database = {
           recipient_name?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          site_estimate_id?: string | null
           status?: string
           subject?: string
           updated_at?: string
@@ -5640,6 +5190,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_sends_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_sends_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
           },
         ]
       }
@@ -5776,8 +5340,9 @@ export type Database = {
       }
       rate_cards: {
         Row: {
+          category: string | null
           code: string | null
-          contract_id: string
+          contract_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -5785,8 +5350,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           code?: string | null
-          contract_id: string
+          contract_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -5794,8 +5360,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           code?: string | null
-          contract_id?: string
+          contract_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -6908,86 +6475,249 @@ export type Database = {
           },
         ]
       }
+      site_estimate_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          site_estimate_id: string
+          sort_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          site_estimate_id: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          site_estimate_id?: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_estimate_groups_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_groups_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
+          },
+        ]
+      }
       site_estimate_lines: {
         Row: {
+          attribute_group: string | null
+          boq_description: string | null
+          boq_item_name: string | null
+          calculate_time: boolean | null
+          charge_out_rate_used: string | null
+          compare_list: string | null
+          compare_title: string | null
+          contingency_pct: number | null
+          conversion_type: string | null
+          cost_category: string | null
           cost_code: string | null
           cost_code_category: string | null
           created_at: string
           description: string
+          discount: number | null
+          fixed_price: boolean | null
+          flexible_qty: boolean | null
+          group_id: string | null
           id: string
+          image_link: string | null
+          include_in_create_task: boolean | null
           is_allowance: boolean
           is_locked: boolean
           is_manual_addition: boolean
+          item_logic: string | null
+          itemised: boolean | null
           line_cost: number
           line_price: number
+          lock_markup_dollar: boolean | null
           markup_amount: number
+          markup_dollar: number | null
           markup_pct: number | null
+          markup_type: string | null
+          milestone_for_sync: string | null
+          no_resources: number | null
+          pricing_notes: string | null
+          product_service: string | null
+          product_type: string | null
+          project_description: string | null
+          project_stage: string | null
+          project_sync_type: string | null
+          project_task_name: string | null
           quantity: number
           rate_code: string | null
           rate_item_id: string | null
           recipe_item_id: string | null
+          rfq_required: boolean | null
+          show_image_in_proposal: boolean | null
           site_estimate_id: string
+          solution_link: string | null
           sort_index: number
           source: string
+          split_labour_materials: boolean | null
           stage: string | null
+          supplier: string | null
+          time_measure: string | null
+          time_value: number | null
           unit: string | null
           unit_cost: number
           unit_price: number
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
           cost_code?: string | null
           cost_code_category?: string | null
           created_at?: string
           description: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
+          group_id?: string | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
           is_allowance?: boolean
           is_locked?: boolean
           is_manual_addition?: boolean
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number
           line_price?: number
+          lock_markup_dollar?: boolean | null
           markup_amount?: number
+          markup_dollar?: number | null
           markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_code?: string | null
           rate_item_id?: string | null
           recipe_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
           site_estimate_id: string
+          solution_link?: string | null
           sort_index?: number
           source?: string
+          split_labour_materials?: boolean | null
           stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string | null
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
           cost_code?: string | null
           cost_code_category?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
+          group_id?: string | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
           is_allowance?: boolean
           is_locked?: boolean
           is_manual_addition?: boolean
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number
           line_price?: number
+          lock_markup_dollar?: boolean | null
           markup_amount?: number
+          markup_dollar?: number | null
           markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_code?: string | null
           rate_item_id?: string | null
           recipe_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
           site_estimate_id?: string
+          solution_link?: string | null
           sort_index?: number
           source?: string
+          split_labour_materials?: boolean | null
           stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string | null
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "site_estimate_lines_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimate_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "site_estimate_lines_rate_item_id_fkey"
             columns: ["rate_item_id"]
@@ -7840,8 +7570,12 @@ export type Database = {
           expires_at: string
           id: string
           message: string | null
+          opened_at: string | null
           org_id: string | null
+          resent_from_id: string | null
           response_id: string | null
+          revoked_at: string | null
+          revoked_by: string | null
           sent_by: string
           sent_to_email: string
           sent_to_name: string | null
@@ -7856,8 +7590,12 @@ export type Database = {
           expires_at?: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id?: string | null
+          resent_from_id?: string | null
           response_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           sent_by: string
           sent_to_email: string
           sent_to_name?: string | null
@@ -7872,8 +7610,12 @@ export type Database = {
           expires_at?: string
           id?: string
           message?: string | null
+          opened_at?: string | null
           org_id?: string | null
+          resent_from_id?: string | null
           response_id?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
           sent_by?: string
           sent_to_email?: string
           sent_to_name?: string | null
@@ -7890,6 +7632,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_resent_from_id_fkey"
+            columns: ["resent_from_id"]
+            isOneToOne: false
+            referencedRelation: "site_surveys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_resent_from_id_fkey"
+            columns: ["resent_from_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_survey_id"]
           },
           {
             foreignKeyName: "site_surveys_site_id_fkey"
@@ -10812,306 +10568,6 @@ export type Database = {
           },
         ]
       }
-      site_milestones: {
-        Row: {
-          actual_date: string | null
-          created_at: string | null
-          description: string | null
-          id: string | null
-          name: string | null
-          owner_user_id: string | null
-          percent_complete: number | null
-          phase: Database["public"]["Enums"]["milestone_phase"] | null
-          planned_date: string | null
-          project_id: string | null
-          sequence: number | null
-          status: Database["public"]["Enums"]["milestone_status"] | null
-          updated_at: string | null
-        }
-        Insert: {
-          actual_date?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: string | null
-          name?: string | null
-          owner_user_id?: string | null
-          percent_complete?: number | null
-          phase?: Database["public"]["Enums"]["milestone_phase"] | null
-          planned_date?: string | null
-          project_id?: string | null
-          sequence?: number | null
-          status?: Database["public"]["Enums"]["milestone_status"] | null
-          updated_at?: string | null
-        }
-        Update: {
-          actual_date?: string | null
-          created_at?: string | null
-          description?: string | null
-          id?: string | null
-          name?: string | null
-          owner_user_id?: string | null
-          percent_complete?: number | null
-          phase?: Database["public"]["Enums"]["milestone_phase"] | null
-          planned_date?: string | null
-          project_id?: string | null
-          sequence?: number | null
-          status?: Database["public"]["Enums"]["milestone_status"] | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_milestones_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_milestones_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      site_programmes: {
-        Row: {
-          account_id: string | null
-          actual_end_date: string | null
-          code: string | null
-          config_json: Json | null
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          health: Database["public"]["Enums"]["project_health"] | null
-          id: string | null
-          name: string | null
-          org_id: string | null
-          percent_complete: number | null
-          priority: Database["public"]["Enums"]["project_priority"] | null
-          proposal_id: string | null
-          site_id: string | null
-          start_date: string | null
-          status: Database["public"]["Enums"]["project_status"] | null
-          study_id: string | null
-          target_end_date: string | null
-          template_id: string | null
-          updated_at: string | null
-          work_package_id: string | null
-        }
-        Insert: {
-          account_id?: string | null
-          actual_end_date?: string | null
-          code?: string | null
-          config_json?: Json | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          health?: Database["public"]["Enums"]["project_health"] | null
-          id?: string | null
-          name?: string | null
-          org_id?: string | null
-          percent_complete?: number | null
-          priority?: Database["public"]["Enums"]["project_priority"] | null
-          proposal_id?: string | null
-          site_id?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["project_status"] | null
-          study_id?: string | null
-          target_end_date?: string | null
-          template_id?: string | null
-          updated_at?: string | null
-          work_package_id?: string | null
-        }
-        Update: {
-          account_id?: string | null
-          actual_end_date?: string | null
-          code?: string | null
-          config_json?: Json | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          health?: Database["public"]["Enums"]["project_health"] | null
-          id?: string | null
-          name?: string | null
-          org_id?: string | null
-          percent_complete?: number | null
-          priority?: Database["public"]["Enums"]["project_priority"] | null
-          proposal_id?: string | null
-          site_id?: string | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["project_status"] | null
-          study_id?: string | null
-          target_end_date?: string | null
-          template_id?: string | null
-          updated_at?: string | null
-          work_package_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "projects_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_proposal_id_fkey"
-            columns: ["proposal_id"]
-            isOneToOne: true
-            referencedRelation: "proposals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "v_wp_site_precon_status"
-            referencedColumns: ["site_id"]
-          },
-          {
-            foreignKeyName: "projects_study_id_fkey"
-            columns: ["study_id"]
-            isOneToOne: false
-            referencedRelation: "studies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "projects_work_package_id_fkey"
-            columns: ["work_package_id"]
-            isOneToOne: false
-            referencedRelation: "v_wp_commercial_position"
-            referencedColumns: ["work_package_id"]
-          },
-          {
-            foreignKeyName: "projects_work_package_id_fkey"
-            columns: ["work_package_id"]
-            isOneToOne: false
-            referencedRelation: "work_packages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      site_tasks: {
-        Row: {
-          actual_hours: number | null
-          boq_ref: string | null
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          due_date: string | null
-          estimated_hours: number | null
-          id: string | null
-          metadata_json: Json | null
-          milestone_id: string | null
-          owner_user_id: string | null
-          parent_task_id: string | null
-          percent_complete: number | null
-          priority: Database["public"]["Enums"]["project_priority"] | null
-          project_id: string | null
-          sort_index: number | null
-          start_date: string | null
-          status: Database["public"]["Enums"]["task_status"] | null
-          title: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          actual_hours?: number | null
-          boq_ref?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          due_date?: string | null
-          estimated_hours?: number | null
-          id?: string | null
-          metadata_json?: Json | null
-          milestone_id?: string | null
-          owner_user_id?: string | null
-          parent_task_id?: string | null
-          percent_complete?: number | null
-          priority?: Database["public"]["Enums"]["project_priority"] | null
-          project_id?: string | null
-          sort_index?: number | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          title?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          actual_hours?: number | null
-          boq_ref?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          due_date?: string | null
-          estimated_hours?: number | null
-          id?: string | null
-          metadata_json?: Json | null
-          milestone_id?: string | null
-          owner_user_id?: string | null
-          parent_task_id?: string | null
-          percent_complete?: number | null
-          priority?: Database["public"]["Enums"]["project_priority"] | null
-          project_id?: string | null
-          sort_index?: number | null
-          start_date?: string | null
-          status?: Database["public"]["Enums"]["task_status"] | null
-          title?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_tasks_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "project_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_milestone_id_fkey"
-            columns: ["milestone_id"]
-            isOneToOne: false
-            referencedRelation: "site_milestones"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "project_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_parent_task_id_fkey"
-            columns: ["parent_task_id"]
-            isOneToOne: false
-            referencedRelation: "site_tasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_tasks_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "site_programmes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ukpn_circuit_latest_utilisation: {
         Row: {
           circuit_id: string | null
@@ -11729,6 +11185,10 @@ export type Database = {
         Returns: number
       }
       equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      extend_survey_expiry: {
+        Args: { _days: number; _survey_id: string }
+        Returns: string
+      }
       find_nearest_compatible_lv_main: {
         Args: { p_lat: number; p_lon: number; p_search_m?: number }
         Returns: {
@@ -12009,6 +11469,7 @@ export type Database = {
         Args: { _id: string; _paid_amount: number; _paid_date: string }
         Returns: undefined
       }
+      mark_survey_opened: { Args: { _token: string }; Returns: undefined }
       maybe_auto_pass_final_review: {
         Args: { p_site: string; p_wp: string }
         Returns: undefined
@@ -12206,6 +11667,10 @@ export type Database = {
           month: number
           stream: string
         }[]
+      }
+      revoke_survey: {
+        Args: { _reason?: string; _survey_id: string }
+        Returns: undefined
       }
       rollup_project_progress: {
         Args: { _project_id: string }
