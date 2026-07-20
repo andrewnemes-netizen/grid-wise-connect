@@ -681,6 +681,52 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
 
   const addBlankLine = () => addLine({});
 
+  const { data: site } = useQuery({
+    queryKey: ["site-estimate-site", estimate?.site_id],
+    enabled: !!estimate?.site_id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sites")
+        .select("id, site_name, postcode").eq("id", estimate!.site_id).maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  // Adapt site_estimates -> SendQuotationDialog's expected estimate/lines contract.
+  const quotationEstimate = useMemo(() => {
+    if (!estimate) return null;
+    return {
+      id: estimate.id,
+      name: estimate.name,
+      ref: `${estimate.name ?? "Estimate"} v${estimate.version_number ?? 1}`,
+      currency: estimate.currency ?? "GBP",
+      total_cost: totals.cost,
+      total_markup: totals.markup,
+      total_discount: 0,
+      total_price: totals.price,
+      vat_total: 0,
+      grand_total: totals.price,
+      work_package_id: null,
+      project_id: null,
+      status: estimate.status,
+    };
+  }, [estimate, totals]);
+
+  const quotationLines = useMemo(
+    () =>
+      (lines as any[]).map((l) => ({
+        id: l.id,
+        group_id: null,
+        boq_item_name: l.description ?? l.rate_code ?? "—",
+        qty: l.quantity,
+        uom: l.unit,
+        unit_price: l.unit_price,
+        discount: 0,
+        sub_total: l.line_price,
+      })),
+    [lines],
+  );
+
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
