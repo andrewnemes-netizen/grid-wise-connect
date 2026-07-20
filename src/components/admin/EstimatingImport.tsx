@@ -550,6 +550,8 @@ function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: strin
     // Skip pure text/header rows
     if (b == null) continue;
     if (c == null) continue;
+    // Skip sub-header rows (e.g. "Supply Only Items"): no unit AND no cost/price
+    if (e == null && f == null && g == null) continue;
 
     const sourceSer = cleanSer(b);
     // Category-scoped base, e.g. "3-2.03"
