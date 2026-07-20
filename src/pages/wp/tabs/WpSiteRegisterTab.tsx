@@ -7,11 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Zap, ClipboardList, CheckCircle2, Trash2, ArrowRightLeft } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2, Trash2, ArrowRightLeft, Upload, Plus } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
@@ -69,6 +72,9 @@ export default function WpSiteRegisterTab() {
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
   const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [addSiteId, setAddSiteId] = useState("");
+  const [addSiteRef, setAddSiteRef] = useState("");
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -346,6 +352,57 @@ export default function WpSiteRegisterTab() {
   const removeBusy = bulkRemoveFromWp.isPending;
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
 
+  const { data: wpMeta } = useQuery({
+    queryKey: ["wp-meta-for-register", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("work_packages")
+        .select("programme_id")
+        .eq("id", wpId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    },
+  });
+  const importHref = `/import/wizard?wp=${wpId}${wpMeta?.programme_id ? `&programme=${wpMeta.programme_id}` : ""}`;
+
+  const usedSiteIds = useMemo(() => new Set(rows.map((r: any) => r.site_id).filter(Boolean)), [rows]);
+  const { data: availableSites = [] } = useQuery({
+    queryKey: ["wp-add-site-available", wpId, addSiteOpen],
+    enabled: !!wpId && addSiteOpen,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sites")
+        .select("id, site_name, postcode")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []).filter((s: any) => !usedSiteIds.has(s.id));
+    },
+  });
+
+  const addSite = useMutation({
+    mutationFn: async () => {
+      if (!wpId || !addSiteId) return;
+      const { error } = await supabase.from("wp_sites").insert({
+        work_package_id: wpId,
+        site_id: addSiteId,
+        local_ref: addSiteRef || null,
+        sequence: rows.length + 1,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Site added");
+      setAddSiteOpen(false);
+      setAddSiteId("");
+      setAddSiteRef("");
+      invalidate();
+    },
+    onError: (e: any) => toast.error(e?.message ?? "Failed to add site"),
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -355,9 +412,19 @@ export default function WpSiteRegisterTab() {
             Every site in scope for this WP with stage, partner and viability. Click a row to open the site detail.
           </p>
         </div>
-        <div className="relative w-64">
-          <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, postcode, ref" className="pl-8 h-9" />
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="relative w-64">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, postcode, ref" className="pl-8 h-9" />
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to={importHref}>
+              <Upload className="h-4 w-4 mr-1" /> Import sites
+            </Link>
+          </Button>
+          <Button size="sm" onClick={() => setAddSiteOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Add site
+          </Button>
         </div>
       </div>
 
@@ -656,6 +723,39 @@ export default function WpSiteRegisterTab() {
           onMoved={() => { clearSel(); invalidate(); }}
         />
       )}
+
+      <Dialog open={addSiteOpen} onOpenChange={setAddSiteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add site to work package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Site</Label>
+              <Select value={addSiteId} onValueChange={setAddSiteId}>
+                <SelectTrigger><SelectValue placeholder="Pick a site" /></SelectTrigger>
+                <SelectContent>
+                  {(availableSites as any[]).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.site_name ?? "Site"}{s.postcode ? ` — ${s.postcode}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Local ref (optional)</Label>
+              <Input value={addSiteRef} onChange={(e) => setAddSiteRef(e.target.value)} placeholder="Site 01" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddSiteOpen(false)}>Cancel</Button>
+            <Button disabled={!addSiteId || addSite.isPending} onClick={() => addSite.mutate()}>
+              {addSite.isPending ? "Adding…" : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
