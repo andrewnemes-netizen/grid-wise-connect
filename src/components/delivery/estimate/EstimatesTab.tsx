@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Plus, FileText, ArrowRight } from "lucide-react";
+import { Plus, FileText, ArrowRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateEditor } from "./EstimateEditor";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
 const fmt = (n: number, c = "GBP") =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n || 0);
@@ -15,17 +17,34 @@ const fmt = (n: number, c = "GBP") =>
 export function EstimatesTab({ scope }: { scope: { work_package_id?: string; project_id?: string } }) {
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const list = useQuery({
     queryKey: ["estimates-list", scope],
     queryFn: async () => {
-      let q = supabase.from("estimates" as any).select("*").order("created_at", { ascending: false });
+      let q = supabase.from("estimates" as any).select("*").is("deleted_at", null).order("created_at", { ascending: false });
       if (scope.work_package_id) q = q.eq("work_package_id", scope.work_package_id);
       if (scope.project_id) q = q.eq("project_id", scope.project_id);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as any[];
     },
+  });
+
+  const archive = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { error } = await supabase.rpc("archive_entity" as any, {
+        _entity_type: "estimate", _entity_id: id, _reason: reason,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Estimate moved to recycle bin");
+      qc.invalidateQueries({ queryKey: ["estimates-list", scope] });
+      setDeleteTarget(null); setDeleteReason("");
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const create = useMutation({
@@ -97,6 +116,15 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
                 <Stat label="Price" value={fmt(e.total_price, e.currency)} accent />
                 <Stat label="Grand Total" value={fmt(e.grand_total, e.currency)} big />
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={(ev) => { ev.stopPropagation(); setDeleteTarget({ id: e.id, name: e.name }); }}
+                  title="Delete estimate (recycle bin)"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </Card>
           ))}
@@ -104,6 +132,30 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       )}
 
       <EditorDialog openId={openId} setOpenId={setOpenId} />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteReason(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete estimate?</AlertDialogTitle>
+            <AlertDialogDescription>
+              "{deleteTarget?.name}" will be moved to the recycle bin (Admin → Archive). It can be restored or permanently deleted from there. All groups and lines are preserved in the snapshot.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Reason (required)</label>
+            <Input value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} placeholder="e.g. superseded by revised BOQ" />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!deleteReason.trim() || archive.isPending}
+              onClick={() => deleteTarget && archive.mutate({ id: deleteTarget.id, reason: deleteReason.trim() })}
+            >
+              Move to recycle bin
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
