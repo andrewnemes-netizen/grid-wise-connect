@@ -15,9 +15,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
+import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers, Send } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
+import { SendQuotationDialog } from "./estimate/SendQuotationDialog";
 import { useUnitRates } from "@/hooks/useUnitRates";
 
 type SocketTier = 2 | 4 | 6 | 8;
@@ -600,6 +601,7 @@ function NewSiteEstimateDialog({
 // -------- Site estimate editor dialog --------
 function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClose: () => void; }) {
   const qc = useQueryClient();
+  const [quoteOpen, setQuoteOpen] = useState(false);
 
   const { data: estimate, refetch: refetchEstimate } = useQuery({
     queryKey: ["site-estimate-edit", estimateId],
@@ -618,6 +620,53 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
       return data ?? [];
     },
   });
+
+  const { data: site } = useQuery({
+    queryKey: ["site-estimate-site", estimate?.site_id],
+    enabled: !!estimate?.site_id,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sites")
+        .select("id, site_name, postcode").eq("id", estimate!.site_id).maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  // Adapt site_estimates -> SendQuotationDialog's expected estimate/lines contract
+  // (matches the shape the shared PDF/edge-function pipeline consumes).
+  const quotationEstimate = useMemo(() => {
+    if (!estimate) return null;
+    return {
+      id: estimate.id,
+      name: estimate.name,
+      ref: `${estimate.name ?? "Estimate"} v${estimate.version_number ?? 1}`,
+      currency: estimate.currency ?? "GBP",
+      total_cost: totals.cost,
+      total_markup: totals.markup,
+      total_discount: 0,
+      total_price: totals.price,
+      vat_total: 0,
+      grand_total: totals.price,
+      work_package_id: null,
+      project_id: null,
+      status: estimate.status,
+    };
+  }, [estimate, totals]);
+
+  const quotationLines = useMemo(
+    () =>
+      (lines as any[]).map((l) => ({
+        id: l.id,
+        group_id: null,
+        boq_item_name: l.description ?? l.rate_code ?? "—",
+        qty: l.quantity,
+        uom: l.unit,
+        unit_price: l.unit_price,
+        discount: 0,
+        sub_total: l.line_price,
+      })),
+    [lines],
+  );
 
   const isApproved = estimate?.status === "APPROVED" || estimate?.status === "SUPERSEDED";
   const ccy = estimate?.currency ?? "GBP";
@@ -789,8 +838,26 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
         </div>
 
         <DialogFooter>
+          <Button
+            size="sm"
+            onClick={() => setQuoteOpen(true)}
+            disabled={!estimate || (lines as any[]).length === 0}
+          >
+            <Send className="h-3.5 w-3.5 mr-1" /> Send Quotation
+          </Button>
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </DialogFooter>
+
+        {quotationEstimate && (
+          <SendQuotationDialog
+            open={quoteOpen}
+            onOpenChange={setQuoteOpen}
+            estimate={quotationEstimate}
+            groups={[]}
+            lines={quotationLines}
+            siteName={site?.site_name}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
