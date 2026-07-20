@@ -1097,6 +1097,120 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
 function RateItemPicker({
   rateCardVersionId, onPick, triggerLabel,
 }: { rateCardVersionId?: string | null; onPick: (rate: any) => void; triggerLabel?: string; }) {
+  return <RateItemPickerImpl rateCardVersionId={rateCardVersionId} onPick={onPick} triggerLabel={triggerLabel} />;
+}
+
+// -------- Add recipe to a specific group inside an existing site estimate --------
+function AddRecipeToGroupDialog({
+  estimateId, contractId, groupId, currentLineCount, onClose, onDone,
+}: {
+  estimateId: string;
+  contractId: string | null;
+  groupId: string | null;
+  currentLineCount: number;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [recipeId, setRecipeId] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
+
+  const { data: recipes = [] } = useQuery({
+    enabled: !!contractId,
+    queryKey: ["recipes-in-editor", contractId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("estimate_recipes")
+        .select("id, name, status, version_number")
+        .eq("contract_id", contractId!)
+        .eq("status", "APPROVED")
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const run = async () => {
+    if (!recipeId) return;
+    setBusy(true);
+    try {
+      const { data: items, error: iErr } = await supabase.from("recipe_items")
+        .select("*, rate_items(unit, total_unit_cost, client_unit_price, description)")
+        .eq("recipe_id", recipeId)
+        .order("sort_index");
+      if (iErr) throw iErr;
+      const rows = (items ?? []).map((r: any, i: number) => {
+        const cost = Number(r.rate_items?.total_unit_cost ?? 0);
+        const price = Number(r.rate_items?.client_unit_price ?? cost);
+        const qty = Number(r.default_quantity ?? 0);
+        return {
+          site_estimate_id: estimateId,
+          group_id: groupId,
+          recipe_item_id: r.id,
+          rate_item_id: r.rate_item_id,
+          description: r.description_override ?? r.rate_items?.description ?? "",
+          unit: r.unit ?? r.rate_items?.unit ?? null,
+          quantity: qty,
+          unit_cost: cost,
+          unit_price: price,
+          markup_amount: Number(r.markup_amount ?? 0),
+          markup_pct: r.markup_pct != null ? Number(r.markup_pct) : null,
+          line_cost: Number((qty * cost).toFixed(2)),
+          line_price: Number((qty * price).toFixed(2)),
+          stage: r.stage,
+          cost_code: r.cost_code,
+          cost_code_category: r.cost_code_category,
+          is_allowance: !!r.is_allowance,
+          sort_index: currentLineCount + i,
+        };
+      });
+      if (rows.length) {
+        const { error } = await supabase.from("site_estimate_lines").insert(rows as any);
+        if (error) throw error;
+      }
+      toast.success(`Added ${rows.length} recipe line(s)`);
+      onDone();
+    } catch (e: any) {
+      toast.error(e.message ?? "Recipe apply failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add recipe lines to group</DialogTitle>
+          <DialogDescription>
+            {contractId
+              ? "Pick an approved recipe. Its items will be added to this group."
+              : "This estimate has no contract set, so recipes are unavailable."}
+          </DialogDescription>
+        </DialogHeader>
+        {contractId && (
+          <div className="space-y-2">
+            <Label>Recipe</Label>
+            <Select value={recipeId} onValueChange={setRecipeId}>
+              <SelectTrigger><SelectValue placeholder="Select a recipe" /></SelectTrigger>
+              <SelectContent>
+                {(recipes as any[]).map((r) => (
+                  <SelectItem key={r.id} value={r.id}>{r.name} v{r.version_number}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button onClick={run} disabled={!recipeId || busy}>{busy ? "Adding…" : "Add lines"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RateItemPickerImpl({
+  rateCardVersionId, onPick, triggerLabel,
+}: { rateCardVersionId?: string | null; onPick: (rate: any) => void; triggerLabel?: string; }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
