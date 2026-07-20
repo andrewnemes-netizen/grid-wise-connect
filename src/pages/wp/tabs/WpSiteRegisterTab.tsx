@@ -73,8 +73,9 @@ export default function WpSiteRegisterTab() {
   const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
-  const [addSiteId, setAddSiteId] = useState("");
+  const [addSiteIds, setAddSiteIds] = useState<Set<string>>(new Set());
   const [addSiteRef, setAddSiteRef] = useState("");
+  const [addSiteQuery, setAddSiteQuery] = useState("");
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -384,23 +385,28 @@ export default function WpSiteRegisterTab() {
 
   const addSite = useMutation({
     mutationFn: async () => {
-      if (!wpId || !addSiteId) return;
-      const { error } = await supabase.from("wp_sites").insert({
+      const ids = Array.from(addSiteIds);
+      if (!wpId || ids.length === 0) return { count: 0 };
+      const payload = ids.map((sid, i) => ({
         work_package_id: wpId,
-        site_id: addSiteId,
-        local_ref: addSiteRef || null,
-        sequence: rows.length + 1,
-      });
+        site_id: sid,
+        local_ref: ids.length === 1 && addSiteRef ? addSiteRef : null,
+        sequence: rows.length + 1 + i,
+      }));
+      const { error } = await supabase.from("wp_sites").insert(payload);
       if (error) throw error;
+      return { count: ids.length };
     },
-    onSuccess: () => {
-      toast.success("Site added");
+    onSuccess: (res) => {
+      const n = res?.count ?? 0;
+      toast.success(`${n} site${n === 1 ? "" : "s"} added`);
       setAddSiteOpen(false);
-      setAddSiteId("");
+      setAddSiteIds(new Set());
       setAddSiteRef("");
+      setAddSiteQuery("");
       invalidate();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed to add site"),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to add sites"),
   });
 
   return (
