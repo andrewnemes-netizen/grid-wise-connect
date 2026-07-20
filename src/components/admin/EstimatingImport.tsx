@@ -499,9 +499,10 @@ type IcpRow = {
   source_ser: string;
 };
 
-function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: string[]; sheetName: string | null } {
+function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: string[]; sheetName: string | null; uniquifiedCount: number } {
   const rows: IcpRow[] = [];
   const errors: string[] = [];
+  let uniquifiedCount = 0;
   // Find sheet by A1/A2 containing "INTERNAL MASTER"
   let sheetName: string | null = null;
   for (const name of wb.SheetNames) {
@@ -512,11 +513,13 @@ function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: strin
   }
   if (!sheetName) {
     errors.push('Sheet containing "INTERNAL MASTER" not found');
-    return { rows, errors, sheetName: null };
+    return { rows, errors, sheetName: null, uniquifiedCount: 0 };
   }
   const ws = wb.Sheets[sheetName];
   const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any[][];
   let currentCategory: string | null = null;
+  let categoryIndex = 0;
+  const seenCodes = new Set<string>();
   const num = (v: any) => {
     if (v == null || v === "" || v === "N/A") return null;
     if (typeof v === "string" && v.startsWith("#")) return null;
@@ -524,6 +527,13 @@ function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: strin
     return Number.isFinite(n) ? n : null;
   };
   const norm = (v: any) => (typeof v === "string" ? v.trim().toLowerCase() : v);
+  // Normalise Excel float drift (3.09000000000001 -> "3.09"). Strip trailing zeros.
+  const cleanSer = (v: any): string => {
+    if (typeof v === "number") {
+      return Number.isInteger(v) ? String(v) : (Math.round(v * 100) / 100).toString();
+    }
+    return String(v).trim();
+  };
 
   for (let i = 0; i < data.length; i++) {
     const r = data[i] ?? [];
@@ -534,14 +544,25 @@ function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: strin
     const dNorm = norm(d);
     const isCategoryHeader = typeof b === "number" && Number.isInteger(b) && (dNorm === "quantity" || norm(e) === "unit");
     if (isCategoryHeader) {
-      if (c) currentCategory = String(c).trim();
+      if (c) { currentCategory = String(c).trim(); categoryIndex += 1; }
       continue;
     }
     // Skip pure text/header rows
     if (b == null) continue;
     if (c == null) continue;
 
-    const rateCode = String(b).trim();
+    const sourceSer = cleanSer(b);
+    // Category-scoped base, e.g. "3-2.03"
+    const catPrefix = categoryIndex > 0 ? `${categoryIndex}-` : "";
+    let rateCode = `${catPrefix}${sourceSer}`;
+    if (seenCodes.has(rateCode)) {
+      // Still-duplicate within the same category — suffix #2, #3…
+      let n = 2;
+      while (seenCodes.has(`${rateCode}#${n}`)) n += 1;
+      rateCode = `${rateCode}#${n}`;
+      uniquifiedCount += 1;
+    }
+    seenCodes.add(rateCode);
     const unitCost = num(f);
     const unitPrice = num(g);
     rows.push({
@@ -553,10 +574,10 @@ function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: strin
       unit_price: unitPrice,
       needs_pricing: unitCost == null || unitCost === 0 || unitPrice == null || unitPrice === 0,
       source_sheet: sheetName,
-      source_ser: rateCode,
+      source_ser: sourceSer,
     });
   }
-  return { rows, errors, sheetName };
+  return { rows, errors, sheetName, uniquifiedCount };
 }
 
 const ICP_CONTRACT_NAME = "ICP SOR";
@@ -587,7 +608,7 @@ async function ensureIcpContract(): Promise<string> {
 
 function IcpSorImport() {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<{ rows: IcpRow[]; errors: string[]; sheetName: string | null } | null>(null);
+  const [parsed, setParsed] = useState<{ rows: IcpRow[]; errors: string[]; sheetName: string | null; uniquifiedCount: number } | null>(null);
   const [rateCardName, setRateCardName] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -688,6 +709,11 @@ function IcpSorImport() {
               {needsPricingCount > 0 && (
                 <Badge variant="outline" className="border-amber-500/40 text-amber-600">
                   {needsPricingCount} need pricing
+                </Badge>
+              )}
+              {parsed.uniquifiedCount > 0 && (
+                <Badge variant="outline" className="border-blue-500/40 text-blue-600">
+                  {parsed.uniquifiedCount} duplicate codes uniquified
                 </Badge>
               )}
               {parsed.errors.map((e, i) => (
