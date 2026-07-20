@@ -20,7 +20,7 @@ export async function runAutomations(
     if (act.type === "set_date_today" && act.column) patch[act.column] = new Date().toISOString().slice(0, 10);
     if (act.type === "set_status" && act.status) patch.status = act.status;
     if (Object.keys(patch).length) {
-      await supabase.from("project_tasks").update(patch).eq("id", taskId);
+      await supabase.from("project_tasks" as any).update(patch).eq("id", taskId);
     }
   }
 }
