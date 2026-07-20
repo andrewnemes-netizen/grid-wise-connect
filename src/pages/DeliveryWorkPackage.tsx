@@ -102,7 +102,7 @@ export default function DeliveryWorkPackage() {
   const { data: sitePrograms = [] } = useQuery({
     queryKey: ["wp-site-programmes", wpId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("site_programmes")
+      const { data, error } = await supabase.from("site_programmes" as any)
         .select("id,name,site_id,start_date,target_end_date,percent_complete,status")
         .eq("work_package_id", wpId);
       if (error) throw error;

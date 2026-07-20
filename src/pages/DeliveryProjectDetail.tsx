@@ -30,7 +30,7 @@ export default function DeliveryProjectDetail() {
   const { data: project, isLoading } = useQuery({
     queryKey: ["delivery-project", projectId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("projects").select("*").eq("id", projectId).single();
+      const { data, error } = await supabase.from("projects" as any).select("*").eq("id", projectId).single();
       if (error) throw error;
       return data;
     },
@@ -53,7 +53,7 @@ export default function DeliveryProjectDetail() {
     queryKey: ["delivery-milestones", projectId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("project_milestones")
+        .from("project_milestones" as any)
         .select("*")
         .eq("project_id", projectId)
         .order("sequence", { ascending: true });
@@ -66,7 +66,7 @@ export default function DeliveryProjectDetail() {
     queryKey: ["delivery-tasks", projectId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("project_tasks")
+        .from("project_tasks" as any)
         .select("*")
         .eq("project_id", projectId)
         .order("sort_index", { ascending: true });
@@ -81,7 +81,7 @@ export default function DeliveryProjectDetail() {
       const ids = tasks.map((t: any) => t.id);
       if (ids.length === 0) return [];
       const { data } = await supabase
-        .from("project_task_dependencies")
+        .from("project_task_dependencies" as any)
         .select("*")
         .in("task_id", ids);
       return data ?? [];
@@ -91,7 +91,7 @@ export default function DeliveryProjectDetail() {
 
   const updateTask = useMutation({
     mutationFn: async ({ taskId, patch }: { taskId: string; patch: any }) => {
-      const { error } = await supabase.from("project_tasks").update(patch).eq("id", taskId);
+      const { error } = await supabase.from("project_tasks" as any).update(patch).eq("id", taskId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -253,7 +253,7 @@ function NewTaskDialog({ projectId, milestones }: { projectId: string; milestone
   const [due, setDue] = useState("");
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("project_tasks").insert({
+      const { error } = await supabase.from("project_tasks" as any).insert({
         project_id: projectId,
         milestone_id: milestone === "none" ? null : milestone,
         title,
@@ -319,7 +319,7 @@ function NewMilestoneDialog({ projectId, nextSeq }: { projectId: string; nextSeq
   const [planned, setPlanned] = useState("");
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("project_milestones").insert({
+      const { error } = await supabase.from("project_milestones" as any).insert({
         project_id: projectId,
         name,
         phase: phase as any,
@@ -372,7 +372,7 @@ function ProjectMembersPanel({ projectId }: { projectId: string }) {
   const { data: members = [] } = useQuery({
     queryKey: ["delivery-members", projectId],
     queryFn: async () => {
-      const { data } = await supabase.from("project_members").select("*").eq("project_id", projectId);
+      const { data } = await supabase.from("project_members" as any).select("*").eq("project_id", projectId);
       return data ?? [];
     },
   });

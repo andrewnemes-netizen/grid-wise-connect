@@ -17,7 +17,7 @@ export function TaskKanban({ projectId, tasks }: { projectId: string; tasks: any
   const move = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase
-        .from("project_tasks")
+        .from("project_tasks" as any)
         .update({ status: status as any, percent_complete: status === "done" ? 100 : undefined })
         .eq("id", id);
       if (error) throw error;

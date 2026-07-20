@@ -50,7 +50,7 @@ export default function DeliveryProjects() {
     queryKey: ["delivery-projects"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("projects")
+        .from("projects" as any)
         .select("id,name,code,status,priority,health,percent_complete,target_end_date,study_id,created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -82,7 +82,7 @@ export default function DeliveryProjects() {
         site_id = s?.site_id ?? null;
       }
       const { data, error } = await supabase
-        .from("projects")
+        .from("projects" as any)
         .insert({
           name: payload.name,
           description: payload.description || null,
