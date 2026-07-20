@@ -73,8 +73,9 @@ export default function WpSiteRegisterTab() {
   const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
-  const [addSiteId, setAddSiteId] = useState("");
+  const [addSiteIds, setAddSiteIds] = useState<Set<string>>(new Set());
   const [addSiteRef, setAddSiteRef] = useState("");
+  const [addSiteQuery, setAddSiteQuery] = useState("");
   const qc = useQueryClient();
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["wp-site-register", wpId] });
@@ -384,23 +385,28 @@ export default function WpSiteRegisterTab() {
 
   const addSite = useMutation({
     mutationFn: async () => {
-      if (!wpId || !addSiteId) return;
-      const { error } = await supabase.from("wp_sites").insert({
+      const ids = Array.from(addSiteIds);
+      if (!wpId || ids.length === 0) return { count: 0 };
+      const payload = ids.map((sid, i) => ({
         work_package_id: wpId,
-        site_id: addSiteId,
-        local_ref: addSiteRef || null,
-        sequence: rows.length + 1,
-      });
+        site_id: sid,
+        local_ref: ids.length === 1 && addSiteRef ? addSiteRef : null,
+        sequence: rows.length + 1 + i,
+      }));
+      const { error } = await supabase.from("wp_sites").insert(payload);
       if (error) throw error;
+      return { count: ids.length };
     },
-    onSuccess: () => {
-      toast.success("Site added");
+    onSuccess: (res) => {
+      const n = res?.count ?? 0;
+      toast.success(`${n} site${n === 1 ? "" : "s"} added`);
       setAddSiteOpen(false);
-      setAddSiteId("");
+      setAddSiteIds(new Set());
       setAddSiteRef("");
+      setAddSiteQuery("");
       invalidate();
     },
-    onError: (e: any) => toast.error(e?.message ?? "Failed to add site"),
+    onError: (e: any) => toast.error(e?.message ?? "Failed to add sites"),
   });
 
   return (
@@ -423,7 +429,7 @@ export default function WpSiteRegisterTab() {
             </Link>
           </Button>
           <Button size="sm" onClick={() => setAddSiteOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Add site
+            <Plus className="h-4 w-4 mr-1" /> Add sites
           </Button>
         </div>
       </div>
@@ -724,34 +730,79 @@ export default function WpSiteRegisterTab() {
         />
       )}
 
-      <Dialog open={addSiteOpen} onOpenChange={setAddSiteOpen}>
+      <Dialog open={addSiteOpen} onOpenChange={(o) => { setAddSiteOpen(o); if (!o) { setAddSiteIds(new Set()); setAddSiteRef(""); setAddSiteQuery(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add site to work package</DialogTitle>
+            <DialogTitle>Add sites to work package</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Site</Label>
-              <Select value={addSiteId} onValueChange={setAddSiteId}>
-                <SelectTrigger><SelectValue placeholder="Pick a site" /></SelectTrigger>
-                <SelectContent>
-                  {(availableSites as any[]).map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.site_name ?? "Site"}{s.postcode ? ` — ${s.postcode}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={addSiteQuery}
+                onChange={(e) => setAddSiteQuery(e.target.value)}
+                placeholder="Search sites by name or postcode"
+                className="pl-8 h-9"
+              />
             </div>
-            <div>
-              <Label>Local ref (optional)</Label>
-              <Input value={addSiteRef} onChange={(e) => setAddSiteRef(e.target.value)} placeholder="Site 01" />
-            </div>
+            {(() => {
+              const q2 = addSiteQuery.trim().toLowerCase();
+              const list = (availableSites as any[]).filter((s) =>
+                !q2 || [s.site_name, s.postcode].filter(Boolean).join(" ").toLowerCase().includes(q2)
+              );
+              const allSel = list.length > 0 && list.every((s) => addSiteIds.has(s.id));
+              return (
+                <>
+                  <div className="flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => {
+                        const next = new Set(addSiteIds);
+                        if (allSel) list.forEach((s) => next.delete(s.id));
+                        else list.forEach((s) => next.add(s.id));
+                        setAddSiteIds(next);
+                      }}
+                    >
+                      {allSel ? "Clear all" : `Select all (${list.length})`}
+                    </button>
+                    <span className="text-muted-foreground">{addSiteIds.size} selected</span>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto rounded border divide-y">
+                    {list.length === 0 ? (
+                      <div className="p-4 text-xs text-center text-muted-foreground">No sites available.</div>
+                    ) : list.map((s: any) => {
+                      const checked = addSiteIds.has(s.id);
+                      return (
+                        <label key={s.id} className="flex items-center gap-2 p-2 text-sm cursor-pointer hover:bg-muted/40">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => {
+                              const next = new Set(addSiteIds);
+                              if (checked) next.delete(s.id); else next.add(s.id);
+                              setAddSiteIds(next);
+                            }}
+                          />
+                          <span className="truncate flex-1">{s.site_name ?? "Site"}</span>
+                          {s.postcode && <span className="text-xs text-muted-foreground">{s.postcode}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+            {addSiteIds.size === 1 && (
+              <div>
+                <Label>Local ref (optional)</Label>
+                <Input value={addSiteRef} onChange={(e) => setAddSiteRef(e.target.value)} placeholder="Site 01" />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setAddSiteOpen(false)}>Cancel</Button>
-            <Button disabled={!addSiteId || addSite.isPending} onClick={() => addSite.mutate()}>
-              {addSite.isPending ? "Adding…" : "Add"}
+            <Button disabled={addSiteIds.size === 0 || addSite.isPending} onClick={() => addSite.mutate()}>
+              {addSite.isPending ? "Adding…" : `Add ${addSiteIds.size || ""} site${addSiteIds.size === 1 ? "" : "s"}`.trim()}
             </Button>
           </DialogFooter>
         </DialogContent>
