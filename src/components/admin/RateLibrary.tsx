@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 
 type StatusFilter = "ALL" | "DRAFT" | "APPROVED" | "SUPERSEDED";
+const LIBRARY_KEY = "__LIBRARY__";
 
 function StatusBadge({ status }: { status: string }) {
   const variant = status === "APPROVED" ? "default" : status === "DRAFT" ? "secondary" : "outline";
@@ -23,9 +24,11 @@ function StatusBadge({ status }: { status: string }) {
 export function RateLibrary() {
   const qc = useQueryClient();
   const [contractFilter, setContractFilter] = useState<string>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [search, setSearch] = useState("");
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null);
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
 
   const { data: contracts = [] } = useQuery({
     queryKey: ["rate-library-contracts"],
@@ -41,25 +44,36 @@ export function RateLibrary() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rate_card_versions")
-        .select("id, version_number, status, notes, source_workbook, imported_at, approved_at, effective_from, effective_to, rate_card:rate_cards(id, name, code, contract_id, contract:contracts(id, name))")
+        .select("id, version_number, status, notes, source_workbook, imported_at, approved_at, effective_from, effective_to, rate_card:rate_cards(id, name, code, category, contract_id, contract:contracts(id, name))")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
 
+  const categories = useMemo(() => {
+    const s = new Set<string>();
+    (rows as any[]).forEach((r) => r.rate_card?.category && s.add(r.rate_card.category));
+    return Array.from(s).sort();
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (rows as any[]).filter((r) => {
       if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
-      if (contractFilter !== "ALL" && r.rate_card?.contract_id !== contractFilter) return false;
+      if (contractFilter === LIBRARY_KEY) {
+        if (r.rate_card?.contract_id != null) return false;
+      } else if (contractFilter !== "ALL" && r.rate_card?.contract_id !== contractFilter) return false;
+      if (categoryFilter === LIBRARY_KEY) {
+        if (r.rate_card?.contract_id != null) return false;
+      } else if (categoryFilter !== "ALL" && r.rate_card?.category !== categoryFilter) return false;
       if (q) {
-        const hay = `${r.rate_card?.name ?? ""} ${r.rate_card?.contract?.name ?? ""} ${r.notes ?? ""}`.toLowerCase();
+        const hay = `${r.rate_card?.name ?? ""} ${r.rate_card?.category ?? ""} ${r.rate_card?.contract?.name ?? ""} ${r.notes ?? ""}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [rows, search, statusFilter, contractFilter]);
+  }, [rows, search, statusFilter, contractFilter, categoryFilter]);
 
   const approve = async (versionId: string) => {
     const { error } = await supabase.rpc("approve_rate_card_version", { _version_id: versionId });
@@ -101,7 +115,16 @@ export function RateLibrary() {
             <SelectTrigger className="w-56"><SelectValue placeholder="Contract" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All contracts</SelectItem>
+              <SelectItem value={LIBRARY_KEY}>Library (no contract)</SelectItem>
               {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Category" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All categories</SelectItem>
+              <SelectItem value={LIBRARY_KEY}>Library (no contract)</SelectItem>
+              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
@@ -120,6 +143,7 @@ export function RateLibrary() {
             <TableHeader>
               <TableRow>
                 <TableHead>Rate card</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead>Contract</TableHead>
                 <TableHead>Version</TableHead>
                 <TableHead>Status</TableHead>
@@ -130,13 +154,30 @@ export function RateLibrary() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No versions found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No versions found</TableCell></TableRow>
               ) : filtered.map((r: any) => (
                 <TableRow key={r.id}>
-                  <TableCell className="text-sm font-medium">{r.rate_card?.name ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.rate_card?.contract?.name ?? "—"}</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {r.rate_card?.id ? (
+                      <button
+                        className="hover:underline underline-offset-2 text-left"
+                        onClick={() => setEditingCardId(r.rate_card.id)}
+                        title="Edit rate card"
+                      >
+                        {r.rate_card?.name ?? "—"}
+                      </button>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {r.rate_card?.category
+                      ? <Badge variant="outline">{r.rate_card.category}</Badge>
+                      : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {r.rate_card?.contract?.name ?? (r.rate_card?.contract_id == null ? <em>Library</em> : "—")}
+                  </TableCell>
                   <TableCell className="text-xs">v{r.version_number}</TableCell>
                   <TableCell><StatusBadge status={r.status} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground">
@@ -172,8 +213,119 @@ export function RateLibrary() {
         {editingVersionId && (
           <RateItemsDialog versionId={editingVersionId} onClose={() => setEditingVersionId(null)} />
         )}
+        {editingCardId && (
+          <EditRateCardDialog
+            cardId={editingCardId}
+            contracts={contracts as any[]}
+            existingCategories={categories}
+            onClose={() => setEditingCardId(null)}
+            onSaved={() => qc.invalidateQueries({ queryKey: ["rate-library-versions"] })}
+          />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+// ---------- Edit Rate Card Dialog ----------
+function EditRateCardDialog({
+  cardId,
+  contracts,
+  existingCategories,
+  onClose,
+  onSaved,
+}: {
+  cardId: string;
+  contracts: any[];
+  existingCategories: string[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [contractId, setContractId] = useState<string>("__LIBRARY__");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useMemo(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("rate_cards")
+        .select("name, category, contract_id")
+        .eq("id", cardId)
+        .single();
+      if (error) { toast.error(error.message); return; }
+      setName((data as any).name ?? "");
+      setCategory((data as any).category ?? "");
+      setContractId((data as any).contract_id ?? "__LIBRARY__");
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardId]);
+
+  const save = async () => {
+    if (!name.trim()) { toast.error("Name required"); return; }
+    setSaving(true);
+    const { error } = await supabase
+      .from("rate_cards")
+      .update({
+        name: name.trim(),
+        category: category.trim() || null,
+        contract_id: contractId === "__LIBRARY__" ? null : contractId,
+      })
+      .eq("id", cardId);
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Rate card updated");
+    onSaved();
+    onClose();
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit rate card</DialogTitle>
+          <DialogDescription>Rename, re-tag, or move between library and a contract.</DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium">Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium">Category</label>
+              <Input
+                list="edit-card-categories"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. ICP, Build"
+              />
+              <datalist id="edit-card-categories">
+                {existingCategories.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="text-xs font-medium">Contract</label>
+              <Select value={contractId} onValueChange={setContractId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__LIBRARY__">— Library (no contract) —</SelectItem>
+                  {contracts.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
