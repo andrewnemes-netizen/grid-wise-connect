@@ -1,50 +1,28 @@
-## Feedback on the upload
+# Expandable Estimate Editor
 
-I parsed `ICP SOR 2026.xlsm` with the new importer and verified column mapping against the real sheet.
+## Problem
+On `/wp/:id/commercial/poc-estimates`, the estimate editor modal (`EstimatesTab` → `EstimateEditor`) currently opens at `96vw × 92vh`, but the BOQ groups/line-items table still consumes only ~40% of usable width due to inner padding and column widths, leaving the workbench feeling cramped.
 
-**What worked**
-- Sheet detection (`INTERNAL MASTER` in A1) picked the "Example" sheet correctly.
-- Column map is right: B=code, C=description, D=Quantity (ignored), E=Unit, F=Unit Cost, G=Unit Price.
-- 94 rate items parsed across 14 categories (Labour, LV Service Cable, Mains Joint Kits, DNO Works, Extra Overs, Feeder Pillars, etc.).
-- Blank rows (e.g. row 22, 35 with a code but no description) are already skipped.
-- Contract auto-create + version = max+1 logic behaved as designed.
+## Change (UI-only)
+Add a **Maximize / Restore** toggle button in the editor header (next to Close) that expands the dialog to full viewport and gives the BOQ table the full width.
 
-**Why the import crashed** (this is what your toast showed)
+### 1. `src/components/delivery/estimate/EstimatesTab.tsx`
+- Track a `maximized` state at the `Dialog` level.
+- Apply conditional classes on `DialogContent`:
+  - Default: `max-w-[96vw] w-[96vw] h-[92vh]` (unchanged)
+  - Maximized: `max-w-none w-screen h-screen rounded-none border-0`
+- Pass `maximized` + `onToggleMaximize` down to `<EstimateEditor />`.
 
-```
-duplicate key value violates unique constraint
-"rate_items_rate_card_version_id_rate_code_key"
-```
+### 2. `src/components/delivery/estimate/EstimateEditor.tsx`
+- Accept optional `maximized?: boolean` and `onToggleMaximize?: () => void` props.
+- Add a header icon button (Lucide `Maximize2` / `Minimize2`) placed next to the existing `Close` control that calls `onToggleMaximize`.
+- When `maximized`, remove any internal `max-w-*` constraints on the BOQ container so the group/line-items table fills 100% width. Ensure the scroll container remains `flex-1 overflow-auto` so the header/toolbar stay pinned.
+- Keep line row column widths fluid (`min-w` on the description column, flexible `flex-1` for value columns) so extra width benefits the data area, not empty margin.
 
-The source workbook reuses the same numeric code across (and even within) categories. Confirmed 23 duplicate codes in this file, including:
+### 3. `src/components/delivery/SiteEstimatesPanel.tsx` (EV Build editor dialog)
+- Mirror the same maximize toggle on `SiteEstimateEditor`'s `DialogContent` (`max-w-6xl` → toggles to fullscreen) so both estimate editors behave consistently.
 
-```text
-1.01 × 6     3.01 × 6
-1.02 × 5     3.02 × 4
-2.03 × 4     3.03 × 3
-2.04 × 2     3.06 × 3
-```
-
-Some are legitimate cross-category reuse (`3.01` under "Extra Overs" and again under "Feeder Pillars"); others are true typos in the sheet (`2.03` appearing 4 times inside "Lay Ducting" for genuinely different ducting items). Both patterns break the DB uniqueness rule on `(rate_card_version_id, rate_code)`.
-
-## Fix plan
-
-**1. Uniquify `rate_code` at parse time** — keep `source_ser` as the raw workbook value (audit-preserving), derive `rate_code` deterministically so it's unique inside one version:
-
-- Track a running category index (1, 2, 3…) in parse order.
-- Base code = `${categoryIndex}-${sourceSer}` (e.g. `3-2.03`).
-- If that still collides within the same category (the four `2.03`s in Lay Ducting), append `#2`, `#3`, `#4` in encounter order.
-
-This keeps codes human-readable, category-scoped, and stable across re-imports of the same file. `source_sheet` and `source_ser` remain the raw audit trail.
-
-**2. Normalise float-code drift** — a few codes come through as `3.09000000000001` because Excel stores them as floats. Round to 2 decimals before stringifying so the audit code shows `3.09`, not the noisy float.
-
-**3. Show a "duplicates uniquified" badge** in the preview so users see it happened (count only, non-blocking).
-
-**4. Nothing else changes** — RateLibraryImport and RecipeLibraryImport are not touched. The Approve flow downstream is unaffected because it reads `rate_code` as an opaque string.
-
-## Technical notes
-
-- Only `src/components/admin/EstimatingImport.tsx` (the `parseIcpSorWorkbook` function and the preview badge row) needs to change.
-- No migration required. The unique constraint stays as is — it's correct; the parser was wrong to hand it colliding codes.
-- After the fix, re-uploading this exact workbook should insert all 94 rows into a fresh DRAFT version under contract `ICP SOR`.
+## Out of scope
+- No changes to totals logic, mutations, rate-card picker, PDF, or DB.
+- No changes to `WpEstimatePanel` legacy editor.
+- No changes to sizing defaults — user still opens at the current size and clicks Maximize when they want more room.
