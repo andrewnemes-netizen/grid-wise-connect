@@ -57,6 +57,7 @@ const NAV: Group[] = [
     label: "Commercial",
     items: [
       { title: "EV Build Estimating", slug: "commercial/estimating", icon: Calculator },
+      { title: "Estimates", slug: "commercial/estimates", icon: FileText },
       { title: "PoC Estimates", slug: "commercial/poc-estimates", icon: ZapIcon },
       { title: "Purchase Orders", slug: "commercial/purchase-orders", icon: ShoppingCart },
       { title: "Variations", slug: "commercial/variations", icon: FileDiff },
