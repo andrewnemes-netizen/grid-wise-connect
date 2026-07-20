@@ -642,6 +642,7 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [recipeGroupTarget, setRecipeGroupTarget] = useState<string | null | undefined>(undefined);
+  const [editLine, setEditLine] = useState<{ id: string; groupId: string | null } | null>(null);
 
   const { data: estimate, refetch: refetchEstimate } = useQuery({
     queryKey: ["site-estimate-edit", estimateId],
@@ -993,7 +994,11 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
                     <TableBody>
                       {secLines.map((l: any) => (
                         <TableRow key={l.id} className={l.is_locked ? "bg-muted/20" : ""}>
-                          <TableCell className="text-xs">
+                          <TableCell
+                            className="text-xs cursor-pointer hover:underline"
+                            onClick={() => setEditLine({ id: l.id, groupId: l.group_id ?? null })}
+                            title="Open rich line editor"
+                          >
                             <div className="flex flex-col gap-1">
                               <span>{l.rate_code ?? l.cost_code ?? "—"}</span>
                               {l.source && l.source !== "MANUAL" && (
@@ -1004,8 +1009,15 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Input value={l.description ?? ""} disabled={isApproved || l.is_locked}
-                                   onChange={(e) => updateLine(l.id, { description: e.target.value })} />
+                            <div className="flex items-center gap-1">
+                              <Input value={l.description ?? ""} disabled={isApproved || l.is_locked}
+                                     onChange={(e) => updateLine(l.id, { description: e.target.value })} />
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0"
+                                      onClick={() => setEditLine({ id: l.id, groupId: l.group_id ?? null })}
+                                      title="Open rich line editor">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Input value={l.unit ?? ""} disabled={isApproved || l.is_locked} className="w-16"
@@ -1087,6 +1099,19 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
             currentLineCount={(lines as any[]).length}
             onClose={() => setRecipeGroupTarget(undefined)}
             onDone={async () => { setRecipeGroupTarget(undefined); await refetchLines(); await persistTotals(); }}
+          />
+        )}
+
+        {editLine && (
+          <EstimateLineDialog
+            table="site_estimate_lines"
+            estimateId={estimateId}
+            lineId={editLine.id}
+            groupId={editLine.groupId}
+            currency={ccy}
+            nextSortIndex={(lines as any[]).length}
+            onOpenChange={(o) => { if (!o) setEditLine(null); }}
+            onSaved={async () => { await refetchLines(); await persistTotals(); }}
           />
         )}
       </DialogContent>
