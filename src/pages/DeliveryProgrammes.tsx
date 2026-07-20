@@ -1,16 +1,17 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Layers, Briefcase, FileText } from "lucide-react";
+import { Plus, Layers, Briefcase, FileText, ChevronRight, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+import { InlineEdit } from "@/components/InlineEdit";
 
 type Programme = {
   id: string;
@@ -23,9 +24,23 @@ type Programme = {
   end_date: string | null;
 };
 
+type WpRow = {
+  id: string;
+  programme_id: string;
+  name: string | null;
+  code: string | null;
+  status: string | null;
+  start_date: string | null;
+  target_end_date: string | null;
+};
+
 export default function DeliveryProgrammes() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [newWpFor, setNewWpFor] = useState<string | null>(null);
 
   const { data: programmes = [], isLoading } = useQuery({
     queryKey: ["delivery-programmes"],
@@ -59,15 +74,51 @@ export default function DeliveryProgrammes() {
     },
   });
 
-  const { data: wpCounts = {} } = useQuery({
-    queryKey: ["delivery-programme-wp-counts"],
+  const { data: allWps = [] } = useQuery({
+    queryKey: ["delivery-programme-wps"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("work_packages").select("id,programme_id");
+      const { data, error } = await supabase
+        .from("work_packages")
+        .select("id,programme_id,name,code,status,start_date,target_end_date")
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      const counts: Record<string, number> = {};
-      (data ?? []).forEach((r: any) => { counts[r.programme_id] = (counts[r.programme_id] || 0) + 1; });
-      return counts;
+      return (data ?? []) as WpRow[];
     },
+  });
+
+  const wpsByProgramme: Record<string, WpRow[]> = {};
+  for (const w of allWps) {
+    (wpsByProgramme[w.programme_id] ??= []).push(w);
+  }
+
+  const updateProgramme = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, any> }) => {
+      const { error } = await supabase.from("programmes").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success("Saved"); qc.invalidateQueries({ queryKey: ["delivery-programmes"] }); },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
+  });
+
+  const createWp = useMutation({
+    mutationFn: async (v: { programme_id: string; name: string; code: string; budget: string; start: string; end: string }) => {
+      if (!user) throw new Error("Not signed in");
+      const { data, error } = await supabase.from("work_packages").insert({
+        programme_id: v.programme_id, name: v.name, code: v.code, status: "planning",
+        budget_amount: v.budget ? Number(v.budget) : null,
+        start_date: v.start || null, target_end_date: v.end || null,
+        pm_user_id: user.id, created_by: user.id,
+      }).select("id").single();
+      if (error) throw error;
+      return data as { id: string };
+    },
+    onSuccess: (data) => {
+      toast.success("Work package created");
+      setNewWpFor(null);
+      qc.invalidateQueries({ queryKey: ["delivery-programme-wps"] });
+      if (data?.id) navigate(`/wp/${data.id}`);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed"),
   });
 
   const create = useMutation({
@@ -123,6 +174,15 @@ export default function DeliveryProgrammes() {
 
   const accountName = (id: string) => (accounts as any[]).find((a) => a.id === id)?.name ?? "—";
 
+  const handleProgrammeRowClick = (p: Programme) => {
+    const wps = wpsByProgramme[p.id] ?? [];
+    if (wps.length === 1) {
+      navigate(`/wp/${wps[0].id}`);
+      return;
+    }
+    setExpanded((prev) => ({ ...prev, [p.id]: !prev[p.id] }));
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -152,34 +212,165 @@ export default function DeliveryProgrammes() {
         </Card>
       ) : (
         <div className="rounded-lg border border-border/60 bg-card shadow-panel overflow-hidden divide-y divide-border/50">
-          {programmes.map((p) => (
-            <Link key={p.id} to={`/delivery/programme/${p.id}`} className="block group">
-              <div className="flex items-stretch gap-3 p-4 hover:bg-muted/40 transition-colors relative">
-                <div className="w-1 rounded-full bg-primary/60 group-hover:bg-accent transition-colors" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-display font-semibold tracking-tight truncate">{p.name}</h3>
-                    {p.code && <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5">{p.code}</span>}
+          {programmes.map((p) => {
+            const wps = wpsByProgramme[p.id] ?? [];
+            const isOpen = !!expanded[p.id];
+            const hasMulti = wps.length !== 1;
+            return (
+              <div key={p.id}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleProgrammeRowClick(p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleProgrammeRowClick(p); } }}
+                  className="flex items-stretch gap-3 p-4 hover:bg-muted/40 transition-colors relative cursor-pointer group"
+                >
+                  <div className="w-1 rounded-full bg-primary/60 group-hover:bg-accent transition-colors" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <InlineEdit
+                          value={p.name}
+                          onSave={(v) => updateProgramme.mutate({ id: p.id, patch: { name: v } })}
+                          displayClassName="font-display font-semibold tracking-tight truncate"
+                          inputClassName="h-7 min-w-64 font-display font-semibold"
+                          placeholder="Programme name"
+                          pending={updateProgramme.isPending}
+                        />
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <InlineEdit
+                          value={p.code}
+                          onSave={(v) => updateProgramme.mutate({ id: p.id, patch: { code: v } })}
+                          displayClassName="text-[10px] font-mono uppercase tracking-wider text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5"
+                          inputClassName="h-6 w-24 text-xs"
+                          placeholder="add code"
+                          pending={updateProgramme.isPending}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" /> {p.status}
+                      </span>
+                      <span>{accountName(p.account_id)}</span>
+                      <span>·</span>
+                      <span>target</span>
+                      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <InlineEdit
+                          type="number"
+                          value={p.target_site_count}
+                          onSave={(v) => updateProgramme.mutate({ id: p.id, patch: { target_site_count: v } })}
+                          placeholder="—"
+                          inputClassName="h-6 w-16 text-xs"
+                          pending={updateProgramme.isPending}
+                        />
+                      </div>
+                      <span>sites</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" /> {p.status}
-                    </span>
-                    <span>{accountName(p.account_id)}</span>
-                    {p.target_site_count != null && <span>· target {p.target_site_count} sites</span>}
-                    {p.start_date && <span>· {new Date(p.start_date).toLocaleDateString()}</span>}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <div className="flex items-center justify-end gap-1 font-display text-lg font-semibold tabular-nums">
+                        <Briefcase className="h-4 w-4 text-accent" /> {wps.length}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">work packages</div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => { e.stopPropagation(); setNewWpFor(p.id); }}
+                      title="Add work package"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                    {hasMulti ? (
+                      <ChevronRight className={"h-4 w-4 text-muted-foreground transition-transform " + (isOpen ? "rotate-90" : "")} />
+                    ) : wps.length === 1 ? (
+                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                    ) : null}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <div className="flex items-center justify-end gap-1 font-display text-lg font-semibold tabular-nums"><Briefcase className="h-4 w-4 text-accent" /> {wpCounts[p.id] ?? 0}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">work packages</div>
-                </div>
+                {isOpen && hasMulti && (
+                  <div className="border-t border-border/40 bg-muted/20 px-4 py-2 space-y-1">
+                    {wps.length === 0 ? (
+                      <div className="flex items-center justify-between py-2 text-sm text-muted-foreground">
+                        <span>No work packages yet.</span>
+                        <Button size="sm" variant="outline" onClick={() => setNewWpFor(p.id)}>
+                          <Plus className="h-3.5 w-3.5 mr-1" /> New work package
+                        </Button>
+                      </div>
+                    ) : (
+                      wps.map((w) => (
+                        <Link
+                          key={w.id}
+                          to={`/wp/${w.id}`}
+                          className="flex items-center gap-3 rounded px-2 py-1.5 hover:bg-muted/60 transition-colors"
+                        >
+                          <Briefcase className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium truncate">{w.name || "Untitled"}</span>
+                          {w.code && <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{w.code}</span>}
+                          <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">{w.status ?? "—"}</span>
+                          <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Link>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      <NewWpDialog
+        programmeId={newWpFor}
+        onClose={() => setNewWpFor(null)}
+        onCreate={(v) => createWp.mutate(v)}
+        pending={createWp.isPending}
+      />
     </div>
+  );
+}
+
+function NewWpDialog({
+  programmeId, onClose, onCreate, pending,
+}: {
+  programmeId: string | null;
+  onClose: () => void;
+  onCreate: (v: { programme_id: string; name: string; code: string; budget: string; start: string; end: string }) => void;
+  pending: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [budget, setBudget] = useState("");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const open = !!programmeId;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { onClose(); setName(""); setCode(""); setBudget(""); setStart(""); setEnd(""); } }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>New work package</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="West Yorkshire WP-04" /></div>
+          <div><Label>Code</Label><Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="WY-04" /></div>
+          <div><Label>Approved value (£)</Label><Input type="number" value={budget} onChange={(e) => setBudget(e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Start</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
+            <div><Label>Target end</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!name.trim() || !code.trim() || pending || !programmeId}
+            onClick={() => programmeId && onCreate({ programme_id: programmeId, name: name.trim(), code: code.trim(), budget, start, end })}
+          >
+            {pending ? "Creating…" : "Create & open"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
