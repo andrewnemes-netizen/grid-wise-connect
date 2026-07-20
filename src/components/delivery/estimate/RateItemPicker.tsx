@@ -102,6 +102,39 @@ export function RateItemPicker({
       return n;
     });
 
+  const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected[i.id] != null);
+  const someFilteredSelected = filtered.some((i) => selected[i.id] != null);
+
+  const toggleAllFiltered = () =>
+    setSelected((s) => {
+      const n = { ...s };
+      if (allFilteredSelected) {
+        for (const i of filtered) delete n[i.id];
+      } else {
+        for (const i of filtered) if (n[i.id] == null) n[i.id] = 1;
+      }
+      return n;
+    });
+
+  const groupedByCategory = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const i of filtered) {
+      const k = i.category ?? "Uncategorised";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(i);
+    }
+    return Array.from(m.entries());
+  }, [filtered]);
+
+  const toggleCategory = (rows: any[]) =>
+    setSelected((s) => {
+      const n = { ...s };
+      const allSel = rows.every((i) => n[i.id] != null);
+      if (allSel) for (const i of rows) delete n[i.id];
+      else for (const i of rows) if (n[i.id] == null) n[i.id] = 1;
+      return n;
+    });
+
   async function ensureGroupFor(category: string | null, existing: Group[]): Promise<string> {
     const wanted = category?.trim() || "General";
     const hit = existing.find((g) => (g.name ?? "").toLowerCase() === wanted.toLowerCase());
@@ -235,7 +268,23 @@ export function RateItemPicker({
               {!items.isLoading && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No matching rate items.</td></tr>
               )}
-              {filtered.map((i) => {
+              {groupedByCategory.map(([cat, rows]) => {
+                const allSel = rows.every((i) => selected[i.id] != null);
+                const someSel = rows.some((i) => selected[i.id] != null);
+                return (
+                  <>
+                    <tr key={`hdr-${cat}`} className="bg-muted/40 border-b sticky">
+                      <td className="px-3 py-1.5">
+                        <Checkbox
+                          checked={allSel ? true : (someSel ? "indeterminate" : false)}
+                          onCheckedChange={() => toggleCategory(rows)}
+                        />
+                      </td>
+                      <td colSpan={6} className="px-3 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
+                        {cat} <span className="text-muted-foreground/70 normal-case font-normal">({rows.length})</span>
+                      </td>
+                    </tr>
+                    {rows.map((i) => {
                 const isSel = selected[i.id] != null;
                 return (
                   <tr key={i.id} className={`border-b hover:bg-primary/5 ${isSel ? "bg-primary/5" : ""}`}>
@@ -262,6 +311,9 @@ export function RateItemPicker({
                       />
                     </td>
                   </tr>
+                );
+                    })}
+                  </>
                 );
               })}
             </tbody>
