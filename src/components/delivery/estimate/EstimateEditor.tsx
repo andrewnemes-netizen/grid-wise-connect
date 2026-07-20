@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles, CalendarClock, Send, Download } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Copy, Lock, Link as LinkIcon, Layers, Package, Sparkles, CalendarClock, Send, Download, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateLineDialog } from "./EstimateLineDialog";
 import { RateItemPicker } from "./RateItemPicker";
@@ -19,7 +19,7 @@ const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${Number(n).toFixed(2)}%`);
 
-export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estimateId: string; onClose?: () => void; onOpenEstimate?: (id: string) => void }) {
+export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized, onToggleMaximize }: { estimateId: string; onClose?: () => void; onOpenEstimate?: (id: string) => void; maximized?: boolean; onToggleMaximize?: () => void }) {
   const qc = useQueryClient();
   const [editingLine, setEditingLine] = useState<string | null>(null);
   const [creatingInGroup, setCreatingInGroup] = useState<string | null>(null);
@@ -243,6 +243,11 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
           <Button size="sm" onClick={() => setQuoteOpen(true)}>
             <Send className="h-3.5 w-3.5 mr-1" />Send Quotation
           </Button>
+          {onToggleMaximize && (
+            <Button size="sm" variant="ghost" onClick={onToggleMaximize} title={maximized ? "Restore" : "Maximize"}>
+              {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          )}
           {onClose && <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>}
         </div>
       </div>
