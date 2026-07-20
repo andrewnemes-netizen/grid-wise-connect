@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useParams, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { WpSidebar } from "@/components/wp/WpSidebar";
+import { useFeatureFlag } from "@/hooks/useFeatureFlag";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,9 +37,7 @@ import {
   WpPhotos,
   WpAudit,
   WpCommissioning,
-  WpSurveys,
 } from "./wp/WpTabs";
-import WpDesignDetail from "./wp/WpDesignDetail";
 
 function WpHeader({ wpId }: { wpId: string }) {
   const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
@@ -69,7 +68,7 @@ function WpHeader({ wpId }: { wpId: string }) {
     setDeleting(false);
     if (error) { toast.error(error.message ?? "Failed to archive"); return; }
     toast.success("Work package archived (90-day retention). Restore from /admin/archive.");
-    navigate("/programmes");
+    navigate("/delivery");
   };
 
   return (
@@ -77,7 +76,7 @@ function WpHeader({ wpId }: { wpId: string }) {
       <SidebarTrigger />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/programmes" className="hover:underline">Programmes</Link>
+          <Link to="/delivery" className="hover:underline">Programmes</Link>
           <span>/</span>
           <span className="truncate">Work Package</span>
         </div>
@@ -129,7 +128,30 @@ function WpHeader({ wpId }: { wpId: string }) {
 
 export default function WorkPackageShell() {
   const { id } = useParams<{ id: string }>();
-  if (!id) return <Navigate to="/programmes" replace />;
+  const { enabled, loading } = useFeatureFlag("gridwise_os_shell");
+
+  if (!id) return <Navigate to="/delivery" replace />;
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">Loading Work Package…</div>
+    );
+  }
+  if (!enabled) {
+    return (
+      <div className="mx-auto max-w-lg p-6">
+        <div className="rounded-lg border p-6 text-center space-y-3">
+          <h1 className="text-lg font-semibold">Gridwise OS shell is off</h1>
+          <p className="text-sm text-muted-foreground">
+            The new Work Package workspace is behind the <code>gridwise_os_shell</code> feature flag. Ask an
+            administrator to enable it for your account or organisation.
+          </p>
+          <Button asChild variant="outline">
+            <Link to={`/delivery/wp/${id}`}>Open legacy Work Package</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -146,7 +168,6 @@ export default function WorkPackageShell() {
               <Route path="sites/pre-construction" element={<WpPreCon />} />
               <Route path="sites/readiness" element={<WpReadiness />} />
               <Route path="sites/matrix" element={<WpMatrix />} />
-              <Route path="sites/surveys" element={<WpSurveys />} />
               <Route path="commercial/estimating" element={<WpEstimating />} />
               <Route path="commercial/poc-estimates" element={<WpPocEstimates />} />
               <Route path="commercial/purchase-orders" element={<WpPurchaseOrders />} />
@@ -154,7 +175,6 @@ export default function WorkPackageShell() {
               <Route path="engineering/grid-studies" element={<WpGridStudies />} />
               <Route path="engineering/dno-offers" element={<WpDnoOffers />} />
               <Route path="engineering/design" element={<WpDesign />} />
-              <Route path="engineering/design/:submissionId" element={<WpDesignDetail />} />
               <Route path="delivery/programme" element={<WpProgramme />} />
               <Route path="delivery/tasks" element={<WpTasks />} />
               <Route path="delivery/partners" element={<WpPartners />} />

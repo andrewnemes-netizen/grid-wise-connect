@@ -1,4 +1,4 @@
-import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical, Briefcase, PoundSterling, Bot, Handshake, Sparkles, ClipboardList } from "lucide-react";
+import { Map, FolderOpen, Settings, LogOut, Building2, BookOpen, FlaskConical, Briefcase, PoundSterling, Bot, Handshake, Sparkles } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/hooks/useAuth";
 import { usePartnerMembership } from "@/hooks/usePartnerMembership";
@@ -21,11 +21,10 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { title: "Map", url: "/", icon: Map },
   { title: "Studies", url: "/studies", icon: FlaskConical },
-  { title: "Delivery", url: "/programmes", icon: Briefcase },
+  { title: "Delivery", url: "/delivery", icon: Briefcase },
   { title: "Intelligence", url: "/intelligence", icon: Sparkles },
   { title: "Revenue", url: "/delivery/revenue", icon: PoundSterling },
   { title: "Portfolio", url: "/portfolio", icon: FolderOpen },
-  { title: "Surveys", url: "/surveys", icon: ClipboardList },
   { title: "Assistant", url: "/assistant", icon: Bot },
 ];
 

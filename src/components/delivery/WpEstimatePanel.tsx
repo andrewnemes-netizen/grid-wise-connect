@@ -364,21 +364,13 @@ function NewEstimateDialog({
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
-      // find next version number
-      const { data: existing } = await supabase.from("work_package_estimates")
-        .select("version_number")
-        .eq("work_package_id", wpId)
-        .order("version_number", { ascending: false })
-        .limit(1);
-      const nextVer = ((existing?.[0] as any)?.version_number ?? 0) + 1;
-
       const { data, error } = await supabase.from("work_package_estimates").insert({
         work_package_id: wpId,
         name: name.trim(),
         contract_id: contractId ?? null,
         rate_card_version_id: rateCardVersionId ?? null,
         status: "DRAFT",
-        version_number: nextVer,
+        version_number: 1,
         created_by: user.user?.id ?? null,
       }).select().single();
       if (error) throw error;

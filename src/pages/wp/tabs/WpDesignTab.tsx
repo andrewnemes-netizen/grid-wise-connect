@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -12,12 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, PencilRuler, CheckCircle2, XCircle, Calculator, ChevronDown, ExternalLink } from "lucide-react";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, PencilRuler, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 const STATUSES = ["draft", "submitted", "under_review", "approved", "rejected", "withdrawn"];
@@ -34,7 +29,6 @@ function statusClass(s?: string) {
 export default function WpDesignTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const [newOpen, setNewOpen] = useState(false);
 
   const { data: submissions = [], isLoading } = useQuery({
@@ -120,15 +114,6 @@ export default function WpDesignTab() {
                       <Badge variant="outline" className="text-[10px] uppercase">{d.design_type}</Badge>
                     )}
                     <Badge variant="outline" className={statusClass(d.status)}>{d.status}</Badge>
-                    <DesignEstimateMenu wpId={wpId!} siteId={d.site_id} />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7"
-                      onClick={(e) => { e.stopPropagation(); navigate(`/wp/${wpId}/engineering/design/${d.id}`); }}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5 mr-1" /> Open
-                    </Button>
                   </div>
                 </div>
               </AccordionTrigger>
@@ -156,51 +141,7 @@ export default function WpDesignTab() {
   );
 }
 
-export function DesignEstimateMenu({ wpId, siteId }: { wpId: string; siteId: string | null | undefined }) {
-  const navigate = useNavigate();
-  const go = (mode: "detailed" | "synthetic" | "history") => {
-    if (!siteId) return;
-    const p = new URLSearchParams({ siteId, mode, source: "design" });
-    navigate(`/wp/${wpId}/commercial/estimating?${p.toString()}`);
-  };
-  const trigger = (
-    <Button
-      size="sm"
-      variant="outline"
-      className="h-7"
-      disabled={!siteId}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <Calculator className="h-3.5 w-3.5 mr-1" /> Estimate
-      <ChevronDown className="h-3 w-3 ml-1 opacity-70" />
-    </Button>
-  );
-  if (!siteId) {
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild><span>{trigger}</span></TooltipTrigger>
-          <TooltipContent>Link a site to open an estimate</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuLabel>Cost estimate</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => go("detailed")}>Detailed Estimate</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => go("synthetic")}>Synthetic (Rate-Card)</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => go("history")}>Estimate History</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-export function DesignSites({ submissionId }: { submissionId: string }) {
+function DesignSites({ submissionId }: { submissionId: string }) {
   const { data: rows = [] } = useQuery({
     queryKey: ["design-sites", submissionId],
     queryFn: async () => {
@@ -231,7 +172,7 @@ export function DesignSites({ submissionId }: { submissionId: string }) {
   );
 }
 
-export function DesignReviews({ submissionId }: { submissionId: string }) {
+function DesignReviews({ submissionId }: { submissionId: string }) {
   const { data: rows = [] } = useQuery({
     queryKey: ["design-reviews", submissionId],
     queryFn: async () => {

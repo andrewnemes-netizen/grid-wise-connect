@@ -6,7 +6,6 @@ import {
   HardHat,
   ShieldCheck,
   LayoutGrid,
-  ClipboardList,
   Calculator,
   Zap as ZapIcon,
   ShoppingCart,
@@ -52,7 +51,6 @@ const NAV: Group[] = [
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
       { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
-      { title: "Surveys", slug: "sites/surveys", icon: ClipboardList },
     ],
   },
   {
@@ -114,10 +112,10 @@ export function WpSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Back to Programmes">
-                  <NavLink to={`/programmes`} className="flex items-center gap-2">
+                <SidebarMenuButton asChild tooltip="Back to Work Package">
+                  <NavLink to={`/delivery/wp/${id}`} className="flex items-center gap-2">
                     <ChevronLeft className="h-4 w-4" />
-                    {!collapsed && <span className="text-xs text-muted-foreground">Programmes</span>}
+                    {!collapsed && <span className="text-xs text-muted-foreground">Work Package</span>}
                   </NavLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>

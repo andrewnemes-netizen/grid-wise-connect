@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -15,7 +15,6 @@ import PendingApproval from "./pages/PendingApproval";
 
 const MapView = lazy(() => import("./pages/MapView"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
-const SurveysOversight = lazy(() => import("./pages/SurveysOversight"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail"));
 const Admin = lazy(() => import("./pages/Admin"));
 const ArchiveConsole = lazy(() => import("./pages/admin/ArchiveConsole"));
@@ -25,8 +24,13 @@ const QuickEstimate = lazy(() => import("./pages/QuickEstimate"));
 const Training = lazy(() => import("./pages/Training"));
 const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
-const ProgrammesList = lazy(() => import("./pages/gridwise/ProgrammesList"));
-const ProgrammeDetail = lazy(() => import("./pages/gridwise/ProgrammeDetail"));
+const DeliveryProgrammes = lazy(() => import("./pages/DeliveryProgrammes"));
+const DeliveryProgrammeDetail = lazy(() => import("./pages/DeliveryProgrammeDetail"));
+const DeliveryWorkPackage = lazy(() => import("./pages/DeliveryWorkPackage"));
+const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
+const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
+const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
+const DeliveryProposalDetail = lazy(() => import("./pages/DeliveryProposalDetail"));
 const DeliveryRevenue = lazy(() => import("./pages/DeliveryRevenue"));
 const IntelligenceLayout = lazy(() => import("./pages/intelligence/IntelligenceLayout"));
 const ExecutiveDashboard = lazy(() => import("./pages/intelligence/ExecutiveDashboard"));
@@ -113,15 +117,6 @@ function AuthRoute() {
   return <Auth />;
 }
 
-function LegacyProgrammeRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`/programme/${id}`} replace />;
-}
-function LegacyWpRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`/wp/${id}/overview`} replace />;
-}
-
 /** Catches unhandled promise rejections globally so they don't crash the app */
 function GlobalErrorCatcher({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -150,18 +145,18 @@ const AppRoutes = () => (
       <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
-      <Route path="/surveys" element={<ProtectedRoute><SurveysOversight /></ProtectedRoute>} />
       <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
       <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
       <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
-      <Route path="/programmes" element={<ProtectedRoute><ProgrammesList /></ProtectedRoute>} />
-      <Route path="/programme/:id" element={<ProtectedRoute><ProgrammeDetail /></ProtectedRoute>} />
-      {/* Legacy redirects — bookmarks and shared links */}
-      <Route path="/delivery" element={<Navigate to="/programmes" replace />} />
-      <Route path="/delivery/programme/:id" element={<LegacyProgrammeRedirect />} />
-      <Route path="/delivery/wp/:id" element={<LegacyWpRedirect />} />
+      <Route path="/delivery" element={<ProtectedRoute><DeliveryProgrammes /></ProtectedRoute>} />
+      <Route path="/delivery/programme/:id" element={<ProtectedRoute><DeliveryProgrammeDetail /></ProtectedRoute>} />
+      <Route path="/delivery/wp/:id" element={<ProtectedRoute><DeliveryWorkPackage /></ProtectedRoute>} />
+      <Route path="/delivery/proposals" element={<ProtectedRoute><DeliveryProposals /></ProtectedRoute>} />
+      <Route path="/delivery/proposal/:id" element={<ProtectedRoute><DeliveryProposalDetail /></ProtectedRoute>} />
       <Route path="/delivery/revenue" element={<ProtectedRoute><DeliveryRevenue /></ProtectedRoute>} />
+      <Route path="/delivery/projects" element={<ProtectedRoute><DeliveryProjects /></ProtectedRoute>} />
+      <Route path="/delivery/project/:id" element={<ProtectedRoute><DeliveryProjectDetail /></ProtectedRoute>} />
       <Route path="/training" element={<ProtectedRoute><Training /></ProtectedRoute>} />
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/admin/archive" element={<ProtectedRoute><ArchiveConsole /></ProtectedRoute>} />

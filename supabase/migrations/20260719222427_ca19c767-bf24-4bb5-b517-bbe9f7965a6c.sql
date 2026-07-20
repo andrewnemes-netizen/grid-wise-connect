@@ -1,1 +1,0 @@
-GRANT EXECUTE ON FUNCTION public.submit_survey_by_token(text, jsonb, text, jsonb, text, text, text) TO anon;

@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ClipboardList, Mail, Link as LinkIcon, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { sendSurveyToSites } from "@/lib/sendSurveyToSites";
 
 interface Props {
   open: boolean;
@@ -135,18 +134,65 @@ export function QueueSurveyDialog({ open, onOpenChange, siteIds, workPackageId, 
 
       // 2) Optionally send survey link to contacts
       if (sendToContact) {
-        const summary = await sendSurveyToSites({
-          sites,
-          deliveryMode,
-          useSiteContact,
-          extraEmails: parsedExtras,
-          surveyorName,
-          message,
-          saveAsDefaultForExtras: false,
-        });
-        emailedCount = summary.emailedCount;
-        linksCount = summary.linksOnlyCount;
-        failedCount = summary.failedCount;
+        const results: any[] = [];
+
+        if (deliveryMode === "link_only") {
+          for (const s of sites) {
+            const recipients = [{
+              email: s.surveyor_email || `link-only+${s.id.slice(0, 8)}@ecopoweruk.local`,
+              name: surveyorName || "Site surveyor",
+            }];
+            const { data, error } = await supabase.functions.invoke("send-site-survey", {
+              body: {
+                site_ids: [s.id],
+                recipients,
+                delivery_mode: "link_only",
+                save_as_default: false,
+
+              },
+            });
+            if (error) throw error;
+            results.push(data);
+          }
+        } else {
+          if (useSiteContact) {
+            for (const s of sitesWithContact) {
+              const recipients = [{ email: s.surveyor_email!, name: surveyorName || undefined }];
+              const { data, error } = await supabase.functions.invoke("send-site-survey", {
+                body: {
+                  site_ids: [s.id],
+                  recipients,
+                  message: message || undefined,
+                  save_as_default: false,
+
+                  delivery_mode: "email",
+                },
+              });
+              if (error) throw error;
+              results.push(data);
+            }
+          }
+          if (parsedExtras.length > 0) {
+            const recipients = parsedExtras.map((email) => ({ email, name: surveyorName || undefined }));
+            const { data, error } = await supabase.functions.invoke("send-site-survey", {
+              body: {
+                site_ids: siteIds,
+                recipients,
+                message: message || undefined,
+                save_as_default: false,
+
+                delivery_mode: "email",
+              },
+            });
+            if (error) throw error;
+            results.push(data);
+          }
+        }
+
+        const links = results.flatMap((r) => (r?.results ?? []).filter((x: any) => x.ok));
+        emailedCount = links.filter((l: any) => l.email_sent).length;
+        linksCount = links.filter((l: any) => !l.email_sent).length;
+        failedCount = results.reduce((n, r) => n + (r?.failed ?? 0), 0);
       }
 
       const ownerLabel = owner?.full_name ?? "team member";

@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
     });
 
     // Get org name for the email
-    const { data: orgData } = await admin.from("organisations").select("name").eq("id", org_id).single();
+    const { data: orgData } = await admin.from("organisations").select("name").eq("id", orgId).single();
     const orgNameResolved = orgData?.name || "";
 
     // Send welcome email via transactional email system

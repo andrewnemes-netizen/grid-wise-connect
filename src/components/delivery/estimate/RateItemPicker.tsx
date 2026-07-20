@@ -43,7 +43,7 @@ export function RateItemPicker({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rate_card_versions" as any)
-        .select("id, version_number, status, rate_card_id, rate_cards!inner(name, code, category, contract:contracts(name))")
+        .select("id, version_number, status, rate_card_id, rate_cards!inner(name, code)")
         .in("status", ["APPROVED", "DRAFT"])
         .order("status", { ascending: true })
         .order("version_number", { ascending: false });
@@ -190,7 +190,7 @@ export function RateItemPicker({
               <SelectContent>
                 {(versions.data ?? []).map((v: any) => (
                   <SelectItem key={v.id} value={v.id}>
-                    {v.rate_cards?.name ?? "Rate card"} — {v.rate_cards?.category ?? (v.rate_cards?.contract?.name ?? "Library")} · v{v.version_number} ({v.status})
+                    {v.rate_cards?.name ?? "Rate card"} — v{v.version_number} ({v.status})
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -142,12 +142,6 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     return m;
   }, [lines.data]);
 
-  if (est.error) return (
-    <div className="p-6 space-y-2">
-      <div className="text-sm font-medium text-destructive">Failed to load estimate</div>
-      <div className="text-xs text-muted-foreground break-all">{(est.error as any)?.message ?? String(est.error)}</div>
-    </div>
-  );
   if (est.isLoading || !est.data) return <div className="p-6 text-sm text-muted-foreground">Loading estimate…</div>;
   const e = est.data;
   const c = e.currency ?? "GBP";

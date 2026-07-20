@@ -18,7 +18,6 @@ import WpDocumentsTab from "./tabs/WpDocumentsTab";
 import WpPhotosTab from "./tabs/WpPhotosTab";
 import WpAuditTab from "./tabs/WpAuditTab";
 import WpCommissioningTab from "./tabs/WpCommissioningTab";
-import WpSurveysTab from "./tabs/WpSurveysTab";
 
 export const WpOverview = WpOverviewTab;
 export const WpSiteRegister = WpSiteRegisterTab;
@@ -40,4 +39,3 @@ export const WpDocuments = WpDocumentsTab;
 export const WpPhotos = WpPhotosTab;
 export const WpAudit = WpAuditTab;
 export const WpCommissioning = WpCommissioningTab;
-export const WpSurveys = WpSurveysTab;

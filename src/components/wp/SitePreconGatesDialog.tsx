@@ -90,46 +90,8 @@ export function SitePreconGatesDialog({
     onError: (e: any) => toast.error(e.message ?? "Failed to update gate"),
   });
 
-  const saveNotes = useMutation({
-    mutationFn: async () => {
-      const entries = Object.entries(notesByGate).filter(([, v]) => v !== undefined);
-      if (entries.length === 0) return 0;
-      const rows = entries.map(([gate_key, notes]) => {
-        const existing = byKey.get(gate_key);
-        return {
-          work_package_id: workPackageId,
-          site_id: siteId,
-          gate_key,
-          state: (existing?.state as GateState) ?? "open",
-          notes: notes || null,
-          passed_at: existing?.passed_at ?? null,
-          passed_by: existing?.passed_by ?? null,
-        };
-      });
-      const { error } = await (supabase as any)
-        .from("site_precon_gates")
-        .upsert(rows, { onConflict: "work_package_id,site_id,gate_key" });
-      if (error) throw error;
-      return rows.length;
-    },
-  });
-
-  const handleClose = async () => {
-    try {
-      const n = await saveNotes.mutateAsync();
-      if (n && n > 0) toast.success("Gate notes saved");
-    } catch (e: any) {
-      toast.error(e.message ?? "Failed to save notes");
-    } finally {
-      qc.invalidateQueries({ queryKey: ["site-precon-gates", workPackageId, siteId] });
-      qc.invalidateQueries({ queryKey: ["wp-site-precon-status", workPackageId] });
-      qc.invalidateQueries({ queryKey: ["wp-precon-gates-all", workPackageId] });
-      onOpenChange(false);
-    }
-  };
-
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { handleClose(); } else { onOpenChange(true); } }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Pre-construction gates — {siteName ?? "site"}</DialogTitle>
@@ -200,9 +162,7 @@ export function SitePreconGatesDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={saveNotes.isPending}>
-            {saveNotes.isPending ? "Saving…" : "Save & Close"}
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

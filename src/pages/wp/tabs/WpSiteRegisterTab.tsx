@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Zap, ClipboardList, CheckCircle2, Trash2, ArrowRightLeft, Upload } from "lucide-react";
+import { Search, Zap, ClipboardList, CheckCircle2, Trash2, ArrowRightLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -355,16 +355,9 @@ export default function WpSiteRegisterTab() {
             Every site in scope for this WP with stage, partner and viability. Click a row to open the site detail.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild size="sm" variant="outline" className="h-9">
-            <Link to={`/import/wizard?wp=${wpId}`}>
-              <Upload className="h-3.5 w-3.5 mr-1" /> Import Sites
-            </Link>
-          </Button>
-          <div className="relative w-64">
-            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, postcode, ref" className="pl-8 h-9" />
-          </div>
+        <div className="relative w-64">
+          <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, postcode, ref" className="pl-8 h-9" />
         </div>
       </div>
 

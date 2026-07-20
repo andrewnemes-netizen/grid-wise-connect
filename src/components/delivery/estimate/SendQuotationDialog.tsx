@@ -24,11 +24,9 @@ interface Props {
   groups: any[];
   lines: any[];
   siteName?: string;
-  /** When true, the estimate.id refers to public.site_estimates(id) instead of public.estimates(id). */
-  isSiteEstimate?: boolean;
 }
 
-export function SendQuotationDialog({ open, onOpenChange, estimate, groups, lines, siteName, isSiteEstimate }: Props) {
+export function SendQuotationDialog({ open, onOpenChange, estimate, groups, lines, siteName }: Props) {
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [subject, setSubject] = useState(
@@ -39,12 +37,12 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
   );
 
   const history = useQuery({
-    queryKey: ["quotation-sends", isSiteEstimate ? "site" : "wp", estimate.id],
+    queryKey: ["quotation-sends", estimate.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("quotation_sends" as any)
         .select("*")
-        .eq(isSiteEstimate ? "site_estimate_id" : "estimate_id", estimate.id)
+        .eq("estimate_id", estimate.id)
         .order("created_at", { ascending: false })
         .limit(5);
       if (error) throw error;
@@ -75,9 +73,7 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
       // 3) Invoke edge function
       const { data, error } = await supabase.functions.invoke("send-quotation", {
         body: {
-          ...(isSiteEstimate
-            ? { site_estimate_id: estimate.id }
-            : { estimate_id: estimate.id }),
+          estimate_id: estimate.id,
           storage_path: path,
           recipient_email: recipientEmail.trim(),
           recipient_name: recipientName.trim() || undefined,

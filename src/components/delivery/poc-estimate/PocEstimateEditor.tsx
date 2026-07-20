@@ -10,9 +10,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, X, Zap, Pencil } from "lucide-react";
+import { Plus, Trash2, X, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { EstimateLineDialog } from "@/components/delivery/estimate/EstimateLineDialog";
 
 const fmt = (n: number, c = "GBP") =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n || 0);
@@ -32,15 +31,13 @@ type Line = {
 
 export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string; onClose: () => void }) {
   const qc = useQueryClient();
-  const [editLineId, setEditLineId] = useState<string | null>(null);
-  const [creatingNew, setCreatingNew] = useState(false);
 
   const est = useQuery({
     queryKey: ["poc-estimate", estimateId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("poc_estimates" as any)
-        .select("*, sites:site_id(site_name, postcode), dno_offers:dno_offer_id(offer_ref, dno_key)")
+        .select("*, sites:site_id(name, address), dno_offers:dno_offer_id(offer_ref, dno_key)")
         .eq("id", estimateId)
         .single();
       if (error) throw error;
@@ -130,15 +127,6 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
     },
   });
 
-  if (est.error) {
-    return (
-      <div className="p-6 space-y-3">
-        <div className="text-sm font-medium text-destructive">Failed to load PoC estimate</div>
-        <div className="text-xs text-muted-foreground break-all">{(est.error as any)?.message ?? String(est.error)}</div>
-        <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-      </div>
-    );
-  }
   if (est.isLoading || !est.data) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
@@ -161,7 +149,7 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
             />
           </div>
           <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-            {e.sites?.site_name && <span>Site: {e.sites.site_name}</span>}
+            {e.sites?.name && <span>Site: {e.sites.name}</span>}
             {e.dno_offers?.offer_ref && (
               <span>· DNO offer {e.dno_offers.offer_ref}{e.dno_offers.dno_key ? ` (${e.dno_offers.dno_key})` : ""}</span>
             )}
@@ -189,14 +177,9 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="font-heading text-sm">Line items</div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => addLine.mutate()}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Quick add
-              </Button>
-              <Button size="sm" onClick={() => setCreatingNew(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add rich line
-              </Button>
-            </div>
+            <Button size="sm" variant="outline" onClick={() => addLine.mutate()}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add line
+            </Button>
           </div>
           <div className="rounded-md border">
             <Table>
@@ -209,32 +192,53 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
                   <TableHead className="w-28 text-right">Unit price</TableHead>
                   <TableHead className="w-28 text-right">Line cost</TableHead>
                   <TableHead className="w-28 text-right">Line price</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(lines.data ?? []).map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="cursor-pointer hover:bg-muted/40"
-                    onClick={() => setEditLineId(row.id)}
-                  >
-                    <TableCell className="font-medium">{row.description || <span className="text-muted-foreground italic">Untitled</span>}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{row.unit || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{Number(row.quantity ?? 0)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(Number(row.unit_cost), e.currency)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(Number(row.unit_price), e.currency)}</TableCell>
+                  <TableRow key={row.id}>
+                    <TableCell>
+                      <Input
+                        defaultValue={row.description}
+                        onBlur={(ev) => ev.currentTarget.value !== row.description && updateLine.mutate({ id: row.id, patch: { description: ev.currentTarget.value } })}
+                        className="h-8"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        defaultValue={row.unit}
+                        onBlur={(ev) => ev.currentTarget.value !== row.unit && updateLine.mutate({ id: row.id, patch: { unit: ev.currentTarget.value } })}
+                        className="h-8"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" step="0.01" defaultValue={row.quantity}
+                        onBlur={(ev) => updateLine.mutate({ id: row.id, patch: { quantity: Number(ev.currentTarget.value) } })}
+                        className="h-8 text-right tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" step="0.01" defaultValue={row.unit_cost}
+                        onBlur={(ev) => updateLine.mutate({ id: row.id, patch: { unit_cost: Number(ev.currentTarget.value) } })}
+                        className="h-8 text-right tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        type="number" step="0.01" defaultValue={row.unit_price}
+                        onBlur={(ev) => updateLine.mutate({ id: row.id, patch: { unit_price: Number(ev.currentTarget.value) } })}
+                        className="h-8 text-right tabular-nums"
+                      />
+                    </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(Number(row.line_cost), e.currency)}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{fmt(Number(row.line_price), e.currency)}</TableCell>
-                    <TableCell onClick={(ev) => ev.stopPropagation()}>
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditLineId(row.id)} title="Edit rich line">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeLine.mutate(row.id)} title="Remove">
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </div>
+                    <TableCell className="text-right tabular-nums">{fmt(Number(row.line_price), e.currency)}</TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="icon" onClick={() => removeLine.mutate(row.id)}>
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -267,22 +271,6 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
           </div>
         </div>
       </div>
-
-      {(editLineId || creatingNew) && (
-        <EstimateLineDialog
-          table="poc_estimate_lines"
-          estimateId={estimateId}
-          lineId={editLineId}
-          groupId={null}
-          currency={e.currency ?? "GBP"}
-          nextSortIndex={lines.data?.length ?? 0}
-          onOpenChange={(o) => { if (!o) { setEditLineId(null); setCreatingNew(false); } }}
-          onSaved={() => {
-            qc.invalidateQueries({ queryKey: ["poc-estimate-lines", estimateId] });
-            qc.invalidateQueries({ queryKey: ["poc-estimate", estimateId] });
-          }}
-        />
-      )}
     </div>
   );
 }
