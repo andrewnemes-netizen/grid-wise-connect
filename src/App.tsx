@@ -45,6 +45,7 @@ const PartnerDashboard = lazy(() => import("./pages/partner/PartnerDashboard"));
 const PartnerSites = lazy(() => import("./pages/partner/PartnerSites"));
 const PartnerHandover = lazy(() => import("./pages/partner/PartnerHandover"));
 const PartnerSnags = lazy(() => import("./pages/partner/PartnerSnags"));
+const SurveysPage = lazy(() => import("./pages/Surveys"));
 
 const queryClient = new QueryClient();
 
@@ -143,6 +144,7 @@ const AppRoutes = () => (
       <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+      <Route path="/surveys" element={<ProtectedRoute bare><Suspense fallback={<LazyFallback />}><SurveysPage /></Suspense></ProtectedRoute>} />
       <Route path="/site/:id" element={<ProtectedRoute><SiteDetail /></ProtectedRoute>} />
       <Route path="/la-programme" element={<ProtectedRoute><LaProgramme /></ProtectedRoute>} />
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
