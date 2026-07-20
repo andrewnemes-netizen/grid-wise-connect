@@ -1,28 +1,22 @@
-# Expandable Estimate Editor
+## Bulk delete for estimates
 
-## Problem
-On `/wp/:id/commercial/poc-estimates`, the estimate editor modal (`EstimatesTab` → `EstimateEditor`) currently opens at `96vw × 92vh`, but the BOQ groups/line-items table still consumes only ~40% of usable width due to inner padding and column widths, leaving the workbench feeling cramped.
+Extend `src/components/delivery/estimate/EstimatesTab.tsx` (and the equivalent list in `SiteEstimatesPanel.tsx` if applicable) so users can select multiple estimates and delete them in one action, reusing the existing soft-delete → recycle bin flow.
 
-## Change (UI-only)
-Add a **Maximize / Restore** toggle button in the editor header (next to Close) that expands the dialog to full viewport and gives the BOQ table the full width.
+### UI changes
+- Add a checkbox to each estimate card (top-left corner).
+- Add a "Select all" checkbox in the list header with a tri-state (none / some / all).
+- When ≥1 is selected, show a sticky bulk-action bar with:
+  - Selected count ("3 selected")
+  - "Clear" button
+  - "Delete selected" button (destructive)
+- Clicking "Delete selected" opens a single `AlertDialog` asking for one shared reason, listing the estimates to be removed.
 
-### 1. `src/components/delivery/estimate/EstimatesTab.tsx`
-- Track a `maximized` state at the `Dialog` level.
-- Apply conditional classes on `DialogContent`:
-  - Default: `max-w-[96vw] w-[96vw] h-[92vh]` (unchanged)
-  - Maximized: `max-w-none w-screen h-screen rounded-none border-0`
-- Pass `maximized` + `onToggleMaximize` down to `<EstimateEditor />`.
+### Behaviour
+- Confirm → call the existing `archive_entity` RPC once per selected estimate (chunked, e.g. 5 at a time) with `entity_type = 'estimate'` and the shared reason.
+- On success: toast "N estimates moved to recycle bin", clear selection, invalidate the estimates query.
+- On partial failure: toast the count that failed and keep failed rows selected.
+- Deleted estimates appear in **Admin → Archive** (already generic) and can be restored/purged there — no changes required to the archive console.
 
-### 2. `src/components/delivery/estimate/EstimateEditor.tsx`
-- Accept optional `maximized?: boolean` and `onToggleMaximize?: () => void` props.
-- Add a header icon button (Lucide `Maximize2` / `Minimize2`) placed next to the existing `Close` control that calls `onToggleMaximize`.
-- When `maximized`, remove any internal `max-w-*` constraints on the BOQ container so the group/line-items table fills 100% width. Ensure the scroll container remains `flex-1 overflow-auto` so the header/toolbar stay pinned.
-- Keep line row column widths fluid (`min-w` on the description column, flexible `flex-1` for value columns) so extra width benefits the data area, not empty margin.
-
-### 3. `src/components/delivery/SiteEstimatesPanel.tsx` (EV Build editor dialog)
-- Mirror the same maximize toggle on `SiteEstimateEditor`'s `DialogContent` (`max-w-6xl` → toggles to fullscreen) so both estimate editors behave consistently.
-
-## Out of scope
-- No changes to totals logic, mutations, rate-card picker, PDF, or DB.
-- No changes to `WpEstimatePanel` legacy editor.
-- No changes to sizing defaults — user still opens at the current size and clicks Maximize when they want more room.
+### Non-goals
+- No changes to the archive/restore RPCs, snapshot format, or single-item delete flow.
+- No changes to PoC vs EV Build estimate logic.
