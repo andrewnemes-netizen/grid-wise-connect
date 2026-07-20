@@ -566,8 +566,21 @@ async function ensureIcpContract(): Promise<string> {
     .from("contracts").select("id").eq("name", ICP_CONTRACT_NAME).maybeSingle();
   if (e1) throw e1;
   if (existing?.id) return existing.id as string;
+  // Ensure a client to attach the contract to (contracts.client_id is NOT NULL)
+  const { data: existingClient, error: ec1 } = await supabase
+    .from("clients").select("id").eq("name", ICP_CONTRACT_NAME).maybeSingle();
+  if (ec1) throw ec1;
+  let clientId: string;
+  if (existingClient?.id) {
+    clientId = existingClient.id as string;
+  } else {
+    const { data: newClient, error: ec2 } = await supabase
+      .from("clients").insert({ name: ICP_CONTRACT_NAME }).select("id").single();
+    if (ec2) throw ec2;
+    clientId = (newClient as any).id;
+  }
   const { data: created, error: e2 } = await supabase
-    .from("contracts").insert({ name: ICP_CONTRACT_NAME }).select("id").single();
+    .from("contracts").insert({ name: ICP_CONTRACT_NAME, client_id: clientId }).select("id").single();
   if (e2) throw e2;
   return (created as any).id as string;
 }
