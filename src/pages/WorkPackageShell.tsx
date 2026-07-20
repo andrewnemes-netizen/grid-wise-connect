@@ -38,6 +38,7 @@ import {
   WpCommissioning,
   WpSurveys,
 } from "./wp/WpTabs";
+import WpDesignDetail from "./wp/WpDesignDetail";
 
 function WpHeader({ wpId }: { wpId: string }) {
   const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
