@@ -86,6 +86,9 @@ export function SitePreconGatesDialog({
       toast.success("Gate updated");
       qc.invalidateQueries({ queryKey: ["site-precon-gates", workPackageId, siteId] });
       qc.invalidateQueries({ queryKey: ["wp-site-precon-status", workPackageId] });
+      qc.invalidateQueries({ queryKey: ["wp-precon-gates-all", workPackageId] });
+      qc.invalidateQueries({ queryKey: ["wp-site-stage-summary", workPackageId] });
+      qc.invalidateQueries({ queryKey: ["wp-site-register", workPackageId] });
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to update gate"),
   });
