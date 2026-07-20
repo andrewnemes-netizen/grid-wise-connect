@@ -723,6 +723,39 @@ export default function WpSiteRegisterTab() {
           onMoved={() => { clearSel(); invalidate(); }}
         />
       )}
+
+      <Dialog open={addSiteOpen} onOpenChange={setAddSiteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add site to work package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Site</Label>
+              <Select value={addSiteId} onValueChange={setAddSiteId}>
+                <SelectTrigger><SelectValue placeholder="Pick a site" /></SelectTrigger>
+                <SelectContent>
+                  {(availableSites as any[]).map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.site_name ?? "Site"}{s.postcode ? ` — ${s.postcode}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Local ref (optional)</Label>
+              <Input value={addSiteRef} onChange={(e) => setAddSiteRef(e.target.value)} placeholder="Site 01" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddSiteOpen(false)}>Cancel</Button>
+            <Button disabled={!addSiteId || addSite.isPending} onClick={() => addSite.mutate()}>
+              {addSite.isPending ? "Adding…" : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
