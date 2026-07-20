@@ -25,7 +25,6 @@ const Training = lazy(() => import("./pages/Training"));
 const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
 const DeliveryProgrammes = lazy(() => import("./pages/DeliveryProgrammes"));
-const DeliveryProgrammeDetail = lazy(() => import("./pages/DeliveryProgrammeDetail"));
 const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
 const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
 const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
@@ -149,7 +148,6 @@ const AppRoutes = () => (
       <Route path="/studies" element={<ProtectedRoute><Studies /></ProtectedRoute>} />
       <Route path="/study/:id" element={<ProtectedRoute><StudyDetail /></ProtectedRoute>} />
       <Route path="/delivery" element={<ProtectedRoute><DeliveryProgrammes /></ProtectedRoute>} />
-      <Route path="/delivery/programme/:id" element={<ProtectedRoute><DeliveryProgrammeDetail /></ProtectedRoute>} />
       <Route path="/delivery/proposals" element={<ProtectedRoute><DeliveryProposals /></ProtectedRoute>} />
       <Route path="/delivery/proposal/:id" element={<ProtectedRoute><DeliveryProposalDetail /></ProtectedRoute>} />
       <Route path="/delivery/revenue" element={<ProtectedRoute><DeliveryRevenue /></ProtectedRoute>} />
