@@ -97,6 +97,15 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     onSuccess: invalidateAll,
   });
 
+  const updateLine = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, any> }) => {
+      const { error } = await supabase.from("estimate_lines" as any).update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateAll,
+    onError: (e: any) => toast.error(e.message ?? "Update failed"),
+  });
+
   const duplicateLine = useMutation({
     mutationFn: async (id: string) => {
       const src = (lines.data ?? []).find((l) => l.id === id);
