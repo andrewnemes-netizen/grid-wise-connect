@@ -429,7 +429,7 @@ export default function WpSiteRegisterTab() {
             </Link>
           </Button>
           <Button size="sm" onClick={() => setAddSiteOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Add site
+            <Plus className="h-4 w-4 mr-1" /> Add sites
           </Button>
         </div>
       </div>
