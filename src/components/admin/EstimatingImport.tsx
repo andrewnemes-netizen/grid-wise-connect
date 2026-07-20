@@ -477,6 +477,261 @@ export function EstimatingImport() {
     <div className="space-y-4">
       <RateLibraryImport />
       <RecipeLibraryImport />
+      <IcpSorImport />
     </div>
+  );
+}
+
+// ---------------- ICP SOR import ----------------
+// Source: workbook with a sheet whose A1/A2 contains "INTERNAL MASTER".
+// Layout (0-indexed cols): B(1)=rate code / category int, C(2)=description/category title,
+// D(3)=Quantity (ignored on import), E(4)=Unit, F(5)=Unit Cost, G(6)=Unit Price.
+// Category header rows have integer in B and D header text "Quantity".
+type IcpRow = {
+  category: string | null;
+  rate_code: string;
+  description: string;
+  unit: string | null;
+  unit_cost: number | null;
+  unit_price: number | null;
+  needs_pricing: boolean;
+  source_sheet: string;
+  source_ser: string;
+};
+
+function parseIcpSorWorkbook(wb: XLSX.WorkBook): { rows: IcpRow[]; errors: string[]; sheetName: string | null } {
+  const rows: IcpRow[] = [];
+  const errors: string[] = [];
+  // Find sheet by A1/A2 containing "INTERNAL MASTER"
+  let sheetName: string | null = null;
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    const a1 = ws["A1"]?.v; const a2 = ws["A2"]?.v;
+    const hay = `${a1 ?? ""} ${a2 ?? ""}`.toLowerCase();
+    if (hay.includes("internal master")) { sheetName = name; break; }
+  }
+  if (!sheetName) {
+    errors.push('Sheet containing "INTERNAL MASTER" not found');
+    return { rows, errors, sheetName: null };
+  }
+  const ws = wb.Sheets[sheetName];
+  const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) as any[][];
+  let currentCategory: string | null = null;
+  const num = (v: any) => {
+    if (v == null || v === "" || v === "N/A") return null;
+    if (typeof v === "string" && v.startsWith("#")) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const norm = (v: any) => (typeof v === "string" ? v.trim().toLowerCase() : v);
+
+  for (let i = 0; i < data.length; i++) {
+    const r = data[i] ?? [];
+    const b = r[1]; const c = r[2]; const d = r[3]; const e = r[4]; const f = r[5]; const g = r[6];
+    if (b == null && c == null && e == null && f == null && g == null) continue;
+
+    // Category header row: integer in B, D says "Quantity" (header label row)
+    const dNorm = norm(d);
+    const isCategoryHeader = typeof b === "number" && Number.isInteger(b) && (dNorm === "quantity" || norm(e) === "unit");
+    if (isCategoryHeader) {
+      if (c) currentCategory = String(c).trim();
+      continue;
+    }
+    // Skip pure text/header rows
+    if (b == null) continue;
+    if (c == null) continue;
+
+    const rateCode = String(b).trim();
+    const unitCost = num(f);
+    const unitPrice = num(g);
+    rows.push({
+      category: currentCategory,
+      rate_code: rateCode,
+      description: String(c).trim(),
+      unit: e ? String(e).trim() : null,
+      unit_cost: unitCost,
+      unit_price: unitPrice,
+      needs_pricing: unitCost == null || unitCost === 0 || unitPrice == null || unitPrice === 0,
+      source_sheet: sheetName,
+      source_ser: rateCode,
+    });
+  }
+  return { rows, errors, sheetName };
+}
+
+const ICP_CONTRACT_NAME = "ICP SOR";
+
+async function ensureIcpContract(): Promise<string> {
+  const { data: existing, error: e1 } = await supabase
+    .from("contracts").select("id").eq("name", ICP_CONTRACT_NAME).maybeSingle();
+  if (e1) throw e1;
+  if (existing?.id) return existing.id as string;
+  const { data: created, error: e2 } = await supabase
+    .from("contracts").insert({ name: ICP_CONTRACT_NAME }).select("id").single();
+  if (e2) throw e2;
+  return (created as any).id as string;
+}
+
+function IcpSorImport() {
+  const [file, setFile] = useState<File | null>(null);
+  const [parsed, setParsed] = useState<{ rows: IcpRow[]; errors: string[]; sheetName: string | null } | null>(null);
+  const [rateCardName, setRateCardName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const onFile = async (f: File) => {
+    setFile(f); setParsed(null); setResult(null);
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    setParsed(parseIcpSorWorkbook(wb));
+    if (!rateCardName) setRateCardName(f.name.replace(/\.xlsx?$/i, ""));
+  };
+
+  const needsPricingCount = parsed?.rows.filter((r) => r.needs_pricing).length ?? 0;
+
+  const doImport = async () => {
+    if (!parsed || parsed.rows.length === 0) return;
+    if (!rateCardName.trim()) { toast.error("Rate card name required"); return; }
+    setImporting(true); setResult(null);
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      const cid = await ensureIcpContract();
+
+      // Find or create rate_card by (contract, name)
+      const { data: existingCard, error: eFind } = await supabase
+        .from("rate_cards").select("id").eq("contract_id", cid).eq("name", rateCardName.trim()).maybeSingle();
+      if (eFind) throw eFind;
+      let rateCardId: string;
+      if (existingCard?.id) {
+        rateCardId = existingCard.id as string;
+      } else {
+        const { data: rc, error: e1 } = await supabase.from("rate_cards").insert({
+          contract_id: cid, name: rateCardName.trim(),
+        }).select("id").single();
+        if (e1) throw e1;
+        rateCardId = (rc as any).id;
+      }
+
+      // Compute next version_number = max + 1 for this rate card
+      const { data: vers, error: eV } = await supabase
+        .from("rate_card_versions").select("version_number")
+        .eq("rate_card_id", rateCardId).order("version_number", { ascending: false }).limit(1);
+      if (eV) throw eV;
+      const nextVersion = ((vers?.[0] as any)?.version_number ?? 0) + 1;
+
+      const { data: rv, error: e2 } = await supabase.from("rate_card_versions").insert({
+        rate_card_id: rateCardId, version_number: nextVersion, status: "DRAFT",
+        source_workbook: file?.name ?? null, imported_at: new Date().toISOString(),
+        imported_by: user.user?.id ?? null,
+      }).select("id").single();
+      if (e2) throw e2;
+
+      const versionId = (rv as any).id;
+      const rows = parsed.rows.map((r) => ({
+        rate_card_version_id: versionId,
+        rate_code: r.rate_code,
+        description: r.description,
+        unit: r.unit,
+        labour_cost: null,
+        material_cost: null,
+        total_unit_cost: r.unit_cost ?? 0,
+        client_unit_price: r.unit_price ?? 0,
+        needs_pricing: r.needs_pricing,
+        cost_split_available: false,
+        category: r.category,
+        source_sheet: r.source_sheet,
+        source_ser: r.source_ser,
+      }));
+      const chunk = 500;
+      for (let i = 0; i < rows.length; i += chunk) {
+        const { error } = await supabase.from("rate_items").insert(rows.slice(i, i + chunk));
+        if (error) throw error;
+      }
+      setResult(`Imported ${rows.length} ICP SOR items into "${rateCardName.trim()}" v${nextVersion} (DRAFT) under contract "${ICP_CONTRACT_NAME}". ${needsPricingCount} flagged as needs_pricing.`);
+      toast.success("ICP SOR imported");
+    } catch (e: any) {
+      toast.error(e.message ?? "Import failed");
+    } finally { setImporting(false); }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5" /> ICP SOR import</CardTitle>
+        <CardDescription>
+          Parses the sheet whose header contains "INTERNAL MASTER" from an ICP SOR workbook.
+          Auto-creates (or reuses) the <code>ICP SOR</code> contract. Reads both Unit Cost and
+          Unit Price directly from the sheet. Example Quantity column is ignored.
+          New versions are appended (max version + 1) as DRAFT.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Input type="file" accept=".xlsx" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+        {parsed && (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              {parsed.sheetName && <Badge variant="outline">Sheet: {parsed.sheetName}</Badge>}
+              <Badge variant="secondary">{parsed.rows.length} items parsed</Badge>
+              {needsPricingCount > 0 && (
+                <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                  {needsPricingCount} need pricing
+                </Badge>
+              )}
+              {parsed.errors.map((e, i) => (
+                <Badge key={i} variant="destructive">{e}</Badge>
+              ))}
+            </div>
+
+            <div>
+              <Label>Rate card name</Label>
+              <Input value={rateCardName} onChange={(e) => setRateCardName(e.target.value)} />
+              <div className="text-xs text-muted-foreground mt-1">
+                Imported under contract <code>{ICP_CONTRACT_NAME}</code> as the next DRAFT version.
+              </div>
+            </div>
+
+            <div className="rounded-md border overflow-hidden max-h-64 overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Price</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {parsed.rows.slice(0, 20).map((r, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-xs">{r.rate_code}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.category ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{r.description}</TableCell>
+                      <TableCell className="text-xs">{r.unit ?? "—"}</TableCell>
+                      <TableCell className="text-xs text-right">{r.unit_cost != null ? `£${r.unit_cost.toFixed(2)}` : "—"}</TableCell>
+                      <TableCell className="text-xs text-right">{r.unit_price != null ? `£${r.unit_price.toFixed(2)}` : "—"}</TableCell>
+                      <TableCell>{r.needs_pricing && <AlertTriangle className="h-3 w-3 text-amber-500" />}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <Button onClick={doImport} disabled={importing || parsed.rows.length === 0}>
+              <UploadCloud className="h-4 w-4 mr-1" /> Import {parsed.rows.length} ICP SOR items
+            </Button>
+
+            {result && (
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>{result}</AlertDescription>
+              </Alert>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
