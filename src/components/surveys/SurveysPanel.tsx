@@ -98,7 +98,7 @@ export function SurveysPanel({ workPackageId }: Props) {
         const { data: wpSites } = await sb
           .from("wp_sites")
           .select("site_id")
-          .eq("wp_id", workPackageId);
+          .eq("work_package_id", workPackageId);
         siteIds = (wpSites ?? []).map((r: any) => r.site_id);
         if (siteIds.length === 0) return [];
       }
@@ -119,7 +119,7 @@ export function SurveysPanel({ workPackageId }: Props) {
 
       const [sitesRes, wpSitesRes, profilesRes] = await Promise.all([
         sb.from("sites").select("id, site_name, postcode").in("id", uniqueSiteIds),
-        sb.from("wp_sites").select("site_id, wp_id").in("site_id", uniqueSiteIds),
+        sb.from("wp_sites").select("site_id, work_package_id").in("site_id", uniqueSiteIds),
         uniqueUserIds.length
           ? sb.from("profiles").select("id, full_name, email").in("id", uniqueUserIds)
           : Promise.resolve({ data: [] as any[] }),
@@ -127,14 +127,14 @@ export function SurveysPanel({ workPackageId }: Props) {
       const sitesData = sitesRes.data;
       const wpSitesData = wpSitesRes.data;
       const profilesData = profilesRes.data;
-      const wpIds = Array.from(new Set(((wpSitesData ?? []) as any[]).map((r) => r.wp_id)));
+      const wpIds = Array.from(new Set(((wpSitesData ?? []) as any[]).map((r) => r.work_package_id)));
       const wpsRes = wpIds.length
         ? await sb.from("work_packages").select("id, name").in("id", wpIds)
         : { data: [] as any[] };
       const wpsData = wpsRes.data;
 
       const siteMap = new Map<string, any>((sitesData ?? []).map((s: any) => [s.id, s]));
-      const siteWp = new Map<string, string>(((wpSitesData ?? []) as any[]).map((r) => [r.site_id, r.wp_id]));
+      const siteWp = new Map<string, string>(((wpSitesData ?? []) as any[]).map((r) => [r.site_id, r.work_package_id]));
       const wpMap = new Map<string, string>(((wpsData ?? []) as any[]).map((w) => [w.id, w.name]));
       const profileMap = new Map<string, any>(((profilesData ?? []) as any[]).map((p) => [p.id, p]));
 
