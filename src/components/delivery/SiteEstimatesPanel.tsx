@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
 import { SendQuotationDialog } from "./estimate/SendQuotationDialog";
 import { useUnitRates } from "@/hooks/useUnitRates";
+import { EstimateLineDialog } from "./estimate/EstimateLineDialog";
 
 type SocketTier = 2 | 4 | 6 | 8;
 const SOCKET_TIERS: SocketTier[] = [2, 4, 6, 8];
