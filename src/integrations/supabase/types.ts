@@ -4338,49 +4338,172 @@ export type Database = {
       }
       poc_estimate_lines: {
         Row: {
+          attribute_group: string | null
+          boq_description: string | null
+          boq_item_name: string | null
+          calculate_time: boolean | null
+          charge_out_rate_used: string | null
+          compare_list: string | null
+          compare_title: string | null
+          contingency_pct: number | null
+          conversion_type: string | null
+          cost_category: string | null
+          cost_code: string | null
           created_at: string
           description: string
+          discount: number | null
+          fixed_price: boolean | null
+          flexible_qty: boolean | null
           id: string
+          image_link: string | null
+          include_in_create_task: boolean | null
+          is_allowance: boolean | null
+          item_logic: string | null
+          itemised: boolean | null
           line_cost: number | null
           line_price: number | null
+          lock_markup_dollar: boolean | null
+          markup_dollar: number | null
+          markup_pct: number | null
+          markup_type: string | null
+          milestone_for_sync: string | null
+          no_resources: number | null
           poc_estimate_id: string
+          pricing_notes: string | null
+          product_service: string | null
+          product_type: string | null
+          project_description: string | null
+          project_stage: string | null
+          project_sync_type: string | null
+          project_task_name: string | null
           quantity: number
           rate_item_id: string | null
+          rfq_required: boolean | null
+          show_image_in_proposal: boolean | null
+          solution_link: string | null
           sort_index: number
+          split_labour_materials: boolean | null
+          stage: string | null
+          supplier: string | null
+          time_measure: string | null
+          time_value: number | null
           unit: string
           unit_cost: number
           unit_price: number
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number | null
           line_price?: number | null
+          lock_markup_dollar?: boolean | null
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
           poc_estimate_id: string
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
           sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
+          cost_code?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
+          is_allowance?: boolean | null
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number | null
           line_price?: number | null
+          lock_markup_dollar?: boolean | null
+          markup_dollar?: number | null
+          markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
           poc_estimate_id?: string
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
+          solution_link?: string | null
           sort_index?: number
+          split_labour_materials?: boolean | null
+          stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
           {
@@ -6396,85 +6519,196 @@ export type Database = {
       }
       site_estimate_lines: {
         Row: {
+          attribute_group: string | null
+          boq_description: string | null
+          boq_item_name: string | null
+          calculate_time: boolean | null
+          charge_out_rate_used: string | null
+          compare_list: string | null
+          compare_title: string | null
+          contingency_pct: number | null
+          conversion_type: string | null
+          cost_category: string | null
           cost_code: string | null
           cost_code_category: string | null
           created_at: string
           description: string
+          discount: number | null
+          fixed_price: boolean | null
+          flexible_qty: boolean | null
           group_id: string | null
           id: string
+          image_link: string | null
+          include_in_create_task: boolean | null
           is_allowance: boolean
           is_locked: boolean
           is_manual_addition: boolean
+          item_logic: string | null
+          itemised: boolean | null
           line_cost: number
           line_price: number
+          lock_markup_dollar: boolean | null
           markup_amount: number
+          markup_dollar: number | null
           markup_pct: number | null
+          markup_type: string | null
+          milestone_for_sync: string | null
+          no_resources: number | null
+          pricing_notes: string | null
+          product_service: string | null
+          product_type: string | null
+          project_description: string | null
+          project_stage: string | null
+          project_sync_type: string | null
+          project_task_name: string | null
           quantity: number
           rate_code: string | null
           rate_item_id: string | null
           recipe_item_id: string | null
+          rfq_required: boolean | null
+          show_image_in_proposal: boolean | null
           site_estimate_id: string
+          solution_link: string | null
           sort_index: number
           source: string
+          split_labour_materials: boolean | null
           stage: string | null
+          supplier: string | null
+          time_measure: string | null
+          time_value: number | null
           unit: string | null
           unit_cost: number
           unit_price: number
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
           cost_code?: string | null
           cost_code_category?: string | null
           created_at?: string
           description: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           group_id?: string | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
           is_allowance?: boolean
           is_locked?: boolean
           is_manual_addition?: boolean
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number
           line_price?: number
+          lock_markup_dollar?: boolean | null
           markup_amount?: number
+          markup_dollar?: number | null
           markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_code?: string | null
           rate_item_id?: string | null
           recipe_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
           site_estimate_id: string
+          solution_link?: string | null
           sort_index?: number
           source?: string
+          split_labour_materials?: boolean | null
           stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string | null
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
+          attribute_group?: string | null
+          boq_description?: string | null
+          boq_item_name?: string | null
+          calculate_time?: boolean | null
+          charge_out_rate_used?: string | null
+          compare_list?: string | null
+          compare_title?: string | null
+          contingency_pct?: number | null
+          conversion_type?: string | null
+          cost_category?: string | null
           cost_code?: string | null
           cost_code_category?: string | null
           created_at?: string
           description?: string
+          discount?: number | null
+          fixed_price?: boolean | null
+          flexible_qty?: boolean | null
           group_id?: string | null
           id?: string
+          image_link?: string | null
+          include_in_create_task?: boolean | null
           is_allowance?: boolean
           is_locked?: boolean
           is_manual_addition?: boolean
+          item_logic?: string | null
+          itemised?: boolean | null
           line_cost?: number
           line_price?: number
+          lock_markup_dollar?: boolean | null
           markup_amount?: number
+          markup_dollar?: number | null
           markup_pct?: number | null
+          markup_type?: string | null
+          milestone_for_sync?: string | null
+          no_resources?: number | null
+          pricing_notes?: string | null
+          product_service?: string | null
+          product_type?: string | null
+          project_description?: string | null
+          project_stage?: string | null
+          project_sync_type?: string | null
+          project_task_name?: string | null
           quantity?: number
           rate_code?: string | null
           rate_item_id?: string | null
           recipe_item_id?: string | null
+          rfq_required?: boolean | null
+          show_image_in_proposal?: boolean | null
           site_estimate_id?: string
+          solution_link?: string | null
           sort_index?: number
           source?: string
+          split_labour_materials?: boolean | null
           stage?: string | null
+          supplier?: string | null
+          time_measure?: string | null
+          time_value?: number | null
           unit?: string | null
           unit_cost?: number
           unit_price?: number
           updated_at?: string
+          vat_rate?: number | null
         }
         Relationships: [
           {
