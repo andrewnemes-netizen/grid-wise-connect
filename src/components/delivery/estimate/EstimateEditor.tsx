@@ -27,6 +27,7 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
   const [rateCardOpen, setRateCardOpen] = useState<string | null | false>(false); // group id | null (auto) | false (closed)
   const [planOpen, setPlanOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const [bulkMarkup, setBulkMarkup] = useState<string>("");
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
@@ -116,6 +117,27 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     },
     onSuccess: invalidateAll,
   });
+
+  const applyBulkMarkup = useMutation({
+    mutationFn: async (pct: number) => {
+      const ids = (lines.data ?? []).map((l) => l.id);
+      if (!ids.length) return 0;
+      const { error } = await supabase.from("estimate_lines" as any)
+        .update({ markup_type: "Percentage", markup_pct: pct, markup_dollar: 0 } as any)
+        .in("id", ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (n) => { toast.success(`Applied markup to ${n} line${n === 1 ? "" : "s"}`); invalidateAll(); },
+    onError: (e: any) => toast.error(e.message ?? "Bulk markup failed"),
+  });
+
+  const expandAll = () => setCollapsed({});
+  const collapseAll = () => {
+    const map: Record<string, boolean> = {};
+    for (const g of groups.data ?? []) map[g.id] = true;
+    setCollapsed(map);
+  };
 
   const cloneEstimate = useMutation({
     mutationFn: async () => {
@@ -218,6 +240,40 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
         <span className="text-[11px] text-muted-foreground">
           Preliminaries are applied on top of the BOQ subtotal. Tag lines as prelim inside the line editor to roll them up separately.
         </span>
+      </div>
+
+      {/* Bulk actions bar */}
+      <div className="flex flex-wrap items-center gap-2 px-6 py-2 border-b bg-muted/20">
+        <Button size="sm" variant="outline" onClick={expandAll} title="Expand all groups">
+          <ChevronDown className="h-3.5 w-3.5 mr-1" />Expand all
+        </Button>
+        <Button size="sm" variant="outline" onClick={collapseAll} title="Collapse all groups">
+          <ChevronRight className="h-3.5 w-3.5 mr-1" />Collapse all
+        </Button>
+        <div className="mx-2 h-5 w-px bg-border" />
+        <span className="text-xs text-muted-foreground">Apply markup to all lines:</span>
+        <Input
+          type="number"
+          step="0.1"
+          value={bulkMarkup}
+          onChange={(ev) => setBulkMarkup(ev.target.value)}
+          placeholder="%"
+          className="h-7 w-20 text-right tabular-nums"
+        />
+        <Button
+          size="sm"
+          onClick={() => {
+            const v = parseFloat(bulkMarkup);
+            if (!Number.isFinite(v)) { toast.error("Enter a valid %"); return; }
+            const n = (lines.data ?? []).length;
+            if (!n) { toast.error("No lines to update"); return; }
+            if (!confirm(`Apply ${v}% markup to all ${n} line${n === 1 ? "" : "s"}? This will overwrite existing markups.`)) return;
+            applyBulkMarkup.mutate(v);
+          }}
+          disabled={applyBulkMarkup.isPending}
+        >
+          Apply to all
+        </Button>
       </div>
 
       {/* Totals bar */}
