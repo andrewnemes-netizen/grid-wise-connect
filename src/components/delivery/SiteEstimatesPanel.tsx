@@ -370,8 +370,33 @@ function NewSiteEstimateDialog({
     },
   });
 
+  // Global availability of ANY approved rate card — used to decide whether we
+  // hard-block creation (rate cards exist, user just didn't pick one) or allow
+  // the user through with a loud warning (no rate cards set up yet).
+  const { data: anyApprovedRateCards } = useQuery({
+    queryKey: ["any-approved-rate-versions"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("rate_card_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "APPROVED");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+  const hasAnyApprovedRateCards = (anyApprovedRateCards ?? 0) > 0;
+  const missingRateCardSelection = !contractId || !rateCardVersionId;
+  const canSubmit =
+    !!name.trim() &&
+    !saving &&
+    (!missingRateCardSelection || !hasAnyApprovedRateCards);
+
   const submit = async () => {
     if (!name.trim()) { toast.error("Name required"); return; }
+    if (missingRateCardSelection && hasAnyApprovedRateCards) {
+      toast.error("Choose a contract and rate card version");
+      return;
+    }
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
@@ -558,6 +583,18 @@ function NewSiteEstimateDialog({
               </SelectContent>
             </Select>
           </div>
+          {missingRateCardSelection && !hasAnyApprovedRateCards && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              No rate card selected — items will be unfiltered until one is chosen.
+              Set up an approved rate card via <span className="font-medium">Admin → Estimating Import</span> then{" "}
+              <span className="font-medium">Rate Library</span> to fix this.
+            </div>
+          )}
+          {missingRateCardSelection && hasAnyApprovedRateCards && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              Choose a contract and rate card version before creating the draft.
+            </div>
+          )}
           {contractId && (
             <>
               <div>
@@ -591,7 +628,7 @@ function NewSiteEstimateDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={saving}>Create draft</Button>
+          <Button onClick={submit} disabled={!canSubmit}>Create draft</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
