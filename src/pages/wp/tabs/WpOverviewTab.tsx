@@ -94,12 +94,12 @@ export default function WpOverviewTab() {
     enabled: !!wpId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("poc_estimates" as any)
-        .select("id,total_price,currency,status")
+        .from("estimates" as any)
+        .select("id,total_price,grand_total,currency,status")
         .eq("work_package_id", wpId!);
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      const total = rows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+      const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
       return { count: rows.length, total };
     },
   });
