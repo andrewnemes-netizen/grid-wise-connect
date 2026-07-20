@@ -92,9 +92,10 @@ export function SurveysPanel({ workPackageId }: Props) {
     queryKey: scopeKey,
     queryFn: async (): Promise<SurveyRow[]> => {
       // 1. Restrict site set by WP if scoped.
+      const sb = supabase as any;
       let siteIds: string[] | null = null;
       if (workPackageId) {
-        const { data: wpSites } = await supabase
+        const { data: wpSites } = await sb
           .from("wp_sites")
           .select("site_id")
           .eq("wp_id", workPackageId);
@@ -102,7 +103,7 @@ export function SurveysPanel({ workPackageId }: Props) {
         if (siteIds.length === 0) return [];
       }
 
-      let q = supabase
+      let q = sb
         .from("site_surveys")
         .select("id, site_id, token, sent_to_email, sent_to_name, sent_by, status, created_at, expires_at, submitted_at, opened_at, revoked_at, response_id")
         .order("created_at", { ascending: false })
@@ -116,17 +117,21 @@ export function SurveysPanel({ workPackageId }: Props) {
       const uniqueSiteIds = Array.from(new Set(rows.map((r) => r.site_id)));
       const uniqueUserIds = Array.from(new Set(rows.map((r) => r.sent_by).filter(Boolean)));
 
-      const [{ data: sitesData }, { data: wpSitesData }, { data: profilesData }] = await Promise.all([
-        supabase.from("sites").select("id, site_name, postcode").in("id", uniqueSiteIds),
-        supabase.from("wp_sites").select("site_id, wp_id").in("site_id", uniqueSiteIds),
+      const [sitesRes, wpSitesRes, profilesRes] = await Promise.all([
+        sb.from("sites").select("id, site_name, postcode").in("id", uniqueSiteIds),
+        sb.from("wp_sites").select("site_id, wp_id").in("site_id", uniqueSiteIds),
         uniqueUserIds.length
-          ? supabase.from("profiles").select("id, full_name, email").in("id", uniqueUserIds)
+          ? sb.from("profiles").select("id, full_name, email").in("id", uniqueUserIds)
           : Promise.resolve({ data: [] as any[] }),
       ]);
+      const sitesData = sitesRes.data;
+      const wpSitesData = wpSitesRes.data;
+      const profilesData = profilesRes.data;
       const wpIds = Array.from(new Set(((wpSitesData ?? []) as any[]).map((r) => r.wp_id)));
-      const { data: wpsData } = wpIds.length
-        ? await supabase.from("work_packages").select("id, name").in("id", wpIds)
+      const wpsRes = wpIds.length
+        ? await sb.from("work_packages").select("id, name").in("id", wpIds)
         : { data: [] as any[] };
+      const wpsData = wpsRes.data;
 
       const siteMap = new Map<string, any>((sitesData ?? []).map((s: any) => [s.id, s]));
       const siteWp = new Map<string, string>(((wpSitesData ?? []) as any[]).map((r) => [r.site_id, r.wp_id]));
