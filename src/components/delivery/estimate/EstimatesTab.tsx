@@ -103,11 +103,7 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
         </div>
       )}
 
-      <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col">
-          {openId && <EstimateEditor estimateId={openId} onClose={() => setOpenId(null)} onOpenEstimate={(id) => setOpenId(id)} />}
-        </DialogContent>
-      </Dialog>
+      <EditorDialog openId={openId} setOpenId={setOpenId} />
     </div>
   );
 }
