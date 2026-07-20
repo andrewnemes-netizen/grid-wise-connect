@@ -1,9 +1,7 @@
-import WpEstimatePanel from "@/components/delivery/WpEstimatePanel";
 import SiteEstimatesPanel from "@/components/delivery/SiteEstimatesPanel";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { EstimateBreadcrumb } from "@/components/delivery/estimate/EstimateBreadcrumb";
-import { Card } from "@/components/ui/card";
 import { MapPin } from "lucide-react";
 
 export default function WpEstimatingTab() {
@@ -40,10 +38,6 @@ export default function WpEstimatingTab() {
           {source === "portfolio" && <Badge variant="outline" className="shrink-0">From Portfolio</Badge>}
         </div>
         <SiteEstimatesPanel wpId={id} focusSiteId={siteId} autoMode={mode} />
-        <Card className="p-3 text-xs text-muted-foreground">
-          Approved site estimates can then be included in the Work Package estimate via{" "}
-          <a className="underline underline-offset-2" href={`/wp/${id}/commercial/estimating`}>WP Estimate</a>.
-        </Card>
       </div>
     );
   }
@@ -53,15 +47,15 @@ export default function WpEstimatingTab() {
       <EstimateBreadcrumb wpId={id} />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Estimating</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Site Estimates</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Client, partner and DNO cost lenses over shared estimate lines. Roll up per-site estimates
-            with WP-level adjustments (contingency, prelims, overheads, discounts).
+            Manage per-site estimates. Each site can have multiple versions; only APPROVED site
+            estimates can be included in a WP estimate.
           </p>
         </div>
-        <Badge variant="outline" className="shrink-0">Phase 4</Badge>
+        <Badge variant="outline" className="shrink-0">Work Package</Badge>
       </div>
-      <WpEstimatePanel wpId={id} />
+      <SiteEstimatesPanel wpId={id} />
     </div>
   );
 }
