@@ -15,7 +15,7 @@ const FLAGS: { key: string; title: string; description: string; scopes: FlagScop
     key: "gridwise_os_shell",
     title: "Gridwise OS Work Package shell",
     description:
-      "Enables the new /wp/:id shell with the 6-group / 16-leaf navigation. When off, the legacy Work Package page is used.",
+      "Enables the /wp/:id shell with the full 6-group navigation. The legacy /delivery/wp/:id page has been retired, so this flag now only gates advanced OS-only surfaces; leave it on for standard use.",
     scopes: ["user", "org", "global"],
   },
 ];

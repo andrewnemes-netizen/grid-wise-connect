@@ -137,22 +137,10 @@ export default function WorkPackageShell() {
       <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">Loading Work Package…</div>
     );
   }
-  if (!enabled) {
-    return (
-      <div className="mx-auto max-w-lg p-6">
-        <div className="rounded-lg border p-6 text-center space-y-3">
-          <h1 className="text-lg font-semibold">Gridwise OS shell is off</h1>
-          <p className="text-sm text-muted-foreground">
-            The new Work Package workspace is behind the <code>gridwise_os_shell</code> feature flag. Ask an
-            administrator to enable it for your account or organisation.
-          </p>
-          <Button asChild variant="outline">
-            <Link to={`/delivery/wp/${id}`}>Open legacy Work Package</Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // gridwise_os_shell flag is retained for downstream branches but the OS shell
+  // is now the only Work Package experience — the legacy /delivery/wp/:id page
+  // has been retired.
+  void enabled;
 
   return (
     <SidebarProvider>

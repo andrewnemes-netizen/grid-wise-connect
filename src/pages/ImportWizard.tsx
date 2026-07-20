@@ -548,11 +548,11 @@ export default function ImportWizard() {
           <CardContent className="space-y-3">
             <p className="text-sm">
               {batch.summary_json?.sites_created ?? 0} sites created and linked to Work Package{" "}
-              {batch.target_wp_id ? <Link to={`/delivery/wp/${batch.target_wp_id}`} className="underline">open WP</Link> : null}.
+              {batch.target_wp_id ? <Link to={`/wp/${batch.target_wp_id}`} className="underline">open WP</Link> : null}.
             </p>
             <div className="flex gap-2 flex-wrap">
               <Button asChild variant="default"><Link to={`/portfolio`}>View in Portfolio</Link></Button>
-              {batch.target_wp_id && <Button asChild variant="outline"><Link to={`/delivery/wp/${batch.target_wp_id}`}>Open Work Package</Link></Button>}
+              {batch.target_wp_id && <Button asChild variant="outline"><Link to={`/wp/${batch.target_wp_id}`}>Open Work Package</Link></Button>}
               <Button asChild variant="outline"><Link to={`/`}>Show on Map</Link></Button>
             </div>
             <p className="text-xs text-muted-foreground pt-3">
