@@ -357,7 +357,7 @@ export default function WpSiteRegisterTab() {
         </div>
         <div className="flex items-center gap-2">
           <Button asChild size="sm" variant="outline" className="h-9">
-            <Link to={`/import/wizard?wp=${id}`}>
+            <Link to={`/import/wizard?wp=${wpId}`}>
               <Upload className="h-3.5 w-3.5 mr-1" /> Import Sites
             </Link>
           </Button>
