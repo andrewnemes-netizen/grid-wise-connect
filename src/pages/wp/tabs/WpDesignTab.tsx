@@ -156,10 +156,6 @@ export default function WpDesignTab() {
   );
 }
 
-function DesignSites({ submissionId }: { submissionId: string }) {
-  return _DesignSitesImpl({ submissionId });
-}
-
 export function DesignEstimateMenu({ wpId, siteId }: { wpId: string; siteId: string | null | undefined }) {
   const navigate = useNavigate();
   const go = (mode: "detailed" | "synthetic" | "history") => {
@@ -204,7 +200,7 @@ export function DesignEstimateMenu({ wpId, siteId }: { wpId: string; siteId: str
   );
 }
 
-function _DesignSitesImpl({ submissionId }: { submissionId: string }) {
+export function DesignSites({ submissionId }: { submissionId: string }) {
   const { data: rows = [] } = useQuery({
     queryKey: ["design-sites", submissionId],
     queryFn: async () => {
