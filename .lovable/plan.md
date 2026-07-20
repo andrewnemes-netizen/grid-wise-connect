@@ -1,65 +1,50 @@
-## Goal
+## Feedback on the upload
 
-Commercial estimating in Gridwise OS becomes exactly two tabs. Each name keeps its meaning, but the underlying engine is swapped to the correct one:
+I parsed `ICP SOR 2026.xlsm` with the new importer and verified column mapping against the real sheet.
 
-- **EV Build Estimates** — uses the existing **Site Estimates** engine (`SiteEstimatesPanel`, synthetic rates). This is the current "Site Estimates" tab, just renamed back to its correct business name.
-- **PoC Estimates** — uses the existing group-based **Estimates** engine (`EstimatesTab`). The current bespoke PoC editor is retired.
-- The standalone "Estimates" tab is removed. All existing PoC data in `poc_estimates` / `poc_estimate_lines` is archived to `deleted_entities` and the tables are dropped.
+**What worked**
+- Sheet detection (`INTERNAL MASTER` in A1) picked the "Example" sheet correctly.
+- Column map is right: B=code, C=description, D=Quantity (ignored), E=Unit, F=Unit Cost, G=Unit Price.
+- 94 rate items parsed across 14 categories (Labour, LV Service Cable, Mains Joint Kits, DNO Works, Extra Overs, Feeder Pillars, etc.).
+- Blank rows (e.g. row 22, 35 with a code but no description) are already skipped.
+- Contract auto-create + version = max+1 logic behaved as designed.
 
-Existing EV Build flow, line items and billing logic stay untouched.
+**Why the import crashed** (this is what your toast showed)
 
-## Changes
-
-### 1. Sidebar & routes (`src/components/wp/WpSidebar.tsx`, `src/pages/WorkPackageShell.tsx`)
-
-Commercial group becomes:
-
-```text
-- EV Build Estimates   commercial/estimating       (Calculator icon)
-- PoC Estimates        commercial/poc-estimates    (ZapIcon)
-- Purchase Orders
-- Variations
+```
+duplicate key value violates unique constraint
+"rate_items_rate_card_version_id_rate_code_key"
 ```
 
-Remove the "Estimates" (`commercial/estimates`) entry and its `<Route>`. Keep the two remaining slugs unchanged so no deep links break, and keep the icons.
+The source workbook reuses the same numeric code across (and even within) categories. Confirmed 23 duplicate codes in this file, including:
 
-### 2. Tab components
+```text
+1.01 × 6     3.01 × 6
+1.02 × 5     3.02 × 4
+2.03 × 4     3.03 × 3
+2.04 × 2     3.06 × 3
+```
 
-- `src/pages/wp/tabs/WpEstimatingTab.tsx` — rename display label to **"EV Build Estimates"**; keep wrapping `SiteEstimatesPanel` exactly as-is (deep-link handling included).
-- `src/pages/wp/tabs/WpPocEstimatesTab.tsx` — replace contents to render the group-based `EstimatesTab` (same component `WpEstimatesTab` currently renders), scoped to the work package. Heading becomes **"PoC Estimates"**.
-- Delete `src/pages/wp/tabs/WpEstimatesTab.tsx` and remove its exports from `src/pages/wp/WpTabs.tsx`.
-- Delete the bespoke PoC editor: `src/components/delivery/poc-estimate/PocEstimatesTab.tsx` and `src/components/delivery/poc-estimate/PocEstimateEditor.tsx` (and any local helpers only used by them).
+Some are legitimate cross-category reuse (`3.01` under "Extra Overs" and again under "Feeder Pillars"); others are true typos in the sheet (`2.03` appearing 4 times inside "Lay Ducting" for genuinely different ducting items). Both patterns break the DB uniqueness rule on `(rate_card_version_id, rate_code)`.
 
-### 3. Cross-references
+## Fix plan
 
-- `src/pages/wp/tabs/WpOverviewTab.tsx` — the "Open PoC Estimates" link keeps `commercial/poc-estimates`; the "Open EV Build Estimating" link stays on `commercial/estimating` but label becomes "Open EV Build Estimates". Remove any link to the retired `commercial/estimates` route (none expected outside sidebar).
-- `src/pages/SiteDetail.tsx` deep-link into `commercial/estimating` is unchanged (still the Site Estimates engine).
+**1. Uniquify `rate_code` at parse time** — keep `source_ser` as the raw workbook value (audit-preserving), derive `rate_code` deterministically so it's unique inside one version:
 
-### 4. Data migration
+- Track a running category index (1, 2, 3…) in parse order.
+- Base code = `${categoryIndex}-${sourceSer}` (e.g. `3-2.03`).
+- If that still collides within the same category (the four `2.03`s in Lay Ducting), append `#2`, `#3`, `#4` in encounter order.
 
-One migration that:
+This keeps codes human-readable, category-scoped, and stable across re-imports of the same file. `source_sheet` and `source_ser` remain the raw audit trail.
 
-1. Snapshots each row of `poc_estimates` (plus its `poc_estimate_lines` as JSON) into `deleted_entities` with `entity_type = 'poc_estimate'`, `retention_until = now() + 90 days`, and a reason of `'retired: PoC now uses Estimates engine'`.
-2. Drops `poc_estimate_lines` then `poc_estimates` (cascades any dependents; there should be none outside the retired UI).
-3. Drops any RLS policies, grants, triggers, and functions specific to those two tables.
+**2. Normalise float-code drift** — a few codes come through as `3.09000000000001` because Excel stores them as floats. Round to 2 decimals before stringifying so the audit code shows `3.09`, not the noisy float.
 
-No new tables. No changes to the existing `estimates` / `estimate_lines` / `estimate_groups` schema or its RLS.
+**3. Show a "duplicates uniquified" badge** in the preview so users see it happened (count only, non-blocking).
 
-## Out of scope
-
-- No changes to the Site Estimates engine, EV Build logic, synthetic-rate calculations, `estimates`/`estimate_lines` schema, PO / Variations tabs, or notifications.
-- No import of historical PoC estimate content into the Estimates engine — user chose archive-and-drop.
+**4. Nothing else changes** — RateLibraryImport and RecipeLibraryImport are not touched. The Approve flow downstream is unaffected because it reads `rate_code` as an opaque string.
 
 ## Technical notes
 
-- `WpEstimatesTab` today is a thin wrapper around `src/components/delivery/estimate/EstimatesTab.tsx`. `WpPocEstimatesTab` will mount that same component with the current work-package context; if `EstimatesTab` currently has no notion of "type", we won't fabricate one — both tabs are already scoped by different URLs and only PoC will use this engine after the change.
-- The migration uses `deleted_entities` (already present, 90-day retention pattern used by the Archive engine), so no new retention plumbing is needed.
-- After the migration runs and Supabase types regenerate, the deleted PoC components will no longer reference removed tables, so the TS build stays clean.
-
-## Verification
-
-- Sidebar shows only **EV Build Estimates** and **PoC Estimates** under Commercial; the middle "Estimates" entry is gone.
-- `/wp/:id/commercial/estimating` renders `SiteEstimatesPanel` unchanged.
-- `/wp/:id/commercial/poc-estimates` renders the group-based Estimates UI (create group, add lines, totals).
-- `/wp/:id/commercial/estimates` 404s / redirects to overview.
-- `select count(*) from poc_estimates` fails (table dropped); matching snapshot rows exist in `deleted_entities`.
+- Only `src/components/admin/EstimatingImport.tsx` (the `parseIcpSorWorkbook` function and the preview badge row) needs to change.
+- No migration required. The unique constraint stays as is — it's correct; the parser was wrong to hand it colliding codes.
+- After the fix, re-uploading this exact workbook should insert all 94 rows into a fresh DRAFT version under contract `ICP SOR`.
