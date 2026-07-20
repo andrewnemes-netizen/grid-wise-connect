@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -99,6 +99,39 @@ export function RateItemPicker({
       const n = { ...s };
       if (n[id] != null) delete n[id];
       else n[id] = 1;
+      return n;
+    });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected[i.id] != null);
+  const someFilteredSelected = filtered.some((i) => selected[i.id] != null);
+
+  const toggleAllFiltered = () =>
+    setSelected((s) => {
+      const n = { ...s };
+      if (allFilteredSelected) {
+        for (const i of filtered) delete n[i.id];
+      } else {
+        for (const i of filtered) if (n[i.id] == null) n[i.id] = 1;
+      }
+      return n;
+    });
+
+  const groupedByCategory = useMemo(() => {
+    const m = new Map<string, any[]>();
+    for (const i of filtered) {
+      const k = i.category ?? "Uncategorised";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(i);
+    }
+    return Array.from(m.entries());
+  }, [filtered]);
+
+  const toggleCategory = (rows: any[]) =>
+    setSelected((s) => {
+      const n = { ...s };
+      const allSel = rows.every((i) => n[i.id] != null);
+      if (allSel) for (const i of rows) delete n[i.id];
+      else for (const i of rows) if (n[i.id] == null) n[i.id] = 1;
       return n;
     });
 
@@ -219,7 +252,13 @@ export function RateItemPicker({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted/60 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="w-8 px-3 py-2"></th>
+                <th className="w-8 px-3 py-2">
+                  <Checkbox
+                    checked={allFilteredSelected ? true : (someFilteredSelected ? "indeterminate" : false)}
+                    onCheckedChange={toggleAllFiltered}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="text-left px-3 py-2">Item</th>
                 <th className="text-left px-3 py-2">Category</th>
                 <th className="text-left px-3 py-2">Unit</th>
@@ -235,7 +274,23 @@ export function RateItemPicker({
               {!items.isLoading && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No matching rate items.</td></tr>
               )}
-              {filtered.map((i) => {
+              {groupedByCategory.map(([cat, rows]) => {
+                const allSel = rows.every((i) => selected[i.id] != null);
+                const someSel = rows.some((i) => selected[i.id] != null);
+                return (
+                  <React.Fragment key={`cat-${cat}`}>
+                    <tr className="bg-muted/40 border-b">
+                      <td className="px-3 py-1.5">
+                        <Checkbox
+                          checked={allSel ? true : (someSel ? "indeterminate" : false)}
+                          onCheckedChange={() => toggleCategory(rows)}
+                        />
+                      </td>
+                      <td colSpan={6} className="px-3 py-1.5 text-[11px] uppercase tracking-wider font-semibold text-muted-foreground">
+                        {cat} <span className="text-muted-foreground/70 normal-case font-normal">({rows.length})</span>
+                      </td>
+                    </tr>
+                    {rows.map((i) => {
                 const isSel = selected[i.id] != null;
                 return (
                   <tr key={i.id} className={`border-b hover:bg-primary/5 ${isSel ? "bg-primary/5" : ""}`}>
@@ -262,6 +317,9 @@ export function RateItemPicker({
                       />
                     </td>
                   </tr>
+                );
+                    })}
+                  </React.Fragment>
                 );
               })}
             </tbody>
