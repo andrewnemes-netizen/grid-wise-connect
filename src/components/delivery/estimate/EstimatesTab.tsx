@@ -103,11 +103,7 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
         </div>
       )}
 
-      <Dialog open={!!openId} onOpenChange={(o) => !o && setOpenId(null)}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col">
-          {openId && <EstimateEditor estimateId={openId} onClose={() => setOpenId(null)} onOpenEstimate={(id) => setOpenId(id)} />}
-        </DialogContent>
-      </Dialog>
+      <EditorDialog openId={openId} setOpenId={setOpenId} />
     </div>
   );
 }
@@ -118,5 +114,30 @@ function Stat({ label, value, accent, big }: { label: string; value: string; acc
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`font-heading tabular-nums ${big ? "text-lg" : "text-sm"} ${accent ? "text-primary" : ""}`}>{value}</div>
     </div>
+  );
+}
+
+function EditorDialog({ openId, setOpenId }: { openId: string | null; setOpenId: (id: string | null) => void }) {
+  const [maximized, setMaximized] = useState(false);
+  return (
+    <Dialog open={!!openId} onOpenChange={(o) => { if (!o) { setOpenId(null); setMaximized(false); } }}>
+      <DialogContent
+        className={
+          maximized
+            ? "max-w-none w-screen h-screen rounded-none border-0 p-0 overflow-hidden flex flex-col sm:rounded-none"
+            : "max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col"
+        }
+      >
+        {openId && (
+          <EstimateEditor
+            estimateId={openId}
+            onClose={() => { setOpenId(null); setMaximized(false); }}
+            onOpenEstimate={(id) => setOpenId(id)}
+            maximized={maximized}
+            onToggleMaximize={() => setMaximized((m) => !m)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

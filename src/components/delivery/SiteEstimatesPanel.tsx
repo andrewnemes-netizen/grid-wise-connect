@@ -15,7 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
+import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
@@ -600,6 +600,7 @@ function NewSiteEstimateDialog({
 // -------- Site estimate editor dialog --------
 function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClose: () => void; }) {
   const qc = useQueryClient();
+  const [maximized, setMaximized] = useState(false);
 
   const { data: estimate, refetch: refetchEstimate } = useQuery({
     queryKey: ["site-estimate-edit", estimateId],
@@ -681,12 +682,19 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
 
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className={maximized ? "max-w-none w-screen h-screen rounded-none border-0 overflow-y-auto sm:rounded-none" : "max-w-6xl max-h-[92vh] overflow-y-auto"}>
         <DialogHeader>
-          <DialogTitle>
-            {estimate?.name} <span className="text-sm text-muted-foreground">v{estimate?.version_number} · {estimate?.status}</span>
-          </DialogTitle>
-          <DialogDescription>Edit line items. Totals recompute automatically on any change.</DialogDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <DialogTitle>
+                {estimate?.name} <span className="text-sm text-muted-foreground">v{estimate?.version_number} · {estimate?.status}</span>
+              </DialogTitle>
+              <DialogDescription>Edit line items. Totals recompute automatically on any change.</DialogDescription>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setMaximized((m) => !m)} title={maximized ? "Restore" : "Maximize"}>
+              {maximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+          </div>
         </DialogHeader>
 
         {isApproved && (
