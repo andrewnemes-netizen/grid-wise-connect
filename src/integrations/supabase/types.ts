@@ -5010,7 +5010,7 @@ export type Database = {
           cc_emails: string[] | null
           created_at: string
           error_message: string | null
-          estimate_id: string
+          estimate_id: string | null
           id: string
           message: string | null
           pdf_signed_url: string | null
@@ -5019,6 +5019,7 @@ export type Database = {
           recipient_name: string | null
           sent_at: string | null
           sent_by: string | null
+          site_estimate_id: string | null
           status: string
           subject: string
           updated_at: string
@@ -5027,7 +5028,7 @@ export type Database = {
           cc_emails?: string[] | null
           created_at?: string
           error_message?: string | null
-          estimate_id: string
+          estimate_id?: string | null
           id?: string
           message?: string | null
           pdf_signed_url?: string | null
@@ -5036,6 +5037,7 @@ export type Database = {
           recipient_name?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          site_estimate_id?: string | null
           status?: string
           subject: string
           updated_at?: string
@@ -5044,7 +5046,7 @@ export type Database = {
           cc_emails?: string[] | null
           created_at?: string
           error_message?: string | null
-          estimate_id?: string
+          estimate_id?: string | null
           id?: string
           message?: string | null
           pdf_signed_url?: string | null
@@ -5053,6 +5055,7 @@ export type Database = {
           recipient_name?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          site_estimate_id?: string | null
           status?: string
           subject?: string
           updated_at?: string
@@ -5064,6 +5067,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "estimates"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_sends_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_sends_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
           },
         ]
       }

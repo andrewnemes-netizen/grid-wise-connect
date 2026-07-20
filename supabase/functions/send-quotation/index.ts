@@ -6,7 +6,8 @@ import { template as quotationTemplate } from '../_shared/transactional-email-te
 import { mirrorToOneDrive } from '../_shared/onedrive.ts'
 
 interface Body {
-  estimate_id: string
+  estimate_id?: string
+  site_estimate_id?: string
   storage_path: string
   recipient_email: string
   recipient_name?: string
@@ -46,24 +47,60 @@ Deno.serve(async (req) => {
   }
 
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const hasEst = !!body.estimate_id
+  const hasSiteEst = !!body.site_estimate_id
   if (
-    !body.estimate_id ||
+    (hasEst === hasSiteEst) ||
     !body.storage_path ||
     !body.recipient_email ||
     !emailRe.test(body.recipient_email)
   ) {
-    return json({ error: 'estimate_id, storage_path and valid recipient_email required' }, 400)
+    return json(
+      { error: 'Exactly one of estimate_id or site_estimate_id, plus storage_path and valid recipient_email, required' },
+      400,
+    )
   }
 
   const admin = createClient(supabaseUrl, serviceKey)
 
-  // Load estimate for context + display info
-  const { data: estimate, error: estErr } = await admin
-    .from('estimates')
-    .select('id, name, ref, currency, grand_total, work_package_id, project_id')
-    .eq('id', body.estimate_id)
-    .maybeSingle()
-  if (estErr || !estimate) return json({ error: 'Estimate not found' }, 404)
+  // Load estimate for context + display info (branch by id kind)
+  let estimate: {
+    id: string
+    name: string | null
+    ref: string | null
+    currency: string | null
+    grand_total: number | null
+    work_package_id: string | null
+    project_id: string | null
+    site_id?: string | null
+  } | null = null
+
+  if (hasEst) {
+    const { data, error } = await admin
+      .from('estimates')
+      .select('id, name, ref, currency, grand_total, work_package_id, project_id')
+      .eq('id', body.estimate_id!)
+      .maybeSingle()
+    if (error || !data) return json({ error: 'Estimate not found' }, 404)
+    estimate = data as any
+  } else {
+    const { data, error } = await admin
+      .from('site_estimates')
+      .select('id, name, currency, total_price, site_id')
+      .eq('id', body.site_estimate_id!)
+      .maybeSingle()
+    if (error || !data) return json({ error: 'Site estimate not found' }, 404)
+    estimate = {
+      id: data.id,
+      name: data.name,
+      ref: data.name,
+      currency: data.currency,
+      grand_total: data.total_price,
+      work_package_id: null,
+      project_id: null,
+      site_id: data.site_id,
+    }
+  }
 
   // Sender + org context (best effort)
   const { data: profile } = await admin
@@ -74,7 +111,14 @@ Deno.serve(async (req) => {
 
   // Site/WP name (best effort)
   let siteName: string | undefined
-  if (estimate.work_package_id) {
+  if (hasSiteEst && estimate.site_id) {
+    const { data: site } = await admin
+      .from('sites')
+      .select('site_name')
+      .eq('id', estimate.site_id)
+      .maybeSingle()
+    if (site?.site_name) siteName = site.site_name
+  } else if (estimate.work_package_id) {
     const { data: wp } = await admin
       .from('work_packages')
       .select('name')
@@ -105,7 +149,8 @@ Deno.serve(async (req) => {
   const { data: logRow, error: logErr } = await admin
     .from('quotation_sends')
     .insert({
-      estimate_id: body.estimate_id,
+      estimate_id: body.estimate_id ?? null,
+      site_estimate_id: body.site_estimate_id ?? null,
       recipient_email: body.recipient_email,
       recipient_name: body.recipient_name ?? null,
       cc_emails: body.cc_emails ?? null,

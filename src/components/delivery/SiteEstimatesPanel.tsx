@@ -855,6 +855,7 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
             groups={[]}
             lines={quotationLines}
             siteName={site?.site_name}
+            isSiteEstimate
           />
         )}
       </DialogContent>
