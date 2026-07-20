@@ -1,25 +1,42 @@
 ## Goal
-Bring the two site-onboarding entry points from the legacy `DeliveryWorkPackage` shell into Gridwise OS, on the Site Register tab. No new backend — reuse the existing `/import/wizard` route (Portfolio Import) and the existing `wp_sites` insert path.
+Retire the legacy Work Package page (`/delivery/wp/:id`, `src/pages/DeliveryWorkPackage.tsx`) so the app goes straight from the Delivery/Programme lists into the Gridwise OS shell (`/wp/:id`). No functionality loss: Estimate v1 and Master Gantt are consciously dropped per user decision.
+
+## What's already in Gridwise OS (no work needed)
+Overview, Sites (Site Register), Matrix, Interactive Gantt (Programme tab), Site Estimates, Estimates (v2), PoC Estimates, WP Tasks, Milestones (WP Tasks tab), Import sites + Add site (Site Register), inline WP name/code/dates edit (Overview tab).
+
+## What's being dropped (user-confirmed)
+- **Estimate v1 tab** (`WpEstimatePanel` / `work_package_estimates`) — superseded by Site Estimates + Estimates + PoC Estimates. Table rows stay in DB; UI is removed.
+- **Master Gantt view** — Interactive Gantt in OS Programme tab covers it.
 
 ## Changes
 
-### 1. `src/pages/wp/tabs/WpSiteRegisterTab.tsx` — add a toolbar with two actions
-At the top of the tab (above the search/filter chips), add a right-aligned action group:
+### 1. Remove the legacy route and page
+- `src/App.tsx`: delete the `DeliveryWorkPackage` lazy import and the `<Route path="/delivery/wp/:id" ...>` entry.
+- `rm src/pages/DeliveryWorkPackage.tsx`.
 
-- **Import sites** — outline button, `Upload` icon, links to `/import/wizard?wp={wpId}&programme={programme_id}`. Fetch the WP's `programme_id` once via a small `useQuery` (`work_packages` → `programme_id`). Same URL shape the legacy shell uses so the wizard's existing wp/programme handling works unchanged.
-- **Add site** — primary button, `Plus` icon, opens an "Add site to work package" dialog that mirrors the legacy `SitesPanel`:
-  - Query `sites` (id, site_name, postcode) limited to 500, filter out ids already in the current WP's `rows`.
-  - Fields: `Site` (Select with "Pick a site" placeholder), `Local ref (optional)` input.
-  - On submit: `insert` into `wp_sites` with `{ work_package_id, site_id, local_ref, sequence: rows.length + 1 }`, toast, close, invalidate the tab's queries (`wp-site-register`, `wp-site-precon-status`, `wp-site-stage-summary`).
+### 2. Rewrite every internal link `/delivery/wp/:id` → `/wp/:id`
+Files to update (all currently point at the legacy path):
+- `src/pages/ImportWizard.tsx` (2 links — inline "open WP" + "Open Work Package" button)
+- `src/pages/DeliveryProposalDetail.tsx` (2 places — post-conversion `nav()` + snapshot link)
+- `src/pages/DeliveryProgrammeDetail.tsx` (`onOpenRow` in TaskBoard)
+- `src/components/wp/WpSidebar.tsx` line 118 — remove the "Open legacy Work Package" link entirely (it lives in the OS sidebar itself, pointless once legacy is gone).
+- `src/pages/WorkPackageShell.tsx` line 150 — remove the "Open legacy Work Package" link in the fallback/feature-flag-off branch.
 
-Empty state: when `rows.length === 0`, replace the current empty message with a card that offers both actions inline (Import sites / Add site) so a fresh WP has a clear starting point.
+### 3. Feature flag cleanup
+- `src/components/admin/FeatureFlagsPanel.tsx` — update the `gridwise_os_shell` description so it no longer promises a legacy fallback. Keep the flag itself (other code may branch on it), just rewrite the copy to reflect that OS is now the only shell.
+- `src/pages/WorkPackageShell.tsx` — the flag-disabled branch currently offers to open the legacy page; change it to a plain "This work package uses Gridwise OS" note (or just always render the shell, since there's nowhere else to send them).
 
-### 2. No other files change
-- `WpSidebar`, routing, DB, RLS, `ImportWizard.tsx`, `wp_sites_ensure_stage` trigger — all untouched. The wizard already accepts `?wp=` + `?programme=` params.
-- Legacy `DeliveryWorkPackage.tsx` is left as-is (still the fallback shell).
+### 4. Verify nothing else imports the deleted page
+`rg "DeliveryWorkPackage|/delivery/wp/"` after edits should return zero hits. If anything else surfaces, redirect it to `/wp/:id`.
+
+## Explicitly NOT changing
+- `work_package_estimates` table, `WpEstimatePanel.tsx` component file, or `WpVariationsTab` (which still reads `work_package_estimates` for variation history) — dropping the tab doesn't require deleting the underlying data or the variations read path.
+- OS tab set, sidebar structure, or any OS component.
+- Legacy `MasterGantt` helper lives inside `DeliveryWorkPackage.tsx` and dies with it — no separate cleanup needed.
 
 ## Verification
-- Open a WP in Gridwise OS → Sites › Site Register. Toolbar shows "Import sites" and "Add site".
-- "Import sites" navigates to `/import/wizard?wp=<id>&programme=<id>` matching the screenshot.
-- "Add site" opens the dialog matching the screenshot, inserts a `wp_sites` row, and the new site appears in the register without a page reload.
-- Empty WP shows both actions in the empty-state card.
+1. `rg "DeliveryWorkPackage|/delivery/wp/"` → no matches.
+2. Typecheck passes.
+3. Load `/delivery/programmes/:id`, click a WP row → lands on `/wp/:id` OS shell.
+4. Load `/import/wizard` post-import "Open Work Package" → `/wp/:id`.
+5. Convert a proposal → nav lands on `/wp/:id`.
