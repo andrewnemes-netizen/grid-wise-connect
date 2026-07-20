@@ -54,7 +54,7 @@ export default function DeliveryProjects() {
         .select("id,name,code,status,priority,health,percent_complete,target_end_date,study_id,created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return data as Project[];
+      return (data ?? []) as unknown as Project[];
     },
   });
 

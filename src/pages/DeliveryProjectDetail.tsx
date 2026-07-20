@@ -32,7 +32,7 @@ export default function DeliveryProjectDetail() {
     queryFn: async () => {
       const { data, error } = await supabase.from("projects" as any).select("*").eq("id", projectId).single();
       if (error) throw error;
-      return data;
+      return data as any;
     },
   });
 
@@ -58,7 +58,7 @@ export default function DeliveryProjectDetail() {
         .eq("project_id", projectId)
         .order("sequence", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
 
@@ -71,7 +71,7 @@ export default function DeliveryProjectDetail() {
         .eq("project_id", projectId)
         .order("sort_index", { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as any[];
     },
   });
 
@@ -84,7 +84,7 @@ export default function DeliveryProjectDetail() {
         .from("project_task_dependencies" as any)
         .select("*")
         .in("task_id", ids);
-      return data ?? [];
+      return (data ?? []) as any[];
     },
     enabled: tasks.length > 0,
   });
