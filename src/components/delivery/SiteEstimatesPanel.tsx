@@ -370,8 +370,33 @@ function NewSiteEstimateDialog({
     },
   });
 
+  // Global availability of ANY approved rate card — used to decide whether we
+  // hard-block creation (rate cards exist, user just didn't pick one) or allow
+  // the user through with a loud warning (no rate cards set up yet).
+  const { data: anyApprovedRateCards } = useQuery({
+    queryKey: ["any-approved-rate-versions"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("rate_card_versions")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "APPROVED");
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+  const hasAnyApprovedRateCards = (anyApprovedRateCards ?? 0) > 0;
+  const missingRateCardSelection = !contractId || !rateCardVersionId;
+  const canSubmit =
+    !!name.trim() &&
+    !saving &&
+    (!missingRateCardSelection || !hasAnyApprovedRateCards);
+
   const submit = async () => {
     if (!name.trim()) { toast.error("Name required"); return; }
+    if (missingRateCardSelection && hasAnyApprovedRateCards) {
+      toast.error("Choose a contract and rate card version");
+      return;
+    }
     setSaving(true);
     try {
       const { data: user } = await supabase.auth.getUser();
@@ -591,7 +616,7 @@ function NewSiteEstimateDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={saving}>Create draft</Button>
+          <Button onClick={submit} disabled={!canSubmit}>Create draft</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
