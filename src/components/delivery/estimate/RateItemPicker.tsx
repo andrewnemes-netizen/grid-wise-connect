@@ -163,7 +163,8 @@ export function RateItemPicker({
       const groupCache = [...groups];
       const rows: any[] = [];
       for (const it of selectedList) {
-        const qty = Number(selected[it.id] || 1);
+        const raw = selected[it.id];
+        const qty = raw === undefined || raw === null || Number.isNaN(Number(raw)) ? 0 : Number(raw);
         const cost = Number(it.total_unit_cost ?? 0);
         const price = Number(it.client_unit_price ?? cost);
         const markupDollar = Math.max(0, price - cost);
