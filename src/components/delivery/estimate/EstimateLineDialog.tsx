@@ -151,7 +151,7 @@ export function EstimateLineDialog({
                 <CheckboxRow d={d} k="itemised" label="Itemised" set={set} />
                 <CheckboxRow d={d} k="flexible_qty" label="Flexible Qty" set={set} />
                 <CheckboxRow d={d} k="fixed_price" label="Fixed Price" set={set} />
-                <CheckboxRow d={d} k="lock_markup_dollar" label="Lock Markup as $" set={set} />
+                <CheckboxRow d={d} k="lock_markup_dollar" label="Lock Markup as £" set={set} />
                 <CheckboxRow d={d} k="split_labour_materials" label="Split Labour & Materials" set={set} />
                 <CheckboxRow d={d} k="calculate_time" label="Calculate Time" set={set} />
                 <CheckboxRow d={d} k="rfq_required" label="RFQ Required" set={set} />
@@ -172,7 +172,7 @@ export function EstimateLineDialog({
                     <SelectContent>{["Percentage","Amount","Combination"].map((x) => <SelectItem key={x} value={x}>{x}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
-                <Field label="Markup as $"><Input type="number" step="any" value={d.markup_dollar ?? 0} onChange={(e) => set("markup_dollar", parseFloat(e.target.value) || 0)} /></Field>
+                <Field label="Markup as £"><Input type="number" step="any" value={d.markup_dollar ?? 0} onChange={(e) => set("markup_dollar", parseFloat(e.target.value) || 0)} /></Field>
                 <Field label="Markup as %"><Input type="number" step="any" value={d.markup_pct ?? 0} onChange={(e) => set("markup_pct", parseFloat(e.target.value) || 0)} /></Field>
                 <Field label="Contingency Markup %"><Input type="number" step="any" value={d.contingency_pct ?? 0} onChange={(e) => set("contingency_pct", parseFloat(e.target.value) || 0)} /></Field>
                 <ReadonlyField label="Net Mark Up %" value={`${netMarkupPct.toFixed(2)} %`} accent />
