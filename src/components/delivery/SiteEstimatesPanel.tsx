@@ -15,7 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Command, CommandInput, CommandList, CommandItem, CommandEmpty } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers } from "lucide-react";
+import { MapPin, Plus, Pencil, CheckCircle2, GitBranch, Trash2, Search, Layers, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import { DEFAULT_UNIT_RATES } from "@/lib/connectionCosts";
 import { useUnitRates } from "@/hooks/useUnitRates";
