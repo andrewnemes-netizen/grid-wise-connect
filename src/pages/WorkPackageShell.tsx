@@ -37,6 +37,7 @@ import {
   WpPhotos,
   WpAudit,
   WpCommissioning,
+  WpSurveys,
 } from "./wp/WpTabs";
 
 function WpHeader({ wpId }: { wpId: string }) {
@@ -156,6 +157,7 @@ export default function WorkPackageShell() {
               <Route path="sites/pre-construction" element={<WpPreCon />} />
               <Route path="sites/readiness" element={<WpReadiness />} />
               <Route path="sites/matrix" element={<WpMatrix />} />
+              <Route path="sites/surveys" element={<WpSurveys />} />
               <Route path="commercial/estimating" element={<WpEstimating />} />
               <Route path="commercial/poc-estimates" element={<WpPocEstimates />} />
               <Route path="commercial/purchase-orders" element={<WpPurchaseOrders />} />
