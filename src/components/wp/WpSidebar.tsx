@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   LayoutGrid,
   Calculator,
+  FileText,
   Zap as ZapIcon,
   ShoppingCart,
   FileDiff,
