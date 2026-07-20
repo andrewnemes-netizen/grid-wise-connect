@@ -98,7 +98,7 @@ export function RateItemPicker({
     setSelected((s) => {
       const n = { ...s };
       if (n[id] != null) delete n[id];
-      else n[id] = 1;
+      else n[id] = 0;
       return n;
     });
 
@@ -111,7 +111,7 @@ export function RateItemPicker({
       if (allFilteredSelected) {
         for (const i of filtered) delete n[i.id];
       } else {
-        for (const i of filtered) if (n[i.id] == null) n[i.id] = 1;
+        for (const i of filtered) if (n[i.id] == null) n[i.id] = 0;
       }
       return n;
     });
@@ -131,7 +131,7 @@ export function RateItemPicker({
       const n = { ...s };
       const allSel = rows.every((i) => n[i.id] != null);
       if (allSel) for (const i of rows) delete n[i.id];
-      else for (const i of rows) if (n[i.id] == null) n[i.id] = 1;
+      else for (const i of rows) if (n[i.id] == null) n[i.id] = 0;
       return n;
     });
 
