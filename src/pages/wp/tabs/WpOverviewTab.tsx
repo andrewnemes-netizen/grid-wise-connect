@@ -94,12 +94,12 @@ export default function WpOverviewTab() {
     enabled: !!wpId,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("poc_estimates" as any)
-        .select("id,total_price,currency,status")
+        .from("estimates" as any)
+        .select("id,total_price,grand_total,currency,status")
         .eq("work_package_id", wpId!);
       if (error) throw error;
       const rows = (data ?? []) as any[];
-      const total = rows.reduce((s, r) => s + Number(r.total_price ?? 0), 0);
+      const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
       return { count: rows.length, total };
     },
   });
@@ -179,7 +179,7 @@ export default function WpOverviewTab() {
                 {evBuild?.count ?? 0} estimate{(evBuild?.count ?? 0) === 1 ? "" : "s"} · install / build scope
               </div>
               <Button asChild size="sm" variant="outline" className="mt-1">
-                <Link to="../commercial/estimating">Open EV Build Estimating <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
+               <Link to="../commercial/estimating">Open EV Build Estimates <ArrowRight className="h-3.5 w-3.5 ml-1" /></Link>
               </Button>
             </CardContent>
           </Card>
