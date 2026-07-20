@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { EstimateEditor } from "./EstimateEditor";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const fmt = (n: number, c = "GBP") =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n || 0);
@@ -19,6 +20,10 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
   const [openId, setOpenId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkPending, setBulkPending] = useState(false);
 
   const list = useQuery({
     queryKey: ["estimates-list", scope],
@@ -47,6 +52,46 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
     onError: (e: any) => toast.error(e.message),
   });
 
+  const toggleOne = (id: string, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const rows = list.data ?? [];
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someChecked = rows.some((r) => selected.has(r.id)) && !allChecked;
+  const toggleAll = (checked: boolean) => {
+    setSelected(checked ? new Set(rows.map((r) => r.id)) : new Set());
+  };
+
+  const runBulkDelete = async () => {
+    const ids = Array.from(selected);
+    const reason = bulkReason.trim();
+    if (!ids.length || !reason) return;
+    setBulkPending(true);
+    const failed: string[] = [];
+    for (let i = 0; i < ids.length; i += 5) {
+      const chunk = ids.slice(i, i + 5);
+      const results = await Promise.all(
+        chunk.map((id) =>
+          supabase.rpc("archive_entity" as any, { _entity_type: "estimate", _entity_id: id, _reason: reason })
+            .then((r: any) => ({ id, error: r.error }))
+        )
+      );
+      for (const r of results) if (r.error) failed.push(r.id);
+    }
+    setBulkPending(false);
+    const ok = ids.length - failed.length;
+    if (ok > 0) toast.success(`${ok} estimate${ok === 1 ? "" : "s"} moved to recycle bin`);
+    if (failed.length) toast.error(`${failed.length} failed to delete`);
+    setSelected(new Set(failed));
+    setBulkOpen(false);
+    setBulkReason("");
+    qc.invalidateQueries({ queryKey: ["estimates-list", scope] });
+  };
+
   const create = useMutation({
     mutationFn: async () => {
       const n = (list.data?.length ?? 0) + 1;
@@ -72,10 +117,35 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
           <h3 className="font-heading text-lg">Estimates</h3>
           <p className="text-xs text-muted-foreground">BOQ-driven pricing with live totals, recipes, markup and VAT.</p>
         </div>
-        <Button onClick={() => create.mutate()} disabled={create.isPending}>
-          <Plus className="h-4 w-4 mr-1" /> New estimate
-        </Button>
+        <div className="flex items-center gap-2">
+          {rows.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground pr-2">
+              <Checkbox
+                checked={allChecked ? true : someChecked ? "indeterminate" : false}
+                onCheckedChange={(c) => toggleAll(!!c)}
+              />
+              Select all
+            </label>
+          )}
+          <Button onClick={() => create.mutate()} disabled={create.isPending}>
+            <Plus className="h-4 w-4 mr-1" /> New estimate
+          </Button>
+        </div>
       </div>
+
+      {selected.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center justify-between rounded-md border bg-background/95 backdrop-blur px-3 py-2 shadow-sm">
+          <div className="text-sm">
+            <span className="font-medium">{selected.size}</span> selected
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+            <Button size="sm" variant="destructive" onClick={() => setBulkOpen(true)}>
+              <Trash2 className="h-4 w-4 mr-1" /> Delete selected
+            </Button>
+          </div>
+        </div>
+      )}
 
       {list.data?.length === 0 ? (
         <Card className="p-10 text-center border-dashed">
@@ -88,6 +158,13 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
           {list.data?.map((e) => (
             <Card key={e.id} className="p-4 hover:shadow-panel transition-shadow cursor-pointer" onClick={() => setOpenId(e.id)}>
               <div className="flex items-center gap-4">
+                <div onClick={(ev) => ev.stopPropagation()}>
+                  <Checkbox
+                    checked={selected.has(e.id)}
+                    onCheckedChange={(c) => toggleOne(e.id, !!c)}
+                    aria-label={`Select ${e.name}`}
+                  />
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-heading font-semibold truncate">{e.name}</span>
@@ -132,6 +209,32 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       )}
 
       <EditorDialog openId={openId} setOpenId={setOpenId} />
+
+      <AlertDialog open={bulkOpen} onOpenChange={(o) => { if (!o) { setBulkOpen(false); setBulkReason(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} estimate{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The selected estimates will be moved to the recycle bin (Admin → Archive). They can be restored or permanently deleted from there. All groups and lines are preserved in the snapshot.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded border bg-muted/30 p-2 text-xs space-y-0.5">
+            {rows.filter((r) => selected.has(r.id)).map((r) => (
+              <div key={r.id} className="truncate">• {r.name}</div>
+            ))}
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Reason (required)</label>
+            <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} placeholder="e.g. cleanup of superseded drafts" />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={!bulkReason.trim() || bulkPending} onClick={(ev) => { ev.preventDefault(); runBulkDelete(); }}>
+              {bulkPending ? "Deleting…" : "Move to recycle bin"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) { setDeleteTarget(null); setDeleteReason(""); } }}>
         <AlertDialogContent>
