@@ -211,7 +211,7 @@ export function SurveysPanel({ workPackageId }: Props) {
   const revoke = async (ids: string[]) => {
     if (ids.length === 0) return;
     setBusy(true);
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from("site_surveys")
       .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_by: user?.id ?? null })
       .in("id", ids);
@@ -231,7 +231,7 @@ export function SurveysPanel({ workPackageId }: Props) {
     for (const r of targets) {
       const base = new Date(r.expires_at).getTime();
       const newExp = new Date(Math.max(base, Date.now()) + days * 86_400_000).toISOString();
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("site_surveys")
         .update({ expires_at: newExp })
         .eq("id", r.id);
@@ -258,7 +258,7 @@ export function SurveysPanel({ workPackageId }: Props) {
           resentFromId: r.id,
         });
         // Revoke the superseded token so the old link stops working.
-        await supabase
+        await (supabase as any)
           .from("site_surveys")
           .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_by: user?.id ?? null })
           .eq("id", r.id)
@@ -289,7 +289,7 @@ export function SurveysPanel({ workPackageId }: Props) {
     if (!r.response_id) return;
     setOpeningPdf(r.id);
     try {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("site_survey_responses")
         .select("id, submitter_name, submitter_email, submitted_at, submission")
         .eq("id", r.response_id)
