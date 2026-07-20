@@ -40,7 +40,7 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
     queryFn: async () => {
       const { data, error } = await supabase
         .from("poc_estimates" as any)
-        .select("*, sites:site_id(name, address), dno_offers:dno_offer_id(offer_ref, dno_key)")
+        .select("*, sites:site_id(site_name, postcode), dno_offers:dno_offer_id(offer_ref, dno_key)")
         .eq("id", estimateId)
         .single();
       if (error) throw error;
@@ -130,6 +130,15 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
     },
   });
 
+  if (est.error) {
+    return (
+      <div className="p-6 space-y-3">
+        <div className="text-sm font-medium text-destructive">Failed to load PoC estimate</div>
+        <div className="text-xs text-muted-foreground break-all">{(est.error as any)?.message ?? String(est.error)}</div>
+        <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+      </div>
+    );
+  }
   if (est.isLoading || !est.data) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
@@ -152,7 +161,7 @@ export function PocEstimateEditor({ estimateId, onClose }: { estimateId: string;
             />
           </div>
           <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-            {e.sites?.name && <span>Site: {e.sites.name}</span>}
+            {e.sites?.site_name && <span>Site: {e.sites.site_name}</span>}
             {e.dno_offers?.offer_ref && (
               <span>· DNO offer {e.dno_offers.offer_ref}{e.dno_offers.dno_key ? ` (${e.dno_offers.dno_key})` : ""}</span>
             )}
