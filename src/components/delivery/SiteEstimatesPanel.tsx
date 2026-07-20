@@ -1095,8 +1095,8 @@ function SiteEstimateEditor({ estimateId, onClose }: { estimateId: string; onClo
 
 // -------- Rate item search popover --------
 function RateItemPicker({
-  rateCardVersionId, onPick,
-}: { rateCardVersionId?: string | null; onPick: (rate: any) => void; }) {
+  rateCardVersionId, onPick, triggerLabel,
+}: { rateCardVersionId?: string | null; onPick: (rate: any) => void; triggerLabel?: string; }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
@@ -1118,7 +1118,7 @@ function RateItemPicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline"><Search className="h-3.5 w-3.5 mr-1" /> Add from rate library</Button>
+        <Button size="sm" variant="outline"><Search className="h-3.5 w-3.5 mr-1" /> {triggerLabel ?? "Add from rate library"}</Button>
       </PopoverTrigger>
       <PopoverContent className="w-[520px] p-0" align="start">
         <Command shouldFilter={false}>
