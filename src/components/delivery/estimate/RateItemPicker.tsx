@@ -252,7 +252,13 @@ export function RateItemPicker({
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-muted/60 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="w-8 px-3 py-2"></th>
+                <th className="w-8 px-3 py-2">
+                  <Checkbox
+                    checked={allFilteredSelected ? true : (someFilteredSelected ? "indeterminate" : false)}
+                    onCheckedChange={toggleAllFiltered}
+                    aria-label="Select all"
+                  />
+                </th>
                 <th className="text-left px-3 py-2">Item</th>
                 <th className="text-left px-3 py-2">Category</th>
                 <th className="text-left px-3 py-2">Unit</th>
