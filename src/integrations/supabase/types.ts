@@ -6352,12 +6352,55 @@ export type Database = {
           },
         ]
       }
+      site_estimate_groups: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          site_estimate_id: string
+          sort_index: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          site_estimate_id: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          site_estimate_id?: string
+          sort_index?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_estimate_groups_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimate_groups_site_estimate_id_fkey"
+            columns: ["site_estimate_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["latest_site_estimate_id"]
+          },
+        ]
+      }
       site_estimate_lines: {
         Row: {
           cost_code: string | null
           cost_code_category: string | null
           created_at: string
           description: string
+          group_id: string | null
           id: string
           is_allowance: boolean
           is_locked: boolean
@@ -6384,6 +6427,7 @@ export type Database = {
           cost_code_category?: string | null
           created_at?: string
           description: string
+          group_id?: string | null
           id?: string
           is_allowance?: boolean
           is_locked?: boolean
@@ -6410,6 +6454,7 @@ export type Database = {
           cost_code_category?: string | null
           created_at?: string
           description?: string
+          group_id?: string | null
           id?: string
           is_allowance?: boolean
           is_locked?: boolean
@@ -6432,6 +6477,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "site_estimate_lines_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "site_estimate_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "site_estimate_lines_rate_item_id_fkey"
             columns: ["rate_item_id"]
