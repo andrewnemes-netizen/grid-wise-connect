@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 // ---------------- Shared ----------------
 function useContracts() {
@@ -98,9 +99,16 @@ function RateLibraryImport() {
   const [rateCardName, setRateCardName] = useState("");
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [importedVersionId, setImportedVersionId] = useState<string | null>(null);
+  const [importedNeedsPricing, setImportedNeedsPricing] = useState<number>(0);
+  const [importedTotal, setImportedTotal] = useState<number>(0);
+  const [importedName, setImportedName] = useState<string>("");
+  const [approving, setApproving] = useState(false);
+  const [approved, setApproved] = useState(false);
 
   const onFile = async (f: File) => {
     setFile(f); setParsed(null); setResult(null);
+    setImportedVersionId(null); setApproved(false);
     const buf = await f.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
     const parsed = parseRatesWorkbook(wb);
@@ -153,11 +161,29 @@ function RateLibraryImport() {
         if (error) throw error;
       }
       setResult(`Imported ${rows.length} rate items into "${rateCardName.trim()}" v1 (DRAFT). ${needsPricingCount} flagged as needs_pricing.`);
+      setImportedVersionId(versionId);
+      setImportedNeedsPricing(needsPricingCount);
+      setImportedTotal(rows.length);
+      setImportedName(rateCardName.trim());
       toast.success("Rate library imported");
       qc.invalidateQueries({ queryKey: ["contracts-import"] });
     } catch (e: any) {
       toast.error(e.message ?? "Import failed");
     } finally { setImporting(false); }
+  };
+
+  const approveNow = async () => {
+    if (!importedVersionId) return;
+    if (importedNeedsPricing > 0) return;
+    setApproving(true);
+    try {
+      const { error } = await supabase.rpc("approve_rate_card_version", { _version_id: importedVersionId });
+      if (error) throw error;
+      setApproved(true);
+      toast.success("Rate card version approved");
+    } catch (e: any) {
+      toast.error(e.message ?? "Approve failed");
+    } finally { setApproving(false); }
   };
 
   return (
@@ -240,7 +266,44 @@ function RateLibraryImport() {
             {result && (
               <Alert>
                 <CheckCircle2 className="h-4 w-4" />
-                <AlertDescription>{result}</AlertDescription>
+                <AlertDescription className="space-y-2">
+                  <div>{result}</div>
+                  {importedVersionId && !approved && (
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      {importedNeedsPricing > 0 ? (
+                        <>
+                          <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                            {importedNeedsPricing} of {importedTotal} need pricing
+                          </Badge>
+                          <Button size="sm" disabled title="Resolve needs_pricing items before approving">
+                            Approve now
+                          </Button>
+                          <span className="text-xs text-muted-foreground">
+                            Price the flagged items in{" "}
+                            <Link to="/admin?tab=rate-library" className="underline underline-offset-2">
+                              Rate Library
+                            </Link>{" "}
+                            before this version can be approved.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Button size="sm" onClick={approveNow} disabled={approving}>
+                            {approving ? "Approving…" : "Approve now"}
+                          </Button>
+                          <span className="text-xs text-muted-foreground">
+                            All {importedTotal} items priced — safe to approve.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {approved && (
+                    <div className="text-xs text-emerald-600 font-medium">
+                      ✓ "{importedName}" v1 is now APPROVED and available for estimating.
+                    </div>
+                  )}
+                </AlertDescription>
               </Alert>
             )}
           </>
