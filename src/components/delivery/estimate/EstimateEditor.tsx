@@ -132,6 +132,20 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     onError: (e: any) => toast.error(e.message ?? "Bulk markup failed"),
   });
 
+  const zeroAllQty = useMutation({
+    mutationFn: async () => {
+      const ids = (lines.data ?? []).map((l) => l.id);
+      if (!ids.length) return 0;
+      const { error } = await supabase.from("estimate_lines" as any)
+        .update({ qty: 0 } as any)
+        .in("id", ids);
+      if (error) throw error;
+      return ids.length;
+    },
+    onSuccess: (n) => { toast.success(`Zeroed qty on ${n} line${n === 1 ? "" : "s"}`); invalidateAll(); },
+    onError: (e: any) => toast.error(e.message ?? "Zero qty failed"),
+  });
+
   const expandAll = () => setCollapsed({});
   const collapseAll = () => {
     const map: Record<string, boolean> = {};
@@ -273,6 +287,21 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
           disabled={applyBulkMarkup.isPending}
         >
           Apply to all
+        </Button>
+        <div className="mx-2 h-5 w-px bg-border" />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            const n = (lines.data ?? []).length;
+            if (!n) { toast.error("No lines to update"); return; }
+            if (!confirm(`Set quantity to 0 on all ${n} line${n === 1 ? "" : "s"}?`)) return;
+            zeroAllQty.mutate();
+          }}
+          disabled={zeroAllQty.isPending}
+          title="Reset every line qty to 0"
+        >
+          Zero all qty
         </Button>
       </div>
 
