@@ -1,45 +1,54 @@
-## Goal
-Expose the existing Site Estimating flow directly inside the EV Build and ICP design surfaces so that estimating is one click away from any design row. No new estimating engine — reuse `SiteEstimatesPanel` and the existing `/wp/:id/commercial/estimating?siteId=…&mode=…` deep-link.
+# Rate Cards as a Reusable Library
 
-## Scope (from clarifications)
-- **Where:** Row-level shortcut on each design in `WpDesignTab` **and** an embedded Estimate tab inside a Design detail view.
-- **Mode:** User chooses (Detailed / Synthetic / History) — mirrors `SiteDetail`'s Estimate dropdown.
+Today `rate_cards.contract_id` is NOT NULL and there's no category concept. Cards can only exist tied to one client contract. This plan makes cards standalone-capable and category-tagged, then updates the three touchpoints (Import, Library browse, Picker).
 
-## Deliverables
+## 1. Database migration
 
-### 1. Row-level "Estimate" dropdown in `WpDesignTab.tsx`
-- In the design accordion header (next to the status badge), add an `Estimate ▾` split button rendering the same three items as `SiteDetail`:
-  - Detailed Estimate
-  - Synthetic (Rate-Card)
-  - Estimate History
-- Enabled only when the design has a linked `site_id` (single-site designs); disabled with tooltip "Link a site to open an estimate" otherwise.
-- Each item navigates to `/wp/:wpId/commercial/estimating?siteId=<site>&mode=<detailed|synthetic|history>&source=design`.
+- `ALTER TABLE public.rate_cards ALTER COLUMN contract_id DROP NOT NULL;`
+- `ALTER TABLE public.rate_cards ADD COLUMN category text;` (free-text tag, e.g. `"ICP"`, `"Build"`, `"LV Civils"`)
+- Replace unique constraint `(contract_id, name)` with a partial pair:
+  - `UNIQUE (contract_id, name) WHERE contract_id IS NOT NULL`
+  - `UNIQUE (name) WHERE contract_id IS NULL` (library names unique on their own)
+- Index: `CREATE INDEX idx_rate_cards_category ON public.rate_cards(category);`
+- RLS unchanged (existing `rate_cards_staff_all` covers it).
 
-### 2. New Design detail view with embedded Estimate tab
-- New route: `/wp/:id/design/:submissionId` handled by a new component `WpDesignDetail.tsx` mounted in `WorkPackageShell.tsx`.
-- Clicking a design row's title/"Open" opens this view (accordion behaviour on the list page is preserved for quick inline actions).
-- Tabs inside the detail view:
-  - **Overview** — existing status controls, notes, sites, reviews (extracted from current `AccordionContent`).
-  - **Estimate** — embeds `<SiteEstimatesPanel wpId={wpId} focusSiteId={design.site_id} autoMode="detailed" />`. If the design has no linked site, show an empty state prompting the user to link one first.
-  - **Documents** (optional, deferred — not built this pass).
-- Reuse existing `EstimateBreadcrumb` at the top of the Estimate tab for consistency with the WP Estimating tab.
+## 2. Admin → Estimating Import (`src/components/admin/EstimatingImport.tsx`)
 
-### 3. No schema / no engine changes
-- No new tables. `site_estimates` / `site_estimate_lines` remain the single source of truth.
-- No changes to `SiteEstimatesPanel`, `EstimateEditor`, `SendQuotationDialog`, or the send-quotation edge function.
-- No duplicate estimate list per design — the embedded panel is the same one already used from Portfolio and the WP Estimating tab, scoped by `focusSiteId`.
+Replace the single "Contract" selector in `RateLibraryImport` with a **Mode** radio group:
 
-## Reuse map (single source of truth)
-- Estimate list / editor → `SiteEstimatesPanel` (unchanged)
-- Deep-link contract → `WpEstimatingTab` `siteId` + `mode` params (unchanged)
-- Estimate mode menu UX → mirrors `SiteDetail`'s dropdown (copy pattern, not duplicate component)
+1. **Library card (no contract)** — inputs: `name`, `category` (free text with datalist of existing categories).
+2. **New card for a contract** — inputs: `name`, `category` (optional), `contract` (current dropdown).
+3. **New version of an existing card** — inputs: `rate_card_id` (searchable select showing `name · category · contract?`). Skips `rate_cards` insert; computes next `version_number = max+1`.
 
-## Out of scope
-- WP-wide (multi-site) designs — the Estimate action stays disabled; those users go via the WP Estimate tab.
-- Any change to `estimates` (legacy) or `poc_estimates`.
-- New backend policies, RPCs, or edge functions.
+`doImport()` branches on mode:
+- Modes 1/2: insert `rate_cards` with `contract_id` null-or-set + `category`, then v1 DRAFT (unchanged).
+- Mode 3: insert a new `rate_card_versions` row against the chosen card at `max(version_number)+1`.
+
+Approve-now inline button remains as built.
+
+## 3. Admin → Rate Library (`src/components/admin/RateLibrary.tsx`)
+
+- Extend versions query select to include `rate_card(category)`.
+- New **Category** filter dropdown: `All`, distinct categories from loaded rows, plus `Library (no contract)` which filters `contract_id IS NULL`.
+- New table column **Category** (badge) between Rate card and Contract; Contract cell shows `—` for library cards.
+- Make the **Rate card name** cell a button opening a new `EditRateCardDialog`:
+  - Fields: `name`, `category` (free text), `contract_id` (select with `— Library (no contract) —` option).
+  - Saves via `UPDATE public.rate_cards SET name, category, contract_id WHERE id`.
+  - Invalidates `rate-library-versions`.
+
+## 4. Rate item picker (`src/components/delivery/estimate/RateItemPicker.tsx`)
+
+- Extend `versions` query select to `rate_cards(name, code, category, contract:contracts(name))`.
+- Change SelectItem label to: `"{name} — {category ?? (contract?.name ?? 'Library')} · v{version_number} ({status})"` so ICP vs Build vs contract-scoped cards are visually distinct.
+
+## 5. Out of scope / unchanged
+
+- `rate_card_versions`, `rate_items`, approval RPC, quotation flow — untouched.
+- No migration of existing rows; they keep their `contract_id` and get `category = NULL`.
+- `partners.default_rate_card_id` FK still valid (library cards allowed).
 
 ## Technical notes
-- Row action uses the same `DropdownMenu` pattern already imported in `SiteDetail.tsx`.
-- `WpDesignDetail.tsx` reads the submission via existing `design_submissions` query, then splits current `AccordionContent` JSX into an `<Overview />` subcomponent to avoid divergence with the list page.
-- Add route + sidebar entry only if navigation from the list is not enough; initial pass uses in-list navigation via `useNavigate`.
+
+- Supabase types regenerate after the migration; picker/library/import code that reads new fields must land after approval.
+- The `NewSiteEstimateDialog` "no approved rate cards" warning path (built earlier) continues to work — library cards count once approved.
+- No changes needed to `EstimatingImport.tsx`'s Recipe importer or to `SiteEstimatesPanel` (contract selection there is orthogonal; library cards will simply appear in the version dropdown regardless of contract).
