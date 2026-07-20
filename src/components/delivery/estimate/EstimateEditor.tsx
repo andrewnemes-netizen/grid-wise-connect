@@ -122,10 +122,14 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     mutationFn: async (pct: number) => {
       const ids = (lines.data ?? []).map((l) => l.id);
       if (!ids.length) return 0;
-      const { error } = await supabase.from("estimate_lines" as any)
-        .update({ markup_type: "Percentage", markup_pct: pct, markup_dollar: 0 } as any)
-        .in("id", ids);
-      if (error) throw error;
+      const chunk = 10;
+      for (let i = 0; i < ids.length; i += chunk) {
+        const slice = ids.slice(i, i + chunk);
+        const { error } = await supabase.from("estimate_lines" as any)
+          .update({ markup_type: "Percentage", markup_pct: pct, markup_dollar: 0 } as any)
+          .in("id", slice);
+        if (error) throw error;
+      }
       return ids.length;
     },
     onSuccess: (n) => { toast.success(`Applied markup to ${n} line${n === 1 ? "" : "s"}`); invalidateAll(); },
@@ -136,10 +140,14 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     mutationFn: async () => {
       const ids = (lines.data ?? []).map((l) => l.id);
       if (!ids.length) return 0;
-      const { error } = await supabase.from("estimate_lines" as any)
-        .update({ qty: 0 } as any)
-        .in("id", ids);
-      if (error) throw error;
+      const chunk = 10;
+      for (let i = 0; i < ids.length; i += chunk) {
+        const slice = ids.slice(i, i + chunk);
+        const { error } = await supabase.from("estimate_lines" as any)
+          .update({ qty: 0 } as any)
+          .in("id", slice);
+        if (error) throw error;
+      }
       return ids.length;
     },
     onSuccess: (n) => { toast.success(`Zeroed qty on ${n} line${n === 1 ? "" : "s"}`); invalidateAll(); },
