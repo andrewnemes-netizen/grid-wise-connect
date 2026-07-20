@@ -5217,8 +5217,9 @@ export type Database = {
       }
       rate_cards: {
         Row: {
+          category: string | null
           code: string | null
-          contract_id: string
+          contract_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -5226,8 +5227,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           code?: string | null
-          contract_id: string
+          contract_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -5235,8 +5237,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           code?: string | null
-          contract_id?: string
+          contract_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
