@@ -97,6 +97,15 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
     onSuccess: invalidateAll,
   });
 
+  const updateLine = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Record<string, any> }) => {
+      const { error } = await supabase.from("estimate_lines" as any).update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidateAll,
+    onError: (e: any) => toast.error(e.message ?? "Update failed"),
+  });
+
   const duplicateLine = useMutation({
     mutationFn: async (id: string) => {
       const src = (lines.data ?? []).find((l) => l.id === id);
@@ -293,12 +302,48 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate }: { estima
                           </button>
                         </div>
                         <div className="px-2 py-2 text-right tabular-nums">
-                          <div>{Number(l.qty).toLocaleString()} <span className="text-[10px] text-muted-foreground">{l.uom}</span></div>
-                          <div className="text-xs text-muted-foreground">@ {fmt(l.unit_cost, c)}</div>
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              step="any"
+                              min={0}
+                              defaultValue={Number(l.qty)}
+                              key={`qty-${l.id}-${l.qty}`}
+                              onBlur={(ev) => {
+                                const v = parseFloat(ev.target.value);
+                                if (Number.isFinite(v) && v !== Number(l.qty)) {
+                                  updateLine.mutate({ id: l.id, patch: { qty: v } });
+                                }
+                              }}
+                              onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+                              className="h-7 w-20 text-right tabular-nums"
+                              title="Quantity — press Enter or tab out to save"
+                            />
+                            <span className="text-[10px] text-muted-foreground w-6 text-left">{l.uom}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">@ {fmt(l.unit_cost, c)}</div>
                         </div>
                         <div className="px-2 py-2 text-right tabular-nums">
-                          <div>{fmt(l.total_markup, c)}</div>
-                          <div className="text-xs text-muted-foreground">{pct(l.net_markup_pct)}</div>
+                          <div className="flex items-center justify-end gap-1">
+                            <Input
+                              type="number"
+                              step="0.1"
+                              defaultValue={Number(l.markup_pct ?? l.net_markup_pct ?? 0)}
+                              key={`mk-${l.id}-${l.markup_pct}-${l.net_markup_pct}`}
+                              onBlur={(ev) => {
+                                const v = parseFloat(ev.target.value);
+                                const current = Number(l.markup_pct ?? l.net_markup_pct ?? 0);
+                                if (Number.isFinite(v) && v !== current) {
+                                  updateLine.mutate({ id: l.id, patch: { markup_type: "Percentage", markup_pct: v, markup_dollar: 0 } });
+                                }
+                              }}
+                              onKeyDown={(ev) => { if (ev.key === "Enter") (ev.target as HTMLInputElement).blur(); }}
+                              className="h-7 w-16 text-right tabular-nums"
+                              title="Gross margin % — press Enter or tab out to save"
+                            />
+                            <span className="text-[10px] text-muted-foreground w-2">%</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">{fmt(l.total_markup, c)}</div>
                         </div>
                         <div className="px-2 py-2 text-right tabular-nums font-medium">{fmt(l.unit_price, c)}</div>
                         <div className="px-2 py-2 text-right tabular-nums text-muted-foreground">{fmt(l.discount, c)}</div>
