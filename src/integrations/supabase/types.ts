@@ -2303,6 +2303,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          deleted_at: string | null
           description: string | null
           exchange_rate: number
           expense_cost: number
@@ -2347,6 +2348,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deleted_at?: string | null
           description?: string | null
           exchange_rate?: number
           expense_cost?: number
@@ -2391,6 +2393,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          deleted_at?: string | null
           description?: string | null
           exchange_rate?: number
           expense_cost?: number
