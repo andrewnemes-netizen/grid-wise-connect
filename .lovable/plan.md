@@ -1,59 +1,49 @@
-# Clients dashboard layer in Programmes
+# Fix: Recipient on Done → next stage, not the completed one
 
-Introduce a new top-level view inside Programmes that lists **Clients** with their programme counts. Clicking a client drills into the existing programmes-and-work-packages view, scoped to that client.
+## Problem
+In `StageDetailDialog`, marking Stage N as **Done** with a recipient writes the recipient onto Stage N's own `site_stage_status` row. The `notify_stage_owner_assignment` trigger then notifies them against Stage N (which is closed). It should instead attach that recipient to Stage N+1 and open it as `in_progress`.
 
-## Navigation flow
+## Next-stage resolution
 
-```text
-Programmes (/programmes)                ← NEW: clients dashboard
-   └─ Client card / row                 ← click
-        Programmes for {Client}          ← existing DeliveryProgrammes UI, filtered
-           └─ Programme → Work Packages  ← unchanged
-```
+Add a pure helper `getNextStages(stage): StageKey[]` in `src/lib/wp/stageStatus.ts` that walks the pipeline correctly, including the parallel branch after Client Site Selection / Survey.
 
-Sidebar "Programmes" item points at `/programmes` (the new clients dashboard). The current `/delivery` route stays working for backwards-compatibility and renders the same content as `/programmes/:clientId` when a client filter is passed.
+Rules:
+- Same-track sequential move within `common`, `build`, `connections`.
+- **Branch point**: after `survey_completed` (end of common), next = **both** `build_design_po_gate` **and** `icp_po` (Build + Connections tracks run concurrently).
+- Terminal stages (`build_handover_gate`, `connections_handover_gate`) have no next.
 
-## Data model (no schema changes)
+## Dialog changes (`StageDetailDialog.tsx`)
 
-- Clients are already modelled as `organisations` with `org_type = 'client'` (established earlier this project).
-- `programmes.account_id` currently points at `accounts`, not `organisations`. Two options for linking programmes → client:
-  1. Match `accounts.name` to `organisations.name` (name-based join) — zero migration, works with current data.
-  2. Add `programmes.client_org_id uuid references organisations(id)` and backfill from account name — cleaner long-term.
-- Recommend **Option 1 for this slice** (display-only aggregation). We can add the FK later without changing UI.
+- When user sets **status = Done**, the recipient picker relabels from "Who does this stage go to next?" to **"Assign {Next Stage Label} to:"**.
+- If the completed stage branches (survey_completed), render **two pickers**: one for `Build Design PO Gate` recipient, one for `ICP PO` recipient. Either can be left empty (only branches with a recipient get opened + notified). At least one recipient required to allow save.
+- For terminal stages with no next, show a note "Final stage — no downstream task" and allow Done without a recipient.
 
-Include an "Unassigned" bucket for programmes whose `account_id` doesn't map to a client organisation.
+## Save logic
 
-## New page: `src/pages/ClientsDashboard.tsx`
+Replace the current single-row upsert with a small transaction (two upserts, sequential):
 
-Route: `/programmes` (also add `/clients` alias).
+1. **Stage N**: upsert with `workflow_status='done'`, `actual_finish_date = today if empty`, and **clear** `owner_id`, `recipient_user_ids`, `recipient_contact_ids` so no open task remains on it.
+2. For each next stage returned by `getNextStages(N)` **that has a picked recipient**:
+   - Upsert `site_stage_status` row for `(site_id, next_stage)` with:
+     - `workflow_status = 'in_progress'` (only if current status is `not_started`; else preserve existing)
+     - `owner_id` = single-recipient value (or null for multi-recipient stages)
+     - `recipient_user_ids`, `recipient_contact_ids` = picked recipients
+     - `actual_start_date = today if empty`
+   - The existing `notify_stage_owner_assignment` trigger fires on this row and creates the notification against Stage N+1 — no trigger change needed.
 
-- Fetch `organisations` where `org_type = 'client'`.
-- Fetch all `programmes` + `accounts(name)` and group by matched client.
-- Render a grid of client cards, each showing:
-  - Client name + type badge
-  - Programme count, active WP count, total site count (best-effort aggregates)
-  - "View programmes →" link to `/programmes/client/:clientId`
-- Include an "Unassigned programmes" card if any exist.
-- Search box to filter clients by name.
+Non-Done saves (In progress / Review / Blocked / Not started) keep today's behaviour: write recipients on the current row.
 
-## Scoped programmes view
+## Test case (before rollout)
 
-Route: `/programmes/client/:clientId` renders the existing `DeliveryProgrammes` component with a `clientId` prop/param that filters the programmes list to that client (name-matched to the client's organisation). Breadcrumb: `Programmes / {Client Name}`.
+Rutger Place site, `PoC Application` stage:
+1. Open dialog, set status = **Done**, pick recipient X.
+2. Save.
+3. Verify: PoC Application row shows Done with no assignee/recipient; Awaiting PoC Offer row shows In progress with X as owner; notification row exists for X with `stage = 'poc_offer_awaiting'` (screenshot confirmation in Playwright).
 
-`/delivery` continues to render the unfiltered `DeliveryProgrammes` for now to avoid breaking existing links.
+Only after Rutger Place passes: no other stages need code changes — the same helper covers them.
 
-## Sidebar
+## Technical notes
 
-Update `src/components/AppSidebar.tsx` "Programmes" entry to link to `/programmes`.
-
-## Files touched
-
-- `src/pages/ClientsDashboard.tsx` — new
-- `src/pages/DeliveryProgrammes.tsx` — accept optional `clientId` route param, filter programmes when present, add breadcrumb
-- `src/App.tsx` — add `/programmes`, `/programmes/client/:clientId`, `/clients` routes
-- `src/components/AppSidebar.tsx` — point Programmes at `/programmes`
-
-## Out of scope
-
-- No changes to work package pages or the Pre-Con Flow.
-- No schema migration; can add `programmes.client_org_id` in a follow-up if you want strict FK linkage.
+- Files touched: `src/lib/wp/stageStatus.ts` (add helper), `src/components/wp/StageDetailDialog.tsx` (UI + save).
+- No DB migration required — trigger already keys off the row it fires on.
+- `MULTI_RECIPIENT_STAGES` continues to gate whether `owner_id` is populated on the next row.

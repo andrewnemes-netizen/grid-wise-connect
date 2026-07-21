@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { STAGE_LABEL_MAP, STAGE_STATUS_LABEL, MULTI_RECIPIENT_STAGES, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { STAGE_LABEL_MAP, STAGE_STATUS_LABEL, MULTI_RECIPIENT_STAGES, getNextStages, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { RecipientPicker } from "@/components/wp/RecipientPicker";
 
 export type StageRow = {
@@ -55,6 +55,10 @@ export function StageDetailDialog({
   const [reviewNotes, setReviewNotes] = useState(row?.review_notes ?? "");
   const [saving, setSaving] = useState(false);
 
+  // Recipients targeting the NEXT stage(s) when marking Done.
+  // Keyed by next stage key so branch points (survey_completed) can hold two.
+  const [nextRecipients, setNextRecipients] = useState<Record<string, { userIds: string[]; contactIds: string[] }>>({});
+
   useEffect(() => {
     setStatus((row?.workflow_status ?? "not_started") as StageStatus);
     setUserIds(row?.recipient_user_ids?.length ? row!.recipient_user_ids! : (row?.owner_id ? [row.owner_id] : []));
@@ -65,6 +69,7 @@ export function StageDetailDialog({
     setActualFinish(row?.actual_finish_date ?? "");
     setBlockedReason(row?.blocked_reason ?? "");
     setReviewNotes(row?.review_notes ?? "");
+    setNextRecipients({});
   }, [row?.id]);
 
   const { data: audit = [] } = useQuery({
@@ -80,36 +85,103 @@ export function StageDetailDialog({
   });
 
   const multi = MULTI_RECIPIENT_STAGES.has(stage);
-  const hasRecipient = userIds.length + contactIds.length > 0;
   const isTerminalAction = status === "done";
-  const blocked = isTerminalAction && !hasRecipient;
+  const nextStages = isTerminalAction ? getNextStages(stage) : [];
+  const hasNextRecipient = nextStages.some((s) => {
+    const r = nextRecipients[s];
+    return (r?.userIds.length ?? 0) + (r?.contactIds.length ?? 0) > 0;
+  });
+  const hasRecipient = userIds.length + contactIds.length > 0;
+  // For non-Done saves, use the in-place picker as before.
+  // For Done, require a recipient on at least one next stage (unless terminal-with-no-next).
+  const blocked = isTerminalAction
+    ? (nextStages.length > 0 && !hasNextRecipient)
+    : false;
 
   const save = async () => {
     if (blocked) {
-      toast.error("Pick who this stage goes to next before marking Done.");
+      toast.error("Pick who the next stage goes to before marking Done.");
       return;
     }
     setSaving(true);
     try {
-      const patch = {
-        work_package_id: wpId,
-        site_id: siteId,
-        stage,
-        workflow_status: status,
-        owner_id: multi ? null : (userIds[0] ?? null),
-        recipient_user_ids: userIds,
-        recipient_contact_ids: contactIds,
-        planned_start_date: plannedStart || null,
-        planned_finish_date: plannedFinish || null,
-        actual_start_date: actualStart || null,
-        actual_finish_date: actualFinish || null,
-        blocked_reason: blockedReason || null,
-        review_notes: reviewNotes || null,
-      };
-      const { error } = await (supabase as any).from("site_stage_status")
-        .upsert(patch, { onConflict: "site_id,stage" });
-      if (error) throw error;
-      toast.success(hasRecipient ? "Stage updated · recipients notified" : "Stage updated");
+      const today = new Date().toISOString().slice(0, 10);
+
+      if (isTerminalAction) {
+        // 1) Close current stage — clear recipients so no open task remains.
+        const currentPatch = {
+          work_package_id: wpId,
+          site_id: siteId,
+          stage,
+          workflow_status: "done" as StageStatus,
+          owner_id: null,
+          recipient_user_ids: [],
+          recipient_contact_ids: [],
+          planned_start_date: plannedStart || null,
+          planned_finish_date: plannedFinish || null,
+          actual_start_date: actualStart || null,
+          actual_finish_date: actualFinish || today,
+          blocked_reason: null,
+          review_notes: reviewNotes || null,
+        };
+        const { error: e1 } = await (supabase as any).from("site_stage_status")
+          .upsert(currentPatch, { onConflict: "site_id,stage" });
+        if (e1) throw e1;
+
+        // 2) Open next stage(s) with picked recipients.
+        let notified = 0;
+        for (const nextKey of nextStages) {
+          const r = nextRecipients[nextKey];
+          const uIds = r?.userIds ?? [];
+          const cIds = r?.contactIds ?? [];
+          if (uIds.length + cIds.length === 0) continue;
+
+          const { data: existing } = await (supabase as any)
+            .from("site_stage_status")
+            .select("workflow_status,actual_start_date")
+            .eq("site_id", siteId).eq("stage", nextKey).maybeSingle();
+
+          const isMultiNext = MULTI_RECIPIENT_STAGES.has(nextKey as StageKey);
+          const nextStatus: StageStatus =
+            !existing || existing.workflow_status === "not_started" ? "in_progress" : existing.workflow_status;
+
+          const nextPatch = {
+            work_package_id: wpId,
+            site_id: siteId,
+            stage: nextKey,
+            workflow_status: nextStatus,
+            owner_id: isMultiNext ? null : (uIds[0] ?? null),
+            recipient_user_ids: uIds,
+            recipient_contact_ids: cIds,
+            actual_start_date: existing?.actual_start_date ?? today,
+          };
+          const { error: e2 } = await (supabase as any).from("site_stage_status")
+            .upsert(nextPatch, { onConflict: "site_id,stage" });
+          if (e2) throw e2;
+          notified++;
+        }
+        toast.success(notified > 0 ? `Stage done · ${notified} next task${notified > 1 ? "s" : ""} opened` : "Stage marked done");
+      } else {
+        const patch = {
+          work_package_id: wpId,
+          site_id: siteId,
+          stage,
+          workflow_status: status,
+          owner_id: multi ? null : (userIds[0] ?? null),
+          recipient_user_ids: userIds,
+          recipient_contact_ids: contactIds,
+          planned_start_date: plannedStart || null,
+          planned_finish_date: plannedFinish || null,
+          actual_start_date: actualStart || null,
+          actual_finish_date: actualFinish || null,
+          blocked_reason: blockedReason || null,
+          review_notes: reviewNotes || null,
+        };
+        const { error } = await (supabase as any).from("site_stage_status")
+          .upsert(patch, { onConflict: "site_id,stage" });
+        if (error) throw error;
+        toast.success(hasRecipient ? "Stage updated · recipients notified" : "Stage updated");
+      }
       onSaved();
       onClose();
     } catch (e: any) {
@@ -139,17 +211,47 @@ export function StageDetailDialog({
                 </SelectContent>
               </Select>
             </label>
-            <div className="col-span-2 rounded-md border bg-muted/20 p-3">
-              <RecipientPicker
-                wpId={wpId}
-                multi={multi}
-                userIds={userIds}
-                contactIds={contactIds}
-                onChange={({ userIds: u, contactIds: c }) => { setUserIds(u); setContactIds(c); }}
-                label={multi ? "Notify who? (multiple recipients)" : "Who does this stage go to next?"}
-                requiredHint={blocked ? "Marking Done requires at least one recipient — they will be notified immediately on save." : null}
-              />
-            </div>
+            {isTerminalAction ? (
+              nextStages.length === 0 ? (
+                <div className="col-span-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
+                  Final stage — no downstream task will be created.
+                </div>
+              ) : (
+                <div className="col-span-2 space-y-3">
+                  {nextStages.map((nk) => {
+                    const isMultiNext = MULTI_RECIPIENT_STAGES.has(nk);
+                    const r = nextRecipients[nk] ?? { userIds: [], contactIds: [] };
+                    return (
+                      <div key={nk} className="rounded-md border bg-muted/20 p-3">
+                        <RecipientPicker
+                          wpId={wpId}
+                          multi={isMultiNext}
+                          userIds={r.userIds}
+                          contactIds={r.contactIds}
+                          onChange={({ userIds: u, contactIds: c }) =>
+                            setNextRecipients((prev) => ({ ...prev, [nk]: { userIds: u, contactIds: c } }))
+                          }
+                          label={`Assign next stage · ${STAGE_LABEL_MAP[nk]} — to:`}
+                          requiredHint={blocked ? "Pick at least one recipient on a next stage before saving Done." : null}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              <div className="col-span-2 rounded-md border bg-muted/20 p-3">
+                <RecipientPicker
+                  wpId={wpId}
+                  multi={multi}
+                  userIds={userIds}
+                  contactIds={contactIds}
+                  onChange={({ userIds: u, contactIds: c }) => { setUserIds(u); setContactIds(c); }}
+                  label={multi ? "Notify who? (multiple recipients)" : "Recipients for this stage"}
+                  requiredHint={null}
+                />
+              </div>
+            )}
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Planned start</span>
               <Input type="date" value={plannedStart ?? ""} onChange={(e) => setPlannedStart(e.target.value)} />
@@ -203,7 +305,7 @@ export function StageDetailDialog({
         <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2 px-6 py-4 border-t shrink-0 bg-background">
           {blocked && (
             <span className="text-[11px] text-destructive mr-auto">
-              Select a recipient before saving Done — they will be notified immediately.
+              Select a recipient on the next stage before saving Done — they will be notified immediately.
             </span>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
