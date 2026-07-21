@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileCheck2, ShieldCheck, TrafficCone, ClipboardList, SearchCheck, Package } from "lucide-react";
+import { FileCheck2, ShieldCheck, TrafficCone, ClipboardList, SearchCheck, Package, FileSignature } from "lucide-react";
 import { useSitesMap, attachSites } from "./_useSitesMap";
+import { SurveysPanel } from "@/components/surveys/SurveysPanel";
 
 function StatusBadge({ value }: { value?: string | null }) {
   if (!value) return <Badge variant="outline">—</Badge>;
@@ -109,6 +110,7 @@ export default function WpPreConTab() {
           <TabsTrigger value="permits"><FileCheck2 className="h-3.5 w-3.5 mr-1" /> Permits ({counts.permits})</TabsTrigger>
           <TabsTrigger value="rams"><ShieldCheck className="h-3.5 w-3.5 mr-1" /> RAMS ({counts.rams})</TabsTrigger>
           <TabsTrigger value="tm"><TrafficCone className="h-3.5 w-3.5 mr-1" /> TM plans ({counts.tm})</TabsTrigger>
+          <TabsTrigger value="surveys"><FileSignature className="h-3.5 w-3.5 mr-1" /> Surveys</TabsTrigger>
           <TabsTrigger value="logs"><ClipboardList className="h-3.5 w-3.5 mr-1" /> Daily logs ({counts.logs})</TabsTrigger>
           <TabsTrigger value="inspections"><SearchCheck className="h-3.5 w-3.5 mr-1" /> Inspections ({counts.inspections})</TabsTrigger>
           <TabsTrigger value="deliveries"><Package className="h-3.5 w-3.5 mr-1" /> Deliveries ({counts.deliveries})</TabsTrigger>
