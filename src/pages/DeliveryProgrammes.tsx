@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +38,7 @@ export default function DeliveryProgrammes() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { clientId } = useParams<{ clientId?: string }>();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [newWpFor, setNewWpFor] = useState<string | null>(null);
@@ -68,9 +69,19 @@ export default function DeliveryProgrammes() {
   const { data: accounts = [] } = useQuery({
     queryKey: ["delivery-accounts"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("accounts").select("id,name").order("name");
+      const { data, error } = await supabase.from("accounts").select("id,name,client_id").order("name");
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  const { data: currentClient } = useQuery({
+    queryKey: ["delivery-current-client", clientId],
+    enabled: !!clientId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("clients").select("id,name").eq("id", clientId!).maybeSingle();
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -85,6 +96,13 @@ export default function DeliveryProgrammes() {
       return (data ?? []) as WpRow[];
     },
   });
+
+  const accountToClient: Record<string, string | null> = {};
+  for (const a of (accounts as any[])) accountToClient[a.id] = a.client_id ?? null;
+
+  const scopedProgrammes = clientId
+    ? programmes.filter((p) => accountToClient[p.account_id] === clientId)
+    : programmes;
 
   const wpsByProgramme: Record<string, WpRow[]> = {};
   for (const w of allWps) {
@@ -185,13 +203,24 @@ export default function DeliveryProgrammes() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {clientId && (
+        <nav className="text-xs text-muted-foreground">
+          <Link to="/programmes" className="hover:text-foreground">Programmes</Link>
+          <span className="mx-1.5">/</span>
+          <span className="text-foreground">{currentClient?.name ?? "Client"}</span>
+        </nav>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-foreground/70 mb-1">
             <span className="h-1 w-1 rounded-full bg-accent" /> Delivery
           </div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight flex items-center gap-2"><Layers className="h-6 w-6 text-primary" /> Programmes</h1>
-          <p className="text-sm text-muted-foreground mt-1">Client programmes group work packages. Each work package delivers 1–100 sites.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex items-center gap-2">
+            <Layers className="h-6 w-6 text-primary" /> {clientId && currentClient ? `${currentClient.name} · Programmes` : "Programmes"}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {clientId ? "Programmes and work packages scoped to this client." : "Client programmes group work packages. Each work package delivers 1–100 sites."}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link to="/delivery/proposals">
@@ -203,16 +232,16 @@ export default function DeliveryProgrammes() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading programmes…</p>
-      ) : programmes.length === 0 ? (
+      ) : scopedProgrammes.length === 0 ? (
         <Card className="p-12 text-center">
           <Layers className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-          <h3 className="font-medium mb-1">No programmes yet</h3>
+          <h3 className="font-medium mb-1">{clientId ? "No programmes for this client yet" : "No programmes yet"}</h3>
           <p className="text-sm text-muted-foreground mb-4">Create a programme for a client to start grouping work packages.</p>
           <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> New programme</Button>
         </Card>
       ) : (
         <div className="rounded-lg border border-border/60 bg-card shadow-panel overflow-hidden divide-y divide-border/50">
-          {programmes.map((p) => {
+          {scopedProgrammes.map((p) => {
             const wps = wpsByProgramme[p.id] ?? [];
             const isOpen = !!expanded[p.id];
             const hasMulti = wps.length !== 1;
