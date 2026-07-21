@@ -22,7 +22,6 @@ import {
   ScrollText,
   Zap,
   ChevronLeft,
-  ClipboardList,
 } from "lucide-react";
 import {
   Sidebar,
@@ -53,7 +52,6 @@ const NAV: Group[] = [
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
       { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
-      { title: "Surveys", slug: "sites/surveys", icon: ClipboardList },
     ],
   },
   {
