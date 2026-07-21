@@ -54,6 +54,21 @@ export const STAGE_STATUS_COLORS: Record<StageStatus, string> = {
 
 export const isCompleteStatus = (s: StageStatus | string | null | undefined) => s === "done";
 
+/** Return the next stage(s) after the given stage, honouring track branching. */
+export function getNextStages(stage: StageKey): StageKey[] {
+  // Branch point: survey_completed opens both Build and Connections tracks.
+  if (stage === "survey_completed") return ["build_design_po_gate", "icp_po"];
+  // Terminals
+  if (stage === "build_handover_gate" || stage === "connections_handover_gate") return [];
+  const current = STAGES.find((s) => s.key === stage);
+  if (!current) return [];
+  // Within same track, next stage
+  const sameTrack = STAGES.filter((s) => s.track === current.track);
+  const idx = sameTrack.findIndex((s) => s.key === stage);
+  if (idx >= 0 && idx < sameTrack.length - 1) return [sameTrack[idx + 1].key];
+  return [];
+}
+
 /** Summary for a set of stage rows for a single site */
 export function summariseSiteStages(rows: { stage: StageKey; workflow_status: StageStatus }[]) {
   const byStage = new Map<StageKey, StageStatus>();
