@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, UserPlus, X } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { useInternalDirectory } from "@/hooks/useInternalDirectory";
 
 export type ExternalContact = { id: string; full_name: string; email?: string | null; role?: string | null };
 
@@ -63,8 +64,24 @@ export function RecipientPicker({
       return (data ?? []) as ExternalContact[];
     },
   });
+  const { data: internal = [] } = useInternalDirectory();
 
-  const memberById = useMemo(() => new Map((members as any[]).map((m) => [m.user_id, m])), [members]);
+  const teamIds = new Set((members as any[]).map((m: any) => m.user_id));
+  const internalOnly = internal.filter((u) => !teamIds.has(u.user_id));
+
+  const memberById = useMemo(() => {
+    const m = new Map<string, any>((members as any[]).map((x: any) => [x.user_id, x]));
+    for (const u of internal) {
+      if (!m.has(u.user_id)) {
+        m.set(u.user_id, {
+          user_id: u.user_id,
+          team_role: "Internal",
+          profile: { full_name: u.full_name, email: u.email },
+        });
+      }
+    }
+    return m;
+  }, [members, internal]);
   const contactById = useMemo(() => new Map((contacts as ExternalContact[]).map((c) => [c.id, c])), [contacts]);
 
   const toggleUser = (id: string) => {
@@ -175,6 +192,21 @@ export function RecipientPicker({
                     );
                   })}
                 </CommandGroup>
+                {internalOnly.length > 0 && (
+                  <CommandGroup heading="Internal directory">
+                    {internalOnly.map((u) => {
+                      const name = u.full_name || u.email || u.user_id;
+                      const selected = userIds.includes(u.user_id);
+                      return (
+                        <CommandItem key={u.user_id} value={`${name} internal ${u.org_name}`} onSelect={() => toggleUser(u.user_id)}>
+                          <Check className={`mr-2 h-4 w-4 ${selected ? "opacity-100" : "opacity-0"}`} />
+                          <span className="flex-1">{name}</span>
+                          <Badge variant="secondary" className="text-[10px]">Internal</Badge>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                )}
               </CommandList>
             </Command>
           </PopoverContent>

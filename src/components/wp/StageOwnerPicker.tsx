@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useInternalDirectory } from "@/hooks/useInternalDirectory";
 
 type Props = {
   wpId: string;
@@ -48,6 +49,26 @@ export function StageOwnerPicker({ wpId, value, onChange, label = "Stage owner" 
       return data ?? [];
     },
   });
+  const { data: internal = [] } = useInternalDirectory();
+
+  // Union: WP team first, then internal-directory users not already listed.
+  const teamIds = new Set((members as any[]).map((m: any) => m.user_id));
+  const combined = [
+    ...(members as any[]).map((m: any) => ({
+      user_id: m.user_id,
+      name: m.profiles?.full_name || m.profiles?.email || m.user_id,
+      badge: m.team_role || null,
+      internal: false,
+    })),
+    ...internal
+      .filter((u) => !teamIds.has(u.user_id))
+      .map((u) => ({
+        user_id: u.user_id,
+        name: u.full_name || u.email || u.user_id,
+        badge: "Internal",
+        internal: true,
+      })),
+  ];
 
   return (
     <div className="flex flex-col gap-1">
@@ -73,26 +94,23 @@ export function StageOwnerPicker({ wpId, value, onChange, label = "Stage owner" 
           <SelectItem value="__unassigned">
             <span className="text-muted-foreground">Unassigned — no notification will fire</span>
           </SelectItem>
-          {(members as any[]).map((m: any) => {
-            const name = m.profiles?.full_name || m.profiles?.email || m.user_id;
-            return (
-              <SelectItem key={m.user_id} value={m.user_id}>
-                <span className="flex items-center gap-2">
-                  <span>{name}</span>
-                  {m.team_role && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {m.team_role}
-                    </Badge>
-                  )}
-                </span>
-              </SelectItem>
-            );
-          })}
+          {combined.map((m) => (
+            <SelectItem key={m.user_id} value={m.user_id}>
+              <span className="flex items-center gap-2">
+                <span>{m.name}</span>
+                {m.badge && (
+                  <Badge variant={m.internal ? "secondary" : "outline"} className="text-[10px]">
+                    {m.badge}
+                  </Badge>
+                )}
+              </span>
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
-      {!isLoading && (members as any[]).length === 0 && (
+      {!isLoading && combined.length === 0 && (
         <p className="text-[11px] text-muted-foreground">
-          No team members added to this Work Package yet. Add people under Team to make them selectable.
+          No team members or internal users available yet.
         </p>
       )}
     </div>

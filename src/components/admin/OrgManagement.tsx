@@ -101,6 +101,9 @@ export function OrgManagement() {
   const isSuperAdmin = isPlatformAdmin;
   const [createOpen, setCreateOpen] = useState(false);
   const [orgName, setOrgName] = useState("");
+  const [orgType, setOrgType] = useState<"client" | "partner" | "internal" | "other">("client");
+  const [orgTypeOther, setOrgTypeOther] = useState("");
+  const [editingOrg, setEditingOrg] = useState<any | null>(null);
   const [addMemberOrgId, setAddMemberOrgId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
 
@@ -142,10 +145,41 @@ export function OrgManagement() {
   const createOrg = useMutation({
     mutationFn: async () => {
       const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-      const { error } = await supabase.from("organisations").insert({ name: orgName, slug });
+      const payload: any = {
+        name: orgName,
+        slug,
+        org_type: orgType,
+        org_type_other: orgType === "other" ? orgTypeOther.trim() : null,
+      };
+      const { error } = await supabase.from("organisations").insert(payload);
       if (error) throw error;
     },
-    onSuccess: () => { invalidateAll(); setCreateOpen(false); setOrgName(""); toast({ title: "Organisation created" }); },
+    onSuccess: () => {
+      invalidateAll();
+      setCreateOpen(false);
+      setOrgName("");
+      setOrgType("client");
+      setOrgTypeOther("");
+      toast({ title: "Organisation created" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateOrgType = useMutation({
+    mutationFn: async () => {
+      if (!editingOrg) return;
+      const payload: any = {
+        org_type: orgType,
+        org_type_other: orgType === "other" ? orgTypeOther.trim() : null,
+      };
+      const { error } = await (supabase as any).from("organisations").update(payload).eq("id", editingOrg.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAll();
+      setEditingOrg(null);
+      toast({ title: "Organisation updated" });
+    },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
@@ -183,6 +217,15 @@ export function OrgManagement() {
 
   const getOrgMembers = (orgId: string) => members.filter((m: any) => m.org_id === orgId);
 
+  const orgTypeLabel = (o: any) =>
+    o.org_type === "other"
+      ? o.org_type_other || "Other"
+      : (o.org_type ?? "client").charAt(0).toUpperCase() + (o.org_type ?? "client").slice(1);
+  const orgTypeBadgeVariant = (t: string): "default" | "secondary" | "outline" =>
+    t === "internal" ? "default" : t === "client" ? "secondary" : "outline";
+
+  const canSaveType = orgType !== "other" || orgTypeOther.trim().length > 0;
+
   const unassignedUsers = profiles.filter(
     (p: any) => !members.some((m: any) => m.user_id === p.user_id)
   );
@@ -207,12 +250,65 @@ export function OrgManagement() {
                   <Label>Organisation Name</Label>
                   <Input value={orgName} onChange={(e) => setOrgName(e.target.value)} placeholder="e.g. Acme Energy Ltd" />
                 </div>
-                <Button className="w-full" disabled={!orgName.trim()} onClick={() => createOrg.mutate()}>Create</Button>
+                <div className="space-y-2">
+                  <Label>Type *</Label>
+                  <Select value={orgType} onValueChange={(v) => setOrgType(v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="client">Client</SelectItem>
+                      <SelectItem value="partner">Partner</SelectItem>
+                      <SelectItem value="internal">Internal (EcoPower staff)</SelectItem>
+                      <SelectItem value="other">Other…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Internal orgs give every member access to Programme &amp; Work Package pickers.
+                  </p>
+                </div>
+                {orgType === "other" && (
+                  <div className="space-y-2">
+                    <Label>Type label *</Label>
+                    <Input
+                      value={orgTypeOther}
+                      onChange={(e) => setOrgTypeOther(e.target.value)}
+                      placeholder="e.g. Supplier, DNO, Local Authority"
+                    />
+                  </div>
+                )}
+                <Button className="w-full" disabled={!orgName.trim() || !canSaveType} onClick={() => createOrg.mutate()}>Create</Button>
               </div>
             </DialogContent>
           </Dialog>
         )}
       </div>
+
+      {/* Edit type dialog (shared for all rows) */}
+      <Dialog open={!!editingOrg} onOpenChange={(open) => { if (!open) setEditingOrg(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Change type — {editingOrg?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Type *</Label>
+              <Select value={orgType} onValueChange={(v) => setOrgType(v as any)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="partner">Partner</SelectItem>
+                  <SelectItem value="internal">Internal (EcoPower staff)</SelectItem>
+                  <SelectItem value="other">Other…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {orgType === "other" && (
+              <div className="space-y-2">
+                <Label>Type label *</Label>
+                <Input value={orgTypeOther} onChange={(e) => setOrgTypeOther(e.target.value)} placeholder="e.g. Supplier" />
+              </div>
+            )}
+            <Button className="w-full" disabled={!canSaveType} onClick={() => updateOrgType.mutate()}>Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
@@ -232,10 +328,26 @@ export function OrgManagement() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
                     {org.name}
+                    <Badge variant={orgTypeBadgeVariant(org.org_type ?? "client")} className="text-[10px] uppercase">
+                      {orgTypeLabel(org)}
+                    </Badge>
                     <Badge variant="outline" className="text-xs">{orgMembers.length} members</Badge>
                   </CardTitle>
                   <div className="flex gap-1 flex-wrap">
                     <CreateUserDialog orgId={org.id} orgName={org.name} onSuccess={invalidateAll} />
+                    {isSuperAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingOrg(org);
+                          setOrgType(((org.org_type ?? "client") as any));
+                          setOrgTypeOther(org.org_type_other ?? "");
+                        }}
+                      >
+                        Change type
+                      </Button>
+                    )}
                     <Dialog open={addMemberOrgId === org.id} onOpenChange={(open) => { setAddMemberOrgId(open ? org.id : null); setSelectedUserId(""); }}>
                       <DialogTrigger asChild>
                         <Button variant="ghost" size="sm"><Users className="h-4 w-4 mr-1" />Existing User</Button>
