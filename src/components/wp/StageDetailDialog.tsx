@@ -305,7 +305,7 @@ export function StageDetailDialog({
         <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2 px-6 py-4 border-t shrink-0 bg-background">
           {blocked && (
             <span className="text-[11px] text-destructive mr-auto">
-              Select a recipient before saving Done — they will be notified immediately.
+              Select a recipient on the next stage before saving Done — they will be notified immediately.
             </span>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
