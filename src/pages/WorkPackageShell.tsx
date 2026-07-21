@@ -41,7 +41,11 @@ import {
 } from "./wp/WpTabs";
 
 function WpHeader({ wpId }: { wpId: string }) {
-  const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
+  const [meta, setMeta] = useState<{
+    name: string | null;
+    status: string | null;
+    programme: { id: string; name: string } | null;
+  } | null>(null);
   const [reason, setReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
@@ -50,10 +54,13 @@ function WpHeader({ wpId }: { wpId: string }) {
     (async () => {
       const { data } = await supabase
         .from("work_packages")
-        .select("name, status")
+        .select("name, status, programme_id, programmes(id, name)")
         .eq("id", wpId)
         .maybeSingle();
-      if (!cancelled) setMeta(data ?? { name: null, status: null });
+      const programme = Array.isArray(data?.programmes)
+        ? data.programmes[0] ?? null
+        : data?.programmes ?? null;
+      if (!cancelled) setMeta(data ? { name: data.name, status: data.status, programme } : { name: null, status: null, programme: null });
     })();
     return () => {
       cancelled = true;
@@ -78,6 +85,14 @@ function WpHeader({ wpId }: { wpId: string }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link to="/delivery" className="hover:underline">Programmes</Link>
+          <span>/</span>
+          {meta?.programme ? (
+            <Link to="/delivery" className="hover:underline truncate" title={meta.programme.name}>
+              {meta.programme.name}
+            </Link>
+          ) : (
+            <span className="truncate">…</span>
+          )}
           <span>/</span>
           <span className="truncate">Work Package</span>
         </div>
