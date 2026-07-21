@@ -49,6 +49,7 @@ const NAV: Group[] = [
     items: [
       { title: "Site Register", slug: "sites/register", icon: MapPin },
       { title: "Pre-Con Flow", slug: "sites/matrix", icon: LayoutGrid },
+      { title: "Tasks", slug: "delivery/tasks", icon: ListChecks },
       { title: "Map", slug: "sites/map", icon: MapIcon },
       { title: "Pre-Construction", slug: "sites/pre-construction", icon: HardHat },
       { title: "Readiness", slug: "sites/readiness", icon: ShieldCheck },
@@ -75,7 +76,6 @@ const NAV: Group[] = [
     label: "Delivery",
     items: [
       { title: "Programme", slug: "delivery/programme", icon: CalendarRange },
-      { title: "Tasks", slug: "delivery/tasks", icon: ListChecks },
       { title: "Partners", slug: "delivery/partners", icon: Users },
     ],
   },
