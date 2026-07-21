@@ -205,10 +205,6 @@ export default function WpPreConTab() {
         </TabsContent>
 
         <TabsContent value="logs" className="mt-3">
-
-        <TabsContent value="surveys" className="mt-3">
-          {wpId && <SurveysPanel workPackageId={wpId} />}
-        </TabsContent>
           {counts.logs === 0 ? (
             <EmptyState icon={ClipboardList} label="No daily logs recorded." />
           ) : (
@@ -234,6 +230,10 @@ export default function WpPreConTab() {
               </Table>
             </Card>
           )}
+        </TabsContent>
+
+        <TabsContent value="surveys" className="mt-3">
+          {wpId && <SurveysPanel workPackageId={wpId} />}
         </TabsContent>
 
         <TabsContent value="inspections" className="mt-3">
