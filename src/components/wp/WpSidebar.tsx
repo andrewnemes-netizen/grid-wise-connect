@@ -76,7 +76,6 @@ const NAV: Group[] = [
     label: "Delivery",
     items: [
       { title: "Programme", slug: "delivery/programme", icon: CalendarRange },
-      { title: "Tasks", slug: "delivery/tasks", icon: ListChecks },
       { title: "Partners", slug: "delivery/partners", icon: Users },
     ],
   },
