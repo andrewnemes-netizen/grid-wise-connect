@@ -321,11 +321,12 @@ function StageDetailDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle>{STAGE_LABEL_MAP[stage]} · {siteName ?? "Site"}</DialogTitle>
           <DialogDescription>Workflow status and delivery dates. All changes are recorded in the audit trail below.</DialogDescription>
         </DialogHeader>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <label className="col-span-2 flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Workflow status</span>
@@ -397,8 +398,9 @@ function StageDetailDialog({
             </ul>
           )}
         </div>
+        </div>
 
-        <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2 px-6 py-4 border-t shrink-0 bg-background">
           {blocked && (
             <span className="text-[11px] text-destructive mr-auto">
               Select a recipient before saving Done — they will be notified immediately.
