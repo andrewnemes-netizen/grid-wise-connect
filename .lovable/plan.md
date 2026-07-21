@@ -1,17 +1,13 @@
-## Problem
+## Cause
 
-The `notify_stage_owner_assignment` trigger fires when a stage row is inserted/updated (e.g. Mark Done & Notify). It inserts into `public.notifications` using columns `kind`, `title`, `body`, but the real table has `type`, `message`, `link`, `entity_type`, `entity_id` — no `kind`/`title`/`body`. So every save on the matrix errors with `column "kind" of relation "notifications" does not exist`.
+For single-recipient stages, the save writes both `owner_id = userIds[0]` and `recipient_user_ids = userIds`. The `notify_stage_owner_assignment` trigger then fires twice for the same user: once from the owner branch ("Assigned: …") and once from the recipient-array loop ("Next up: …").
 
 ## Fix
 
-Recreate the trigger function so the three INSERTs use the actual notifications columns:
+Update `notify_stage_owner_assignment` so the recipient-array loop skips any user that is already `NEW.owner_id` (or `OLD.owner_id` when unchanged). One person = one notification per save.
 
-- `kind` → `type`
-- `title` + `body` → concatenated into `message` (e.g. `Assigned: <stage> — <WP> · <Site>`)
-- keep `user_id`, `link`, `entity_type`, `entity_id` unchanged
-
-No schema changes to `notifications`, no UI changes, no other triggers touched.
+No UI, schema, or other trigger changes.
 
 ## Technical detail
 
-Single migration that runs `CREATE OR REPLACE FUNCTION public.notify_stage_owner_assignment()` with the corrected column list for all three inserts (owner assigned, owner unassigned, recipient added). Behaviour otherwise identical.
+Single migration replacing the function. In the `FOR v_uid IN … unnest(NEW.recipient_user_ids)` loop, add `AND u IS DISTINCT FROM NEW.owner_id` to the filter so the owner isn't re-notified as a recipient.
