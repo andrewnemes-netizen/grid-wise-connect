@@ -41,7 +41,11 @@ import {
 } from "./wp/WpTabs";
 
 function WpHeader({ wpId }: { wpId: string }) {
-  const [meta, setMeta] = useState<{ name: string | null; status: string | null } | null>(null);
+  const [meta, setMeta] = useState<{
+    name: string | null;
+    status: string | null;
+    programme: { id: string; name: string } | null;
+  } | null>(null);
   const [reason, setReason] = useState("");
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
@@ -50,10 +54,13 @@ function WpHeader({ wpId }: { wpId: string }) {
     (async () => {
       const { data } = await supabase
         .from("work_packages")
-        .select("name, status")
+        .select("name, status, programme_id, programmes(id, name)")
         .eq("id", wpId)
         .maybeSingle();
-      if (!cancelled) setMeta(data ?? { name: null, status: null });
+      const programme = Array.isArray(data?.programmes)
+        ? data.programmes[0] ?? null
+        : data?.programmes ?? null;
+      if (!cancelled) setMeta(data ? { name: data.name, status: data.status, programme } : { name: null, status: null, programme: null });
     })();
     return () => {
       cancelled = true;
