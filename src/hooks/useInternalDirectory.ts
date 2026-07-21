@@ -41,7 +41,7 @@ export function useInternalDirectory() {
         .select("user_id, full_name")
         .in("user_id", userIds);
       if (profErr) throw profErr;
-      const profById = new Map((profs ?? []).map((p: any) => [p.user_id, p]));
+      const profById = new Map<string, any>((profs ?? []).map((p: any) => [p.user_id, p]));
 
       const rows: InternalUser[] = (mems ?? []).map((m: any) => {
         const p = profById.get(m.user_id);
