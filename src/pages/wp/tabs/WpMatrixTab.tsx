@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { StageOwnerPicker } from "@/components/wp/StageOwnerPicker";
 
 type Row = {
   id: string;
@@ -108,10 +109,11 @@ export default function WpMatrixTab() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Delivery Matrix</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Pre-Construction Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            The single source of truth for stage workflow status. Editing here updates the Site Register,
-            Overview counters and site detail pages. Click a status cell to record dates, owner, blockers and notes.
+            Stage-by-stage workflow with explicit owner assignment. No stage auto-assigns an owner — pick
+            one when you're ready and the picked person is notified. Editing here updates the Site Register,
+            Overview counters and site detail pages.
           </p>
           {focusSiteId && (
             <div className="mt-2 text-xs">
@@ -218,6 +220,7 @@ function StageDetailDialog({
   onSaved: () => void;
 }) {
   const [status, setStatus] = useState<StageStatus>((row?.workflow_status ?? "not_started") as StageStatus);
+  const [ownerId, setOwnerId] = useState<string | null>(row?.owner_id ?? null);
   const [plannedStart, setPlannedStart] = useState(row?.planned_start_date ?? "");
   const [plannedFinish, setPlannedFinish] = useState(row?.planned_finish_date ?? "");
   const [actualStart, setActualStart] = useState(row?.actual_start_date ?? "");
@@ -228,6 +231,7 @@ function StageDetailDialog({
 
   useEffect(() => {
     setStatus((row?.workflow_status ?? "not_started") as StageStatus);
+    setOwnerId(row?.owner_id ?? null);
     setPlannedStart(row?.planned_start_date ?? "");
     setPlannedFinish(row?.planned_finish_date ?? "");
     setActualStart(row?.actual_start_date ?? "");
@@ -256,6 +260,7 @@ function StageDetailDialog({
         site_id: siteId,
         stage,
         workflow_status: status,
+        owner_id: ownerId,
         planned_start_date: plannedStart || null,
         planned_finish_date: plannedFinish || null,
         actual_start_date: actualStart || null,
@@ -295,6 +300,13 @@ function StageDetailDialog({
               </SelectContent>
             </Select>
           </label>
+          <div className="col-span-2">
+            <StageOwnerPicker
+              wpId={wpId}
+              value={ownerId}
+              onChange={setOwnerId}
+            />
+          </div>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Planned start</span>
             <Input type="date" value={plannedStart ?? ""} onChange={(e) => setPlannedStart(e.target.value)} />

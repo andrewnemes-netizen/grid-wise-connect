@@ -7856,6 +7856,7 @@ export type Database = {
       }
       stage_definitions: {
         Row: {
+          allowed_owner_roles: string[]
           category: string
           colour: string | null
           created_at: string
@@ -7865,9 +7866,11 @@ export type Database = {
           label: string
           order_index: number
           org_id: string | null
+          requires_owner: boolean
           updated_at: string
         }
         Insert: {
+          allowed_owner_roles?: string[]
           category: string
           colour?: string | null
           created_at?: string
@@ -7877,9 +7880,11 @@ export type Database = {
           label: string
           order_index?: number
           org_id?: string | null
+          requires_owner?: boolean
           updated_at?: string
         }
         Update: {
+          allowed_owner_roles?: string[]
           category?: string
           colour?: string | null
           created_at?: string
@@ -7889,6 +7894,7 @@ export type Database = {
           label?: string
           order_index?: number
           org_id?: string | null
+          requires_owner?: boolean
           updated_at?: string
         }
         Relationships: [
