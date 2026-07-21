@@ -25,6 +25,7 @@ const Training = lazy(() => import("./pages/Training"));
 const Studies = lazy(() => import("./pages/Studies"));
 const StudyDetail = lazy(() => import("./pages/StudyDetail"));
 const DeliveryProgrammes = lazy(() => import("./pages/DeliveryProgrammes"));
+const ClientsDashboard = lazy(() => import("./pages/ClientsDashboard"));
 const DeliveryProjects = lazy(() => import("./pages/DeliveryProjects"));
 const DeliveryProjectDetail = lazy(() => import("./pages/DeliveryProjectDetail"));
 const DeliveryProposals = lazy(() => import("./pages/DeliveryProposals"));
