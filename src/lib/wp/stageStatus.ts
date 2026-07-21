@@ -1,19 +1,37 @@
 export type StageKey =
-  | "survey" | "design" | "dno" | "permit"
-  | "civils" | "electrical" | "meter" | "handover";
+  | "intake" | "poc_application" | "poc_offer_awaiting" | "poc_quote_review"
+  | "poc_quote_sent" | "client_site_selection" | "survey_po_gate"
+  | "survey_allocation" | "survey_completed"
+  | "build_design_po_gate" | "build_quote_design" | "build_quote_sent" | "build_handover_gate"
+  | "icp_po" | "connections_handover_gate"
+  // legacy — hidden from the new pipeline but retained so old rows don't blow up TS
+  | "survey" | "design" | "dno" | "permit" | "civils" | "electrical" | "meter" | "handover";
 
 export type StageStatus = "not_started" | "in_progress" | "review" | "blocked" | "done";
 
-export const STAGES: { key: StageKey; label: string }[] = [
-  { key: "survey",     label: "Survey" },
-  { key: "design",     label: "Design" },
-  { key: "dno",        label: "DNO" },
-  { key: "permit",     label: "Permit" },
-  { key: "civils",     label: "Civils" },
-  { key: "electrical", label: "Electrical" },
-  { key: "meter",      label: "Meter" },
-  { key: "handover",   label: "Handover" },
+export type StageTrack = "common" | "build" | "connections";
+
+export const STAGES: { key: StageKey; label: string; track: StageTrack; multiRecipient?: boolean }[] = [
+  { key: "intake",                    label: "Intake",                track: "common" },
+  { key: "poc_application",           label: "PoC Application",       track: "common" },
+  { key: "poc_offer_awaiting",        label: "Awaiting PoC Offer",    track: "common" },
+  { key: "poc_quote_review",          label: "PoC Quote Review",      track: "common" },
+  { key: "poc_quote_sent",            label: "PoC Quote Sent",        track: "common" },
+  { key: "client_site_selection",     label: "Client Site Selection", track: "common" },
+  { key: "survey_po_gate",            label: "Survey PO Gate",        track: "common" },
+  { key: "survey_allocation",         label: "Survey Allocation",     track: "common" },
+  { key: "survey_completed",          label: "Survey Completed",      track: "common" },
+  { key: "build_design_po_gate",      label: "Build Design PO Gate",  track: "build" },
+  { key: "build_quote_design",        label: "Build Quote & Design",  track: "build" },
+  { key: "build_quote_sent",          label: "Build Quote Sent",      track: "build" },
+  { key: "build_handover_gate",       label: "Build Handover Gate",   track: "build", multiRecipient: true },
+  { key: "icp_po",                    label: "ICP PO",                track: "connections" },
+  { key: "connections_handover_gate", label: "Connections Handover",  track: "connections", multiRecipient: true },
 ];
+
+export const MULTI_RECIPIENT_STAGES = new Set<StageKey>(
+  STAGES.filter((s) => s.multiRecipient).map((s) => s.key),
+);
 
 export const STAGE_LABEL_MAP: Record<StageKey, string> =
   STAGES.reduce((acc, s) => ({ ...acc, [s.key]: s.label }), {} as Record<StageKey, string>);
