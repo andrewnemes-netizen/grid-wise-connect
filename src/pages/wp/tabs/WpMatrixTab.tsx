@@ -1,37 +1,13 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
-import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, MULTI_RECIPIENT_STAGES, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
-import { RecipientPicker } from "@/components/wp/RecipientPicker";
-
-type Row = {
-  id: string;
-  work_package_id: string;
-  site_id: string;
-  stage: StageKey;
-  workflow_status: StageStatus;
-  owner_id: string | null;
-  recipient_user_ids: string[] | null;
-  recipient_contact_ids: string[] | null;
-  planned_start_date: string | null;
-  planned_finish_date: string | null;
-  actual_start_date: string | null;
-  actual_finish_date: string | null;
-  blocked_reason: string | null;
-  review_notes: string | null;
-  updated_at: string;
-  updated_by: string | null;
-};
+import { STAGES, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { StageDetailDialog, type StageRow as Row } from "@/components/wp/StageDetailDialog";
 
 export default function WpMatrixTab() {
   const { id: wpId } = useParams<{ id: string }>();
