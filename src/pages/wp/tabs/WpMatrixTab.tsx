@@ -122,7 +122,7 @@ export default function WpMatrixTab() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pre-Construction Pipeline</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Pre-Con Flow</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             Stage-by-stage workflow with explicit owner assignment. No stage auto-assigns an owner — pick
             one when you're ready and the picked person is notified. Editing here updates the Site Register,
