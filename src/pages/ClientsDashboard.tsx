@@ -148,9 +148,12 @@ export default function ClientsDashboard() {
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="rounded-md border border-border/60 bg-muted/20 p-2">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">{icon}{label}</div>
-      <div className="font-display text-xl font-semibold tabular-nums">{value}</div>
+    <div className="rounded-md border border-border/60 bg-muted/20 p-2 min-w-0">
+      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+        <span className="shrink-0">{icon}</span>
+        <span className="truncate">{label}</span>
+      </div>
+      <div className="font-display text-xl font-semibold tabular-nums mt-1">{value}</div>
     </div>
   );
 }
