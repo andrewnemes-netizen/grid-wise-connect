@@ -101,42 +101,43 @@ export default function ClientsDashboard() {
           <Link to="/delivery" className="text-sm text-primary underline mt-3 inline-block">Go to all programmes →</Link>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="flex flex-col gap-3">
           {filtered.map((c) => (
             <Link
               key={c.id}
               to={`/programmes/client/${c.id}`}
-              className="group"
+              className="group block w-full"
             >
-              <Card className="p-4 h-full hover:border-primary/60 hover:shadow-panel transition-all cursor-pointer flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
+              <Card className="p-5 hover:border-primary/60 hover:shadow-panel transition-all cursor-pointer flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
+                <div className="flex items-start justify-between gap-2 md:flex-1 md:min-w-0">
                   <div className="min-w-0">
                     <div className="font-display font-semibold text-lg tracking-tight truncate">{c.name}</div>
                     <Badge variant="outline" className="mt-1 text-[10px]">Client</Badge>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 md:hidden" />
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-auto">
-                  <Stat icon={<Layers className="h-3.5 w-3.5" />} label="Programmes" value={c.programmeCount} />
-                  <Stat icon={<Briefcase className="h-3.5 w-3.5" />} label="Work packages" value={c.wpCount} />
-                  <Stat icon={<Briefcase className="h-3.5 w-3.5 text-accent" />} label="Active WPs" value={c.activeWps} />
+                <div className="grid grid-cols-3 gap-3 md:gap-4 md:shrink-0">
+                  <Stat icon={<Layers className="h-4 w-4" />} label="Programmes" value={c.programmeCount} />
+                  <Stat icon={<Briefcase className="h-4 w-4" />} label="Work packages" value={c.wpCount} />
+                  <Stat icon={<Briefcase className="h-4 w-4 text-accent" />} label="Active WPs" value={c.activeWps} />
                 </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0 hidden md:block" />
               </Card>
             </Link>
           ))}
           {rows.unassignedCount > 0 && (
-            <Link to="/delivery" className="group">
-              <Card className="p-4 h-full hover:border-primary/60 hover:shadow-panel transition-all cursor-pointer flex flex-col gap-3 border-dashed">
+            <Link to="/delivery" className="group block w-full">
+              <Card className="p-5 hover:border-primary/60 hover:shadow-panel transition-all cursor-pointer flex flex-col md:flex-row md:items-center gap-4 md:gap-6 border-dashed">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-display font-semibold text-lg tracking-tight truncate">Unassigned</div>
                     <Badge variant="outline" className="mt-1 text-[10px]">No client</Badge>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground md:flex-1">
                   {rows.unassignedCount} programme{rows.unassignedCount === 1 ? "" : "s"} not linked to a client.
                 </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
               </Card>
             </Link>
           )}
@@ -148,12 +149,12 @@ export default function ClientsDashboard() {
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="rounded-md border border-border/60 bg-muted/20 p-2 min-w-0">
-      <div className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
+    <div className="rounded-md border border-border/60 bg-muted/20 px-4 py-3 md:min-w-[150px]">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground leading-tight whitespace-nowrap">
         <span className="shrink-0">{icon}</span>
-        <span className="truncate">{label}</span>
+        <span>{label}</span>
       </div>
-      <div className="font-display text-xl font-semibold tabular-nums mt-1">{value}</div>
+      <div className="font-display text-2xl font-semibold tabular-nums mt-1.5">{value}</div>
     </div>
   );
 }
