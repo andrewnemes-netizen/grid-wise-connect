@@ -204,27 +204,3 @@ export default function WpMatrixTab() {
   );
 }
 
-function StageDetailDialog({
-  wpId, siteId, siteName, stage, row, onClose, onSaved,
-}: {
-  wpId: string;
-  siteId: string;
-  siteName?: string;
-  stage: StageKey;
-  row?: Row;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [status, setStatus] = useState<StageStatus>((row?.workflow_status ?? "not_started") as StageStatus);
-  const [userIds, setUserIds] = useState<string[]>(
-    row?.recipient_user_ids?.length ? row.recipient_user_ids : (row?.owner_id ? [row.owner_id] : [])
-  );
-  const [contactIds, setContactIds] = useState<string[]>(row?.recipient_contact_ids ?? []);
-  const [plannedStart, setPlannedStart] = useState(row?.planned_start_date ?? "");
-  const [plannedFinish, setPlannedFinish] = useState(row?.planned_finish_date ?? "");
-  const [actualStart, setActualStart] = useState(row?.actual_start_date ?? "");
-  const [actualFinish, setActualFinish] = useState(row?.actual_finish_date ?? "");
-  const [blockedReason, setBlockedReason] = useState(row?.blocked_reason ?? "");
-  const [reviewNotes, setReviewNotes] = useState(row?.review_notes ?? "");
-  const [saving, setSaving] = useState(false);
-
