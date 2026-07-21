@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { StageOwnerPicker } from "@/components/wp/StageOwnerPicker";
 
 type Row = {
   id: string;
@@ -219,6 +220,7 @@ function StageDetailDialog({
   onSaved: () => void;
 }) {
   const [status, setStatus] = useState<StageStatus>((row?.workflow_status ?? "not_started") as StageStatus);
+  const [ownerId, setOwnerId] = useState<string | null>(row?.owner_id ?? null);
   const [plannedStart, setPlannedStart] = useState(row?.planned_start_date ?? "");
   const [plannedFinish, setPlannedFinish] = useState(row?.planned_finish_date ?? "");
   const [actualStart, setActualStart] = useState(row?.actual_start_date ?? "");
@@ -229,6 +231,7 @@ function StageDetailDialog({
 
   useEffect(() => {
     setStatus((row?.workflow_status ?? "not_started") as StageStatus);
+    setOwnerId(row?.owner_id ?? null);
     setPlannedStart(row?.planned_start_date ?? "");
     setPlannedFinish(row?.planned_finish_date ?? "");
     setActualStart(row?.actual_start_date ?? "");
@@ -257,6 +260,7 @@ function StageDetailDialog({
         site_id: siteId,
         stage,
         workflow_status: status,
+        owner_id: ownerId,
         planned_start_date: plannedStart || null,
         planned_finish_date: plannedFinish || null,
         actual_start_date: actualStart || null,
@@ -296,6 +300,13 @@ function StageDetailDialog({
               </SelectContent>
             </Select>
           </label>
+          <div className="col-span-2">
+            <StageOwnerPicker
+              wpId={wpId}
+              value={ownerId}
+              onChange={setOwnerId}
+            />
+          </div>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Planned start</span>
             <Input type="date" value={plannedStart ?? ""} onChange={(e) => setPlannedStart(e.target.value)} />
