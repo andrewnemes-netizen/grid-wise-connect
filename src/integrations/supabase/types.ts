@@ -7004,6 +7004,8 @@ export type Database = {
           owner_id: string | null
           planned_finish_date: string | null
           planned_start_date: string | null
+          recipient_contact_ids: string[]
+          recipient_user_ids: string[]
           review_notes: string | null
           site_id: string
           stage: Database["public"]["Enums"]["site_stage_key"]
@@ -7021,6 +7023,8 @@ export type Database = {
           owner_id?: string | null
           planned_finish_date?: string | null
           planned_start_date?: string | null
+          recipient_contact_ids?: string[]
+          recipient_user_ids?: string[]
           review_notes?: string | null
           site_id: string
           stage: Database["public"]["Enums"]["site_stage_key"]
@@ -7038,6 +7042,8 @@ export type Database = {
           owner_id?: string | null
           planned_finish_date?: string | null
           planned_start_date?: string | null
+          recipient_contact_ids?: string[]
+          recipient_user_ids?: string[]
           review_notes?: string | null
           site_id?: string
           stage?: Database["public"]["Enums"]["site_stage_key"]
@@ -12243,6 +12249,21 @@ export type Database = {
         | "electrical"
         | "meter"
         | "handover"
+        | "intake"
+        | "poc_application"
+        | "poc_offer_awaiting"
+        | "poc_quote_review"
+        | "poc_quote_sent"
+        | "client_site_selection"
+        | "survey_po_gate"
+        | "survey_allocation"
+        | "survey_completed"
+        | "build_design_po_gate"
+        | "build_quote_design"
+        | "build_quote_sent"
+        | "build_handover_gate"
+        | "icp_po"
+        | "connections_handover_gate"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -12536,6 +12557,21 @@ export const Constants = {
         "electrical",
         "meter",
         "handover",
+        "intake",
+        "poc_application",
+        "poc_offer_awaiting",
+        "poc_quote_review",
+        "poc_quote_sent",
+        "client_site_selection",
+        "survey_po_gate",
+        "survey_allocation",
+        "survey_completed",
+        "build_design_po_gate",
+        "build_quote_design",
+        "build_quote_sent",
+        "build_handover_gate",
+        "icp_po",
+        "connections_handover_gate",
       ],
       site_stage_state: [
         "not_started",
