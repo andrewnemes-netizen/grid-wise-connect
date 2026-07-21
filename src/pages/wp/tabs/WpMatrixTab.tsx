@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
-import { StageOwnerPicker } from "@/components/wp/StageOwnerPicker";
+import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, MULTI_RECIPIENT_STAGES, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { RecipientPicker } from "@/components/wp/RecipientPicker";
 
 type Row = {
   id: string;
@@ -21,6 +21,8 @@ type Row = {
   stage: StageKey;
   workflow_status: StageStatus;
   owner_id: string | null;
+  recipient_user_ids: string[] | null;
+  recipient_contact_ids: string[] | null;
   planned_start_date: string | null;
   planned_finish_date: string | null;
   actual_start_date: string | null;
@@ -101,6 +103,17 @@ export default function WpMatrixTab() {
     onError: (e: any) => toast.error(e.message ?? "Failed to update stage"),
   });
 
+  /** Inline dropdown handler: 'done' always routes through the modal so
+   *  the recipient requirement cannot be bypassed. */
+  const handleInlineStatus = (site: any, stage: StageKey, next: StageStatus, row?: Row) => {
+    if (next === "done") {
+      setEditing({ siteId: site.site_id, siteName: site.sites?.site_name, stage, row });
+      toast.info("Pick who this goes to next before marking Done.");
+      return;
+    }
+    setStatus.mutate({ site_id: site.site_id, stage, value: next });
+  };
+
   if ((sites as any[]).length === 0) {
     return <Card className="p-8 text-center text-sm text-muted-foreground">No sites in this work package yet.</Card>;
   }
@@ -125,7 +138,7 @@ export default function WpMatrixTab() {
         <Badge variant="outline" className="shrink-0">Source of truth</Badge>
       </div>
 
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2">
         {STAGES.map((st) => (
           <Card key={st.key} className="p-2">
             <div className="text-[11px] text-muted-foreground">{st.label}</div>
@@ -145,7 +158,14 @@ export default function WpMatrixTab() {
           <thead className="bg-muted/40">
             <tr>
               <th className="text-left p-2 sticky left-0 bg-muted/40 z-10">Site</th>
-              {STAGES.map((s) => <th key={s.key} className="p-2 text-left">{s.label}</th>)}
+              {STAGES.map((s) => (
+                <th key={s.key} className={`p-2 text-left whitespace-nowrap ${s.track === "build" ? "bg-primary/5" : s.track === "connections" ? "bg-amber-500/5" : ""}`}>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {s.track === "build" ? "Build" : s.track === "connections" ? "Connections" : ""}
+                  </div>
+                  {s.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -158,9 +178,9 @@ export default function WpMatrixTab() {
                   const r = byKey.get(`${s.site_id}:${st.key}`);
                   const v = (r?.workflow_status ?? "not_started") as StageStatus;
                   return (
-                    <td key={st.key} className="p-1 align-top">
+                    <td key={st.key} className={`p-1 align-top ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
                       <div className="flex items-center gap-1">
-                        <Select value={v} onValueChange={(nv) => setStatus.mutate({ site_id: s.site_id, stage: st.key, value: nv as StageStatus })}>
+                        <Select value={v} onValueChange={(nv) => handleInlineStatus(s, st.key, nv as StageStatus, r)}>
                           <SelectTrigger className={`h-7 text-[10px] px-2 border ${STAGE_STATUS_COLORS[v]} flex-1`}>
                             <SelectValue>{STAGE_STATUS_LABEL[v]}</SelectValue>
                           </SelectTrigger>
