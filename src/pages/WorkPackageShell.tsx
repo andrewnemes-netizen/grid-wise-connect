@@ -86,6 +86,14 @@ function WpHeader({ wpId }: { wpId: string }) {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link to="/delivery" className="hover:underline">Programmes</Link>
           <span>/</span>
+          {meta?.programme ? (
+            <Link to="/delivery" className="hover:underline truncate" title={meta.programme.name}>
+              {meta.programme.name}
+            </Link>
+          ) : (
+            <span className="truncate">…</span>
+          )}
+          <span>/</span>
           <span className="truncate">Work Package</span>
         </div>
         <div className="flex items-center gap-2">
