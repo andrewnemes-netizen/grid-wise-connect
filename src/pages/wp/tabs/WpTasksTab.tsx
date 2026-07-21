@@ -90,14 +90,14 @@ export default function WpTasksTab() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("profiles")
-        .select("id, full_name, email")
-        .in("id", userIds);
+        .select("user_id, full_name")
+        .in("user_id", userIds);
       if (error) throw error;
       return data ?? [];
     },
   });
   const profileById = useMemo(
-    () => new Map((profiles as any[]).map((p) => [p.id, p])),
+    () => new Map((profiles as any[]).map((p) => [p.user_id, p])),
     [profiles],
   );
 
@@ -120,7 +120,7 @@ export default function WpTasksTab() {
 
   const nameForUser = (id: string) => {
     const p: any = profileById.get(id);
-    return p?.full_name || p?.email || id.slice(0, 8);
+    return p?.full_name || id.slice(0, 8);
   };
   const nameForContact = (id: string) => {
     const c: any = contactById.get(id);
