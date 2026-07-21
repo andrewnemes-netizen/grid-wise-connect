@@ -11,8 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
-import { StageOwnerPicker } from "@/components/wp/StageOwnerPicker";
+import { STAGES, STAGE_LABEL_MAP, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, MULTI_RECIPIENT_STAGES, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { RecipientPicker } from "@/components/wp/RecipientPicker";
 
 type Row = {
   id: string;
@@ -21,6 +21,8 @@ type Row = {
   stage: StageKey;
   workflow_status: StageStatus;
   owner_id: string | null;
+  recipient_user_ids: string[] | null;
+  recipient_contact_ids: string[] | null;
   planned_start_date: string | null;
   planned_finish_date: string | null;
   actual_start_date: string | null;
@@ -101,6 +103,17 @@ export default function WpMatrixTab() {
     onError: (e: any) => toast.error(e.message ?? "Failed to update stage"),
   });
 
+  /** Inline dropdown handler: 'done' always routes through the modal so
+   *  the recipient requirement cannot be bypassed. */
+  const handleInlineStatus = (site: any, stage: StageKey, next: StageStatus, row?: Row) => {
+    if (next === "done") {
+      setEditing({ siteId: site.site_id, siteName: site.sites?.site_name, stage, row });
+      toast.info("Pick who this goes to next before marking Done.");
+      return;
+    }
+    setStatus.mutate({ site_id: site.site_id, stage, value: next });
+  };
+
   if ((sites as any[]).length === 0) {
     return <Card className="p-8 text-center text-sm text-muted-foreground">No sites in this work package yet.</Card>;
   }
@@ -125,7 +138,7 @@ export default function WpMatrixTab() {
         <Badge variant="outline" className="shrink-0">Source of truth</Badge>
       </div>
 
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-8 gap-2">
         {STAGES.map((st) => (
           <Card key={st.key} className="p-2">
             <div className="text-[11px] text-muted-foreground">{st.label}</div>
@@ -145,7 +158,14 @@ export default function WpMatrixTab() {
           <thead className="bg-muted/40">
             <tr>
               <th className="text-left p-2 sticky left-0 bg-muted/40 z-10">Site</th>
-              {STAGES.map((s) => <th key={s.key} className="p-2 text-left">{s.label}</th>)}
+              {STAGES.map((s) => (
+                <th key={s.key} className={`p-2 text-left whitespace-nowrap ${s.track === "build" ? "bg-primary/5" : s.track === "connections" ? "bg-amber-500/5" : ""}`}>
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {s.track === "build" ? "Build" : s.track === "connections" ? "Connections" : ""}
+                  </div>
+                  {s.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -158,9 +178,9 @@ export default function WpMatrixTab() {
                   const r = byKey.get(`${s.site_id}:${st.key}`);
                   const v = (r?.workflow_status ?? "not_started") as StageStatus;
                   return (
-                    <td key={st.key} className="p-1 align-top">
+                    <td key={st.key} className={`p-1 align-top ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
                       <div className="flex items-center gap-1">
-                        <Select value={v} onValueChange={(nv) => setStatus.mutate({ site_id: s.site_id, stage: st.key, value: nv as StageStatus })}>
+                        <Select value={v} onValueChange={(nv) => handleInlineStatus(s, st.key, nv as StageStatus, r)}>
                           <SelectTrigger className={`h-7 text-[10px] px-2 border ${STAGE_STATUS_COLORS[v]} flex-1`}>
                             <SelectValue>{STAGE_STATUS_LABEL[v]}</SelectValue>
                           </SelectTrigger>
@@ -220,7 +240,10 @@ function StageDetailDialog({
   onSaved: () => void;
 }) {
   const [status, setStatus] = useState<StageStatus>((row?.workflow_status ?? "not_started") as StageStatus);
-  const [ownerId, setOwnerId] = useState<string | null>(row?.owner_id ?? null);
+  const [userIds, setUserIds] = useState<string[]>(
+    row?.recipient_user_ids?.length ? row.recipient_user_ids : (row?.owner_id ? [row.owner_id] : [])
+  );
+  const [contactIds, setContactIds] = useState<string[]>(row?.recipient_contact_ids ?? []);
   const [plannedStart, setPlannedStart] = useState(row?.planned_start_date ?? "");
   const [plannedFinish, setPlannedFinish] = useState(row?.planned_finish_date ?? "");
   const [actualStart, setActualStart] = useState(row?.actual_start_date ?? "");
@@ -231,7 +254,8 @@ function StageDetailDialog({
 
   useEffect(() => {
     setStatus((row?.workflow_status ?? "not_started") as StageStatus);
-    setOwnerId(row?.owner_id ?? null);
+    setUserIds(row?.recipient_user_ids?.length ? row!.recipient_user_ids! : (row?.owner_id ? [row.owner_id] : []));
+    setContactIds(row?.recipient_contact_ids ?? []);
     setPlannedStart(row?.planned_start_date ?? "");
     setPlannedFinish(row?.planned_finish_date ?? "");
     setActualStart(row?.actual_start_date ?? "");
@@ -252,7 +276,16 @@ function StageDetailDialog({
     },
   });
 
+  const multi = MULTI_RECIPIENT_STAGES.has(stage);
+  const hasRecipient = userIds.length + contactIds.length > 0;
+  const isTerminalAction = status === "done";
+  const blocked = isTerminalAction && !hasRecipient;
+
   const save = async () => {
+    if (blocked) {
+      toast.error("Pick who this stage goes to next before marking Done.");
+      return;
+    }
     setSaving(true);
     try {
       const patch = {
@@ -260,7 +293,12 @@ function StageDetailDialog({
         site_id: siteId,
         stage,
         workflow_status: status,
-        owner_id: ownerId,
+        // For single-recipient stages we keep owner_id in sync so downstream
+        // consumers of that column continue to work; multi-recipient gates
+        // rely on the arrays.
+        owner_id: multi ? null : (userIds[0] ?? null),
+        recipient_user_ids: userIds,
+        recipient_contact_ids: contactIds,
         planned_start_date: plannedStart || null,
         planned_finish_date: plannedFinish || null,
         actual_start_date: actualStart || null,
@@ -271,7 +309,7 @@ function StageDetailDialog({
       const { error } = await (supabase as any).from("site_stage_status")
         .upsert(patch, { onConflict: "site_id,stage" });
       if (error) throw error;
-      toast.success("Stage updated");
+      toast.success(hasRecipient ? "Stage updated · recipients notified" : "Stage updated");
       onSaved();
       onClose();
     } catch (e: any) {
@@ -300,11 +338,15 @@ function StageDetailDialog({
               </SelectContent>
             </Select>
           </label>
-          <div className="col-span-2">
-            <StageOwnerPicker
+          <div className="col-span-2 rounded-md border bg-muted/20 p-3">
+            <RecipientPicker
               wpId={wpId}
-              value={ownerId}
-              onChange={setOwnerId}
+              multi={multi}
+              userIds={userIds}
+              contactIds={contactIds}
+              onChange={({ userIds: u, contactIds: c }) => { setUserIds(u); setContactIds(c); }}
+              label={multi ? "Notify who? (multiple recipients)" : "Who does this stage go to next?"}
+              requiredHint={blocked ? "Marking Done requires at least one recipient — they will be notified immediately on save." : null}
             />
           </div>
           <label className="flex flex-col gap-1">
@@ -356,9 +398,16 @@ function StageDetailDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {blocked && (
+            <span className="text-[11px] text-destructive mr-auto">
+              Select a recipient before saving Done — they will be notified immediately.
+            </span>
+          )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>Save</Button>
+          <Button onClick={save} disabled={saving || blocked}>
+            {isTerminalAction ? "Mark Done & Notify" : "Save"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
