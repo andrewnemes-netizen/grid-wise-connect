@@ -9,6 +9,8 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { Badge } from "@/components/ui/badge";
 import { Bot } from "lucide-react";
+import { Paperclip, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ToolProposalCard } from "./ToolProposalCard";
 import { toast } from "sonner";
@@ -59,6 +61,8 @@ export function AssistantChat({ threadId }: { threadId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,9 +172,35 @@ export function AssistantChat({ threadId }: { threadId: string }) {
   async function handleSubmit(_message: unknown, e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    if ((!text && attachments.length === 0) || busy) return;
+    const files = attachments;
     setInput("");
-    await sendMessage({ text });
+    setAttachments([]);
+    if (files.length === 0) {
+      await sendMessage({ text });
+      return;
+    }
+    const fileParts = await Promise.all(
+      files.map(
+        (f) =>
+          new Promise<{ type: "file"; mediaType: string; url: string; filename: string }>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                type: "file",
+                mediaType: f.type || "application/octet-stream",
+                url: String(reader.result),
+                filename: f.name,
+              });
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(f);
+          }),
+      ),
+    );
+    await sendMessage({
+      role: "user",
+      parts: [...(text ? [{ type: "text" as const, text }] : []), ...fileParts],
+    } as any);
   }
 
   if (initialMessages === null && !loadError) {
@@ -272,8 +302,58 @@ export function AssistantChat({ threadId }: { threadId: string }) {
               placeholder="Ask about your sites, programmes, studies, or delivery risks…"
               disabled={busy}
             />
-            <PromptInputFooter className="justify-end">
-              <PromptInputSubmit status={busy ? "streaming" : undefined} onStop={stop} disabled={!input.trim() && !busy} />
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 px-2 pb-1">
+                {attachments.map((f, i) => (
+                  <span
+                    key={`${f.name}-${i}`}
+                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                    <span className="max-w-[160px] truncate">{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <PromptInputFooter>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length) setAttachments((prev) => [...prev, ...files]);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy}
+                aria-label="Attach files"
+                title="Attach files"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <div className="ml-auto">
+                <PromptInputSubmit
+                  status={busy ? "streaming" : undefined}
+                  onStop={stop}
+                  disabled={!input.trim() && attachments.length === 0 && !busy}
+                />
+              </div>
             </PromptInputFooter>
           </PromptInput>
           <p className="text-[11px] text-muted-foreground/70 mt-1.5 text-center">
