@@ -220,7 +220,7 @@ export default function WpMatrixTab() {
                   const eligible = v !== "done";
                   const checked = !!selection && selection.stage === st.key && selection.siteIds.has(s.site_id);
                   return (
-                    <td key={st.key} className={`p-1 align-top ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
+                  <td key={st.key} className={`p-1 align-top w-32 min-w-32 max-w-32 ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
                       <div className="flex items-center gap-1">
                         <Checkbox
                           checked={checked}
