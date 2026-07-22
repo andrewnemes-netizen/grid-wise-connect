@@ -23,9 +23,9 @@ RULES YOU MUST FOLLOW:
 4. Cite every fact by including the id from the tool result. Sources are rendered automatically from tool outputs — you do not need to format them.
 5. All data returned to you is already filtered by the user's permissions. Do not ask for user_id or org_id.
 6. Be concise and precise. Use markdown lists and headings. Do not repeat tool JSON verbatim.
-7. You CAN take actions using WRITE tools (mark_stage_done_bulk, add_sites_to_wp, remove_sites_from_wp, queue_survey_for_sites, update_site_fields). Every write requires the user to click Approve before it runs — you cannot bypass this.
-8. Before proposing a write, gather the required IDs by calling read tools first (search_sites, search_programmes, get_site_details). Never guess UUIDs.
-9. For remove_sites_from_wp you MUST include the confirm_phrase field with the literal string "remove N sites" where N is the number of site_ids. Never fabricate other confirmation text.
+7. You CAN take actions using WRITE tools: mark_stage_done_bulk, add_sites_to_wp, remove_sites_from_wp, queue_survey_for_sites, update_site_fields, archive_site, archive_work_package, archive_programme, archive_work_packages_bulk, archive_programmes_bulk. Every write shows an Approve/Reject card to the user before it runs — you cannot bypass this.
+8. Before proposing a write, gather the required IDs by calling read tools first (search_sites, search_programmes, get_site_details). Never guess UUIDs. If the user asks to archive/delete "all programmes" or "all work packages", first call search_programmes (with no query) to list them, then propose an archive_programmes_bulk / archive_work_packages_bulk with the real IDs.
+9. Confirm phrases must be EXACT: remove_sites_from_wp → "remove N sites"; archive_programmes_bulk → "archive N programmes"; archive_work_packages_bulk → "archive N work packages". N is the array length. Ask the user for a reason string for any archive tool.
 10. Do not chain more than 3 write proposals in one turn; wait for the user to review.`;
 
 Deno.serve(async (req) => {
@@ -218,6 +218,43 @@ Deno.serve(async (req) => {
           return {
             programmes: items,
             sources: items.map((p) => ({ table: "programmes", id: p.id, url: `/delivery/programme/${p.id}`, label: p.name })),
+          };
+        },
+      }),
+
+      search_work_packages: tool({
+        description: "Search work packages by name/code, optionally scoped to a programme. Returns id, name, code, programme_id, status.",
+        inputSchema: z.object({
+          query: z.string().optional(),
+          programme_id: z.string().uuid().optional(),
+          limit: z.number().int().optional(),
+        }),
+        execute: async ({ query, programme_id, limit }) => {
+          const started = Date.now();
+          const lim = Math.min(limit ?? 50, 200);
+          let q = supabase
+            .from("work_packages")
+            .select("id, name, code, programme_id, status")
+            .order("updated_at", { ascending: false })
+            .limit(lim);
+          if (programme_id) q = q.eq("programme_id", programme_id);
+          if (query?.trim()) {
+            const s = `%${query.trim()}%`;
+            q = q.or(`name.ilike.${s},code.ilike.${s}`);
+          }
+          const { data, error } = await q;
+          if (error) {
+            await audit("search_work_packages", { query, programme_id, limit: lim }, started, "error", { error: error.message });
+            return { error: error.message };
+          }
+          const items = data ?? [];
+          await audit("search_work_packages", { query, programme_id, limit: lim }, started, "ok", {
+            summary: `Found ${items.length} work packages`,
+            ids: items.map((w) => w.id),
+          });
+          return {
+            work_packages: items,
+            sources: items.map((w) => ({ table: "work_packages", id: w.id, url: `/wp/${w.id}`, label: w.name })),
           };
         },
       }),

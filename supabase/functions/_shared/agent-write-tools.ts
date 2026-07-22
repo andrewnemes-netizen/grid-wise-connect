@@ -11,7 +11,12 @@ export type WriteToolName =
   | "add_sites_to_wp"
   | "remove_sites_from_wp"
   | "queue_survey_for_sites"
-  | "update_site_fields";
+  | "update_site_fields"
+  | "archive_programme"
+  | "archive_work_package"
+  | "archive_site"
+  | "archive_programmes_bulk"
+  | "archive_work_packages_bulk";
 
 // Zod schemas — mirrored client-side via the tool call payload.
 export const writeToolSchemas = {
@@ -51,6 +56,28 @@ export const writeToolSchemas = {
       })
       .refine((v) => Object.keys(v).length > 0, "fields cannot be empty"),
   }),
+  archive_programme: z.object({
+    programme_id: z.string().uuid(),
+    reason: z.string().min(3),
+  }),
+  archive_work_package: z.object({
+    work_package_id: z.string().uuid(),
+    reason: z.string().min(3),
+  }),
+  archive_site: z.object({
+    site_id: z.string().uuid(),
+    reason: z.string().min(3),
+  }),
+  archive_programmes_bulk: z.object({
+    programme_ids: z.array(z.string().uuid()).min(1).max(100),
+    reason: z.string().min(3),
+    confirm_phrase: z.string().describe("User must type 'archive N programmes' exactly."),
+  }),
+  archive_work_packages_bulk: z.object({
+    work_package_ids: z.array(z.string().uuid()).min(1).max(100),
+    reason: z.string().min(3),
+    confirm_phrase: z.string().describe("User must type 'archive N work packages' exactly."),
+  }),
 } as const;
 
 // Human-readable tool descriptions for the model.
@@ -65,6 +92,16 @@ export const writeToolDescriptions: Record<WriteToolName, string> = {
     "Create pending survey invitations for one or more sites and email the surveyor. Requires human approval.",
   update_site_fields:
     "Edit editable metadata on a site (name, postcode, client code, proposed kW, socket count, blocker reason). Requires human approval.",
+  archive_programme:
+    "Archive a single programme (soft delete → recoverable from Admin Archive). Requires human approval and a reason.",
+  archive_work_package:
+    "Archive a single work package (soft delete → recoverable from Admin Archive). Requires human approval and a reason.",
+  archive_site:
+    "Archive a single site (soft delete → recoverable from Admin Archive). Requires human approval and a reason.",
+  archive_programmes_bulk:
+    "DESTRUCTIVE. Archive multiple programmes in one action. Requires approval, a reason, and confirm_phrase 'archive N programmes' matching count. Call search_programmes first — never guess IDs.",
+  archive_work_packages_bulk:
+    "DESTRUCTIVE. Archive multiple work packages in one action. Requires approval, a reason, and confirm_phrase 'archive N work packages' matching count. Never guess IDs.",
 };
 
 // Preview (shown to the user in the approval card) — synchronous, no I/O.
@@ -87,6 +124,16 @@ export function previewFor(tool: WriteToolName, input: unknown): string {
       return `Queue a survey to **${p.surveyor_email}** for ${p.site_ids.length} site${p.site_ids.length === 1 ? "" : "s"}.`;
     case "update_site_fields":
       return `Update site ${short(p.site_id)}: ${Object.entries(p.fields).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(", ")}.`;
+    case "archive_programme":
+      return `⚠️ Archive programme ${short(p.programme_id)}. Reason: ${p.reason}.`;
+    case "archive_work_package":
+      return `⚠️ Archive work package ${short(p.work_package_id)}. Reason: ${p.reason}.`;
+    case "archive_site":
+      return `⚠️ Archive site ${short(p.site_id)}. Reason: ${p.reason}.`;
+    case "archive_programmes_bulk":
+      return `⚠️ Archive ${p.programme_ids.length} programme${p.programme_ids.length === 1 ? "" : "s"}. Reason: ${p.reason}. Confirm phrase required.`;
+    case "archive_work_packages_bulk":
+      return `⚠️ Archive ${p.work_package_ids.length} work package${p.work_package_ids.length === 1 ? "" : "s"}. Reason: ${p.reason}. Confirm phrase required.`;
   }
 }
 
@@ -174,6 +221,57 @@ export async function executeWriteTool(
         if (error) return { ok: false, error: error.message };
         if (!data) return { ok: false, error: "Site not found or not editable by you" };
         return { ok: true, result: { site: data } };
+      }
+      case "archive_programme": {
+        const { data, error } = await supabase.rpc("archive_entity", {
+          _entity_type: "programme", _entity_id: input.programme_id, _reason: input.reason,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { archive_id: data } };
+      }
+      case "archive_work_package": {
+        const { data, error } = await supabase.rpc("archive_entity", {
+          _entity_type: "work_package", _entity_id: input.work_package_id, _reason: input.reason,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { archive_id: data } };
+      }
+      case "archive_site": {
+        const { data, error } = await supabase.rpc("archive_entity", {
+          _entity_type: "site", _entity_id: input.site_id, _reason: input.reason,
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true, result: { archive_id: data } };
+      }
+      case "archive_programmes_bulk": {
+        const expected = `archive ${input.programme_ids.length} programmes`;
+        if (input.confirm_phrase.trim().toLowerCase() !== expected) {
+          return { ok: false, error: `Confirm phrase must be exactly "${expected}"` };
+        }
+        const results: { id: string; archive_id?: string; error?: string }[] = [];
+        for (const id of input.programme_ids) {
+          const { data, error } = await supabase.rpc("archive_entity", {
+            _entity_type: "programme", _entity_id: id, _reason: input.reason,
+          });
+          results.push(error ? { id, error: error.message } : { id, archive_id: data as string });
+        }
+        const ok = results.filter((r) => !r.error).length;
+        return { ok: true, result: { archived: ok, failed: results.length - ok, results } };
+      }
+      case "archive_work_packages_bulk": {
+        const expected = `archive ${input.work_package_ids.length} work packages`;
+        if (input.confirm_phrase.trim().toLowerCase() !== expected) {
+          return { ok: false, error: `Confirm phrase must be exactly "${expected}"` };
+        }
+        const results: { id: string; archive_id?: string; error?: string }[] = [];
+        for (const id of input.work_package_ids) {
+          const { data, error } = await supabase.rpc("archive_entity", {
+            _entity_type: "work_package", _entity_id: id, _reason: input.reason,
+          });
+          results.push(error ? { id, error: error.message } : { id, archive_id: data as string });
+        }
+        const ok = results.filter((r) => !r.error).length;
+        return { ok: true, result: { archived: ok, failed: results.length - ok, results } };
       }
     }
   } catch (e) {
