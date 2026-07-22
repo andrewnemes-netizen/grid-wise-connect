@@ -1,10 +1,11 @@
 export type StageKey =
-  | "intake" | "poc_application" | "poc_offer_awaiting" | "poc_quote_review"
-  | "poc_quote_sent" | "client_site_selection" | "survey_po_gate"
+  | "intake" | "poc_application" | "poc_offer_awaiting" | "poc_quote"
+  | "client_site_selection" | "survey_po_gate"
   | "survey_allocation" | "survey_completed"
   | "build_design_po_gate" | "build_quote_design" | "build_quote_sent" | "build_handover_gate"
   | "icp_po" | "connections_handover_gate"
   // legacy — hidden from the new pipeline but retained so old rows don't blow up TS
+  | "poc_quote_review" | "poc_quote_sent"
   | "survey" | "design" | "dno" | "permit" | "civils" | "electrical" | "meter" | "handover";
 
 export type StageStatus = "not_started" | "in_progress" | "review" | "blocked" | "done";
@@ -15,8 +16,7 @@ export const STAGES: { key: StageKey; label: string; track: StageTrack; multiRec
   { key: "intake",                    label: "Intake",                track: "common" },
   { key: "poc_application",           label: "PoC Application",       track: "common" },
   { key: "poc_offer_awaiting",        label: "Awaiting PoC Offer",    track: "common" },
-  { key: "poc_quote_review",          label: "PoC Quote Review",      track: "common" },
-  { key: "poc_quote_sent",            label: "PoC Quote Sent",        track: "common" },
+  { key: "poc_quote",                 label: "PoC Quote",             track: "common" },
   { key: "client_site_selection",     label: "Client Site Selection", track: "common" },
   { key: "survey_po_gate",            label: "Survey PO Gate",        track: "common" },
   { key: "survey_allocation",         label: "Survey Allocation",     track: "common" },
