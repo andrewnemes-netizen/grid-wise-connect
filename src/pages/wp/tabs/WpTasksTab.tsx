@@ -16,6 +16,8 @@ import {
   type StageStatus,
 } from "@/lib/wp/stageStatus";
 import { StageDetailDialog, type StageRow } from "@/components/wp/StageDetailDialog";
+import { isWaitingStage, getWaitEscalation, WAIT_ESCALATION_CLASSES } from "@/lib/wp/waitingStages";
+import { format } from "date-fns";
 
 type SiteLite = { id: string; site_name: string | null; postcode: string | null };
 
@@ -299,9 +301,22 @@ export default function WpTasksTab() {
                       )}
                     </td>
                     <td className="p-2">
-                      <Badge variant="outline" className={`text-[10px] border ${STAGE_STATUS_COLORS[v]}`}>
-                        {STAGE_STATUS_LABEL[v]}
-                      </Badge>
+                      {isWaitingStage(t.row.stage) && (t.row as any).wait_target_date ? (
+                        (() => {
+                          const td = (t.row as any).wait_target_date as string;
+                          const esc = getWaitEscalation(t.row.stage, td, v);
+                          return (
+                            <Badge variant="outline" className={`text-[10px] border ${WAIT_ESCALATION_CLASSES[esc]}`}>
+                              {format(new Date(td + "T00:00:00"), "d MMM")}
+                              {esc === "overdue" ? " · overdue" : esc === "warn" ? " · due soon" : ""}
+                            </Badge>
+                          );
+                        })()
+                      ) : (
+                        <Badge variant="outline" className={`text-[10px] border ${STAGE_STATUS_COLORS[v]}`}>
+                          {STAGE_STATUS_LABEL[v]}
+                        </Badge>
+                      )}
                     </td>
                     <td className="p-2 tabular-nums text-muted-foreground">{t.row.planned_start_date ?? "—"}</td>
                     <td className="p-2 tabular-nums text-muted-foreground">{t.row.planned_finish_date ?? "—"}</td>

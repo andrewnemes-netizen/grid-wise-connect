@@ -7017,6 +7017,10 @@ export type Database = {
           stage: Database["public"]["Enums"]["site_stage_key"]
           updated_at: string
           updated_by: string | null
+          wait_delay_logged_at: string | null
+          wait_delay_reason: string | null
+          wait_started_at: string | null
+          wait_target_date: string | null
           work_package_id: string
           workflow_status: Database["public"]["Enums"]["site_stage_state"]
         }
@@ -7036,6 +7040,10 @@ export type Database = {
           stage: Database["public"]["Enums"]["site_stage_key"]
           updated_at?: string
           updated_by?: string | null
+          wait_delay_logged_at?: string | null
+          wait_delay_reason?: string | null
+          wait_started_at?: string | null
+          wait_target_date?: string | null
           work_package_id: string
           workflow_status?: Database["public"]["Enums"]["site_stage_state"]
         }
@@ -7055,6 +7063,10 @@ export type Database = {
           stage?: Database["public"]["Enums"]["site_stage_key"]
           updated_at?: string
           updated_by?: string | null
+          wait_delay_logged_at?: string | null
+          wait_delay_reason?: string | null
+          wait_started_at?: string | null
+          wait_target_date?: string | null
           work_package_id?: string
           workflow_status?: Database["public"]["Enums"]["site_stage_state"]
         }
