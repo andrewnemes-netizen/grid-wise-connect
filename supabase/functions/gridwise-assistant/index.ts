@@ -221,6 +221,43 @@ Deno.serve(async (req) => {
           };
         },
       }),
+
+      search_work_packages: tool({
+        description: "Search work packages by name/code, optionally scoped to a programme. Returns id, name, code, programme_id, status.",
+        inputSchema: z.object({
+          query: z.string().optional(),
+          programme_id: z.string().uuid().optional(),
+          limit: z.number().int().optional(),
+        }),
+        execute: async ({ query, programme_id, limit }) => {
+          const started = Date.now();
+          const lim = Math.min(limit ?? 50, 200);
+          let q = supabase
+            .from("work_packages")
+            .select("id, name, code, programme_id, status")
+            .order("updated_at", { ascending: false })
+            .limit(lim);
+          if (programme_id) q = q.eq("programme_id", programme_id);
+          if (query?.trim()) {
+            const s = `%${query.trim()}%`;
+            q = q.or(`name.ilike.${s},code.ilike.${s}`);
+          }
+          const { data, error } = await q;
+          if (error) {
+            await audit("search_work_packages", { query, programme_id, limit: lim }, started, "error", { error: error.message });
+            return { error: error.message };
+          }
+          const items = data ?? [];
+          await audit("search_work_packages", { query, programme_id, limit: lim }, started, "ok", {
+            summary: `Found ${items.length} work packages`,
+            ids: items.map((w) => w.id),
+          });
+          return {
+            work_packages: items,
+            sources: items.map((w) => ({ table: "work_packages", id: w.id, url: `/wp/${w.id}`, label: w.name })),
+          };
+        },
+      }),
     };
 
     // WRITE tools — declared WITHOUT `execute` so the AI SDK surfaces them
