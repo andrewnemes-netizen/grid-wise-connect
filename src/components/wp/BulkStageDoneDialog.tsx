@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { STAGE_LABEL_MAP, getNextStages, type StageKey } from "@/lib/wp/stageStatus";
 import { RecipientPicker } from "@/components/wp/RecipientPicker";
-import { completeStageAndAssignNext } from "@/lib/wp/completeStage";
+import { supabase } from "@/integrations/supabase/client";
 
 export type BulkSite = { site_id: string; site_name: string };
 
@@ -46,30 +46,29 @@ export function BulkStageDoneDialog({
     }
     setSaving(true);
     setProgress({ done: 0, failed: [] });
-    const failed: string[] = [];
-    let done = 0;
-    for (const s of sites) {
-      try {
-        await completeStageAndAssignNext({
-          wpId,
-          siteId: s.site_id,
-          stage,
-          nextRecipientUserIds: userIds,
-        });
-        done++;
-      } catch (e: any) {
-        failed.push(`${s.site_name}: ${e?.message ?? "failed"}`);
-      }
-      setProgress({ done, failed: [...failed] });
-    }
-    setSaving(false);
-    if (failed.length === 0) {
-      toast.success(`Marked ${done} site${done === 1 ? "" : "s"} Done · next stage assigned`);
+    try {
+      const { data, error } = await (supabase as any).rpc(
+        "bulk_complete_stage_and_assign_next",
+        {
+          p_wp_id: wpId,
+          p_site_ids: sites.map((s) => s.site_id),
+          p_stage: stage,
+          p_next_recipient_user_ids: userIds,
+        },
+      );
+      if (error) throw error;
+      const processed = (data as any)?.processed ?? sites.length;
+      setProgress({ done: processed, failed: [] });
+      toast.success(
+        `Marked ${processed} site${processed === 1 ? "" : "s"} Done · 1 notification sent per recipient`,
+      );
       onSaved();
       onClose();
-    } else {
-      toast.error(`${done} succeeded · ${failed.length} failed`);
-      onSaved();
+    } catch (e: any) {
+      setProgress({ done: 0, failed: [e?.message ?? "Bulk update failed"] });
+      toast.error(e?.message ?? "Bulk update failed");
+    } finally {
+      setSaving(false);
     }
   };
 

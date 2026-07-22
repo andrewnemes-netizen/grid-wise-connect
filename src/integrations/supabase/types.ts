@@ -10744,6 +10744,15 @@ export type Database = {
         Args: { _features_json: string; _table_name: string }
         Returns: number
       }
+      bulk_complete_stage_and_assign_next: {
+        Args: {
+          p_next_recipient_user_ids: string[]
+          p_site_ids: string[]
+          p_stage: string
+          p_wp_id: string
+        }
+        Returns: Json
+      }
       can_access_project: {
         Args: { _project_id: string; _user_id: string }
         Returns: boolean
