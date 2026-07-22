@@ -183,11 +183,11 @@ export default function WpMatrixTab() {
             <tr>
               <th className="text-left p-2 sticky left-0 bg-muted/40 z-10">Site</th>
               {STAGES.map((s) => (
-                <th key={s.key} className={`p-2 text-left whitespace-nowrap ${s.track === "build" ? "bg-primary/5" : s.track === "connections" ? "bg-amber-500/5" : ""}`}>
+              <th key={s.key} className={`p-2 text-left align-top w-32 min-w-32 max-w-32 ${s.track === "build" ? "bg-primary/5" : s.track === "connections" ? "bg-amber-500/5" : ""}`}>
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                     {s.track === "build" ? "Build" : s.track === "connections" ? "Connections" : ""}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-start gap-1.5">
                     {(() => {
                       const eligible = eligibleForStage(s.key);
                       const selCount = selection && selection.stage === s.key ? selection.siteIds.size : 0;
@@ -202,7 +202,7 @@ export default function WpMatrixTab() {
                         />
                       );
                     })()}
-                    <span>{s.label}</span>
+                  <span className="whitespace-normal break-words leading-tight">{s.label}</span>
                   </div>
                 </th>
               ))}
@@ -220,7 +220,7 @@ export default function WpMatrixTab() {
                   const eligible = v !== "done";
                   const checked = !!selection && selection.stage === st.key && selection.siteIds.has(s.site_id);
                   return (
-                    <td key={st.key} className={`p-1 align-top ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
+                  <td key={st.key} className={`p-1 align-top w-32 min-w-32 max-w-32 ${st.track === "build" ? "bg-primary/[0.02]" : st.track === "connections" ? "bg-amber-500/[0.03]" : ""}`}>
                       <div className="flex items-center gap-1">
                         <Checkbox
                           checked={checked}
