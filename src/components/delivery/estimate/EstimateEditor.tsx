@@ -42,6 +42,20 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
     },
   });
 
+  const boundSite = useQuery({
+    queryKey: ["estimate-bound-site", est.data?.site_id],
+    enabled: !!est.data?.site_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sites")
+        .select("id, site_name, postcode")
+        .eq("id", est.data.site_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
   const groups = useQuery({
     queryKey: ["estimate-groups", estimateId],
     queryFn: async () => {
@@ -222,6 +236,30 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
             <span>Ref: <Input value={e.ref ?? ""} onChange={(ev) => updateEstimate.mutate({ ref: ev.target.value })} className="h-6 w-32 inline-block px-1" placeholder="REF…" /></span>
             <span>Currency: {e.currency}</span>
             <span>Rate: {Number(e.exchange_rate).toFixed(2)}</span>
+            {e.site_id && boundSite.data ? (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                <Link to={`/site/${e.site_id}`} className="text-primary hover:underline">
+                  {boundSite.data.site_name}{boundSite.data.postcode ? ` · ${boundSite.data.postcode}` : ""}
+                </Link>
+                {e.work_package_id && (
+                  <button
+                    onClick={() => setSitePickerOpen(true)}
+                    className="ml-1 text-[10px] underline text-muted-foreground hover:text-foreground"
+                  >
+                    change
+                  </button>
+                )}
+              </span>
+            ) : e.work_package_id ? (
+              <button
+                onClick={() => setSitePickerOpen(true)}
+                className="inline-flex items-center gap-1 text-amber-700 hover:underline"
+              >
+                <AlertCircle className="h-3 w-3" />
+                Assign site
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
