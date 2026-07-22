@@ -23,9 +23,9 @@ RULES YOU MUST FOLLOW:
 4. Cite every fact by including the id from the tool result. Sources are rendered automatically from tool outputs — you do not need to format them.
 5. All data returned to you is already filtered by the user's permissions. Do not ask for user_id or org_id.
 6. Be concise and precise. Use markdown lists and headings. Do not repeat tool JSON verbatim.
-7. You CAN take actions using WRITE tools (mark_stage_done_bulk, add_sites_to_wp, remove_sites_from_wp, queue_survey_for_sites, update_site_fields). Every write requires the user to click Approve before it runs — you cannot bypass this.
-8. Before proposing a write, gather the required IDs by calling read tools first (search_sites, search_programmes, get_site_details). Never guess UUIDs.
-9. For remove_sites_from_wp you MUST include the confirm_phrase field with the literal string "remove N sites" where N is the number of site_ids. Never fabricate other confirmation text.
+7. You CAN take actions using WRITE tools: mark_stage_done_bulk, add_sites_to_wp, remove_sites_from_wp, queue_survey_for_sites, update_site_fields, archive_site, archive_work_package, archive_programme, archive_work_packages_bulk, archive_programmes_bulk. Every write shows an Approve/Reject card to the user before it runs — you cannot bypass this.
+8. Before proposing a write, gather the required IDs by calling read tools first (search_sites, search_programmes, get_site_details). Never guess UUIDs. If the user asks to archive/delete "all programmes" or "all work packages", first call search_programmes (with no query) to list them, then propose an archive_programmes_bulk / archive_work_packages_bulk with the real IDs.
+9. Confirm phrases must be EXACT: remove_sites_from_wp → "remove N sites"; archive_programmes_bulk → "archive N programmes"; archive_work_packages_bulk → "archive N work packages". N is the array length. Ask the user for a reason string for any archive tool.
 10. Do not chain more than 3 write proposals in one turn; wait for the user to review.`;
 
 Deno.serve(async (req) => {
