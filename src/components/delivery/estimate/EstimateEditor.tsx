@@ -14,6 +14,9 @@ import { GeneratePlanDialog } from "./GeneratePlanDialog";
 import { SendQuotationDialog } from "./SendQuotationDialog";
 import { downloadQuotationPdf } from "@/lib/quotation-pdf";
 import { EstimateRevisionsBar, PrelimsInline } from "./EstimateRevisionsBar";
+import { EstimateSitePickerDialog, type PickedSite } from "./EstimateSitePickerDialog";
+import { MapPin, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -28,6 +31,7 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
   const [planOpen, setPlanOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [bulkMarkup, setBulkMarkup] = useState<string>("");
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
