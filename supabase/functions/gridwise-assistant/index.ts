@@ -2,6 +2,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { convertToModelMessages, streamText, tool, stepCountIs, type UIMessage } from "npm:ai@^7";
 import { z } from "npm:zod@^3";
 import { createLovableAiGatewayProvider } from "../_shared/ai-gateway.ts";
+import {
+  writeToolSchemas,
+  writeToolDescriptions,
+  WRITE_TOOL_NAMES,
+} from "../_shared/agent-write-tools.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,7 +23,10 @@ RULES YOU MUST FOLLOW:
 4. Cite every fact by including the id from the tool result. Sources are rendered automatically from tool outputs — you do not need to format them.
 5. All data returned to you is already filtered by the user's permissions. Do not ask for user_id or org_id.
 6. Be concise and precise. Use markdown lists and headings. Do not repeat tool JSON verbatim.
-7. You are read-only in this phase. If a user asks you to create, update, delete, approve, or assign anything, explain that write actions arrive in the next phase.`;
+7. You CAN take actions using WRITE tools (mark_stage_done_bulk, add_sites_to_wp, remove_sites_from_wp, queue_survey_for_sites, update_site_fields). Every write requires the user to click Approve before it runs — you cannot bypass this.
+8. Before proposing a write, gather the required IDs by calling read tools first (search_sites, search_programmes, get_site_details). Never guess UUIDs.
+9. For remove_sites_from_wp you MUST include the confirm_phrase field with the literal string "remove N sites" where N is the number of site_ids. Never fabricate other confirmation text.
+10. Do not chain more than 3 write proposals in one turn; wait for the user to review.`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -96,7 +104,7 @@ Deno.serve(async (req) => {
 
     const system = SYSTEM_PROMPT + (contextLine ? `\n\nCurrent context: ${contextLine}.` : "");
 
-    const tools = {
+    const tools: Record<string, any> = {
       search_sites: tool({
         description: "Search the user's Gridwise sites by name, postcode, or client organisation. Returns up to 20 rows scoped by RLS.",
         inputSchema: z.object({
@@ -215,6 +223,21 @@ Deno.serve(async (req) => {
       }),
     };
 
+    // WRITE tools — declared WITHOUT `execute` so the AI SDK surfaces them
+    // to the client in `input-available` state. The client renders an
+    // approval card; on Approve it calls gridwise-agent-execute and then
+    // returns the result via addToolResult, which resumes the stream.
+    for (const name of WRITE_TOOL_NAMES) {
+      tools[name] = tool({
+        description: writeToolDescriptions[name],
+        inputSchema: writeToolSchemas[name],
+        // no execute → human-in-the-loop
+      });
+    }
+
+    // Log every proposed write for audit as soon as the model asks for it.
+    // We use onStepFinish to capture proposals without waiting for execution.
+
     const modelMessages = await convertToModelMessages(messages);
     const result = streamText({
       model,
@@ -222,6 +245,25 @@ Deno.serve(async (req) => {
       messages: modelMessages,
       tools,
       stopWhen: stepCountIs(20),
+      onStepFinish: async ({ toolCalls }) => {
+        try {
+          for (const call of toolCalls ?? []) {
+            if (WRITE_TOOL_NAMES.includes(call.toolName as any)) {
+              await supabase.from("assistant_tool_calls").insert({
+                thread_id: threadId,
+                user_id: userId,
+                tool_name: call.toolName,
+                tool_call_id: call.toolCallId,
+                params: call.input as any,
+                status: "proposed",
+                model: "google/gemini-3.1-pro-preview",
+              });
+            }
+          }
+        } catch (err) {
+          console.error("proposal audit failed", err);
+        }
+      },
       onError: (err) => console.error("streamText error", err),
     });
 
