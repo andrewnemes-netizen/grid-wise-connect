@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { MULTI_RECIPIENT_STAGES, getNextStages, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { computeWaitTargetDate, isWaitingStage } from "@/lib/wp/waitingStages";
 
 /**
  * Mark a stage as Done for a single site, clear its recipients, and open the
@@ -54,19 +55,25 @@ export async function completeStageAndAssignNext(params: {
         ? "in_progress"
         : (existing.workflow_status as StageStatus);
 
-    const { error: e2 } = await (supabase as any).from("site_stage_status").upsert(
-      {
-        work_package_id: wpId,
-        site_id: siteId,
-        stage: nextKey,
-        workflow_status: nextStatus,
-        owner_id: isMultiNext ? null : (nextRecipientUserIds[0] ?? null),
-        recipient_user_ids: nextRecipientUserIds,
-        recipient_contact_ids: [],
-        actual_start_date: existing?.actual_start_date ?? today,
-      },
-      { onConflict: "site_id,stage" },
-    );
+    const payload: Record<string, any> = {
+      work_package_id: wpId,
+      site_id: siteId,
+      stage: nextKey,
+      workflow_status: nextStatus,
+      owner_id: isMultiNext ? null : (nextRecipientUserIds[0] ?? null),
+      recipient_user_ids: nextRecipientUserIds,
+      recipient_contact_ids: [],
+      actual_start_date: existing?.actual_start_date ?? today,
+    };
+    if (isWaitingStage(nextKey)) {
+      payload.wait_started_at = new Date().toISOString();
+      payload.wait_target_date = computeWaitTargetDate(nextKey);
+      payload.wait_delay_reason = null;
+      payload.wait_delay_logged_at = null;
+    }
+    const { error: e2 } = await (supabase as any)
+      .from("site_stage_status")
+      .upsert(payload, { onConflict: "site_id,stage" });
     if (e2) throw e2;
     opened++;
   }
