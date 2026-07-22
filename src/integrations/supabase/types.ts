@@ -12279,6 +12279,7 @@ export type Database = {
         | "build_handover_gate"
         | "icp_po"
         | "connections_handover_gate"
+        | "poc_quote"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -12587,6 +12588,7 @@ export const Constants = {
         "build_handover_gate",
         "icp_po",
         "connections_handover_gate",
+        "poc_quote",
       ],
       site_stage_state: [
         "not_started",
