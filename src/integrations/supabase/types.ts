@@ -12181,6 +12181,10 @@ export type Database = {
         Returns: boolean
       }
       user_org_id: { Args: { _user_id: string }; Returns: string }
+      working_days_between: {
+        Args: { from_date: string; to_date: string }
+        Returns: number
+      }
     }
     Enums: {
       actual_cost_category:
@@ -12292,6 +12296,7 @@ export type Database = {
         | "icp_po"
         | "connections_handover_gate"
         | "poc_quote"
+        | "issue_survey_design_quote"
       site_stage_state:
         | "not_started"
         | "in_progress"
@@ -12601,6 +12606,7 @@ export const Constants = {
         "icp_po",
         "connections_handover_gate",
         "poc_quote",
+        "issue_survey_design_quote",
       ],
       site_stage_state: [
         "not_started",
