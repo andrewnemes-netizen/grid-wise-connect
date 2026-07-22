@@ -381,7 +381,7 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
                       <div className="px-3 py-2">BOQ Item / Supplier</div>
                       <div className="px-2 py-2 text-right">Qty × Unit Cost</div>
                       <div className="px-2 py-2 text-right">Markup</div>
-                      <div className="px-2 py-2 text-right">Unit Price</div>
+                      <div className="px-2 py-2 text-right">Unit Price (incl. markup)</div>
                       <div className="px-2 py-2 text-right">Discount</div>
                       <div className="px-2 py-2 text-right">Sub Total</div>
                       <div className="px-2 py-2 text-right">VAT / Total</div>
