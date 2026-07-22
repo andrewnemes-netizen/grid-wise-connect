@@ -192,6 +192,39 @@ export type Database = {
           },
         ]
       }
+      agent_auto_execution_log: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          params: Json | null
+          result_summary: string | null
+          status: string
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          params?: Json | null
+          result_summary?: string | null
+          status: string
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          params?: Json | null
+          result_summary?: string | null
+          status?: string
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           financial_period_lock_before: string | null
@@ -265,7 +298,9 @@ export type Database = {
       }
       assistant_threads: {
         Row: {
+          agent_id: string | null
           archived_at: string | null
+          auto_execute_safe: boolean | null
           context_programme_id: string | null
           context_site_id: string | null
           context_wp_id: string | null
@@ -276,7 +311,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string | null
           archived_at?: string | null
+          auto_execute_safe?: boolean | null
           context_programme_id?: string | null
           context_site_id?: string | null
           context_wp_id?: string | null
@@ -287,7 +324,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string | null
           archived_at?: string | null
+          auto_execute_safe?: boolean | null
           context_programme_id?: string | null
           context_site_id?: string | null
           context_wp_id?: string | null
@@ -301,9 +340,11 @@ export type Database = {
       }
       assistant_tool_calls: {
         Row: {
+          agent_id: string | null
           created_at: string
           error_message: string | null
           executed_at: string | null
+          execution_mode: string | null
           execution_ms: number | null
           id: string
           model: string | null
@@ -311,6 +352,7 @@ export type Database = {
           preview: string | null
           record_ids: string[] | null
           result_summary: string | null
+          risk_tier: string | null
           status: string
           thread_id: string | null
           tool_call_id: string | null
@@ -318,9 +360,11 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agent_id?: string | null
           created_at?: string
           error_message?: string | null
           executed_at?: string | null
+          execution_mode?: string | null
           execution_ms?: number | null
           id?: string
           model?: string | null
@@ -328,6 +372,7 @@ export type Database = {
           preview?: string | null
           record_ids?: string[] | null
           result_summary?: string | null
+          risk_tier?: string | null
           status: string
           thread_id?: string | null
           tool_call_id?: string | null
@@ -335,9 +380,11 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agent_id?: string | null
           created_at?: string
           error_message?: string | null
           executed_at?: string | null
+          execution_mode?: string | null
           execution_ms?: number | null
           id?: string
           model?: string | null
@@ -345,6 +392,7 @@ export type Database = {
           preview?: string | null
           record_ids?: string[] | null
           result_summary?: string | null
+          risk_tier?: string | null
           status?: string
           thread_id?: string | null
           tool_call_id?: string | null

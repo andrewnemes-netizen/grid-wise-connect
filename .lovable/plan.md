@@ -1,108 +1,157 @@
+# Plan: Multi-Agent Orchestration for Gridwise
 
-# Gridwise Assistant → Action Agent
+## Goals
 
-Turn the read-only Assistant into a **tool-using agent that proposes writes and executes them after the user clicks Approve**. All writes run **as the signed-in user** through Supabase (RLS enforced — the Assistant can never do anything the user couldn't do in the UI). Every proposal and execution is written to an audit log.
+1. Split the single Gridwise Assistant into domain-specific agents (Pre-Con, Sales, Delivery, Admin).
+2. Expand the Pre-Con agent so it can progress stages, reassign owners, and escalate waiting/counter stages.
+3. Introduce **safe auto-execution** for low-risk actions while keeping destructive/costly actions approval-gated.
+4. Add a background scheduler that auto-escalates overdue waiting/counter stages and sends reminders.
+5. Build an audit/traceability UI for every tool proposal and execution.
+6. Generate a user guide for prompting the agents.
 
-Phase 1 ships on-demand (chat-driven). Phase 2 adds a scheduled/triggered agent runner reusing the same tools.
+## Current state (verified)
 
----
+- One `gridwise-assistant` Edge Function serves all requests. It mixes read tools (search sites, programmes, work packages) and write tools (archive, stage updates, site edits, surveys).
+- Write tools are declared **without `execute`** so the AI SDK surfaces them as proposals; `AssistantChat.tsx` renders `ToolProposalCard.tsx` and calls `gridwise-agent-execute` on approval.
+- `assistant_threads` has context fields (`context_programme_id`, `context_wp_id`, `context_site_id`) but no agent identifier.
+- `assistant_tool_calls` logs `status: proposed | executed | rejected | error` but has no `agent_id` or `execution_mode` (auto/approved).
+- Pre-Con stages live in `site_stage_status` / `stage_definitions`; `src/lib/wp/completeStage.ts` and `bulk_complete_stage_and_assign_next` RPC already handle stage progression.
+- Waiting stages (`poc_offer_awaiting`) and counter stages (`survey_po_gate`) already store `wait_started_at`, `wait_target_date`, and `wait_delay_reason`.
+- A `pg_cron` job already invokes an Edge Function (`xero-sync-payments-30m`), so the scheduler pattern is proven.
+- Docs live under `docs/` (e.g., `docs/gridwise-os/`).
 
-## Phase 1 — On-demand write agent (this slice)
+## 1. Schema changes
 
-### 1. Tool registry (server, shared)
+### `assistant_threads`
+- Add `agent_id text` (nullable, default `'general'`).
+- Add `auto_execute_safe boolean` default `false`.
 
-New Edge Function tool library in `supabase/functions/_shared/agent-tools/`, one file per tool. Each tool declares:
+### `assistant_tool_calls`
+- Add `agent_id text`.
+- Add `execution_mode text` (`proposed`, `auto_executed`, `approved`, `rejected`, `error`).
+- Add `risk_tier text` (`safe`, `destructive`, `external`, `cost`).
 
-- `name`, `description`, Zod `inputSchema`
-- `mode`: `"read"` (auto-runs) or `"write"` (requires approval)
-- `preview(input, ctx)` → human-readable diff string ("Will move site *Rutger Place* from **Intake → PoC Application** and notify **Liam French**")
-- `execute(input, ctx)` → runs via a Supabase client bound to the caller's JWT (RLS enforced)
+### New table: `agent_auto_execution_log`
+- `id uuid`, `agent_id text`, `tool_name text`, `params jsonb`, `user_id uuid`, `status text`, `result_summary text`, `created_at timestamptz`.
+- GRANT to authenticated + service_role; RLS enabled; policy scoped to `auth.uid()`.
 
-**First tools (small, high-leverage subset from your 4 categories):**
+## 2. Agent registry and routing
 
-| Category | Tool | Mode |
-|---|---|---|
-| Site & WP | `search_sites`, `add_sites_to_wp`, `remove_sites_from_wp`, `update_site_fields` | read / write / write / write |
-| Pre-Con stages | `list_stage_status`, `mark_stage_done`, `mark_stage_received`, `mark_stage_delayed`, `assign_next_stage_owner` | read / write × 4 |
-| Surveys & tasks | `list_open_tasks`, `queue_survey`, `reassign_task`, `resend_survey_link` | read / write × 3 |
-| Estimates & docs | `list_estimates`, `create_draft_estimate`, `apply_bulk_markup`, `generate_estimate_pdf` | read / write × 3 |
+Create `supabase/functions/_shared/agent-registry.ts`:
+- Define agents: `general`, `precon`, `sales`, `delivery`, `admin`.
+- Each agent has: `id`, `name`, `systemPrompt`, `readToolNames`, `writeToolNames`, `safeAutoExecute` predicate.
 
-Every write tool reuses the **existing RPC / service function** it corresponds to (e.g. `bulk_complete_stage_and_assign_next`, `queue_survey`, `archive_entity`) — no duplicate business logic.
+Refactor `gridwise-assistant/index.ts`:
+- Read `agent_id` from request body (default `general`).
+- Load the agent's system prompt and tool set from the registry.
+- Keep the same streaming/audit pattern.
+- Persist `agent_id` on thread and tool-call rows.
 
-### 2. Assistant edge function (rewritten)
+## 3. Pre-Con agent tools
 
-`supabase/functions/gridwise-assistant/index.ts` becomes an AI-SDK tool-calling loop:
+Move Pre-Con-specific tools into `supabase/functions/_shared/agents/precon-tools.ts`.
 
-- Auth: `supabase.auth.getUser()` from the bearer token — reject if no session.
-- Loads the tool registry. **Read tools** are exposed with `execute`. **Write tools** are exposed with `needsApproval: true` (AI SDK native approval mechanism).
-- `streamText({ model: gateway("google/gemini-3.5-flash"), tools, stopWhen: stepCountIs(50), toolChoice: "auto" })`.
-- Streams via `toUIMessageStreamResponse` so the client sees text + tool call parts + approval requests.
+### Read tools
+- `list_wp_sites(work_package_id)` — sites in a WP with current stage summary.
+- `get_stage_status(work_package_id, site_ids, stage_key)` — current status, owner, recipients, wait dates.
+- `list_stage_definitions()` — key, label, track, requires_owner, allowed_owner_roles.
 
-### 3. Approval UI (new)
+### Write tools
+- `mark_stage_done_bulk` (existing) — approval required.
+- `set_stage_status_bulk` — set `in_progress` / `blocked` / `review` for many sites; **safe auto-execute** when only changing status within the same stage and no external communication.
+- `assign_stage_owner` — assign owner/recipients to a stage; **safe auto-execute**.
+- `reassign_waiting_stage_owner` — change owner of an overdue waiting stage; **safe auto-execute**.
+- `queue_survey_for_sites` (existing) — approval required (sends email).
+- `update_site_fields` (existing) — approval required.
 
-Extends `src/components/assistant/AssistantChat.tsx`:
+## 4. Safe auto-execution rules
 
-- Renders tool-call parts inline (using existing `ai-elements/tool.tsx`).
-- When a write tool is called, shows a **proposal card** with the tool's `preview` string + Approve / Reject buttons.
-- Approve → sends `addToolResult` continuing the stream, which triggers `execute` server-side.
-- Reject → sends a "rejected" tool result; assistant apologises / offers alternatives.
-- Removes the "READ-ONLY" badge; renames to "Gridwise Assistant" with a small "Acts as you" tooltip.
+A write tool may auto-execute only when **all** are true:
+1. Tool is in the active agent's `safeAutoExecute` allowlist.
+2. Action is idempotent (same input → same outcome).
+3. No external communication (no email, no survey token, no Xero/OneDrive write).
+4. No cost impact (no estimate creation, no PO/invoice).
+5. User's role/capability allows the action (verified via `capability_grants` or RLS).
+6. Audit row is inserted before execution.
 
-### 4. Audit log
+Implementation:
+- In `gridwise-assistant`, when a safe tool is called, run it inline via `executeWriteTool` and return the result immediately (no proposal).
+- Non-safe tools continue to surface as `ToolProposalCard` for human approval.
+- Update `ToolProposalCard` to show a "Safe action — executed automatically" badge when `execution_mode === 'auto_executed'`.
 
-New table `assistant_action_log`:
+## 5. Background scheduler for waiting/counter stages
 
-```
-id, user_id, thread_id, tool_name, input jsonb, preview text,
-status (proposed|approved|rejected|executed|failed),
-result jsonb, error text, created_at, executed_at
-```
+Create `supabase/functions/gridwise-agent-scheduler/index.ts`:
+- Invoked by a new `pg_cron` job every 15 minutes.
+- Finds waiting/counter stages that are:
+  - overdue (`wait_target_date < today` or 20 working days elapsed),
+  - not already escalated today,
+  - assigned to an owner.
+- Auto-sets status to `blocked` with reason `"Overdue: <stage label>"`.
+- Sends one aggregated notification per owner via the existing notification path.
+- Logs to `agent_auto_execution_log`.
 
-RLS: users see their own rows; platform admins see all. Rendered in a new **Admin → Assistant Activity** panel (later slice).
+Frontend: add a read-only "Agent Activity" panel in `WpMatrixTab.tsx` showing recent auto-executions for the WP.
 
-### 5. Safety rails (non-negotiable)
+## 6. Frontend changes
 
-- **All writes go through the user-scoped Supabase client** (`Authorization: Bearer <user JWT>`). No service-role client in the tool path.
-- Destructive tools (`remove_sites_from_wp`, delete-style) require explicit confirmation text match ("delete 3 sites") in the approval.
-- Rate limit: max 20 tool calls per assistant turn (via `stopWhen`), max 5 concurrent write approvals per thread.
-- Tools never see or return the JWT.
-- The assistant system prompt forbids: privilege escalation, bulk deletes without explicit user request, cross-org data access, and inventing engineering/commercial values.
+### `AssistantChat.tsx`
+- Add an agent selector dropdown (General, Pre-Con, Sales, Delivery, Admin).
+- Persist selected agent in `assistant_threads.agent_id`.
+- Pass `agent_id` to the Edge Function.
+- Render auto-executed tool results inline (no approval card).
 
----
+### New page: `AgentAuditLog.tsx`
+- Route: `/assistant/audit` (Admin-only via `is_platform_admin` or capability check).
+- Table: agent, tool, user, params preview, status, execution mode, timestamp.
+- Filters by agent, status, date range.
 
-## Phase 2 — Scheduled/triggered agents (next slice, not this one)
+### `WpMatrixTab.tsx`
+- Add "Agent Activity" drawer showing last 20 auto-executions for the current WP.
+- Add "Ask Pre-Con agent" button that opens the Assistant with `agent_id='precon'` and `context_wp_id` pre-filled.
 
-Once Phase 1 is live and audited, add:
+## 7. User guide
 
-- `agent_definitions` table (name, schedule cron, prompt, allowed_tools, owner_user_id, enabled).
-- `agent_runs` table (definition_id, started_at, finished_at, status, transcript, actions_taken).
-- Supabase cron → `run-agent` edge function that runs the same tool loop **without human approval** but restricted to a per-agent tool allowlist and acting under the definition's owner.
-- Event triggers (e.g. "when PoC offer arrives", "every weekday 8am") that enqueue an agent run.
-- Admin UI in `/admin/agents` to author agents, view runs, disable them.
+Generate `docs/gridwise-os/AI_AGENT_GUIDE.md`:
+- How to switch agents.
+- What each agent can do.
+- Which actions auto-execute vs require approval.
+- Example prompts:
+  - "Mark PoC Application done for all sites in WP4 and assign Liam to PoC Offer Due."
+  - "Show me overdue waiting stages in Plymouth programme."
+  - "Archive all completed programmes from 2024."
+- Confirmation phrases for destructive actions.
 
-Out of scope for this PR.
+## 8. Deployment and verification
 
----
+- Add migration for schema changes.
+- Deploy `gridwise-assistant`, `gridwise-agent-execute`, and `gridwise-agent-scheduler`.
+- Create `pg_cron` job via `supabase--read_query` (not migration, because it contains project-specific URL/key).
+- Verify with Playwright:
+  1. Open Assistant, switch to Pre-Con agent.
+  2. Ask to mark a stage done → approval card appears.
+  3. Ask to assign an owner → auto-executes inline.
+  4. Open Agent Audit Log and see both rows.
 
-## Files touched (Phase 1)
+## Out of scope for this plan
 
-**New**
-- `supabase/functions/_shared/agent-tools/index.ts` (registry)
-- `supabase/functions/_shared/agent-tools/{sites,stages,surveys,estimates}.ts`
-- `supabase/functions/_shared/user-supabase.ts` (JWT-bound client factory)
-- `src/components/assistant/ToolProposalCard.tsx`
-- Migration: `assistant_action_log` + RLS + grants
+- Replacing the existing approval flow entirely.
+- Adding natural-language archive for non-destructive entities beyond what already exists.
+- Sales/Delivery/Admin agent full tool registries (only Pre-Con gets expanded tools; others get identity/prompt only).
 
-**Modified**
-- `supabase/functions/gridwise-assistant/index.ts` (rewrite — tool loop)
-- `src/components/assistant/AssistantChat.tsx` (render tool parts, approval UI, remove READ-ONLY badge)
-- `src/pages/Assistant.tsx` (badge label change)
+## Files to create/modify
 
----
-
-## Acceptance
-
-- User asks "Mark 'PoC Application' done for Rutger Place and notify Liam" → assistant proposes → user clicks Approve → stage advances in the matrix in real time → audit row written.
-- User asks "Delete all sites in Gloucester" → assistant proposes with destructive confirmation → user must type "delete 4 sites" → executes only if RLS allows.
-- Signing in as a Client (no admin capability) and asking for admin-only actions → tool call fails with the same RLS error the UI would show; assistant reports it honestly.
-- Old chat threads still open; new threads use the write-capable assistant.
+- New: `supabase/functions/_shared/agent-registry.ts`
+- New: `supabase/functions/_shared/agents/precon-tools.ts`
+- New: `supabase/functions/gridwise-agent-scheduler/index.ts`
+- New: `src/components/assistant/AgentSelector.tsx`
+- New: `src/pages/AgentAuditLog.tsx`
+- New: `docs/gridwise-os/AI_AGENT_GUIDE.md`
+- Modify: `supabase/functions/gridwise-assistant/index.ts`
+- Modify: `supabase/functions/gridwise-agent-execute/index.ts`
+- Modify: `supabase/functions/_shared/agent-write-tools.ts`
+- Modify: `src/components/assistant/AssistantChat.tsx`
+- Modify: `src/components/assistant/ToolProposalCard.tsx`
+- Modify: `src/pages/Assistant.tsx`
+- Modify: `src/components/wp/WpMatrixTab.tsx`
+- Migration: add columns to `assistant_threads` / `assistant_tool_calls`; create `agent_auto_execution_log`.

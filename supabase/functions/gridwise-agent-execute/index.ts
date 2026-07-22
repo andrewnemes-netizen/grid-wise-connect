@@ -6,6 +6,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   executeWriteTool,
   previewFor,
+  riskTierFor,
   WRITE_TOOL_NAMES,
   type WriteToolName,
 } from "../_shared/agent-write-tools.ts";
@@ -31,13 +32,14 @@ Deno.serve(async (req) => {
     const userId = userData.user.id;
 
     const body = await req.json().catch(() => null) as
-      | { tool?: string; input?: unknown; tool_call_id?: string; thread_id?: string; decision?: "approve" | "reject" }
+      | { tool?: string; input?: unknown; tool_call_id?: string; thread_id?: string; decision?: "approve" | "reject"; agent_id?: string }
       | null;
     if (!body?.tool || !body.decision) return json({ error: "tool and decision required" }, 400);
     if (!WRITE_TOOL_NAMES.includes(body.tool as WriteToolName)) {
       return json({ error: `Unknown tool: ${body.tool}` }, 400);
     }
     const tool = body.tool as WriteToolName;
+    const agentId = body.agent_id ?? "general";
     const started = Date.now();
     const preview = previewFor(tool, body.input);
 
@@ -46,6 +48,7 @@ Deno.serve(async (req) => {
       await supabase.from("assistant_tool_calls").insert({
         thread_id: body?.thread_id ?? null,
         user_id: userId,
+        agent_id: agentId,
         tool_name: tool,
         params: body?.input ?? null,
         tool_call_id: body?.tool_call_id ?? null,
@@ -56,6 +59,8 @@ Deno.serve(async (req) => {
         record_ids: extra.record_ids ?? null,
         execution_ms: Date.now() - started,
         executed_at: status === "executed" ? new Date().toISOString() : null,
+        execution_mode: status === "executed" ? "approved" : status,
+        risk_tier: riskTierFor(tool),
       });
     }
 
