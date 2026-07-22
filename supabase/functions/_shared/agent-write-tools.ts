@@ -3,11 +3,17 @@
 // so every call arrives at the client as a proposal that requires human
 // approval. On approval the client posts to `gridwise-agent-execute`, which
 // runs the corresponding branch below as the signed-in user (RLS enforced).
+//
+// SAFE tools (configured per agent in agent-registry.ts) may also be executed
+// inline by gridwise-assistant when the user has enabled auto_execute_safe.
 import { z } from "npm:zod@^3";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export type WriteToolName =
   | "mark_stage_done_bulk"
+  | "set_stage_status_bulk"
+  | "assign_stage_owner"
+  | "reassign_waiting_stage_owner"
   | "add_sites_to_wp"
   | "remove_sites_from_wp"
   | "queue_survey_for_sites"
@@ -25,6 +31,26 @@ export const writeToolSchemas = {
     site_ids: z.array(z.string().uuid()).min(1).max(200),
     stage_key: z.string().min(1),
     next_stage_recipient_user_ids: z.array(z.string().uuid()).default([]),
+  }),
+  set_stage_status_bulk: z.object({
+    work_package_id: z.string().uuid(),
+    site_ids: z.array(z.string().uuid()).min(1).max(200),
+    stage_key: z.string().min(1),
+    status: z.enum(["in_progress", "blocked", "review"]),
+    blocked_reason: z.string().optional(),
+  }),
+  assign_stage_owner: z.object({
+    work_package_id: z.string().uuid(),
+    site_ids: z.array(z.string().uuid()).min(1).max(200),
+    stage_key: z.string().min(1),
+    owner_user_id: z.string().uuid().optional(),
+    recipient_user_ids: z.array(z.string().uuid()).default([]),
+  }),
+  reassign_waiting_stage_owner: z.object({
+    work_package_id: z.string().uuid(),
+    site_ids: z.array(z.string().uuid()).min(1).max(200),
+    stage_key: z.string().min(1),
+    new_owner_user_id: z.string().uuid(),
   }),
   add_sites_to_wp: z.object({
     work_package_id: z.string().uuid(),
@@ -84,6 +110,12 @@ export const writeToolSchemas = {
 export const writeToolDescriptions: Record<WriteToolName, string> = {
   mark_stage_done_bulk:
     "Mark a Pre-Con stage as DONE for one or more sites in a work package, and optionally assign owners for the NEXT stage. Requires human approval. Use exact stage_key from stage_definitions (e.g. 'poc_application').",
+  set_stage_status_bulk:
+    "Set the workflow status of a stage to in_progress / blocked / review for one or more sites. Safe — may auto-execute when the user has enabled safe auto-execution.",
+  assign_stage_owner:
+    "Assign an owner and/or recipients to a stage for one or more sites. Safe — may auto-execute.",
+  reassign_waiting_stage_owner:
+    "Reassign the owner of an overdue waiting/counter stage (e.g. PoC Offer Due, Survey PO Gate) to a new user. Safe — may auto-execute.",
   add_sites_to_wp:
     "Attach existing sites to a work package. Requires human approval. Does not create sites.",
   remove_sites_from_wp:
@@ -104,6 +136,27 @@ export const writeToolDescriptions: Record<WriteToolName, string> = {
     "DESTRUCTIVE. Archive multiple work packages in one action. Requires approval, a reason, and confirm_phrase 'archive N work packages' matching count. Never guess IDs.",
 };
 
+// Risk tier used for UI badges and auto-execution eligibility.
+export function riskTierFor(tool: WriteToolName): "safe" | "destructive" | "external" | "cost" {
+  switch (tool) {
+    case "set_stage_status_bulk":
+    case "assign_stage_owner":
+    case "reassign_waiting_stage_owner":
+      return "safe";
+    case "queue_survey_for_sites":
+      return "external";
+    case "archive_programme":
+    case "archive_work_package":
+    case "archive_site":
+    case "archive_programmes_bulk":
+    case "archive_work_packages_bulk":
+    case "remove_sites_from_wp":
+      return "destructive";
+    default:
+      return "cost";
+  }
+}
+
 // Preview (shown to the user in the approval card) — synchronous, no I/O.
 export function previewFor(tool: WriteToolName, input: unknown): string {
   const parsed = writeToolSchemas[tool].safeParse(input);
@@ -116,6 +169,12 @@ export function previewFor(tool: WriteToolName, input: unknown): string {
           ? ` and assign ${p.next_stage_recipient_user_ids.length} owner${p.next_stage_recipient_user_ids.length === 1 ? "" : "s"} to the next stage`
           : ""
       }.`;
+    case "set_stage_status_bulk":
+      return `Set stage **${p.stage_key}** to **${p.status}** for ${p.site_ids.length} site${p.site_ids.length === 1 ? "" : "s"} in WP ${short(p.work_package_id)}.`;
+    case "assign_stage_owner":
+      return `Assign owner/recipients to stage **${p.stage_key}** for ${p.site_ids.length} site${p.site_ids.length === 1 ? "" : "s"} in WP ${short(p.work_package_id)}.`;
+    case "reassign_waiting_stage_owner":
+      return `Reassign waiting stage **${p.stage_key}** for ${p.site_ids.length} site${p.site_ids.length === 1 ? "" : "s"} to owner ${short(p.new_owner_user_id)}.`;
     case "add_sites_to_wp":
       return `Attach ${p.site_ids.length} site${p.site_ids.length === 1 ? "" : "s"} to WP ${short(p.work_package_id)}.`;
     case "remove_sites_from_wp":
@@ -164,6 +223,84 @@ export async function executeWriteTool(
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true, result: { updated: input.site_ids.length, rpc: data ?? null } };
+      }
+      case "set_stage_status_bulk": {
+        const today = new Date().toISOString().slice(0, 10);
+        const failed: { site_id: string; message: string }[] = [];
+        let updated = 0;
+        for (const siteId of input.site_ids) {
+          const { data: existing } = await supabase
+            .from("site_stage_status")
+            .select("actual_start_date")
+            .eq("site_id", siteId)
+            .eq("stage", input.stage_key)
+            .maybeSingle();
+          const payload: Record<string, any> = {
+            work_package_id: input.work_package_id,
+            site_id: siteId,
+            stage: input.stage_key,
+            workflow_status: input.status,
+            blocked_reason: input.status === "blocked" ? (input.blocked_reason ?? null) : null,
+          };
+          if (input.status === "in_progress" && !existing?.actual_start_date) {
+            payload.actual_start_date = today;
+          }
+          const { error } = await supabase.from("site_stage_status").upsert(payload, { onConflict: "site_id,stage" });
+          if (error) {
+            failed.push({ site_id: siteId, message: error.message });
+          } else {
+            updated++;
+          }
+        }
+        return { ok: true, result: { updated, failed } };
+      }
+      case "assign_stage_owner": {
+        const failed: { site_id: string; message: string }[] = [];
+        let updated = 0;
+        for (const siteId of input.site_ids) {
+          const { error } = await supabase.from("site_stage_status").upsert({
+            work_package_id: input.work_package_id,
+            site_id: siteId,
+            stage: input.stage_key,
+            owner_id: input.owner_user_id ?? null,
+            recipient_user_ids: input.recipient_user_ids,
+          }, { onConflict: "site_id,stage" });
+          if (error) {
+            failed.push({ site_id: siteId, message: error.message });
+          } else {
+            updated++;
+          }
+        }
+        return { ok: true, result: { updated, failed } };
+      }
+      case "reassign_waiting_stage_owner": {
+        const failed: { site_id: string; message: string }[] = [];
+        let updated = 0;
+        for (const siteId of input.site_ids) {
+          const { data: existing } = await supabase
+            .from("site_stage_status")
+            .select("workflow_status")
+            .eq("site_id", siteId)
+            .eq("stage", input.stage_key)
+            .maybeSingle();
+          if (!existing || (existing.workflow_status !== "in_progress" && existing.workflow_status !== "review")) {
+            failed.push({ site_id: siteId, message: "Stage is not active; cannot reassign" });
+            continue;
+          }
+          const { error } = await supabase.from("site_stage_status").upsert({
+            work_package_id: input.work_package_id,
+            site_id: siteId,
+            stage: input.stage_key,
+            owner_id: input.new_owner_user_id,
+            recipient_user_ids: [input.new_owner_user_id],
+          }, { onConflict: "site_id,stage" });
+          if (error) {
+            failed.push({ site_id: siteId, message: error.message });
+          } else {
+            updated++;
+          }
+        }
+        return { ok: true, result: { updated, failed } };
       }
       case "add_sites_to_wp": {
         const rows = input.site_ids.map((site_id: string) => ({

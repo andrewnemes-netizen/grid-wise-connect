@@ -13,14 +13,23 @@ import { Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ToolProposalCard } from "./ToolProposalCard";
+import { AgentSelector, type AgentId } from "./AgentSelector";
 import { toast } from "sonner";
 
 const WRITE_TOOL_NAMES = new Set([
   "mark_stage_done_bulk",
+  "set_stage_status_bulk",
+  "assign_stage_owner",
+  "reassign_waiting_stage_owner",
   "add_sites_to_wp",
   "remove_sites_from_wp",
   "queue_survey_for_sites",
   "update_site_fields",
+  "archive_programme",
+  "archive_work_package",
+  "archive_site",
+  "archive_programmes_bulk",
+  "archive_work_packages_bulk",
 ]);
 
 interface Source {
@@ -60,6 +69,8 @@ export function AssistantChat({ threadId }: { threadId: string }) {
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [agentId, setAgentId] = useState<AgentId>("general");
+  const [autoExecuteSafe, setAutoExecuteSafe] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -73,17 +84,28 @@ export function AssistantChat({ threadId }: { threadId: string }) {
         if (!cancelled) setLoadError("Please sign in again.");
         return;
       }
-      const { data, error } = await supabase
-        .from("assistant_messages")
-        .select("id, role, parts, created_at")
-        .eq("thread_id", threadId)
-        .order("created_at", { ascending: true });
+      const [msgRes, threadRes] = await Promise.all([
+        supabase
+          .from("assistant_messages")
+          .select("id, role, parts, created_at")
+          .eq("thread_id", threadId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("assistant_threads")
+          .select("agent_id, auto_execute_safe")
+          .eq("id", threadId)
+          .maybeSingle(),
+      ]);
       if (cancelled) return;
-      if (error) {
-        setLoadError(error.message);
+      if (msgRes.error) {
+        setLoadError(msgRes.error.message);
         return;
       }
-      const msgs: UIMessage[] = (data ?? []).map((row: any) => ({
+      if (threadRes.data) {
+        if (threadRes.data.agent_id) setAgentId(threadRes.data.agent_id as AgentId);
+        setAutoExecuteSafe(!!threadRes.data.auto_execute_safe);
+      }
+      const msgs: UIMessage[] = (msgRes.data ?? []).map((row: any) => ({
         id: row.id,
         role: row.role,
         parts: Array.isArray(row.parts) ? row.parts : [],
@@ -102,7 +124,7 @@ export function AssistantChat({ threadId }: { threadId: string }) {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
         return {
-          body: { messages, threadId, ...(body ?? {}) },
+          body: { messages, threadId, agentId, autoExecuteSafe, ...(body ?? {}) },
           headers: {
             Authorization: `Bearer ${token}`,
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -110,7 +132,7 @@ export function AssistantChat({ threadId }: { threadId: string }) {
         };
       },
     });
-  }, [threadId]);
+  }, [threadId, agentId, autoExecuteSafe]);
 
   const { messages, sendMessage, status, error, stop, addToolResult } = useChat({
     id: threadId,
@@ -139,7 +161,7 @@ export function AssistantChat({ threadId }: { threadId: string }) {
           Authorization: `Bearer ${token}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: JSON.stringify({ tool: toolName, input, tool_call_id: toolCallId, thread_id: threadId, decision }),
+        body: JSON.stringify({ tool: toolName, input, tool_call_id: toolCallId, thread_id: threadId, decision, agent_id: agentId }),
       });
       const body = await res.json().catch(() => ({}));
       const output = body?.output ?? (body?.error ? { error: body.error } : body);
@@ -212,6 +234,13 @@ export function AssistantChat({ threadId }: { threadId: string }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <AgentSelector
+        threadId={threadId}
+        agentId={agentId}
+        onChange={setAgentId}
+        autoExecuteSafe={autoExecuteSafe}
+        onAutoExecuteChange={setAutoExecuteSafe}
+      />
       <Conversation className="flex-1 min-h-0">
         <ConversationContent className="max-w-3xl mx-auto w-full">
           {messages.length === 0 ? (
