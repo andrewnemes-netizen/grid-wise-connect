@@ -2384,6 +2384,7 @@ export type Database = {
           ref: string | null
           revision: number
           show_recipe_totals: boolean
+          site_id: string | null
           source_estimate_id: string | null
           status: string
           sub_total: number
@@ -2429,6 +2430,7 @@ export type Database = {
           ref?: string | null
           revision?: number
           show_recipe_totals?: boolean
+          site_id?: string | null
           source_estimate_id?: string | null
           status?: string
           sub_total?: number
@@ -2474,6 +2476,7 @@ export type Database = {
           ref?: string | null
           revision?: number
           show_recipe_totals?: boolean
+          site_id?: string | null
           source_estimate_id?: string | null
           status?: string
           sub_total?: number
@@ -2508,6 +2511,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "rate_card_versions"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
           },
           {
             foreignKeyName: "estimates_source_estimate_id_fkey"
