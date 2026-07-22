@@ -14,6 +14,9 @@ import { GeneratePlanDialog } from "./GeneratePlanDialog";
 import { SendQuotationDialog } from "./SendQuotationDialog";
 import { downloadQuotationPdf } from "@/lib/quotation-pdf";
 import { EstimateRevisionsBar, PrelimsInline } from "./EstimateRevisionsBar";
+import { EstimateSitePickerDialog, type PickedSite } from "./EstimateSitePickerDialog";
+import { MapPin, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const fmt = (n: number | null | undefined, ccy = "GBP") =>
   n == null ? "—" : new Intl.NumberFormat("en-GB", { style: "currency", currency: ccy, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n));
@@ -28,11 +31,26 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
   const [planOpen, setPlanOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [bulkMarkup, setBulkMarkup] = useState<string>("");
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
 
   const est = useQuery({
     queryKey: ["estimate", estimateId],
     queryFn: async () => {
       const { data, error } = await supabase.from("estimates" as any).select("*").eq("id", estimateId).single();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+
+  const boundSite = useQuery({
+    queryKey: ["estimate-bound-site", est.data?.site_id],
+    enabled: !!est.data?.site_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sites")
+        .select("id, site_name, postcode")
+        .eq("id", est.data.site_id)
+        .maybeSingle();
       if (error) throw error;
       return data as any;
     },
@@ -218,6 +236,30 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
             <span>Ref: <Input value={e.ref ?? ""} onChange={(ev) => updateEstimate.mutate({ ref: ev.target.value })} className="h-6 w-32 inline-block px-1" placeholder="REF…" /></span>
             <span>Currency: {e.currency}</span>
             <span>Rate: {Number(e.exchange_rate).toFixed(2)}</span>
+            {e.site_id && boundSite.data ? (
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3" />
+                <Link to={`/site/${e.site_id}`} className="text-primary hover:underline">
+                  {boundSite.data.site_name}{boundSite.data.postcode ? ` · ${boundSite.data.postcode}` : ""}
+                </Link>
+                {e.work_package_id && (
+                  <button
+                    onClick={() => setSitePickerOpen(true)}
+                    className="ml-1 text-[10px] underline text-muted-foreground hover:text-foreground"
+                  >
+                    change
+                  </button>
+                )}
+              </span>
+            ) : e.work_package_id ? (
+              <button
+                onClick={() => setSitePickerOpen(true)}
+                className="inline-flex items-center gap-1 text-amber-700 hover:underline"
+              >
+                <AlertCircle className="h-3 w-3" />
+                Assign site
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -510,6 +552,19 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
         groups={groups.data ?? []}
         lines={lines.data ?? []}
       />
+      {e.work_package_id && (
+        <EstimateSitePickerDialog
+          workPackageId={e.work_package_id}
+          open={sitePickerOpen}
+          onOpenChange={setSitePickerOpen}
+          onPick={(site: PickedSite) => {
+            updateEstimate.mutate({ site_id: site.id });
+            toast.success("Site linked to estimate");
+          }}
+          title={e.site_id ? "Change linked site" : "Link this estimate to a site"}
+          confirmLabel={e.site_id ? "Change site" : "Link site"}
+        />
+      )}
     </div>
   );
 }

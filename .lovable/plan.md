@@ -1,157 +1,51 @@
-# Plan: Multi-Agent Orchestration for Gridwise
+## Goal
 
-## Goals
+Right now on `PoC Estimates` (`WpPocEstimatesTab` → `EstimatesTab`), estimates are scoped only to the Work Package. `estimates.site_id` already exists on the row but is never set or displayed, so you can't tell which Site Register entry an estimate belongs to — and PO issuance has nothing to bind against.
 
-1. Split the single Gridwise Assistant into domain-specific agents (Pre-Con, Sales, Delivery, Admin).
-2. Expand the Pre-Con agent so it can progress stages, reassign owners, and escalate waiting/counter stages.
-3. Introduce **safe auto-execution** for low-risk actions while keeping destructive/costly actions approval-gated.
-4. Add a background scheduler that auto-escalates overdue waiting/counter stages and sends reminders.
-5. Build an audit/traceability UI for every tool proposal and execution.
-6. Generate a user guide for prompting the agents.
+This slice makes the site link a first-class, required field on every PoC estimate.
 
-## Current state (verified)
+## What changes (UX)
 
-- One `gridwise-assistant` Edge Function serves all requests. It mixes read tools (search sites, programmes, work packages) and write tools (archive, stage updates, site edits, surveys).
-- Write tools are declared **without `execute`** so the AI SDK surfaces them as proposals; `AssistantChat.tsx` renders `ToolProposalCard.tsx` and calls `gridwise-agent-execute` on approval.
-- `assistant_threads` has context fields (`context_programme_id`, `context_wp_id`, `context_site_id`) but no agent identifier.
-- `assistant_tool_calls` logs `status: proposed | executed | rejected | error` but has no `agent_id` or `execution_mode` (auto/approved).
-- Pre-Con stages live in `site_stage_status` / `stage_definitions`; `src/lib/wp/completeStage.ts` and `bulk_complete_stage_and_assign_next` RPC already handle stage progression.
-- Waiting stages (`poc_offer_awaiting`) and counter stages (`survey_po_gate`) already store `wait_started_at`, `wait_target_date`, and `wait_delay_reason`.
-- A `pg_cron` job already invokes an Edge Function (`xero-sync-payments-30m`), so the scheduler pattern is proven.
-- Docs live under `docs/` (e.g., `docs/gridwise-os/`).
+1. **"New estimate" opens a Site picker first**
+   - Modal listing every site currently in the WP Site Register (from `wp_sites` joined to `sites`) — searchable by `site_name`, `local_ref`, `postcode`.
+   - Shows a badge next to sites that already have an estimate ("1 estimate", "2 estimates") so you don't accidentally duplicate. You can still create another (revision case).
+   - Confirm → creates the estimate with `site_id` set and default groups seeded (unchanged).
 
-## 1. Schema changes
+2. **Site column on the estimates list**
+   - New column in `EstimatesTab` cards showing `Site: {local_ref} — {site_name} · {postcode}`.
+   - Clicking the site chip deep-links to that site's dashboard.
+   - Add a Site filter (dropdown of WP sites + "Unassigned") at the top of the list.
 
-### `assistant_threads`
-- Add `agent_id text` (nullable, default `'general'`).
-- Add `auto_execute_safe boolean` default `false`.
+3. **Backfill / repair for existing estimates without `site_id`**
+   - Any row where `site_id IS NULL` shows an amber "Assign site" chip in-line; clicking opens the same site picker and patches the row. No auto-guessing.
 
-### `assistant_tool_calls`
-- Add `agent_id text`.
-- Add `execution_mode text` (`proposed`, `auto_executed`, `approved`, `rejected`, `error`).
-- Add `risk_tier text` (`safe`, `destructive`, `external`, `cost`).
+4. **Editor header shows the bound site**
+   - `EstimateEditor` header renders the site name + local_ref (read-only). Prevents editing an estimate against the wrong site by mistake.
 
-### New table: `agent_auto_execution_log`
-- `id uuid`, `agent_id text`, `tool_name text`, `params jsonb`, `user_id uuid`, `status text`, `result_summary text`, `created_at timestamptz`.
-- GRANT to authenticated + service_role; RLS enabled; policy scoped to `auth.uid()`.
+5. **PO readiness signal**
+   - On the Site Register (`WpSiteRegisterTab`), add a small "Est." indicator per row: green tick if the site has an `AWARDED` (or `is_current`) estimate, amber dot if only draft, grey if none. This is the visual cue that a site is "ready for PO".
+   - No PO issuance logic changes in this slice — POs already reference `site_id` via `po_line_sites`/`estimates.po_line_id`; we're just making sure the estimate side of the link is populated.
 
-## 2. Agent registry and routing
+## Scope guardrails (per your reuse rule)
 
-Create `supabase/functions/_shared/agent-registry.ts`:
-- Define agents: `general`, `precon`, `sales`, `delivery`, `admin`.
-- Each agent has: `id`, `name`, `systemPrompt`, `readToolNames`, `writeToolNames`, `safeAutoExecute` predicate.
+- No new estimate table, no duplicate site register, no new PO flow.
+- Only touched files: `src/components/delivery/estimate/EstimatesTab.tsx`, `src/components/delivery/estimate/EstimateEditor.tsx` (header only), `src/pages/wp/tabs/WpSiteRegisterTab.tsx` (badge only), plus one new small component `EstimateSitePickerDialog.tsx`.
+- Uses the existing `estimates.site_id` column and existing `wp_sites`/`sites` tables — no migration needed.
 
-Refactor `gridwise-assistant/index.ts`:
-- Read `agent_id` from request body (default `general`).
-- Load the agent's system prompt and tool set from the registry.
-- Keep the same streaming/audit pattern.
-- Persist `agent_id` on thread and tool-call rows.
+## Technical notes
 
-## 3. Pre-Con agent tools
+- Site picker query: `wp_sites` → `sites(id, site_name, postcode, local_ref)` filtered by `work_package_id`, joined against `estimates(site_id, status, is_current)` to compute the per-site estimate count and awarded status.
+- Creation: `estimates.insert({ work_package_id, site_id, name })` — `site_id` becomes required in the UI (button disabled until picked).
+- Filtering: client-side on the already-fetched list (no extra fetch).
+- Site chip deep-link: `/sites/{site_id}` (existing route).
+- Readiness badge in Site Register: single aggregated query `select site_id, status, is_current from estimates where work_package_id=? and deleted_at is null and site_id in (...)`.
 
-Move Pre-Con-specific tools into `supabase/functions/_shared/agents/precon-tools.ts`.
+## Out of scope
 
-### Read tools
-- `list_wp_sites(work_package_id)` — sites in a WP with current stage summary.
-- `get_stage_status(work_package_id, site_ids, stage_key)` — current status, owner, recipients, wait dates.
-- `list_stage_definitions()` — key, label, track, requires_owner, allowed_owner_roles.
+- Auto-creating PO drafts from awarded estimates (separate slice).
+- Bulk re-assigning site_id across many estimates (Admin task; can add later if needed).
+- Changing EV Build Estimates flow — same pattern would apply but only PoC is in this slice unless you want both.
 
-### Write tools
-- `mark_stage_done_bulk` (existing) — approval required.
-- `set_stage_status_bulk` — set `in_progress` / `blocked` / `review` for many sites; **safe auto-execute** when only changing status within the same stage and no external communication.
-- `assign_stage_owner` — assign owner/recipients to a stage; **safe auto-execute**.
-- `reassign_waiting_stage_owner` — change owner of an overdue waiting stage; **safe auto-execute**.
-- `queue_survey_for_sites` (existing) — approval required (sends email).
-- `update_site_fields` (existing) — approval required.
+## Question before I build
 
-## 4. Safe auto-execution rules
-
-A write tool may auto-execute only when **all** are true:
-1. Tool is in the active agent's `safeAutoExecute` allowlist.
-2. Action is idempotent (same input → same outcome).
-3. No external communication (no email, no survey token, no Xero/OneDrive write).
-4. No cost impact (no estimate creation, no PO/invoice).
-5. User's role/capability allows the action (verified via `capability_grants` or RLS).
-6. Audit row is inserted before execution.
-
-Implementation:
-- In `gridwise-assistant`, when a safe tool is called, run it inline via `executeWriteTool` and return the result immediately (no proposal).
-- Non-safe tools continue to surface as `ToolProposalCard` for human approval.
-- Update `ToolProposalCard` to show a "Safe action — executed automatically" badge when `execution_mode === 'auto_executed'`.
-
-## 5. Background scheduler for waiting/counter stages
-
-Create `supabase/functions/gridwise-agent-scheduler/index.ts`:
-- Invoked by a new `pg_cron` job every 15 minutes.
-- Finds waiting/counter stages that are:
-  - overdue (`wait_target_date < today` or 20 working days elapsed),
-  - not already escalated today,
-  - assigned to an owner.
-- Auto-sets status to `blocked` with reason `"Overdue: <stage label>"`.
-- Sends one aggregated notification per owner via the existing notification path.
-- Logs to `agent_auto_execution_log`.
-
-Frontend: add a read-only "Agent Activity" panel in `WpMatrixTab.tsx` showing recent auto-executions for the WP.
-
-## 6. Frontend changes
-
-### `AssistantChat.tsx`
-- Add an agent selector dropdown (General, Pre-Con, Sales, Delivery, Admin).
-- Persist selected agent in `assistant_threads.agent_id`.
-- Pass `agent_id` to the Edge Function.
-- Render auto-executed tool results inline (no approval card).
-
-### New page: `AgentAuditLog.tsx`
-- Route: `/assistant/audit` (Admin-only via `is_platform_admin` or capability check).
-- Table: agent, tool, user, params preview, status, execution mode, timestamp.
-- Filters by agent, status, date range.
-
-### `WpMatrixTab.tsx`
-- Add "Agent Activity" drawer showing last 20 auto-executions for the current WP.
-- Add "Ask Pre-Con agent" button that opens the Assistant with `agent_id='precon'` and `context_wp_id` pre-filled.
-
-## 7. User guide
-
-Generate `docs/gridwise-os/AI_AGENT_GUIDE.md`:
-- How to switch agents.
-- What each agent can do.
-- Which actions auto-execute vs require approval.
-- Example prompts:
-  - "Mark PoC Application done for all sites in WP4 and assign Liam to PoC Offer Due."
-  - "Show me overdue waiting stages in Plymouth programme."
-  - "Archive all completed programmes from 2024."
-- Confirmation phrases for destructive actions.
-
-## 8. Deployment and verification
-
-- Add migration for schema changes.
-- Deploy `gridwise-assistant`, `gridwise-agent-execute`, and `gridwise-agent-scheduler`.
-- Create `pg_cron` job via `supabase--read_query` (not migration, because it contains project-specific URL/key).
-- Verify with Playwright:
-  1. Open Assistant, switch to Pre-Con agent.
-  2. Ask to mark a stage done → approval card appears.
-  3. Ask to assign an owner → auto-executes inline.
-  4. Open Agent Audit Log and see both rows.
-
-## Out of scope for this plan
-
-- Replacing the existing approval flow entirely.
-- Adding natural-language archive for non-destructive entities beyond what already exists.
-- Sales/Delivery/Admin agent full tool registries (only Pre-Con gets expanded tools; others get identity/prompt only).
-
-## Files to create/modify
-
-- New: `supabase/functions/_shared/agent-registry.ts`
-- New: `supabase/functions/_shared/agents/precon-tools.ts`
-- New: `supabase/functions/gridwise-agent-scheduler/index.ts`
-- New: `src/components/assistant/AgentSelector.tsx`
-- New: `src/pages/AgentAuditLog.tsx`
-- New: `docs/gridwise-os/AI_AGENT_GUIDE.md`
-- Modify: `supabase/functions/gridwise-assistant/index.ts`
-- Modify: `supabase/functions/gridwise-agent-execute/index.ts`
-- Modify: `supabase/functions/_shared/agent-write-tools.ts`
-- Modify: `src/components/assistant/AssistantChat.tsx`
-- Modify: `src/components/assistant/ToolProposalCard.tsx`
-- Modify: `src/pages/Assistant.tsx`
-- Modify: `src/components/wp/WpMatrixTab.tsx`
-- Migration: add columns to `assistant_threads` / `assistant_tool_calls`; create `agent_auto_execution_log`.
+Should the site link be **required only for PoC Estimates** (this slice), or **for EV Build Estimates too** (identical treatment in the same `EstimatesTab` component, since it's shared)?
