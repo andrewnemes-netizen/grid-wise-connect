@@ -316,7 +316,19 @@ export function AssistantChat({ threadId }: { threadId: string }) {
             <div className="ml-4"><Shimmer>Thinking…</Shimmer></div>
           )}
           {error && (
-            <div className="text-sm text-destructive px-4">{error.message}</div>
+            <div className="text-sm px-4">
+              {String(error.message ?? "").includes("402") || String(error.message ?? "").includes("Payment Required") ? (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-amber-700">
+                  <p className="font-medium">AI credit limit reached</p>
+                  <p className="text-xs mt-1">
+                    The assistant cannot send requests right now because the workspace AI credit budget is exhausted.
+                    Add credits under workspace billing or wait for the next daily reset.
+                  </p>
+                </div>
+              ) : (
+                <span className="text-destructive">{error.message}</span>
+              )}
+            </div>
           )}
         </ConversationContent>
         <ConversationScrollButton />
