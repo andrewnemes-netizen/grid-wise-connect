@@ -185,8 +185,8 @@ export default function WpTasksTab() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Every assigned Pre-Con Flow stage across all sites in this work package. Editing a task here
-            updates the same record on the Pre-Con Flow — one source of truth, no duplicate task entity.
+            Every assigned Pre-Con Progress stage across all sites in this work package. Editing a task here
+            updates the same record on Pre-Con Progress — one source of truth, no duplicate task entity.
           </p>
         </div>
         <Badge variant="outline" className="shrink-0">{filtered.length} of {taskLines.length}</Badge>
@@ -246,7 +246,7 @@ export default function WpTasksTab() {
           <ListTodo className="h-8 w-8 mx-auto text-muted-foreground" />
           <div className="font-medium">No assigned tasks yet</div>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">
-            Assign an owner or recipient to a Pre-Con Flow stage and it will appear here automatically.
+            Assign an owner or recipient to a Pre-Con Progress stage and it will appear here automatically.
           </p>
         </Card>
       ) : filtered.length === 0 ? (
