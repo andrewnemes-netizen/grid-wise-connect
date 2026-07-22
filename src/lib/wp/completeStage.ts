@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { MULTI_RECIPIENT_STAGES, getNextStages, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { computeWaitTargetDate, isWaitingStage } from "@/lib/wp/waitingStages";
+import { isCounterStage } from "@/lib/wp/counterStages";
 
 /**
  * Mark a stage as Done for a single site, clear its recipients, and open the
@@ -68,6 +69,11 @@ export async function completeStageAndAssignNext(params: {
     if (isWaitingStage(nextKey)) {
       payload.wait_started_at = new Date().toISOString();
       payload.wait_target_date = computeWaitTargetDate(nextKey);
+      payload.wait_delay_reason = null;
+      payload.wait_delay_logged_at = null;
+    } else if (isCounterStage(nextKey)) {
+      payload.wait_started_at = new Date().toISOString();
+      payload.wait_target_date = null;
       payload.wait_delay_reason = null;
       payload.wait_delay_logged_at = null;
     }

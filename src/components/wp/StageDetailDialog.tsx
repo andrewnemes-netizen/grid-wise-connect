@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { STAGE_LABEL_MAP, STAGE_STATUS_LABEL, MULTI_RECIPIENT_STAGES, getNextStages, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
+import { computeWaitTargetDate, isWaitingStage } from "@/lib/wp/waitingStages";
+import { isCounterStage } from "@/lib/wp/counterStages";
 import { RecipientPicker } from "@/components/wp/RecipientPicker";
 
 export type StageRow = {
@@ -150,7 +152,7 @@ export function StageDetailDialog({
           const nextStatus: StageStatus =
             !existing || existing.workflow_status === "not_started" ? "in_progress" : existing.workflow_status;
 
-          const nextPatch = {
+          const nextPatch: Record<string, any> = {
             work_package_id: wpId,
             site_id: siteId,
             stage: nextKey,
@@ -160,6 +162,17 @@ export function StageDetailDialog({
             recipient_contact_ids: cIds,
             actual_start_date: existing?.actual_start_date ?? today,
           };
+          if (isWaitingStage(nextKey)) {
+            nextPatch.wait_started_at = new Date().toISOString();
+            nextPatch.wait_target_date = computeWaitTargetDate(nextKey);
+            nextPatch.wait_delay_reason = null;
+            nextPatch.wait_delay_logged_at = null;
+          } else if (isCounterStage(nextKey)) {
+            nextPatch.wait_started_at = new Date().toISOString();
+            nextPatch.wait_target_date = null;
+            nextPatch.wait_delay_reason = null;
+            nextPatch.wait_delay_logged_at = null;
+          }
           const { error: e2 } = await (supabase as any).from("site_stage_status")
             .upsert(nextPatch, { onConflict: "site_id,stage" });
           if (e2) throw e2;

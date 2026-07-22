@@ -13,7 +13,9 @@ import { StageDetailDialog, type StageRow as Row } from "@/components/wp/StageDe
 import { BulkStageDoneDialog, type BulkSite } from "@/components/wp/BulkStageDoneDialog";
 import { BulkStageStatusDialog } from "@/components/wp/BulkStageStatusDialog";
 import { isWaitingStage } from "@/lib/wp/waitingStages";
+import { isCounterStage } from "@/lib/wp/counterStages";
 import { WaitingStageCell } from "@/components/wp/WaitingStageCell";
+import { CounterStageCell } from "@/components/wp/CounterStageCell";
 
 export default function WpMatrixTab() {
   const { id: wpId } = useParams<{ id: string }>();
@@ -233,6 +235,21 @@ export default function WpMatrixTab() {
                               siteId={s.site_id}
                               stage={st.key}
                               targetDate={(r as any)?.wait_target_date ?? null}
+                              workflowStatus={v}
+                              delayReason={(r as any)?.wait_delay_reason ?? null}
+                              onRequestMarkDone={() =>
+                                setEditing({ siteId: s.site_id, siteName: s.sites?.site_name, stage: st.key, row: r, initialStatus: "done" })
+                              }
+                              onSaved={() => qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] })}
+                            />
+                          </div>
+                        ) : isCounterStage(st.key) ? (
+                          <div className="flex-1">
+                            <CounterStageCell
+                              wpId={wpId!}
+                              siteId={s.site_id}
+                              stage={st.key}
+                              startedAt={(r as any)?.wait_started_at ?? null}
                               workflowStatus={v}
                               delayReason={(r as any)?.wait_delay_reason ?? null}
                               onRequestMarkDone={() =>

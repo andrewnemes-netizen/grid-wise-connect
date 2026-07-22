@@ -1,6 +1,6 @@
 export type StageKey =
   | "intake" | "poc_application" | "poc_offer_awaiting" | "poc_quote"
-  | "client_site_selection" | "survey_po_gate"
+  | "client_site_selection" | "issue_survey_design_quote" | "survey_po_gate"
   | "survey_allocation" | "survey_completed"
   | "build_design_po_gate" | "build_quote_design" | "build_quote_sent" | "build_handover_gate"
   | "icp_po" | "connections_handover_gate"
@@ -18,6 +18,7 @@ export const STAGES: { key: StageKey; label: string; track: StageTrack; multiRec
   { key: "poc_offer_awaiting",        label: "Awaiting PoC Offer",    track: "common" },
   { key: "poc_quote",                 label: "PoC Quote",             track: "common" },
   { key: "client_site_selection",     label: "Client Site Selection", track: "common" },
+  { key: "issue_survey_design_quote", label: "Issue Survey / Design Quote", track: "common" },
   { key: "survey_po_gate",            label: "Survey PO Gate",        track: "common" },
   { key: "survey_allocation",         label: "Survey Allocation",     track: "common" },
   { key: "survey_completed",          label: "Survey Completed",      track: "common" },

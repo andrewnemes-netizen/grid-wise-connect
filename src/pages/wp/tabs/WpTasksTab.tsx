@@ -17,6 +17,7 @@ import {
 } from "@/lib/wp/stageStatus";
 import { StageDetailDialog, type StageRow } from "@/components/wp/StageDetailDialog";
 import { isWaitingStage, getWaitEscalation, WAIT_ESCALATION_CLASSES } from "@/lib/wp/waitingStages";
+import { isCounterStage, formatCounterDisplay } from "@/lib/wp/counterStages";
 import { format } from "date-fns";
 
 type SiteLite = { id: string; site_name: string | null; postcode: string | null };
@@ -301,7 +302,11 @@ export default function WpTasksTab() {
                       )}
                     </td>
                     <td className="p-2">
-                      {isWaitingStage(t.row.stage) && (t.row as any).wait_target_date ? (
+                      {isCounterStage(t.row.stage) ? (
+                        <Badge variant="outline" className={`text-[10px] border ${STAGE_STATUS_COLORS[v]}`}>
+                          {formatCounterDisplay((t.row as any).wait_started_at ?? null)}
+                        </Badge>
+                      ) : isWaitingStage(t.row.stage) && (t.row as any).wait_target_date ? (
                         (() => {
                           const td = (t.row as any).wait_target_date as string;
                           const esc = getWaitEscalation(t.row.stage, td, v);
