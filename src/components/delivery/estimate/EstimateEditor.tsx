@@ -552,6 +552,19 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
         groups={groups.data ?? []}
         lines={lines.data ?? []}
       />
+      {e.work_package_id && (
+        <EstimateSitePickerDialog
+          workPackageId={e.work_package_id}
+          open={sitePickerOpen}
+          onOpenChange={setSitePickerOpen}
+          onPick={(site: PickedSite) => {
+            updateEstimate.mutate({ site_id: site.id });
+            toast.success("Site linked to estimate");
+          }}
+          title={e.site_id ? "Change linked site" : "Link this estimate to a site"}
+          confirmLabel={e.site_id ? "Change site" : "Link site"}
+        />
+      )}
     </div>
   );
 }
