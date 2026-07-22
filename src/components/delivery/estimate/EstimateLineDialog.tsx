@@ -163,7 +163,7 @@ export function EstimateLineDialog({
             <div className="space-y-6">
               <Section title="Pricing Details">
                 <Field label="Unit Cost"><Input type="number" step="any" value={d.unit_cost} onChange={(e) => set("unit_cost", parseFloat(e.target.value) || 0)} /></Field>
-                <ReadonlyField label="Unit Price" value={fmt(unitPrice, currency)} accent />
+                <ReadonlyField label="Unit Price (incl. markup)" value={fmt(unitPrice, currency)} accent />
               </Section>
               <Section title="Mark Up Details">
                 <Field label="Markup Type">
