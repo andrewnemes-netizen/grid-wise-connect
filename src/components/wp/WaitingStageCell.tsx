@@ -75,7 +75,7 @@ export function WaitingStageCell({
                 ? "Due soon"
                 : escalation === "done"
                 ? "Received"
-                : "Awaiting offer"
+                : "PoC offer due"
             }
           >
             {escalation === "done" ? (

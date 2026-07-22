@@ -15,7 +15,7 @@ export type StageTrack = "common" | "build" | "connections";
 export const STAGES: { key: StageKey; label: string; track: StageTrack; multiRecipient?: boolean }[] = [
   { key: "intake",                    label: "Intake",                track: "common" },
   { key: "poc_application",           label: "PoC Application",       track: "common" },
-  { key: "poc_offer_awaiting",        label: "Awaiting PoC Offer",    track: "common" },
+  { key: "poc_offer_awaiting",        label: "PoC Offer Due",         track: "common" },
   { key: "poc_quote",                 label: "PoC Quote",             track: "common" },
   { key: "client_site_selection",     label: "Client Site Selection", track: "common" },
   { key: "issue_survey_design_quote", label: "Issue Survey / Design Quote", track: "common" },
