@@ -5,12 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Plus, FileText, ArrowRight, Trash2 } from "lucide-react";
+import { Plus, FileText, ArrowRight, Trash2, MapPin, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { EstimateEditor } from "./EstimateEditor";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EstimateSitePickerDialog, type PickedSite } from "./EstimateSitePickerDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link } from "react-router-dom";
 
 const fmt = (n: number, c = "GBP") =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n || 0);
@@ -24,6 +27,9 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkReason, setBulkReason] = useState("");
   const [bulkPending, setBulkPending] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [assignFor, setAssignFor] = useState<string | null>(null); // estimate id needing site assignment
+  const [siteFilter, setSiteFilter] = useState<string>("all");
 
   const list = useQuery({
     queryKey: ["estimates-list", scope],
@@ -36,6 +42,28 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       return (data ?? []) as any[];
     },
   });
+
+  // Sites in this WP register — used for chip labels + filter
+  const wpSites = useQuery({
+    queryKey: ["estimates-tab-wp-sites", scope.work_package_id],
+    enabled: !!scope.work_package_id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("wp_sites")
+        .select("site_id, local_ref, sites:sites(id, site_name, postcode)")
+        .eq("work_package_id", scope.work_package_id!);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+  const siteMetaById = new Map<string, { site_name: string; postcode: string | null; local_ref: string | null }>();
+  for (const r of (wpSites.data ?? []) as any[]) {
+    if (r.sites?.id) siteMetaById.set(r.sites.id, {
+      site_name: r.sites.site_name,
+      postcode: r.sites.postcode ?? null,
+      local_ref: r.local_ref ?? null,
+    });
+  }
 
   const archive = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
@@ -93,10 +121,13 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
   };
 
   const create = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (site: PickedSite) => {
       const n = (list.data?.length ?? 0) + 1;
+      const suffix = site.local_ref ?? site.site_name;
       const { data, error } = await supabase.from("estimates" as any).insert({
-        ...scope, name: `Estimate ${String(n).padStart(2, "0")}`,
+        ...scope,
+        site_id: site.id,
+        name: `Estimate ${String(n).padStart(2, "0")} — ${suffix}`,
       } as any).select("id").single();
       if (error) throw error;
       // seed default groups
@@ -108,6 +139,25 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
     },
     onSuccess: (id) => { toast.success("Estimate created"); qc.invalidateQueries({ queryKey: ["estimates-list", scope] }); setOpenId(id); },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  const assignSite = useMutation({
+    mutationFn: async ({ estimateId, site }: { estimateId: string; site: PickedSite }) => {
+      const { error } = await supabase.from("estimates" as any).update({ site_id: site.id }).eq("id", estimateId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Site linked to estimate");
+      qc.invalidateQueries({ queryKey: ["estimates-list", scope] });
+      setAssignFor(null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const filteredRows = (list.data ?? []).filter((r: any) => {
+    if (siteFilter === "all") return true;
+    if (siteFilter === "__unassigned__") return !r.site_id;
+    return r.site_id === siteFilter;
   });
 
   return (
@@ -127,7 +177,21 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
               Select all
             </label>
           )}
-          <Button onClick={() => create.mutate()} disabled={create.isPending}>
+          {scope.work_package_id && (
+            <Select value={siteFilter} onValueChange={setSiteFilter}>
+              <SelectTrigger className="h-9 w-[220px]"><SelectValue placeholder="Filter by site" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All sites</SelectItem>
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                {Array.from(siteMetaById.entries()).map(([id, m]) => (
+                  <SelectItem key={id} value={id}>
+                    {m.local_ref ? `${m.local_ref} — ` : ""}{m.site_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={() => scope.work_package_id ? setPickerOpen(true) : create.mutate({ id: "", site_name: "", postcode: null, local_ref: null } as any)} disabled={create.isPending}>
             <Plus className="h-4 w-4 mr-1" /> New estimate
           </Button>
         </div>
@@ -151,11 +215,13 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
         <Card className="p-10 text-center border-dashed">
           <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
           <div className="text-sm text-muted-foreground mb-4">No estimates yet.</div>
-          <Button onClick={() => create.mutate()}><Plus className="h-4 w-4 mr-1" /> Create first estimate</Button>
+          <Button onClick={() => scope.work_package_id ? setPickerOpen(true) : undefined}>
+            <Plus className="h-4 w-4 mr-1" /> Create first estimate
+          </Button>
         </Card>
       ) : (
         <div className="grid gap-2">
-          {list.data?.map((e) => (
+          {filteredRows.map((e) => (
             <Card key={e.id} className="p-4 hover:shadow-panel transition-shadow cursor-pointer" onClick={() => setOpenId(e.id)}>
               <div className="flex items-center gap-4">
                 <div onClick={(ev) => ev.stopPropagation()}>
@@ -187,7 +253,30 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
                     )}
                     {e.ref && <span className="text-xs text-muted-foreground">{e.ref}</span>}
                   </div>
-                  <div className="text-xs text-muted-foreground">Updated {new Date(e.updated_at).toLocaleDateString()}</div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+                    <span>Updated {new Date(e.updated_at).toLocaleDateString()}</span>
+                    {e.site_id ? (() => {
+                      const m = siteMetaById.get(e.site_id);
+                      return (
+                        <Link
+                          to={`/site/${e.site_id}`}
+                          onClick={(ev) => ev.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          {m ? `${m.local_ref ? m.local_ref + " — " : ""}${m.site_name}${m.postcode ? " · " + m.postcode : ""}` : "View site"}
+                        </Link>
+                      );
+                    })() : (
+                      <button
+                        onClick={(ev) => { ev.stopPropagation(); setAssignFor(e.id); }}
+                        className="inline-flex items-center gap-1 text-amber-700 hover:underline"
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        Assign site
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <Stat label="Cost" value={fmt(e.total_cost, e.currency)} />
                 <Stat label="Price" value={fmt(e.total_price, e.currency)} accent />
@@ -209,6 +298,27 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       )}
 
       <EditorDialog openId={openId} setOpenId={setOpenId} />
+
+      {scope.work_package_id && (
+        <>
+          <EstimateSitePickerDialog
+            workPackageId={scope.work_package_id}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            onPick={(site) => create.mutate(site)}
+            title="Which site is this estimate for?"
+            confirmLabel="Create estimate for this site"
+          />
+          <EstimateSitePickerDialog
+            workPackageId={scope.work_package_id}
+            open={!!assignFor}
+            onOpenChange={(o) => { if (!o) setAssignFor(null); }}
+            onPick={(site) => assignFor && assignSite.mutate({ estimateId: assignFor, site })}
+            title="Link this estimate to a site"
+            confirmLabel="Link site"
+          />
+        </>
+      )}
 
       <AlertDialog open={bulkOpen} onOpenChange={(o) => { if (!o) { setBulkOpen(false); setBulkReason(""); } }}>
         <AlertDialogContent>
