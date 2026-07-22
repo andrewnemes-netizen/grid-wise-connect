@@ -73,3 +73,53 @@ export async function completeStageAndAssignNext(params: {
 
   return { nextStages, opened };
 }
+
+/**
+ * Bulk-set a non-"done" workflow status for many sites on the same stage.
+ * Preserves existing owner/recipients. Sets actual_start_date when moving
+ * a not-yet-opened stage into `in_progress`.
+ */
+export async function bulkSetStageStatus(params: {
+  wpId: string;
+  siteIds: string[];
+  stage: StageKey;
+  status: Exclude<StageStatus, "done">;
+  blockedReason?: string | null;
+}): Promise<{ updated: number; failed: { siteId: string; message: string }[] }> {
+  const { wpId, siteIds, stage, status, blockedReason } = params;
+  const today = new Date().toISOString().slice(0, 10);
+  const failed: { siteId: string; message: string }[] = [];
+  let updated = 0;
+
+  for (const siteId of siteIds) {
+    try {
+      const { data: existing } = await (supabase as any)
+        .from("site_stage_status")
+        .select("actual_start_date")
+        .eq("site_id", siteId)
+        .eq("stage", stage)
+        .maybeSingle();
+
+      const payload: Record<string, any> = {
+        work_package_id: wpId,
+        site_id: siteId,
+        stage,
+        workflow_status: status,
+        blocked_reason: status === "blocked" ? (blockedReason ?? null) : null,
+      };
+      if (status === "in_progress" && !existing?.actual_start_date) {
+        payload.actual_start_date = today;
+      }
+
+      const { error } = await (supabase as any)
+        .from("site_stage_status")
+        .upsert(payload, { onConflict: "site_id,stage" });
+      if (error) throw error;
+      updated++;
+    } catch (e: any) {
+      failed.push({ siteId, message: e?.message ?? "failed" });
+    }
+  }
+
+  return { updated, failed };
+}
