@@ -1,5 +1,5 @@
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls, type UIMessage } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton } from "@/components/ai-elements/conversation";
@@ -10,6 +10,16 @@ import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Bot } from "lucide-react";
 import { Link } from "react-router-dom";
+import { ToolProposalCard } from "./ToolProposalCard";
+import { toast } from "sonner";
+
+const WRITE_TOOL_NAMES = new Set([
+  "mark_stage_done_bulk",
+  "add_sites_to_wp",
+  "remove_sites_from_wp",
+  "queue_survey_for_sites",
+  "update_site_fields",
+]);
 
 interface Source {
   table: string;
@@ -98,11 +108,53 @@ export function AssistantChat({ threadId }: { threadId: string }) {
     });
   }, [threadId]);
 
-  const { messages, sendMessage, status, error, stop } = useChat({
+  const { messages, sendMessage, status, error, stop, addToolResult } = useChat({
     id: threadId,
     messages: initialMessages ?? [],
     transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
+
+  async function decideProposal(
+    toolName: string,
+    toolCallId: string,
+    input: any,
+    decision: "approve" | "reject",
+  ) {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Sign-in expired — please refresh.");
+        return;
+      }
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gridwise-agent-execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ tool: toolName, input, tool_call_id: toolCallId, thread_id: threadId, decision }),
+      });
+      const body = await res.json().catch(() => ({}));
+      const output = body?.output ?? (body?.error ? { error: body.error } : body);
+      if (decision === "approve") {
+        if (body?.error || output?.error) {
+          toast.error(`Action failed: ${body?.error ?? output?.error}`);
+        } else {
+          toast.success("Action completed.");
+        }
+      } else {
+        toast.info("Action rejected.");
+      }
+      addToolResult({ tool: toolName, toolCallId, output });
+    } catch (e) {
+      const msg = (e as Error).message;
+      toast.error(`Could not run action: ${msg}`);
+      addToolResult({ tool: toolName, toolCallId, output: { error: msg } });
+    }
+  }
 
   // Focus composer on mount and after streaming completes
   useEffect(() => {
@@ -153,6 +205,25 @@ export function AssistantChat({ threadId }: { threadId: string }) {
                   const p = part as any;
                   const toolName = p.type.replace(/^tool-/, "");
                   const state = p.state as string | undefined;
+                  const isWrite = WRITE_TOOL_NAMES.has(toolName);
+                  // Write tools awaiting approval — render the card
+                  if (isWrite && (state === "input-available" || state === "input-streaming")) {
+                    if (state === "input-streaming" || !p.toolCallId) {
+                      return (
+                        <div key={`${message.id}-tool-${idx}`} className="ml-11 mr-4 text-xs text-muted-foreground">
+                          Preparing action…
+                        </div>
+                      );
+                    }
+                    return (
+                      <ToolProposalCard
+                        key={`${message.id}-tool-${idx}`}
+                        proposal={{ toolName, toolCallId: p.toolCallId, input: p.input }}
+                        onDecide={(decision) => decideProposal(toolName, p.toolCallId, p.input, decision)}
+                        disabled={busy}
+                      />
+                    );
+                  }
                   const uiState = state === "output-available" ? "output-available" : state === "output-error" ? "output-error" : "input-streaming";
                   return (
                     <Tool key={`${message.id}-tool-${idx}`} defaultOpen={false}>
