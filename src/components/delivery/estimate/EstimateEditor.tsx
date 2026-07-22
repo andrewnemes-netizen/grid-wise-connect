@@ -263,18 +263,9 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border bg-card">
-            <Switch checked={e.show_recipe_totals} onCheckedChange={(v) => updateEstimate.mutate({ show_recipe_totals: v })} />
-            Recipe totals
-          </div>
-          <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-md border bg-card">
-            <Switch checked={e.boq_compact_view} onCheckedChange={(v) => updateEstimate.mutate({ boq_compact_view: v })} />
-            Compact view
-          </div>
           <Button size="sm" variant="outline" onClick={() => setRateCardOpen(null)}>
             <LinkIcon className="h-3.5 w-3.5 mr-1" />From Rate Card
           </Button>
-          <Button size="sm" variant="outline"><Package className="h-3.5 w-3.5 mr-1" />Add Recipe</Button>
           <Button size="sm" onClick={() => setPlanOpen(true)} disabled={!e.work_package_id}>
             <CalendarClock className="h-3.5 w-3.5 mr-1" />Generate Plan
           </Button>
