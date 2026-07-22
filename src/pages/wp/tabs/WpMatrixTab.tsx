@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { STAGES, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { StageDetailDialog, type StageRow as Row } from "@/components/wp/StageDetailDialog";
 import { BulkStageDoneDialog, type BulkSite } from "@/components/wp/BulkStageDoneDialog";
+import { BulkStageStatusDialog } from "@/components/wp/BulkStageStatusDialog";
 
 export default function WpMatrixTab() {
   const { id: wpId } = useParams<{ id: string }>();
@@ -19,7 +20,8 @@ export default function WpMatrixTab() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<{ siteId: string; siteName?: string; stage: StageKey; row?: Row } | null>(null);
   const [selection, setSelection] = useState<{ stage: StageKey; siteIds: Set<string> } | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<StageStatus>("done");
+  const [bulkOpen, setBulkOpen] = useState<null | StageStatus>(null);
 
   const { data: sites = [] } = useQuery({
     queryKey: ["wp-sites-basic", wpId],
@@ -275,17 +277,41 @@ export default function WpMatrixTab() {
           <span className="text-muted-foreground text-xs">
             in “{STAGES.find((s) => s.key === selection.stage)?.label}”
           </span>
-          <Button size="sm" onClick={() => setBulkOpen(true)}>Mark Done</Button>
+          <Select value={bulkStatus} onValueChange={(v) => setBulkStatus(v as StageStatus)}>
+            <SelectTrigger className="h-8 w-[140px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(STAGE_STATUS_LABEL) as StageStatus[]).map((k) => (
+                <SelectItem key={k} value={k}>Set → {STAGE_STATUS_LABEL[k]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={() => setBulkOpen(bulkStatus)}>Apply</Button>
           <Button size="sm" variant="ghost" onClick={() => setSelection(null)}>Clear</Button>
         </div>
       )}
 
-      {bulkOpen && selection && wpId && (
+      {bulkOpen === "done" && selection && wpId && (
         <BulkStageDoneDialog
           wpId={wpId}
           stage={selection.stage}
           sites={selectedSiteObjects}
-          onClose={() => setBulkOpen(false)}
+          onClose={() => setBulkOpen(null)}
+          onSaved={() => {
+            qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] });
+            setSelection(null);
+          }}
+        />
+      )}
+
+      {bulkOpen && bulkOpen !== "done" && selection && wpId && (
+        <BulkStageStatusDialog
+          wpId={wpId}
+          stage={selection.stage}
+          status={bulkOpen as Exclude<StageStatus, "done">}
+          sites={selectedSiteObjects}
+          onClose={() => setBulkOpen(null)}
           onSaved={() => {
             qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] });
             setSelection(null);
