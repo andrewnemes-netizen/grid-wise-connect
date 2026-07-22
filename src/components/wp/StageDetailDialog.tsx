@@ -32,7 +32,7 @@ export type StageRow = {
 };
 
 export function StageDetailDialog({
-  wpId, siteId, siteName, stage, row, onClose, onSaved,
+  wpId, siteId, siteName, stage, row, onClose, onSaved, initialStatus,
 }: {
   wpId: string;
   siteId: string;
@@ -41,8 +41,13 @@ export function StageDetailDialog({
   row?: StageRow;
   onClose: () => void;
   onSaved: () => void;
+  /** Override the initial workflow status shown in the dialog (e.g. from the
+   *  Waiting Stage "Received" action, which opens the dialog pre-set to Done). */
+  initialStatus?: StageStatus;
 }) {
-  const [status, setStatus] = useState<StageStatus>((row?.workflow_status ?? "not_started") as StageStatus);
+  const [status, setStatus] = useState<StageStatus>(
+    (initialStatus ?? row?.workflow_status ?? "not_started") as StageStatus,
+  );
   const [userIds, setUserIds] = useState<string[]>(
     row?.recipient_user_ids?.length ? row.recipient_user_ids : (row?.owner_id ? [row.owner_id] : [])
   );
@@ -60,7 +65,7 @@ export function StageDetailDialog({
   const [nextRecipients, setNextRecipients] = useState<Record<string, { userIds: string[]; contactIds: string[] }>>({});
 
   useEffect(() => {
-    setStatus((row?.workflow_status ?? "not_started") as StageStatus);
+    setStatus((initialStatus ?? row?.workflow_status ?? "not_started") as StageStatus);
     setUserIds(row?.recipient_user_ids?.length ? row!.recipient_user_ids! : (row?.owner_id ? [row.owner_id] : []));
     setContactIds(row?.recipient_contact_ids ?? []);
     setPlannedStart(row?.planned_start_date ?? "");
