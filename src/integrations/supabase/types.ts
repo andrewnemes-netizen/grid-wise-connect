@@ -303,42 +303,51 @@ export type Database = {
         Row: {
           created_at: string
           error_message: string | null
+          executed_at: string | null
           execution_ms: number | null
           id: string
           model: string | null
           params: Json | null
+          preview: string | null
           record_ids: string[] | null
           result_summary: string | null
           status: string
           thread_id: string | null
+          tool_call_id: string | null
           tool_name: string
           user_id: string
         }
         Insert: {
           created_at?: string
           error_message?: string | null
+          executed_at?: string | null
           execution_ms?: number | null
           id?: string
           model?: string | null
           params?: Json | null
+          preview?: string | null
           record_ids?: string[] | null
           result_summary?: string | null
           status: string
           thread_id?: string | null
+          tool_call_id?: string | null
           tool_name: string
           user_id: string
         }
         Update: {
           created_at?: string
           error_message?: string | null
+          executed_at?: string | null
           execution_ms?: number | null
           id?: string
           model?: string | null
           params?: Json | null
+          preview?: string | null
           record_ids?: string[] | null
           result_summary?: string | null
           status?: string
           thread_id?: string | null
+          tool_call_id?: string | null
           tool_name?: string
           user_id?: string
         }

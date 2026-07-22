@@ -49,7 +49,7 @@ export default function Assistant() {
             </div>
             <div>
               <div className="text-sm font-semibold tracking-tight">Gridwise Assistant</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Read-only</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Approval-gated actions</div>
             </div>
           </div>
           <Button size="sm" className="w-full" onClick={handleNew}>
