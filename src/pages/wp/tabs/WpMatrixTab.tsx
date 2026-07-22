@@ -12,13 +12,15 @@ import { STAGES, STAGE_STATUS_LABEL, STAGE_STATUS_COLORS, isCompleteStatus, type
 import { StageDetailDialog, type StageRow as Row } from "@/components/wp/StageDetailDialog";
 import { BulkStageDoneDialog, type BulkSite } from "@/components/wp/BulkStageDoneDialog";
 import { BulkStageStatusDialog } from "@/components/wp/BulkStageStatusDialog";
+import { isWaitingStage } from "@/lib/wp/waitingStages";
+import { WaitingStageCell } from "@/components/wp/WaitingStageCell";
 
 export default function WpMatrixTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const [params] = useSearchParams();
   const focusSiteId = params.get("site");
   const qc = useQueryClient();
-  const [editing, setEditing] = useState<{ siteId: string; siteName?: string; stage: StageKey; row?: Row } | null>(null);
+  const [editing, setEditing] = useState<{ siteId: string; siteName?: string; stage: StageKey; row?: Row; initialStatus?: StageStatus } | null>(null);
   const [selection, setSelection] = useState<{ stage: StageKey; siteIds: Set<string> } | null>(null);
   const [bulkStatus, setBulkStatus] = useState<StageStatus>("done");
   const [bulkOpen, setBulkOpen] = useState<null | StageStatus>(null);
@@ -224,16 +226,33 @@ export default function WpMatrixTab() {
                           onCheckedChange={() => toggleOne(st.key, s.site_id)}
                           aria-label={`Select ${s.sites?.site_name ?? "site"} for ${st.label}`}
                         />
-                        <Select value={v} onValueChange={(nv) => handleInlineStatus(s, st.key, nv as StageStatus, r)}>
-                          <SelectTrigger className={`h-7 text-[10px] px-2 border ${STAGE_STATUS_COLORS[v]} flex-1`}>
-                            <SelectValue>{STAGE_STATUS_LABEL[v]}</SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(Object.keys(STAGE_STATUS_LABEL) as StageStatus[]).map((k) => (
-                              <SelectItem key={k} value={k}>{STAGE_STATUS_LABEL[k]}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {isWaitingStage(st.key) ? (
+                          <div className="flex-1">
+                            <WaitingStageCell
+                              wpId={wpId!}
+                              siteId={s.site_id}
+                              stage={st.key}
+                              targetDate={(r as any)?.wait_target_date ?? null}
+                              workflowStatus={v}
+                              delayReason={(r as any)?.wait_delay_reason ?? null}
+                              onRequestMarkDone={() =>
+                                setEditing({ siteId: s.site_id, siteName: s.sites?.site_name, stage: st.key, row: r, initialStatus: "done" })
+                              }
+                              onSaved={() => qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] })}
+                            />
+                          </div>
+                        ) : (
+                          <Select value={v} onValueChange={(nv) => handleInlineStatus(s, st.key, nv as StageStatus, r)}>
+                            <SelectTrigger className={`h-7 text-[10px] px-2 border ${STAGE_STATUS_COLORS[v]} flex-1`}>
+                              <SelectValue>{STAGE_STATUS_LABEL[v]}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(Object.keys(STAGE_STATUS_LABEL) as StageStatus[]).map((k) => (
+                                <SelectItem key={k} value={k}>{STAGE_STATUS_LABEL[k]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <button
                           className="text-[10px] text-muted-foreground hover:text-foreground"
                           onClick={() => setEditing({ siteId: s.site_id, siteName: s.sites?.site_name, stage: st.key, row: r })}
@@ -264,6 +283,7 @@ export default function WpMatrixTab() {
           siteName={editing.siteName}
           stage={editing.stage}
           row={editing.row}
+          initialStatus={editing.initialStatus}
           onClose={() => setEditing(null)}
           onSaved={() => qc.invalidateQueries({ queryKey: ["wp-stage-status", wpId] })}
         />
