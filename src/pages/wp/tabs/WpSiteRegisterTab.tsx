@@ -218,12 +218,29 @@ export default function WpSiteRegisterTab() {
           },
         });
         if (emailErr) throw emailErr;
+        return { emailed: true as const };
       }
+      // External assignee but no email actually sent — surface why
+      if (assignment.mode === "external") {
+        const reason = !assignment.sendEmail
+          ? "email send was disabled"
+          : !assignment.assigneeEmail
+          ? "no assignee email address"
+          : "email skipped";
+        return { emailed: false as const, reason };
+      }
+      return { emailed: false as const, reason: null as string | null };
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (result: any, vars) => {
       const n = vars.siteIds.length;
-      const emailed = vars.assignment.sendEmail ? ` — emailed ${vars.assignment.assigneeEmail}` : "";
-      toast.success(`POC assigned for ${n} site${n === 1 ? "" : "s"}${emailed}`);
+      const label = `POC assigned for ${n} site${n === 1 ? "" : "s"}`;
+      if (result?.emailed) {
+        toast.success(`${label} — emailed ${vars.assignment.assigneeEmail}`);
+      } else if (vars.assignment.mode === "external") {
+        toast.warning(`${label} but NOT emailed — ${result?.reason ?? "email skipped"}`);
+      } else {
+        toast.success(label);
+      }
       setPocDialogOpen(false);
       clearSel();
       invalidate();

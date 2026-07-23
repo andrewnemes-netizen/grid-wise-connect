@@ -81,6 +81,9 @@ verify_jwt = true
 [functions.send-quotation]
 verify_jwt = true
 
+[functions.send-poc-assignment-email]
+verify_jwt = true
+
 [functions.preview-transactional-email]
 verify_jwt = false
 
