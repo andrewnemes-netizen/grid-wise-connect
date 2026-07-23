@@ -3,6 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as pocTemplate } from '../_shared/transactional-email-templates/poc-assignment.tsx'
+import { sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Body {
   recipientEmail?: string
@@ -101,6 +102,26 @@ Deno.serve(async (req) => {
         ]
       : undefined
 
+  const message = {
+    subject,
+    body: { contentType: 'HTML', content: htmlBody },
+    toRecipients,
+    ccRecipients,
+    ...(attachments ? { attachments } : {}),
+  }
+
+  // 1. Try sending as the signed-in user via the App User Connector.
+  const perUser = await sendMailAsAppUser(userData.user.id, message)
+  if (perUser.ok) return json({ success: true, sender: 'per_user' })
+  if (!perUser.notConnected) {
+    console.error(`Per-user Outlook send failed [${perUser.status}]: ${perUser.error}`)
+    return json(
+      { error: 'Outlook send failed', status: perUser.status, details: perUser.error },
+      502,
+    )
+  }
+
+  // 2. Fallback: shared workspace Outlook connector.
   const outlookRes = await fetch(
     'https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail',
     {
@@ -110,16 +131,7 @@ Deno.serve(async (req) => {
         'X-Connection-Api-Key': outlookKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        message: {
-          subject,
-          body: { contentType: 'HTML', content: htmlBody },
-          toRecipients,
-          ccRecipients,
-          ...(attachments ? { attachments } : {}),
-        },
-        saveToSentItems: true,
-      }),
+      body: JSON.stringify({ message, saveToSentItems: true }),
     },
   )
 
@@ -132,7 +144,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  return json({ success: true })
+  return json({ success: true, sender: 'shared' })
 })
 
 function json(data: Record<string, unknown>, status = 200) {
