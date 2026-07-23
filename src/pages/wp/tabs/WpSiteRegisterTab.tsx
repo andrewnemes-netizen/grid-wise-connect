@@ -316,6 +316,7 @@ export default function WpSiteRegisterTab() {
               due_date: assignment.dueDate,
               sites: siteLinesForEmail,
               work_package_id: wpId,
+              app_origin: typeof window !== "undefined" ? window.location.origin : null,
             },
           },
         );
