@@ -257,7 +257,7 @@ export default function WpSiteRegisterTab() {
           };
         }
 
-        const { error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
+        const { data: emailData, error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
           body: {
             recipientEmail: assignment.assigneeEmail ?? undefined,
             assigneeUserId: assignment.assigneeUserId ?? undefined,
@@ -272,11 +272,13 @@ export default function WpSiteRegisterTab() {
             ...(attachment ? { attachment } : {}),
             use_shared_fallback: assignment.useSharedFallback || undefined,
           },
-        }) as any;
+        });
         if (emailErr) throw emailErr;
         // Edge function reports outlook_not_connected with HTTP 200 so we can
-        // surface the inline prompt without losing the picker state.
-        const emailData: any = (emailErr as any) ? null : ((await Promise.resolve(null)), null);
+        // keep the picker open and offer inline Connect/retry.
+        if ((emailData as any)?.error === "outlook_not_connected") {
+          return { emailed: false as const, outlookNotConnected: true as const };
+        }
         return { emailed: true as const, recipient: assignment.assigneeEmail ?? assignment.assigneeName ?? "assignee" };
       }
       // External assignee but no email actually sent — surface why
@@ -293,6 +295,14 @@ export default function WpSiteRegisterTab() {
     onSuccess: (result: any, vars) => {
       const n = vars.siteIds.length;
       const label = `POC assigned for ${n} site${n === 1 ? "" : "s"}`;
+      if (result?.outlookNotConnected) {
+        setLastPocPayload({ siteIds: vars.siteIds, assignment: vars.assignment });
+        setPocOutlookNotConnected(true);
+        // Task rows were already created — surface state but keep dialog open.
+        return;
+      }
+      setPocOutlookNotConnected(false);
+      setLastPocPayload(null);
       if (result?.emailed) {
         toast.success(`${label} — emailed ${result.recipient ?? vars.assignment.assigneeEmail ?? vars.assignment.assigneeName ?? ""}`);
       } else if (vars.assignment.mode === "external") {
@@ -745,10 +755,30 @@ export default function WpSiteRegisterTab() {
 
       <SendForPocDialog
         open={pocDialogOpen}
-        onOpenChange={setPocDialogOpen}
+        onOpenChange={(v) => { setPocDialogOpen(v); if (!v) { setPocOutlookNotConnected(false); setLastPocPayload(null); } }}
         siteIds={selectedIds}
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
+        notConnectedSlot={
+          pocOutlookNotConnected && lastPocPayload ? (
+            <OutlookNotConnectedInline
+              context="POC assignment"
+              busy={bulkSendPoc.isPending}
+              onRetry={() =>
+                bulkSendPoc.mutate({
+                  siteIds: lastPocPayload.siteIds,
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: false },
+                })
+              }
+              onSendShared={() =>
+                bulkSendPoc.mutate({
+                  siteIds: lastPocPayload.siteIds,
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: true },
+                })
+              }
+            />
+          ) : undefined
+        }
       />
 
       {wpId && (
