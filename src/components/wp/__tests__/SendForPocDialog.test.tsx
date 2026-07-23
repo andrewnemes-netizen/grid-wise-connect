@@ -22,7 +22,7 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 function renderDialog(overrides: Partial<Parameters<typeof SendForPocDialog>[0]> = {}) {
-  const onConfirm = vi.fn<[PocAssignment], Promise<void>>().mockResolvedValue(undefined);
+  const onConfirm = vi.fn(async (_: PocAssignment) => { /* noop */ });
   const props = {
     open: true,
     onOpenChange: vi.fn(),
@@ -89,7 +89,7 @@ describe("SendForPocDialog", () => {
     // Second click: actual send
     fireEvent.click(screen.getByTestId("poc-confirm-send"));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
-    const arg = onConfirm.mock.calls[0][0];
+    const arg = onConfirm.mock.calls[0][0] as PocAssignment;
     expect(arg.mode).toBe("external");
     expect(arg.po).toEqual(expect.objectContaining({ fee: 300, feeBasis: "per_site" }));
   });
@@ -108,6 +108,6 @@ describe("SendForPocDialog", () => {
     await screen.findByTestId("poc-review-step");
     fireEvent.click(screen.getByTestId("poc-confirm-send"));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
-    expect(onConfirm.mock.calls[0][0].po).toBeUndefined();
+    expect((onConfirm.mock.calls[0][0] as PocAssignment).po).toBeUndefined();
   });
 });
