@@ -273,6 +273,7 @@ export default function WpSiteRegisterTab() {
             wp_code: (createRes as any).workPackage?.wp_code,
           },
           recipientName: assignment.assigneeName ?? undefined,
+          recipientCompany: (assignment as any).assigneeCompany ?? undefined,
           recipientEmail: assignment.assigneeEmail,
           programmeName: (createRes as any).workPackage?.programmeName ?? undefined,
           organisationName: (createRes as any).workPackage?.organisationName ?? undefined,
