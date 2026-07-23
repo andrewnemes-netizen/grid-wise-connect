@@ -3,7 +3,6 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as surveyInviteTemplate } from '../_shared/transactional-email-templates/site-survey-invite.tsx'
-import { isAppUserConnected, sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Recipient { email: string; name?: string }
 interface Body {
@@ -14,8 +13,6 @@ interface Body {
   survey_base_url?: string
   expires_in_days?: number
   delivery_mode?: 'email' | 'link_only'
-  /** Admin-only break-glass — force send from the shared EcoPower mailbox. */
-  use_shared_fallback?: boolean
 }
 
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -53,31 +50,6 @@ Deno.serve(async (req) => {
 
   const admin = createClient(supabaseUrl, serviceKey)
   const deliveryMode: 'email' | 'link_only' = body.delivery_mode === 'link_only' ? 'link_only' : 'email'
-
-  // Preflight sender check — only when we're actually going to email.
-  // Link-only mode never touches Outlook so it skips this gate.
-  const useShared = body.use_shared_fallback === true
-  if (deliveryMode === 'email') {
-    if (useShared) {
-      const { data: roleRows } = await admin
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId)
-      const isAdmin = (roleRows ?? []).some((r: any) => r.role === 'admin')
-      if (!isAdmin) {
-        return json({ error: 'forbidden', message: 'Only admins can send from the shared EcoPower mailbox.' }, 403)
-      }
-    } else {
-      const connected = await isAppUserConnected(userId, jwt)
-      if (!connected) {
-        return json({
-          ok: false,
-          error: 'outlook_not_connected',
-          message: 'Connect your Outlook account before sending.',
-        }, 200)
-      }
-    }
-  }
 
   // Load sites (respect RLS via user client)
   const { data: sites, error: sitesErr } = await userClient
@@ -176,31 +148,20 @@ Deno.serve(async (req) => {
         toRecipients: [{ emailAddress: { address: r.email } }],
       }
 
-      if (useShared) {
-        if (!lovableApiKey || !outlookKey) {
-          sendErr = 'Outlook connector not configured'
-        } else {
-          const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${lovableApiKey}`,
-              'X-Connection-Api-Key': outlookKey,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ message, saveToSentItems: true }),
-          })
-          if (outlookRes.ok) sendOk = true
-          else sendErr = `[${outlookRes.status}] ${(await outlookRes.text()).slice(0, 200)}`
-        }
+      if (!lovableApiKey || !outlookKey) {
+        sendErr = 'Outlook connector not configured'
       } else {
-        const perUser = await sendMailAsAppUser(userId, jwt, message)
-        if (perUser.ok) {
-          sendOk = true
-        } else {
-          sendErr = perUser.notConnected
-            ? 'outlook_not_connected'
-            : `per-user [${perUser.status}] ${perUser.error.slice(0, 200)}`
-        }
+        const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${lovableApiKey}`,
+            'X-Connection-Api-Key': outlookKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message, saveToSentItems: true }),
+        })
+        if (outlookRes.ok) sendOk = true
+        else sendErr = `[${outlookRes.status}] ${(await outlookRes.text()).slice(0, 200)}`
       }
 
       if (!sendOk) {

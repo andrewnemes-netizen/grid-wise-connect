@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Mail, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { generateQuotationPdf, downloadQuotationPdf } from "@/lib/quotation-pdf";
-import { OutlookNotConnectedInline } from "@/components/outlook/OutlookNotConnectedInline";
 
 interface Props {
   open: boolean;
@@ -30,7 +29,6 @@ interface Props {
 export function SendQuotationDialog({ open, onOpenChange, estimate, groups, lines, siteName }: Props) {
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [notConnected, setNotConnected] = useState(false);
   const [subject, setSubject] = useState(
     `Quotation ${estimate.ref ?? estimate.name ?? ""} — EcoPower UK`.trim(),
   );
@@ -54,7 +52,7 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
   });
 
   const send = useMutation({
-    mutationFn: async (opts: { useShared?: boolean } = {}) => {
+    mutationFn: async () => {
       // 1) Generate PDF
       const blob = generateQuotationPdf({
         estimate,
@@ -81,21 +79,12 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
           recipient_name: recipientName.trim() || undefined,
           subject: subject.trim(),
           message: message.trim() || undefined,
-          use_shared_fallback: opts.useShared || undefined,
         },
       });
       if (error) throw error;
-      if (data?.error === "outlook_not_connected") {
-        return { outlookNotConnected: true as const };
-      }
       return data;
     },
     onSuccess: (data: any) => {
-      if (data?.outlookNotConnected) {
-        setNotConnected(true);
-        return;
-      }
-      setNotConnected(false);
       toast.success("Quotation sent");
       history.refetch();
       onOpenChange(false);
@@ -113,19 +102,11 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
             <Mail className="h-4 w-4 text-primary" /> Send quotation to client
           </DialogTitle>
           <DialogDescription>
-            Generates a branded PDF from this estimate and emails it as an attachment from your connected Outlook mailbox.
+            Generates a branded PDF from this estimate and emails it as an attachment from the shared EcoPower mailbox.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          {notConnected && (
-            <OutlookNotConnectedInline
-              context="quotation"
-              busy={send.isPending}
-              onRetry={() => send.mutate({})}
-              onSendShared={() => send.mutate({ useShared: true })}
-            />
-          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="rname">Client name</Label>
@@ -169,7 +150,7 @@ export function SendQuotationDialog({ open, onOpenChange, estimate, groups, line
           </Button>
           <Button
             type="button"
-            onClick={() => { setNotConnected(false); send.mutate({}); }}
+            onClick={() => send.mutate()}
             disabled={!emailValid || send.isPending}
           >
             {send.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Mail className="h-4 w-4 mr-1" />}

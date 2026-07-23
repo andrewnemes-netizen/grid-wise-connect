@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Send, X, Copy, Link as LinkIcon, Mail } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { OutlookNotConnectedInline } from "@/components/outlook/OutlookNotConnectedInline";
 
 interface Props {
   open: boolean;
@@ -45,7 +44,6 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
   const [sending, setSending] = useState(false);
   const [deliveryMode, setDeliveryMode] = useState<"email" | "link_only">("email");
   const [generated, setGenerated] = useState<GeneratedLink[]>([]);
-  const [notConnected, setNotConnected] = useState(false);
 
   useEffect(() => {
     if (!open || siteIds.length === 0) return;
@@ -83,10 +81,9 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
     return useSiteContact && sitesWithContact.length > 0 && sitesMissingContact.length === 0;
   }, [useSiteContact, sitesWithContact, sitesMissingContact, sites, parsedExtras, siteIds, deliveryMode]);
 
-  const handleSend = async (opts: { useShared?: boolean } = {}) => {
+  const handleSend = async () => {
     setSending(true);
     setGenerated([]);
-    setNotConnected(false);
     try {
       const results: any[] = [];
 
@@ -107,7 +104,6 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
             },
           });
           if (error) throw error;
-          if (data?.error === "outlook_not_connected") { setNotConnected(true); setSending(false); return; }
           results.push(data);
         }
       } else {
@@ -123,11 +119,9 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
               save_as_default: false,
 
               delivery_mode: "email",
-              use_shared_fallback: opts.useShared || undefined,
             },
           });
           if (error) throw error;
-          if (data?.error === "outlook_not_connected") { setNotConnected(true); setSending(false); return; }
           results.push(data);
         }
       }
@@ -143,11 +137,9 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
             save_as_default: saveDefault,
 
             delivery_mode: "email",
-            use_shared_fallback: opts.useShared || undefined,
           },
         });
         if (error) throw error;
-        if (data?.error === "outlook_not_connected") { setNotConnected(true); setSending(false); return; }
         results.push(data);
       }
       }
@@ -246,14 +238,6 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
           </div>
         ) : (
           <div className="space-y-4">
-            {notConnected && (
-              <OutlookNotConnectedInline
-                context="site survey"
-                busy={sending}
-                onRetry={() => handleSend({})}
-                onSendShared={() => handleSend({ useShared: true })}
-              />
-            )}
             <div>
               <Label className="text-xs uppercase text-muted-foreground">Delivery</Label>
               <RadioGroup
@@ -370,7 +354,7 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
               <Button variant="outline" onClick={close} disabled={sending}>
                 <X className="h-3 w-3 mr-1" /> Cancel
               </Button>
-              <Button onClick={() => handleSend({})} disabled={!canSend || sending}>
+              <Button onClick={() => handleSend()} disabled={!canSend || sending}>
                 {sending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : (
                   deliveryMode === "link_only" ? <LinkIcon className="h-3 w-3 mr-1" /> : <Send className="h-3 w-3 mr-1" />
                 )}
