@@ -30,10 +30,12 @@ interface Props {
   dueDate?: string
   sites?: SiteLine[]
   actionUrl?: string
+  returnUrl?: string
+  poNumber?: string
 }
 
 const Email = ({
-  recipientName, senderName, companyName, programmeName, workPackageName, message, dueDate, sites = [], actionUrl,
+  recipientName, senderName, companyName, programmeName, workPackageName, message, dueDate, sites = [], actionUrl, returnUrl, poNumber,
 }: Props) => (
   <Html lang="en" dir="ltr">
     <Head />
@@ -107,6 +109,18 @@ const Email = ({
         )}
 
         {message && <Text style={text}>{message}</Text>}
+
+        {returnUrl && (
+          <Section style={{ textAlign: 'center', margin: '24px 0' }}>
+            <Text style={{ ...text, marginBottom: 8 }}>
+              When your POC pack is ready, please upload it using the secure link below{poNumber ? ` (PO ${poNumber})` : ''}:
+            </Text>
+            <Button href={returnUrl} style={button}>Upload POC submission</Button>
+            <Text style={{ ...footer, marginTop: 8 }}>
+              This link is unique to your assignment and expires in 30 days. Do not share it.
+            </Text>
+          </Section>
+        )}
 
         {actionUrl && (
           <Section style={{ textAlign: 'center', margin: '32px 0' }}>

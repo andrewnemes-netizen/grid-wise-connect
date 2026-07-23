@@ -39,6 +39,7 @@ const IntelligenceComingSoon = lazy(() => import("./pages/intelligence/ComingSoo
 const NotFound = lazy(() => import("./pages/NotFound"));
 const UnsubscribePage = lazy(() => import("./pages/Unsubscribe"));
 const SurveyForm = lazy(() => import("./pages/SurveyForm"));
+const PocReturnForm = lazy(() => import("./pages/PocReturnForm"));
 const Assistant = lazy(() => import("./pages/Assistant"));
 const ImportWizard = lazy(() => import("./pages/ImportWizard"));
 const WorkPackageShell = lazy(() => import("./pages/WorkPackageShell"));
@@ -144,6 +145,7 @@ const AppRoutes = () => (
       <Route path="/quick-estimate" element={<QuickEstimate />} />
       <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
       <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
+      <Route path="/poc-return/:token" element={<Suspense fallback={<LazyFallback />}><PocReturnForm /></Suspense>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
       <Route path="/surveys" element={<ProtectedRoute bare><Suspense fallback={<LazyFallback />}><SurveysPage /></Suspense></ProtectedRoute>} />

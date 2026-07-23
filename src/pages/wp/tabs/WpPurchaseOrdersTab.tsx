@@ -22,6 +22,7 @@ import { Plus, Receipt, Trash2, FileText, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { SendPurchaseOrderDialog } from "@/components/delivery/SendPurchaseOrderDialog";
 import { XeroPoButton } from "@/components/delivery/XeroPoButton";
+import { PocDesignerReturnReviewDialog } from "@/components/delivery/PocDesignerReturnReviewDialog";
 import { Link } from "react-router-dom";
 
 const fmt = (n: number | null | undefined) =>
@@ -66,6 +67,7 @@ export default function WpPurchaseOrdersTab() {
   const [sendPo, setSendPo] = useState<any | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<"all" | "build" | "poc_design" | "other">("all");
   const [cancelPoc, setCancelPoc] = useState<any | null>(null);
+  const [reviewPoc, setReviewPoc] = useState<any | null>(null);
 
   const { data: workPackage } = useQuery({
     queryKey: ["wp-basic", wpId],
@@ -87,7 +89,7 @@ export default function WpPurchaseOrdersTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("purchase_orders")
-        .select("*, clients(id,name)")
+        .select("*, clients(id,name), poc_designer_returns(id,status,submitted_at,expires_at)")
         .eq("work_package_id", wpId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -243,6 +245,20 @@ export default function WpPurchaseOrdersTab() {
                     >
                       <Mail className="h-3.5 w-3.5 mr-1" /> Send to supplier
                     </Button>
+                    {po.category === "poc_design" && (() => {
+                      const ret = Array.isArray(po.poc_designer_returns) ? po.poc_designer_returns[0] : null;
+                      if (!ret) return null;
+                      return (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={`mr-2 ${ret.status === "submitted" ? "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10" : ""}`}
+                          onClick={() => setReviewPoc(po)}
+                        >
+                          Designer return: {ret.status}
+                        </Button>
+                      );
+                    })()}
                     {po.category === "poc_design" && po.status !== "cancelled" && (
                       <Button
                         size="sm"
@@ -297,6 +313,14 @@ export default function WpPurchaseOrdersTab() {
           workPackage={workPackage}
           onClose={() => setCancelPoc(null)}
           onDone={() => { setCancelPoc(null); invalidate(); }}
+        />
+      )}
+
+      {reviewPoc && (
+        <PocDesignerReturnReviewDialog
+          open={!!reviewPoc}
+          onOpenChange={(o) => { if (!o) setReviewPoc(null); }}
+          po={reviewPoc}
         />
       )}
     </div>

@@ -19,6 +19,7 @@ interface Body {
   sites?: unknown              // pass-through to email template
   cc_emails?: string[]
   work_package_id: string
+  app_origin?: string | null   // caller's window origin, used to build the return upload link
 }
 
 Deno.serve(async (req) => {
@@ -58,6 +59,32 @@ Deno.serve(async (req) => {
   if (poErr || !po) return json({ error: 'PO not found' }, 404)
   if (po.category !== 'poc_design') return json({ error: 'Not a POC design PO' }, 400)
   if (po.status !== 'draft') return json({ error: `PO already ${po.status}, cannot re-issue` }, 409)
+
+  // Create designer-return token (one per PO). Idempotent: reuse if one already exists.
+  let returnToken: string | null = null
+  try {
+    const { data: existing } = await admin
+      .from('poc_designer_returns')
+      .select('token, status')
+      .eq('po_id', po.id)
+      .maybeSingle()
+    if (existing && (existing as any).status === 'pending') {
+      returnToken = (existing as any).token
+    } else {
+      const { data: created, error: retErr } = await admin
+        .from('poc_designer_returns')
+        .insert({ po_id: po.id, created_by: userId })
+        .select('token')
+        .single()
+      if (retErr) throw retErr
+      returnToken = (created as any).token
+    }
+  } catch (e) {
+    console.error('poc_designer_returns create failed:', e instanceof Error ? e.message : String(e))
+  }
+
+  const origin = (body.app_origin ?? '').replace(/\/$/, '')
+  const returnUrl = returnToken && origin ? `${origin}/poc-return/${returnToken}` : null
 
   // Load WP context for the email template
   const { data: wp } = await admin
@@ -109,6 +136,7 @@ Deno.serve(async (req) => {
         sites: body.sites ?? [],
         poNumber: po.po_number,
         orderValue: po.order_value,
+        returnUrl: returnUrl ?? undefined,
       },
       attachments,
     }),
@@ -163,7 +191,12 @@ Deno.serve(async (req) => {
     console.error('audit_log insert failed:', e instanceof Error ? e.message : String(e))
   }
 
-  return json({ ok: true, poNumber: po.po_number, onedrive: { ok: mirror.ok, webUrl: mirror.web_url ?? null } })
+  return json({
+    ok: true,
+    poNumber: po.po_number,
+    onedrive: { ok: mirror.ok, webUrl: mirror.web_url ?? null },
+    returnUrl,
+  })
 })
 
 function base64ToBytes(b64: string): Uint8Array {

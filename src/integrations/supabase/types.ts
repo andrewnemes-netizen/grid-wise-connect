@@ -4461,6 +4461,157 @@ export type Database = {
           },
         ]
       }
+      poc_designer_return_files: {
+        Row: {
+          file_type: string
+          id: string
+          original_filename: string
+          parsed_content: Json | null
+          return_id: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          file_type: string
+          id?: string
+          original_filename: string
+          parsed_content?: Json | null
+          return_id: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          file_type?: string
+          id?: string
+          original_filename?: string
+          parsed_content?: Json | null
+          return_id?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poc_designer_return_files_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "poc_designer_returns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poc_designer_return_lines: {
+        Row: {
+          confirmed_unit_cost: number | null
+          created_at: string
+          description: string | null
+          designer_cost: number | null
+          extraction_confidence: number | null
+          id: string
+          rate_code: string | null
+          return_id: string
+          reviewed: boolean
+          reviewed_at: string | null
+          reviewer_id: string | null
+          source_file_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          confirmed_unit_cost?: number | null
+          created_at?: string
+          description?: string | null
+          designer_cost?: number | null
+          extraction_confidence?: number | null
+          id?: string
+          rate_code?: string | null
+          return_id: string
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          source_file_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          confirmed_unit_cost?: number | null
+          created_at?: string
+          description?: string | null
+          designer_cost?: number | null
+          extraction_confidence?: number | null
+          id?: string
+          rate_code?: string | null
+          return_id?: string
+          reviewed?: boolean
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          source_file_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poc_designer_return_lines_return_id_fkey"
+            columns: ["return_id"]
+            isOneToOne: false
+            referencedRelation: "poc_designer_returns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "poc_designer_return_lines_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "poc_designer_return_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      poc_designer_returns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          po_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          status: string
+          submitted_at: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          po_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          po_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "poc_designer_returns_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       primary_substations_33kv: {
         Row: {
           asset_id: string
@@ -11295,6 +11446,18 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_poc_return_by_token: {
+        Args: { _token: string }
+        Returns: {
+          client_name: string
+          expires_at: string
+          po_id: string
+          po_number: string
+          return_id: string
+          status: string
+          work_package_name: string
+        }[]
+      }
       get_sites_for_poc: {
         Args: { _site_ids: string[] }
         Returns: {
@@ -12241,6 +12404,10 @@ export type Database = {
       st_wrapx: {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
+      }
+      submit_poc_return_by_token: {
+        Args: { _files: Json; _token: string }
+        Returns: string
       }
       submit_survey_by_token: {
         Args: {
