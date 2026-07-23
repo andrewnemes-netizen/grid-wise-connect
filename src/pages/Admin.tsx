@@ -53,7 +53,7 @@ const Admin = () => {
       </div>
 
       <Tabs defaultValue="layers">
-        <TabsList>
+        <TabsList className="h-auto flex-wrap justify-start gap-1">
           <TabsTrigger value="layers"><Layers className="h-3.5 w-3.5 mr-1.5" />Layers</TabsTrigger>
           <TabsTrigger value="rates"><SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />Unit Rates</TabsTrigger>
           <TabsTrigger value="evhub"><Zap className="h-3.5 w-3.5 mr-1.5" />EV Hub Rules</TabsTrigger>
@@ -72,52 +72,52 @@ const Admin = () => {
           <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Integrations</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="layers" className="mt-4">
+        <TabsContent value="layers" className="mt-4 max-w-full overflow-x-auto">
           <LayerManagement />
         </TabsContent>
-        <TabsContent value="rates" className="mt-4">
+        <TabsContent value="rates" className="mt-4 max-w-full overflow-x-auto">
           <UnitRatesSettings />
         </TabsContent>
-        <TabsContent value="evhub" className="mt-4">
+        <TabsContent value="evhub" className="mt-4 max-w-full overflow-x-auto">
           <EvHubRulesEditor />
         </TabsContent>
-        <TabsContent value="dno" className="mt-4">
+        <TabsContent value="dno" className="mt-4 max-w-full overflow-x-auto">
           <NpgDatasetRegistry />
         </TabsContent>
-        <TabsContent value="gas" className="mt-4">
+        <TabsContent value="gas" className="mt-4 max-w-full overflow-x-auto">
           <GasDatasetRegistry />
         </TabsContent>
-        <TabsContent value="api" className="mt-4">
+        <TabsContent value="api" className="mt-4 max-w-full overflow-x-auto">
           <DnoApiSources />
         </TabsContent>
-        <TabsContent value="la" className="mt-4">
+        <TabsContent value="la" className="mt-4 max-w-full overflow-x-auto">
           <LocalAuthorityDatasets />
         </TabsContent>
-        <TabsContent value="ssen-drive" className="mt-4">
+        <TabsContent value="ssen-drive" className="mt-4 max-w-full overflow-x-auto">
           <SsenDriveIngest />
         </TabsContent>
-        <TabsContent value="users" className="mt-4">
+        <TabsContent value="users" className="mt-4 max-w-full overflow-x-auto">
           <UserRolesManagement />
         </TabsContent>
-        <TabsContent value="orgs" className="mt-4">
+        <TabsContent value="orgs" className="mt-4 max-w-full overflow-x-auto">
           <OrgManagement />
         </TabsContent>
-        <TabsContent value="partners" className="mt-4">
+        <TabsContent value="partners" className="mt-4 max-w-full overflow-x-auto">
           <PartnerManagement />
         </TabsContent>
-        <TabsContent value="audit" className="mt-4">
+        <TabsContent value="audit" className="mt-4 max-w-full overflow-x-auto">
           <AuditLogTab />
         </TabsContent>
-        <TabsContent value="learning" className="mt-4">
+        <TabsContent value="learning" className="mt-4 max-w-full overflow-x-auto">
           <RouteLearningDashboard />
         </TabsContent>
-        <TabsContent value="estimating" className="mt-4">
+        <TabsContent value="estimating" className="mt-4 max-w-full overflow-x-auto">
           <EstimatingLibrary />
         </TabsContent>
-        <TabsContent value="flags" className="mt-4">
+        <TabsContent value="flags" className="mt-4 max-w-full overflow-x-auto">
           <FeatureFlagsPanel />
         </TabsContent>
-        <TabsContent value="xero" className="mt-4">
+        <TabsContent value="xero" className="mt-4 max-w-full overflow-x-auto">
           <div className="space-y-4">
             <PublicUrlSettings />
             <XeroIntegration />
