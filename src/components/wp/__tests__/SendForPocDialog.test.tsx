@@ -34,7 +34,11 @@ function renderDialog(overrides: Partial<Parameters<typeof SendForPocDialog>[0]>
     ...overrides,
   };
   // Seed enriched site records so the readiness gate passes without hitting DB.
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // staleTime: Infinity prevents react-query from refetching over our seeded
+  // enriched-site data and clobbering `allValid` with the empty stub.
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } },
+  });
   client.setQueryData(["poc-sites", "site-1,site-2"], [
     { id: "site-1", site_name: "Alpha", postcode: "AB1 2CD", lat: 51.5, lng: -0.1, socket_count: 2, proposed_kw: 22, socket_groups: [{ count: 2, kwPerSocket: 11 }], phase_totals: { L1: 11, L2: 11, L3: 0 } },
     { id: "site-2", site_name: "Beta", postcode: "BE1 2FG", lat: 51.6, lng: -0.2, socket_count: 2, proposed_kw: 22, socket_groups: [{ count: 2, kwPerSocket: 11 }], phase_totals: { L1: 11, L2: 11, L3: 0 } },
