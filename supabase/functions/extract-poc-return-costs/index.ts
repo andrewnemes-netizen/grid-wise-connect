@@ -5,7 +5,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
-import { generateText, Output } from 'npm:ai@^5'
+import { generateText, Output } from 'npm:ai@^7'
 import { z } from 'npm:zod@^3'
 import { createLovableAiGatewayProvider } from '../_shared/ai-gateway.ts'
 
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
   if (fErr) return json({ error: fErr.message }, 500)
   if (!files || files.length === 0) return json({ error: 'No files for this return' }, 404)
 
-  const gateway = createLovableAiGatewayProvider(lovableKey, { structuredOutputs: false })
+  const gateway = createLovableAiGatewayProvider(lovableKey, { structuredOutputs: true })
   const model = gateway('google/gemini-3.6-flash')
 
   const allExtracted: Array<{
