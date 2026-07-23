@@ -177,7 +177,7 @@ export default function WpMatrixTab() {
         ))}
       </div>
 
-      <Card className="p-0 overflow-auto">
+      <Card className="p-0 overflow-auto max-h-[calc(100vh-12rem)]">
         <table className="w-full text-xs">
           <thead className="bg-muted/40">
             <tr>
