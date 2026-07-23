@@ -259,7 +259,16 @@ export default function WpSiteRegisterTab() {
             assigneeUserId: assignment.assigneeUserId ?? undefined,
             templateData: {
               recipientName: assignment.assigneeName ?? undefined,
-              workPackageName: undefined,
+              workPackageName: (wpMeta as any)?.name
+                ? `${(wpMeta as any).name}${(wpMeta as any)?.code ? ` (${(wpMeta as any).code})` : ""}`
+                : undefined,
+              programmeName: (wpMeta as any)?.programmes?.name
+                ? `${(wpMeta as any).programmes.name}${(wpMeta as any)?.programmes?.code ? ` (${(wpMeta as any).programmes.code})` : ""}`
+                : undefined,
+              companyName:
+                (wpMeta as any)?.programmes?.accounts?.clients?.name ??
+                (wpMeta as any)?.programmes?.accounts?.name ??
+                undefined,
               message: assignment.message,
               dueDate: assignment.dueDate,
               sites: siteLines,
