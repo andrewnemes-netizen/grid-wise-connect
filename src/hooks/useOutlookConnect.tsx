@@ -6,7 +6,7 @@ export type OutlookConnectResult =
   | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout" | "oauth_error"; message?: string; email?: string };
 
 export function outlookConnectFailureMessage(result: OutlookConnectResult): string {
-  if (result.ok) return "Outlook connected";
+  if (result.ok === true) return "Outlook connected";
   if (result.message) return result.message;
   if (result.reason === "wrong_tenant") return "Only ecopoweruk.com accounts can be connected.";
   if (result.reason === "oauth_error") return "Microsoft sign-in did not complete. Try again and complete the prompt.";
@@ -43,7 +43,7 @@ async function waitForVerifiedOutlookConnection(): Promise<OutlookConnectResult>
 export function useOutlookConnect() {
   return useCallback(async (): Promise<boolean> => {
     const result = await connectOutlookDetailed();
-    return result.ok;
+    return result.ok === true;
   }, []);
 }
 
