@@ -46,7 +46,7 @@ const Admin = () => {
   }
 
   return (
-    <div className="p-6 space-y-4 h-full overflow-auto">
+    <div className="p-6 space-y-4 h-full max-w-full overflow-x-hidden overflow-y-auto">
       <div className="flex items-center gap-2">
         <Settings className="h-5 w-5 text-primary" />
         <h2 className="text-xl font-bold text-foreground">Admin</h2>
