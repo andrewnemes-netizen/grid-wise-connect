@@ -426,7 +426,7 @@ export default function WpSiteRegisterTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("work_packages")
-        .select("programme_id")
+        .select("programme_id, name, code, programmes:programme_id(name, code, accounts:account_id(name, clients:client_id(name)))")
         .eq("id", wpId!)
         .maybeSingle();
       if (error) throw error;
