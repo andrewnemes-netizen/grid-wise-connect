@@ -255,7 +255,7 @@ export function PocDesignerReturnReviewDialog({
                 <TableRow>
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={rows.length > 0 && rows.filter((r) => !r.reviewed).every((r) => selected.has(r.id))}
+                      checked={rows.filter((r) => !r.reviewed).length > 0 && rows.filter((r) => !r.reviewed).every((r) => selected.has(r.id))}
                       onCheckedChange={(v) => {
                         setSelected(v
                           ? new Set(rows.filter((r) => !r.reviewed).map((r) => r.id))
