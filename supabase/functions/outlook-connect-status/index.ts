@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
-import { isAppUserConnected } from '../_shared/appUserOutlook.ts'
+import { appUserConnectionCheck } from '../_shared/appUserOutlook.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
@@ -18,8 +18,17 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser()
   if (userErr || !userData.user) return json({ error: 'Unauthorized' }, 401)
 
-  const connected = await isAppUserConnected(userData.user.id)
-  return json({ connected, user_id: userData.user.id })
+  const check = await appUserConnectionCheck(userData.user.id)
+  return json({
+    connected: check.ok,
+    user_id: userData.user.id,
+    email: check.ok ? check.email : check.email,
+    reason: check.ok ? undefined : check.reason,
+    message:
+      check.ok || check.reason !== 'wrong_tenant'
+        ? undefined
+        : `Only ecopoweruk.com accounts can be connected (got ${check.email || 'unknown'}).`,
+  })
 })
 
 function json(data: Record<string, unknown>, status = 200) {
