@@ -436,7 +436,9 @@ export default function WpSiteRegisterTab() {
     onSuccess: (result: any, vars) => {
       const n = vars.siteIds.length;
       const label = `POC assigned for ${n} site${n === 1 ? "" : "s"}`;
-      if (result?.emailed) {
+      if ((result as any)?.poNumber) {
+        toast.success(`${label} — emailed ${(result as any).recipient}, PO ${(result as any).poNumber} issued`);
+      } else if (result?.emailed) {
         toast.success(`${label} — emailed ${result.recipient ?? vars.assignment.assigneeEmail ?? vars.assignment.assigneeName ?? ""}`);
       } else if (vars.assignment.mode === "external") {
         toast.warning(`${label} but NOT emailed — ${result?.reason ?? "email skipped"}`);
@@ -890,6 +892,7 @@ export default function WpSiteRegisterTab() {
         open={pocDialogOpen}
         onOpenChange={setPocDialogOpen}
         siteIds={selectedIds}
+        adminOnly={isAdmin}
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
       />
