@@ -24,6 +24,7 @@ interface Props {
   recipientName?: string
   senderName?: string
   companyName?: string
+  programmeName?: string
   workPackageName?: string
   message?: string
   dueDate?: string
@@ -32,11 +33,11 @@ interface Props {
 }
 
 const Email = ({
-  recipientName, senderName, companyName, workPackageName, message, dueDate, sites = [], actionUrl,
+  recipientName, senderName, companyName, programmeName, workPackageName, message, dueDate, sites = [], actionUrl,
 }: Props) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>{`POC application requested${workPackageName ? ` — ${workPackageName}` : ''}`}</Preview>
+    <Preview>{`POC application requested${workPackageName ? ` — ${workPackageName}` : ''}${companyName ? ` · ${companyName}` : ''}`}</Preview>
     <Body style={main}>
       <Container style={container}>
         <Heading style={h1}>POC Application Requested</Heading>
@@ -44,6 +45,20 @@ const Email = ({
         <Text style={text}>
           {senderName ?? 'The team'}{companyName ? ` at ${companyName}` : ''} has asked you to prepare and submit a Point of Connection (POC) application{workPackageName ? ` for work package ${workPackageName}` : ''}.
         </Text>
+
+        {(companyName || programmeName || workPackageName) && (
+          <Section style={card}>
+            {companyName && (
+              <Text style={cardRow}><span style={label}>Organisation</span><span style={value}>{companyName}</span></Text>
+            )}
+            {programmeName && (
+              <Text style={cardRow}><span style={label}>Programme</span><span style={value}>{programmeName}</span></Text>
+            )}
+            {workPackageName && (
+              <Text style={cardRow}><span style={label}>Work Package</span><span style={value}>{workPackageName}</span></Text>
+            )}
+          </Section>
+        )}
 
         {sites.length > 0 && (
           <>

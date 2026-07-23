@@ -259,7 +259,16 @@ export default function WpSiteRegisterTab() {
             assigneeUserId: assignment.assigneeUserId ?? undefined,
             templateData: {
               recipientName: assignment.assigneeName ?? undefined,
-              workPackageName: undefined,
+              workPackageName: (wpMeta as any)?.name
+                ? `${(wpMeta as any).name}${(wpMeta as any)?.code ? ` (${(wpMeta as any).code})` : ""}`
+                : undefined,
+              programmeName: (wpMeta as any)?.programmes?.name
+                ? `${(wpMeta as any).programmes.name}${(wpMeta as any)?.programmes?.code ? ` (${(wpMeta as any).programmes.code})` : ""}`
+                : undefined,
+              companyName:
+                (wpMeta as any)?.programmes?.accounts?.clients?.name ??
+                (wpMeta as any)?.programmes?.accounts?.name ??
+                undefined,
               message: assignment.message,
               dueDate: assignment.dueDate,
               sites: siteLines,
@@ -426,7 +435,7 @@ export default function WpSiteRegisterTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("work_packages")
-        .select("programme_id")
+        .select("programme_id, name, code, programmes:programme_id(name, code, accounts:account_id(name, clients:client_id(name)))")
         .eq("id", wpId!)
         .maybeSingle();
       if (error) throw error;
