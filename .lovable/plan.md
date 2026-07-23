@@ -1,30 +1,36 @@
 ## Goal
-
-Replace the current `src/components/delivery/estimate/RateItemPicker.tsx` with the uploaded version so that when picking rate items:
-
-- **EV Build** estimates (`estimates.kind = 'build'`) default to the **Synthetic** rate card.
-- **PoC/ICP** estimates (`estimates.kind = 'poc'`) default to the **ICP** rate card.
-- Any card whose name contains **"MSA"** is always ranked last and labelled as the Fallback.
-
-Nothing else about picking, insertion, groups, or pricing changes.
+Consolidate the three Admin tabs (*Estimating Import*, *Rate Library*, *Recipe Library*) into a single **Estimating** tab powered by the uploaded `EstimatingLibrary.tsx`, and add a dedicated rate-card version detail page at `/admin/rate-cards/:versionId`.
 
 ## Changes
 
-1. **`src/components/delivery/estimate/RateItemPicker.tsx`** — overwrite with the uploaded file (`user-uploads://RateItemPicker.tsx`). This adds:
-   - New optional prop `estimateKind?: "build" | "poc"`.
-   - Name-based classification of `rate_card_versions` (Primary / Fallback / other) driving default selection order.
-   - A "· Primary" / "· Fallback (MSA)" tag in the rate-card dropdown label.
+### 1. New library component
+- Add `src/components/admin/EstimatingLibrary.tsx` verbatim from `user-uploads://EstimatingLibrary.tsx` (imports `GenericRateCardImport`, which already exists).
 
-2. **`src/components/delivery/estimate/EstimateEditor.tsx`** (line ~524) — pass `estimateKind={e.kind}` to `<RateItemPicker />` so the picker knows which card to default to. `e.kind` already exists on the estimate record (added when PoC/Build split was introduced).
+### 2. Admin page — collapse three tabs into one
+`src/pages/Admin.tsx`:
+- Remove tab triggers **Estimating Import**, **Rate Library**, **Recipe Library**.
+- Add one new tab trigger **Estimating** (value `estimating`, `Library` icon).
+- Remove the three matching `<TabsContent>` blocks and add one that renders `<EstimatingLibrary />`.
+- Remove now-unused imports (`EstimatingImport`, `RateLibrary`, `RecipeLibrary`, `Receipt`, `BookOpen`).
+- Preserve every other tab (Layers, Rates, EV Hub, DNO, Gas, API, LA, SSEN Drive, Users, Orgs, Partners, Audit, Learning, Flags, Xero) exactly as-is.
 
-## Not touched
+### 3. Rate card detail route
+- Add `src/pages/admin/RateCardDetail.tsx`:
+  - Reads `:versionId` from the URL.
+  - Fetches the single `rate_card_versions` row (with parent `rate_cards` + `contracts`) and its `rate_card_lines`.
+  - Reuses the existing edit/approve/clone/delete affordances currently in `RateLibrary.tsx` by extracting the per-version panel into a shared subcomponent `RateCardVersionPanel` (moved from `RateLibrary.tsx` into `src/components/admin/RateCardVersionPanel.tsx`) — so behaviour stays identical and there's no duplication.
+  - Renders inside the standard admin shell with a back link to `/admin?tab=estimating`.
+- Register the route in `src/App.tsx` under the existing admin-guarded section: `/admin/rate-cards/:versionId` → `RateCardDetail`.
 
-- The three existing importers, `RateLibrary`, `UnitRatesSettings`, and `GenericRateCardImport`.
-- Line insertion logic, group auto-routing, quantities, currency formatting.
-- Database / RLS / rate card schema.
+### 4. Legacy files
+- Delete `src/components/admin/EstimatingImport.tsx`, `src/components/admin/RateLibrary.tsx` (after extracting the shared panel), and `src/components/admin/RecipeLibrary.tsx`. Remove any remaining imports.
+- Search once for stray references (`rg -n "RecipeLibrary|EstimatingImport\\b|RateLibrary\\b"`) and clean up.
 
-## Verification
+### 5. Verification
+- Typecheck.
+- Manually confirm: `/admin` → *Estimating* tab shows the rate-card table + "Add rate card" import panel; clicking a row navigates to `/admin/rate-cards/:versionId` and lets you view/edit lines and approve/clone; Recipe Library is gone.
 
-- Open a Build estimate → "Add from rate card": Synthetic card preselected, MSA shown last tagged "Fallback (MSA)".
-- Open a PoC estimate → same picker: ICP card preselected, MSA still last.
-- Estimate with no matching primary card → first non-MSA card selected (previous behaviour preserved).
+## Out of scope
+- No schema changes.
+- No changes to the individual importers (ICP SOR, MSA, Synthetic, Generic Rate Card).
+- No changes to any non-Admin surface that consumes rate cards.
