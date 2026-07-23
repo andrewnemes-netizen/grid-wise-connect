@@ -15,6 +15,7 @@ import { template as siteSurveySubmitted } from './site-survey-submitted.tsx'
 import { template as invoice } from './invoice.tsx'
 import { template as purchaseOrder } from './purchase-order.tsx'
 import { template as pocAssignment } from './poc-assignment.tsx'
+import { template as pocPoCancellation } from './poc-po-cancellation.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'welcome-client': welcomeClient,
@@ -24,4 +25,5 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   invoice: invoice,
   'purchase-order': purchaseOrder,
   'poc-assignment': pocAssignment,
+  'poc-po-cancellation': pocPoCancellation,
 }
