@@ -3,7 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as pocTemplate } from '../_shared/transactional-email-templates/poc-assignment.tsx'
-import { sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
+import { isAppUserConnected, sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Body {
   recipientEmail?: string
@@ -17,6 +17,8 @@ interface Body {
     contentBase64: string
     contentType?: string
   }
+  /** Admin-only break-glass — force send from the shared EcoPower mailbox. */
+  use_shared_fallback?: boolean
 }
 
 Deno.serve(async (req) => {
@@ -25,6 +27,7 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
   const authHeader = req.headers.get('Authorization') ?? ''
   const jwt = authHeader.replace(/^Bearer\s+/i, '')
@@ -35,6 +38,7 @@ Deno.serve(async (req) => {
   })
   const { data: userData, error: userErr } = await userClient.auth.getUser()
   if (userErr || !userData.user) return json({ error: 'Unauthorized' }, 401)
+  const userId = userData.user.id
 
   let body: Body
   try {
@@ -45,11 +49,10 @@ Deno.serve(async (req) => {
 
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   let recipientEmail = body.recipientEmail?.trim() ?? ''
+  const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey) : null
   // Resolve email from assigneeUserId (internal designer) if not provided
   if (!recipientEmail && body.assigneeUserId) {
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    if (serviceKey) {
-      const adminClient = createClient(supabaseUrl, serviceKey)
+    if (adminClient) {
       const { data: u, error: e } = await adminClient.auth.admin.getUserById(body.assigneeUserId)
       if (e || !u?.user?.email) {
         return json({ error: 'Could not resolve assignee email', details: e?.message }, 400)
@@ -59,6 +62,31 @@ Deno.serve(async (req) => {
   }
   if (!recipientEmail || !emailRe.test(recipientEmail)) {
     return json({ error: 'valid recipientEmail required' }, 400)
+  }
+
+  // Preflight sender path — no silent fallback.
+  const useShared = body.use_shared_fallback === true
+  if (useShared) {
+    if (!adminClient) {
+      return json({ error: 'Service role unavailable' }, 500)
+    }
+    const { data: roleRows } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+    const isAdmin = (roleRows ?? []).some((r: any) => r.role === 'admin')
+    if (!isAdmin) {
+      return json({ error: 'forbidden', message: 'Only admins can send from the shared EcoPower mailbox.' }, 403)
+    }
+  } else {
+    const connected = await isAppUserConnected(userId)
+    if (!connected) {
+      return json({
+        ok: false,
+        error: 'outlook_not_connected',
+        message: 'Connect your Outlook account before sending.',
+      }, 200)
+    }
   }
 
   const templateData = (body.templateData ?? {}) as Record<string, unknown>
@@ -73,7 +101,7 @@ Deno.serve(async (req) => {
   // Outlook connector credentials
   const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
   const outlookKey = Deno.env.get('MICROSOFT_OUTLOOK_API_KEY')
-  if (!lovableApiKey || !outlookKey) {
+  if (useShared && (!lovableApiKey || !outlookKey)) {
     return json({ error: 'Outlook connector not configured' }, 500)
   }
 
@@ -110,18 +138,21 @@ Deno.serve(async (req) => {
     ...(attachments ? { attachments } : {}),
   }
 
-  // 1. Try sending as the signed-in user via the App User Connector.
-  const perUser = await sendMailAsAppUser(userData.user.id, message)
-  if (perUser.ok) return json({ success: true, sender: 'per_user' })
-  if (!perUser.notConnected) {
+  // Send via the chosen path only — no silent fallback.
+  if (!useShared) {
+    const perUser = await sendMailAsAppUser(userId, message)
+    if (perUser.ok) return json({ success: true, sender: 'per_user' })
+    if (perUser.notConnected) {
+      return json({
+        ok: false,
+        error: 'outlook_not_connected',
+        message: 'Connect your Outlook account before sending.',
+      }, 200)
+    }
     console.error(`Per-user Outlook send failed [${perUser.status}]: ${perUser.error}`)
-    return json(
-      { error: 'Outlook send failed', status: perUser.status, details: perUser.error },
-      502,
-    )
+    return json({ error: 'Outlook send failed', status: perUser.status, details: perUser.error }, 502)
   }
 
-  // 2. Fallback: shared workspace Outlook connector.
   const outlookRes = await fetch(
     'https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail',
     {
@@ -134,16 +165,11 @@ Deno.serve(async (req) => {
       body: JSON.stringify({ message, saveToSentItems: true }),
     },
   )
-
   if (!outlookRes.ok) {
     const errText = await outlookRes.text()
     console.error(`Outlook sendMail failed [${outlookRes.status}]: ${errText}`)
-    return json(
-      { error: 'Outlook send failed', status: outlookRes.status, details: errText },
-      502,
-    )
+    return json({ error: 'Outlook send failed', status: outlookRes.status, details: errText }, 502)
   }
-
   return json({ success: true, sender: 'shared' })
 })
 
