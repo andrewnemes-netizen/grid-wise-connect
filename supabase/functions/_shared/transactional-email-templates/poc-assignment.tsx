@@ -43,7 +43,7 @@ const Email = ({
         <Heading style={h1}>POC Application Requested</Heading>
         <Text style={text}>{recipientName ? `Hi ${recipientName},` : 'Hi there,'}</Text>
         <Text style={text}>
-          {senderName ?? 'The team'}{companyName ? ` at ${companyName}` : ''} has asked you to prepare and submit a Point of Connection (POC) application{workPackageName ? ` for work package ${workPackageName}` : ''}.
+          {senderName ?? 'The team'} at EcoPower Energy {companyName ? <>has asked you to prepare and submit a Point of Connection (POC) application on behalf of <strong>{companyName}</strong></> : 'has asked you to prepare and submit a Point of Connection (POC) application'}{workPackageName ? ` for work package ${workPackageName}` : ''}.
         </Text>
 
         {(companyName || programmeName || workPackageName) && (
