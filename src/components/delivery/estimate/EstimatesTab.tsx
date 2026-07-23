@@ -18,7 +18,13 @@ import { Link } from "react-router-dom";
 const fmt = (n: number, c = "GBP") =>
   new Intl.NumberFormat("en-GB", { style: "currency", currency: c, maximumFractionDigits: 0 }).format(n || 0);
 
-export function EstimatesTab({ scope }: { scope: { work_package_id?: string; project_id?: string } }) {
+export function EstimatesTab({
+  scope,
+  kind = "build",
+}: {
+  scope: { work_package_id?: string; project_id?: string };
+  kind?: "build" | "poc";
+}) {
   const qc = useQueryClient();
   const [openId, setOpenId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -37,6 +43,7 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       let q = supabase.from("estimates" as any).select("*").is("deleted_at", null).order("created_at", { ascending: false });
       if (scope.work_package_id) q = q.eq("work_package_id", scope.work_package_id);
       if (scope.project_id) q = q.eq("project_id", scope.project_id);
+      q = q.eq("kind", kind);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as any[];
@@ -126,6 +133,7 @@ export function EstimatesTab({ scope }: { scope: { work_package_id?: string; pro
       const suffix = site.local_ref ?? site.site_name;
       const { data, error } = await supabase.from("estimates" as any).insert({
         ...scope,
+        kind,
         site_id: site.id,
         name: `Estimate ${String(n).padStart(2, "0")} — ${suffix}`,
       } as any).select("id").single();
