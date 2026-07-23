@@ -1,24 +1,30 @@
 ## Goal
-Add the uploaded `GenericRateCardImport-2.tsx` as a new, independent fourth card in **Admin → Estimating Import**, alongside the existing Rate Library, Recipe Library, and ICP SOR importers — without touching those three.
+
+Replace the current `src/components/delivery/estimate/RateItemPicker.tsx` with the uploaded version so that when picking rate items:
+
+- **EV Build** estimates (`estimates.kind = 'build'`) default to the **Synthetic** rate card.
+- **PoC/ICP** estimates (`estimates.kind = 'poc'`) default to the **ICP** rate card.
+- Any card whose name contains **"MSA"** is always ranked last and labelled as the Fallback.
+
+Nothing else about picking, insertion, groups, or pricing changes.
 
 ## Changes
 
-1. **Create `src/components/admin/GenericRateCardImport.tsx`**
-   - Copy the uploaded file verbatim (contents of `user-uploads://GenericRateCardImport-2.tsx`).
-   - It already exports `GenericRateCardImport` and uses the same shadcn UI, XLSX, supabase client, react-query and `sonner` imports the existing importer uses, so no wiring changes required.
-   - Writes into the same `contracts` / `rate_cards` / `rate_card_versions` / `rate_items` tables the existing Rate Library importer uses — no schema change, no duplication of business entities.
+1. **`src/components/delivery/estimate/RateItemPicker.tsx`** — overwrite with the uploaded file (`user-uploads://RateItemPicker.tsx`). This adds:
+   - New optional prop `estimateKind?: "build" | "poc"`.
+   - Name-based classification of `rate_card_versions` (Primary / Fallback / other) driving default selection order.
+   - A "· Primary" / "· Fallback (MSA)" tag in the rate-card dropdown label.
 
-2. **Update `src/components/admin/EstimatingImport.tsx`** (small, surgical edit)
-   - Add `import { GenericRateCardImport } from "./GenericRateCardImport";`
-   - In the `EstimatingImport()` layout (lines 475–481), render `<GenericRateCardImport />` after `<IcpSorImport />` as the fourth card.
-   - Do not modify `RateLibraryImport`, `RecipeLibraryImport`, or `IcpSorImport` — per the "don't touch the existing importers" rule established for the ICP SOR card.
+2. **`src/components/delivery/estimate/EstimateEditor.tsx`** (line ~524) — pass `estimateKind={e.kind}` to `<RateItemPicker />` so the picker knows which card to default to. `e.kind` already exists on the estimate record (added when PoC/Build split was introduced).
 
-## Not changing
-- `Admin.tsx` (already renders `<EstimatingImport />`).
-- Any database schema, RLS, or Edge Functions.
-- The other three importer components or their parsers.
+## Not touched
+
+- The three existing importers, `RateLibrary`, `UnitRatesSettings`, and `GenericRateCardImport`.
+- Line insertion logic, group auto-routing, quantities, currency formatting.
+- Database / RLS / rate card schema.
 
 ## Verification
-- Build succeeds.
-- Admin → Estimating Import shows four cards: Rate Library, Recipe Library, ICP SOR, and the new "Rate Card import (generic)".
-- Uploading e.g. a CK MSA Rates workbook lets the user map columns and imports as a new DRAFT version under the chosen (or newly-created) contract.
+
+- Open a Build estimate → "Add from rate card": Synthetic card preselected, MSA shown last tagged "Fallback (MSA)".
+- Open a PoC estimate → same picker: ICP card preselected, MSA still last.
+- Estimate with no matching primary card → first non-MSA card selected (previous behaviour preserved).
