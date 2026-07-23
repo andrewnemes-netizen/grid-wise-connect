@@ -24,6 +24,8 @@ export interface PocAssignment {
   sites: PocSiteEnriched[];
   /** Set by the "Send from shared" admin retry path. */
   useSharedFallback?: boolean;
+  /** When true, skip DB inserts and only (re)send the email — used after outlook_not_connected. */
+  emailOnlyRetry?: boolean;
 }
 
 interface Props {
