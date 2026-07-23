@@ -17,9 +17,9 @@ const MapView = lazy(() => import("./pages/MapView"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail"));
 const Admin = lazy(() => import("./pages/Admin"));
+const RateCardDetail = lazy(() => import("./pages/admin/RateCardDetail"));
 const ArchiveConsole = lazy(() => import("./pages/admin/ArchiveConsole"));
 const CapabilityGrantsConsole = lazy(() => import("./pages/admin/CapabilityGrantsConsole"));
-const RateCardDetail = lazy(() => import("./pages/admin/RateCardDetail"));
 const LaProgramme = lazy(() => import("./pages/LaProgramme"));
 const QuickEstimate = lazy(() => import("./pages/QuickEstimate"));
 const Training = lazy(() => import("./pages/Training"));
@@ -168,7 +168,7 @@ const AppRoutes = () => (
       <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
       <Route path="/admin/archive" element={<ProtectedRoute><ArchiveConsole /></ProtectedRoute>} />
       <Route path="/admin/capabilities" element={<ProtectedRoute><CapabilityGrantsConsole /></ProtectedRoute>} />
-      <Route path="/admin/rate-cards/:versionId" element={<ProtectedRoute><RateCardDetail /></ProtectedRoute>} />
+      <Route path="/admin/rate-cards/:versionId" element={<ProtectedRoute><Suspense fallback={<LazyFallback />}><RateCardDetail /></Suspense></ProtectedRoute>} />
       <Route path="/intelligence" element={<ProtectedRoute><IntelligenceLayout /></ProtectedRoute>}>
         <Route index element={<ExecutiveDashboard />} />
         <Route path="client-report" element={<ClientMonthlyReport />} />
