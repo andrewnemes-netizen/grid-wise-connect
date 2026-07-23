@@ -205,6 +205,55 @@ export default function WpSiteRegisterTab() {
           };
         });
         const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+        // Build an .xlsx attachment for external assignees so the designer has a
+        // working file alongside the inline HTML summary.
+        let attachment:
+          | { filename: string; contentBase64: string; contentType: string }
+          | undefined;
+        if (assignment.mode === "external") {
+          const rowsForSheet = siteLines.map((s) => {
+            const pt = (s.phaseTotals ?? {}) as Record<string, number | null>;
+            const pa = (s.phaseAssignments ?? {}) as Record<string, unknown>;
+            const groups = Array.isArray(s.socketGroups) ? s.socketGroups : [];
+            const groupsSummary = groups
+              .map((g: any) => {
+                const n = g?.count ?? g?.sockets ?? "?";
+                const kw = g?.kwPerSocket ?? g?.kw ?? "?";
+                return `${n} × ${kw} kW`;
+              })
+              .join("; ");
+            return {
+              Address: s.address ?? "",
+              "Site ID": s.siteId ?? "",
+              Postcode: s.postcode ?? "",
+              Latitude: s.lat ?? "",
+              Longitude: s.lng ?? "",
+              Sockets: s.sockets ?? "",
+              "kW per socket": s.kwPerSocket ?? "",
+              "Total connected kW": s.totalConnectedKw ?? "",
+              Breakdown: s.breakdown ?? "",
+              "Phase L1 (kW)": pt.L1 ?? "",
+              "Phase L2 (kW)": pt.L2 ?? "",
+              "Phase L3 (kW)": pt.L3 ?? "",
+              "Phase assignments": JSON.stringify(pa ?? {}),
+              "Socket groups": groupsSummary,
+              "Socket groups (raw)": JSON.stringify(groups ?? []),
+            };
+          });
+          const ws = XLSX.utils.json_to_sheet(rowsForSheet);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "POC sites");
+          const contentBase64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" }) as string;
+          const today = new Date().toISOString().slice(0, 10);
+          attachment = {
+            filename: `POC-sites-${today}.xlsx`,
+            contentBase64,
+            contentType:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          };
+        }
+
         const { error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
           body: {
             recipientEmail: assignment.assigneeEmail,
@@ -216,6 +265,7 @@ export default function WpSiteRegisterTab() {
               sites: siteLines,
               actionUrl: origin ? `${origin}/wp/${wpId}/sites/register` : undefined,
             },
+            ...(attachment ? { attachment } : {}),
           },
         });
         if (emailErr) throw emailErr;
