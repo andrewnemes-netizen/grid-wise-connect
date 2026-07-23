@@ -204,9 +204,8 @@ export default function WpSiteRegisterTab() {
           };
         });
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const { error: emailErr } = await supabase.functions.invoke("send-transactional-email", {
+        const { error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
           body: {
-            templateName: "poc-assignment",
             recipientEmail: assignment.assigneeEmail,
             templateData: {
               recipientName: assignment.assigneeName ?? undefined,
