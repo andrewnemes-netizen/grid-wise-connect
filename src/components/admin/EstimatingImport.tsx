@@ -479,6 +479,7 @@ export function EstimatingImport() {
       <RateLibraryImport />
       <RecipeLibraryImport />
       <IcpSorImport />
+      <GenericRateCardImport />
     </div>
   );
 }
