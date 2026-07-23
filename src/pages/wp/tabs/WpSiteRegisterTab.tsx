@@ -164,7 +164,7 @@ export default function WpSiteRegisterTab() {
         throw new Error(`${invalid.length} site${invalid.length === 1 ? "" : "s"} missing required PoC fields`);
       }
       const bySiteId = new Map((assignment.sites ?? []).map((s) => [s.id, s]));
-      const rows = siteIds.map((sid) => ({
+      const taskRows = siteIds.map((sid) => ({
         work_package_id: wpId,
         site_id: sid,
         task_kind: "poc" as const,
@@ -185,8 +185,14 @@ export default function WpSiteRegisterTab() {
           poc_site: bySiteId.get(sid) ?? null,
         },
       }));
-      const { error } = await (supabase as any).from("wp_tasks").insert(rows);
+      const { data: insertedTasks, error } = await (supabase as any)
+        .from("wp_tasks")
+        .insert(taskRows)
+        .select("id, site_id");
       if (error) throw error;
+      const taskIdBySite = new Map<string, string>(
+        (insertedTasks ?? []).map((t: any) => [t.site_id, t.id]),
+      );
       await (supabase as any).from("audit_log").insert(
         siteIds.map((sid) => ({
           action: "poc.requested",
