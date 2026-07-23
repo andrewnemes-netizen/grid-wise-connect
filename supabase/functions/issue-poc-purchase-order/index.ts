@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
   // Load WP context for the email template
   const { data: wp } = await admin
     .from('work_packages')
-    .select('name, wp_code, project_id, programmes:programme_id(name, code, accounts:account_id(name, clients:client_id(name)))')
+    .select('name, code, programmes:programme_id(name, code, accounts:account_id(name, clients:client_id(name)))')
     .eq('id', body.work_package_id)
     .maybeSingle()
 
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
       subject: `POC application requested — PO ${po.po_number}`,
       templateData: {
         recipientName: body.designer_name ?? undefined,
-        workPackageName: wp?.wp_code ? `${wp.name ?? ''} (${wp.wp_code})`.trim() : (wp?.name ?? undefined),
+        workPackageName: (wp as any)?.code ? `${(wp as any).name ?? ''} (${(wp as any).code})`.trim() : ((wp as any)?.name ?? undefined),
         programmeName: (wp as any)?.programmes?.name
           ? `${(wp as any).programmes.name}${(wp as any).programmes?.code ? ` (${(wp as any).programmes.code})` : ''}`
           : undefined,
