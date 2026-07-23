@@ -354,7 +354,7 @@ export function SendSurveyDialog({ open, onOpenChange, siteIds }: Props) {
               <Button variant="outline" onClick={close} disabled={sending}>
                 <X className="h-3 w-3 mr-1" /> Cancel
               </Button>
-              <Button onClick={() => handleSend({})} disabled={!canSend || sending}>
+              <Button onClick={() => handleSend()} disabled={!canSend || sending}>
                 {sending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : (
                   deliveryMode === "link_only" ? <LinkIcon className="h-3 w-3 mr-1" /> : <Send className="h-3 w-3 mr-1" />
                 )}
