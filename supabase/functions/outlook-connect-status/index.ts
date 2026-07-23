@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser()
   if (userErr || !userData.user) return json({ error: 'Unauthorized' }, 401)
 
-  const check = await appUserConnectionCheck(userData.user.id)
+  const check = await appUserConnectionCheck(userData.user.id, jwt)
   return json({
     connected: check.ok,
     user_id: userData.user.id,

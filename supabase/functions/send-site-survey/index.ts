@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
         return json({ error: 'forbidden', message: 'Only admins can send from the shared EcoPower mailbox.' }, 403)
       }
     } else {
-      const connected = await isAppUserConnected(userId)
+      const connected = await isAppUserConnected(userId, jwt)
       if (!connected) {
         return json({
           ok: false,
@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
           else sendErr = `[${outlookRes.status}] ${(await outlookRes.text()).slice(0, 200)}`
         }
       } else {
-        const perUser = await sendMailAsAppUser(userId, message)
+        const perUser = await sendMailAsAppUser(userId, jwt, message)
         if (perUser.ok) {
           sendOk = true
         } else {
