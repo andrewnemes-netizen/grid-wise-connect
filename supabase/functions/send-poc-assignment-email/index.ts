@@ -11,6 +11,13 @@ interface Body {
   subject?: string
   templateData?: Record<string, unknown>
   cc_emails?: string[]
+  // New: multiple attachments. Kept optional for backward compatibility
+  // with the older single-attachment shape (see `attachment` below).
+  attachments?: Array<{
+    filename: string
+    contentBase64: string
+    contentType?: string
+  }>
   attachment?: {
     filename: string
     contentBase64: string
@@ -88,19 +95,22 @@ Deno.serve(async (req) => {
   const toRecipients = [{ emailAddress: { address: recipientEmail } }]
   const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))
 
-  const attachments =
-    body.attachment && body.attachment.filename && body.attachment.contentBase64
-      ? [
-          {
-            '@odata.type': '#microsoft.graph.fileAttachment',
-            name: body.attachment.filename,
-            contentType:
-              body.attachment.contentType ??
-              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            contentBytes: body.attachment.contentBase64,
-          },
-        ]
-      : undefined
+  // Merge new attachments[] with legacy single attachment (attachments[] wins,
+  // legacy shape kept working for one release).
+  const rawAttachments: Array<{ filename: string; contentBase64: string; contentType?: string }> = []
+  if (Array.isArray(body.attachments)) rawAttachments.push(...body.attachments)
+  if (body.attachment) rawAttachments.push(body.attachment)
+  const graphAttachments = rawAttachments
+    .filter((a) => a && a.filename && a.contentBase64)
+    .map((a) => ({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: a.filename,
+      contentType:
+        a.contentType ??
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      contentBytes: a.contentBase64,
+    }))
+  const attachments = graphAttachments.length > 0 ? graphAttachments : undefined
 
   const message = {
     subject,
