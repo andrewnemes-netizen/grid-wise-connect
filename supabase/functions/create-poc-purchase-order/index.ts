@@ -74,11 +74,13 @@ Deno.serve(async (req) => {
   // Resolve org_id from work package
   const { data: wp, error: wpErr } = await admin
     .from('work_packages')
-    .select('id, name, wp_code, org_id, programme_id, programmes:programme_id(name, code, accounts:account_id(name))')
+    .select('id, name, code, programme_id, programmes:programme_id(name, code, accounts:account_id(name))')
     .eq('id', body.work_package_id)
     .maybeSingle()
   if (wpErr || !wp) return json({ error: 'Work package not found', details: wpErr?.message }, 404)
-  const orgId: string | null = (wp as any).org_id ?? null
+  // work_packages has no org_id column in this schema; PO numbering falls back
+  // to the shared POC- sequence via `IS NOT DISTINCT FROM null` in the RPC.
+  const orgId: string | null = null
 
   // Line values
   const siteCount = body.sites.length
@@ -155,7 +157,7 @@ Deno.serve(async (req) => {
     orderValue: totalOrderValue,
     perSiteFee: perSite,
     workPackage: {
-      id: wp.id, name: (wp as any).name, wp_code: (wp as any).wp_code,
+      id: wp.id, name: (wp as any).name, wp_code: (wp as any).code,
       programmeName: (wp as any).programmes?.name ?? null,
       programmeCode: (wp as any).programmes?.code ?? null,
       organisationName: (wp as any).programmes?.accounts?.name ?? null,
