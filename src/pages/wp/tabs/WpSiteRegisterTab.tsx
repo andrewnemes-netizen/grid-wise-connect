@@ -206,6 +206,127 @@ export default function WpSiteRegisterTab() {
           },
         })),
       );
+      // ── POC PO path (admin + external + fee provided) ─────────────────────
+      if (assignment.mode === "external" && assignment.po && assignment.assigneeEmail) {
+        const siteLinesForEmail = siteIds.map((sid) => {
+          const s = bySiteId.get(sid) as any;
+          return {
+            address: s?.address ?? null,
+            siteId: s?.siteId ?? null,
+            postcode: s?.postcode ?? null,
+            sockets: s?.socket_count ?? null,
+            kwPerSocket: s?.kwPerSocket ?? null,
+            totalConnectedKw: s?.totalConnectedKw ?? null,
+            phaseTotals: s?.phaseTotals ?? null,
+            socketGroups: s?.socketGroups ?? [],
+          };
+        });
+        const perSiteFee =
+          assignment.po.feeBasis === "per_site"
+            ? assignment.po.fee
+            : assignment.po.fee / Math.max(1, siteIds.length);
+        const poSitesPayload = siteIds.map((sid) => {
+          const s = bySiteId.get(sid) as any;
+          return {
+            site_id: sid,
+            address: s?.address ?? null,
+            postcode: s?.postcode ?? null,
+            siteId: s?.siteId ?? null,
+            fee: perSiteFee,
+          };
+        });
+        const firstTaskId = taskIdBySite.get(siteIds[0]) ?? null;
+
+        // 1. Create the PO as DRAFT via edge function
+        const { data: createRes, error: createErr } = await supabase.functions.invoke(
+          "create-poc-purchase-order",
+          {
+            body: {
+              work_package_id: wpId,
+              source_task_id: firstTaskId,
+              designer_name: assignment.assigneeName ?? null,
+              designer_email: assignment.assigneeEmail,
+              fee: assignment.po.fee,
+              fee_basis: assignment.po.feeBasis,
+              payment_terms: assignment.po.paymentTerms,
+              po_terms: assignment.po.poTerms ?? null,
+              due_date: assignment.dueDate,
+              sites: poSitesPayload,
+              notes: assignment.message ?? null,
+            },
+          },
+        );
+        if (createErr || !(createRes as any)?.ok) {
+          throw new Error((createErr as any)?.message ?? (createRes as any)?.error ?? "PO creation failed");
+        }
+
+        // 2. Render the PO PDF and base64-encode
+        const pdfBlob = generatePoPdf({
+          po: {
+            po_number: (createRes as any).poNumber,
+            category: "poc_design",
+            order_value: (createRes as any).orderValue,
+            issued_at: new Date().toISOString(),
+          },
+          workPackage: {
+            name: (createRes as any).workPackage?.name,
+            wp_code: (createRes as any).workPackage?.wp_code,
+          },
+          recipientName: assignment.assigneeName ?? undefined,
+          recipientEmail: assignment.assigneeEmail,
+          programmeName: (createRes as any).workPackage?.programmeName ?? undefined,
+          organisationName: (createRes as any).workPackage?.organisationName ?? undefined,
+          sites: poSitesPayload.map((s) => ({
+            address: s.address, postcode: s.postcode, siteId: s.siteId, fee: s.fee,
+          })),
+          feeBasis: assignment.po.feeBasis,
+          paymentTerms: assignment.po.paymentTerms,
+          poTerms: assignment.po.poTerms ?? undefined,
+          dueDate: assignment.dueDate,
+        });
+        const pdfBase64 = await blobToBase64(pdfBlob);
+
+        // 3. Build the sites XLSX
+        const rowsForSheet = siteLinesForEmail.map((s) => {
+          const pt = (s.phaseTotals ?? {}) as Record<string, number | null>;
+          return {
+            Address: s.address ?? "", "Site ID": s.siteId ?? "", Postcode: s.postcode ?? "",
+            Sockets: s.sockets ?? "", "kW per socket": s.kwPerSocket ?? "",
+            "Total connected kW": s.totalConnectedKw ?? "",
+            "Phase L1 (kW)": pt.L1 ?? "", "Phase L2 (kW)": pt.L2 ?? "", "Phase L3 (kW)": pt.L3 ?? "",
+          };
+        });
+        const ws = XLSX.utils.json_to_sheet(rowsForSheet);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "POC sites");
+        const xlsxBase64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" }) as string;
+
+        // 4. Issue → email + OneDrive mirror + status flip
+        const { data: issueRes, error: issueErr } = await supabase.functions.invoke(
+          "issue-poc-purchase-order",
+          {
+            body: {
+              po_id: (createRes as any).poId,
+              pdf_base64: pdfBase64,
+              xlsx_base64: xlsxBase64,
+              designer_name: assignment.assigneeName ?? null,
+              designer_email: assignment.assigneeEmail,
+              message: assignment.message ?? null,
+              due_date: assignment.dueDate,
+              sites: siteLinesForEmail,
+              work_package_id: wpId,
+            },
+          },
+        );
+        if (issueErr || !(issueRes as any)?.ok) {
+          throw new Error((issueErr as any)?.message ?? (issueRes as any)?.error ?? "PO issue failed");
+        }
+        return {
+          emailed: true as const,
+          recipient: assignment.assigneeEmail,
+          poNumber: (createRes as any).poNumber as string,
+        };
+      }
       if (assignment.sendEmail && (assignment.assigneeEmail || assignment.assigneeUserId)) {
         const siteLines = siteIds.map((sid) => {
           const s = bySiteId.get(sid) as any;
