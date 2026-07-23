@@ -51,7 +51,7 @@ function generateStandardPoPdf(input: PoPdfInput): Blob {
     recipientCompany,
     recipientEmail,
     recipientAddress = [],
-    companyName = "EcoPower UK",
+    companyName = "EcoPower Energy",
     companyAddress = [],
   } = input;
 
@@ -134,12 +134,27 @@ function generateStandardPoPdf(input: PoPdfInput): Blob {
   const rightX = pageW - marginX;
   const labelX = rightX - 160;
   let ty = finalY + 20;
+  const stdSubtotal = Number(po.order_value ?? 0);
+  const stdVat = Math.round(stdSubtotal * 0.2 * 100) / 100;
+  const stdTotal = Math.round((stdSubtotal + stdVat) * 100) / 100;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  doc.text("Subtotal", labelX, ty);
+  doc.setTextColor(20, 20, 20);
+  doc.text(fmt(stdSubtotal), rightX, ty, { align: "right" });
+  ty += 16;
+  doc.setTextColor(60, 60, 60);
+  doc.text("VAT (20%)", labelX, ty);
+  doc.setTextColor(20, 20, 20);
+  doc.text(fmt(stdVat), rightX, ty, { align: "right" });
+  ty += 18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(13, 122, 95);
-  doc.text("Order Total", labelX, ty);
+  doc.text("Order Total (incl. VAT)", labelX, ty);
   doc.setTextColor(20, 20, 20);
-  doc.text(fmt(po.order_value), rightX, ty, { align: "right" });
+  doc.text(fmt(stdTotal), rightX, ty, { align: "right" });
   ty += 24;
 
   // Notes / terms
