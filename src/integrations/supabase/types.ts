@@ -4415,7 +4415,9 @@ export type Database = {
           id: string
           line_value: number
           po_id: string
+          qty: number
           sort_index: number
+          unit_rate: number | null
           updated_at: string
         }
         Insert: {
@@ -4425,7 +4427,9 @@ export type Database = {
           id?: string
           line_value?: number
           po_id: string
+          qty?: number
           sort_index?: number
+          unit_rate?: number | null
           updated_at?: string
         }
         Update: {
@@ -4435,7 +4439,9 @@ export type Database = {
           id?: string
           line_value?: number
           po_id?: string
+          qty?: number
           sort_index?: number
+          unit_rate?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -4873,6 +4879,7 @@ export type Database = {
       }
       purchase_orders: {
         Row: {
+          category: string
           client_id: string | null
           created_at: string
           created_by: string | null
@@ -4883,7 +4890,10 @@ export type Database = {
           order_value: number
           org_id: string | null
           po_number: string
+          source_task_id: string | null
           status: string
+          supplier_contact_email: string | null
+          supplier_contact_name: string | null
           updated_at: string
           work_package_id: string
           xero_purchase_order_id: string | null
@@ -4891,6 +4901,7 @@ export type Database = {
           xero_synced_at: string | null
         }
         Insert: {
+          category?: string
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4901,7 +4912,10 @@ export type Database = {
           order_value?: number
           org_id?: string | null
           po_number: string
+          source_task_id?: string | null
           status?: string
+          supplier_contact_email?: string | null
+          supplier_contact_name?: string | null
           updated_at?: string
           work_package_id: string
           xero_purchase_order_id?: string | null
@@ -4909,6 +4923,7 @@ export type Database = {
           xero_synced_at?: string | null
         }
         Update: {
+          category?: string
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -4919,7 +4934,10 @@ export type Database = {
           order_value?: number
           org_id?: string | null
           po_number?: string
+          source_task_id?: string | null
           status?: string
+          supplier_contact_email?: string | null
+          supplier_contact_name?: string | null
           updated_at?: string
           work_package_id?: string
           xero_purchase_order_id?: string | null
@@ -4939,6 +4957,20 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_source_task_id_fkey"
+            columns: ["source_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["poc_task_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_source_task_id_fkey"
+            columns: ["source_task_id"]
+            isOneToOne: false
+            referencedRelation: "wp_tasks"
             referencedColumns: ["id"]
           },
           {
@@ -11377,6 +11409,7 @@ export type Database = {
           name: string
         }[]
       }
+      next_poc_po_number: { Args: { _org: string }; Returns: string }
       partner_acknowledge_snag: {
         Args: { _notes?: string; _snag_id: string }
         Returns: {
