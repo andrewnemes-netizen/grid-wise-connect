@@ -58,24 +58,35 @@ function guessMapping(headers: string[]): Partial<Record<FieldKey, string>> {
   };
 }
 
-function useContracts() {
+function useClients() {
   return useQuery({
-    queryKey: ["contracts-generic-import"],
+    queryKey: ["clients-generic-import"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contracts").select("id,name,code").order("name");
+      const { data, error } = await supabase.from("clients").select("id,name").order("name");
       if (error) throw error;
       return data ?? [];
     },
   });
 }
 
-async function ensureContract(name: string): Promise<string> {
-  const trimmed = name.trim();
+/** "Contract" is an internal grouping table only — the user picks a Client.
+ *  This finds (or creates) the single contract that represents that client,
+ *  so multiple rate cards for the same client always end up under one
+ *  contract row rather than a new one per rate card. */
+async function ensureContractForClient(clientId: string, clientName: string): Promise<string> {
   const { data: existing, error: e1 } = await supabase
-    .from("contracts").select("id").eq("name", trimmed).maybeSingle();
+    .from("contracts").select("id").eq("client_id", clientId).eq("name", clientName).maybeSingle();
   if (e1) throw e1;
   if (existing?.id) return existing.id as string;
 
+  const { data: created, error: e2 } = await supabase
+    .from("contracts").insert({ name: clientName, client_id: clientId }).select("id").single();
+  if (e2) throw e2;
+  return (created as any).id as string;
+}
+
+async function ensureNewClientAndContract(name: string): Promise<string> {
+  const trimmed = name.trim();
   const { data: existingClient, error: ec1 } = await supabase
     .from("clients").select("id").eq("name", trimmed).maybeSingle();
   if (ec1) throw ec1;
@@ -88,19 +99,16 @@ async function ensureContract(name: string): Promise<string> {
     if (ec2) throw ec2;
     clientId = (newClient as any).id;
   }
-  const { data: created, error: e2 } = await supabase
-    .from("contracts").insert({ name: trimmed, client_id: clientId }).select("id").single();
-  if (e2) throw e2;
-  return (created as any).id as string;
+  return ensureContractForClient(clientId, trimmed);
 }
 
 export function GenericRateCardImport() {
   const qc = useQueryClient();
-  const { data: contracts = [] } = useContracts();
+  const { data: clients = [] } = useClients();
 
-  const [contractMode, setContractMode] = useState<"existing" | "new">("existing");
-  const [contractId, setContractId] = useState<string | undefined>();
-  const [newContractName, setNewContractName] = useState("");
+  const [clientMode, setClientMode] = useState<"existing" | "new">("existing");
+  const [clientId, setClientId] = useState<string | undefined>();
+  const [newClientName, setNewClientName] = useState("");
 
   const [rateCardName, setRateCardName] = useState("");
 
@@ -158,13 +166,16 @@ export function GenericRateCardImport() {
     if (!rows.length) { toast.error("Upload a rate card file first"); return; }
     if (missingRequired.length) { toast.error(`Map all required fields: ${missingRequired.map((f) => FIELD_LABELS[f]).join(", ")}`); return; }
     if (!rateCardName.trim()) { toast.error("Rate card name required"); return; }
-    if (contractMode === "existing" && !contractId) { toast.error("Choose a contract"); return; }
-    if (contractMode === "new" && !newContractName.trim()) { toast.error("Enter a name for the new contract"); return; }
+    if (clientMode === "existing" && !clientId) { toast.error("Choose a client"); return; }
+    if (clientMode === "new" && !newClientName.trim()) { toast.error("Enter a name for the new client"); return; }
 
     setImporting(true); setResult(null);
     try {
       const { data: user } = await supabase.auth.getUser();
-      const cid = contractMode === "existing" ? contractId! : await ensureContract(newContractName);
+      const selectedClient = clientMode === "existing" ? clients.find((c: any) => c.id === clientId) : null;
+      const cid = clientMode === "existing"
+        ? await ensureContractForClient(clientId!, selectedClient?.name ?? "")
+        : await ensureNewClientAndContract(newClientName);
 
       const { data: existingCard, error: eFind } = await supabase
         .from("rate_cards").select("id").eq("contract_id", cid).eq("name", rateCardName.trim()).maybeSingle();
@@ -253,25 +264,25 @@ export function GenericRateCardImport() {
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Contract</Label>
+            <Label>Client</Label>
             <div className="flex gap-2">
-              <Select value={contractMode} onValueChange={(v) => setContractMode(v as any)}>
+              <Select value={clientMode} onValueChange={(v) => setClientMode(v as any)}>
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="existing">Existing</SelectItem>
                   <SelectItem value="new">New</SelectItem>
                 </SelectContent>
               </Select>
-              {contractMode === "existing" ? (
-                <Select value={contractId} onValueChange={setContractId}>
-                  <SelectTrigger><SelectValue placeholder="Choose contract" /></SelectTrigger>
+              {clientMode === "existing" ? (
+                <Select value={clientId} onValueChange={setClientId}>
+                  <SelectTrigger><SelectValue placeholder="Choose client" /></SelectTrigger>
                   <SelectContent>
-                    {contracts.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    {clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               ) : (
-                <Input placeholder="e.g. Connected Kerb" value={newContractName}
-                  onChange={(e) => setNewContractName(e.target.value)} />
+                <Input placeholder="e.g. Connected Kerb" value={newClientName}
+                  onChange={(e) => setNewClientName(e.target.value)} />
               )}
             </div>
           </div>
