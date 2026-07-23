@@ -1,0 +1,2 @@
+ALTER TABLE public.poc_designer_return_files DROP CONSTRAINT IF EXISTS poc_designer_return_files_file_type_check;
+ALTER TABLE public.poc_designer_return_files ADD CONSTRAINT poc_designer_return_files_file_type_check CHECK (file_type IN ('pdf','xlsx','xlsm'));
