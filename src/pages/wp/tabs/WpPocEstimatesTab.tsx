@@ -21,7 +21,7 @@ export default function WpPocEstimatesTab() {
           PoC
         </Badge>
       </div>
-      <EstimatesTab scope={{ work_package_id: id }} />
+      <EstimatesTab scope={{ work_package_id: id }} kind="poc" />
     </div>
   );
 }
