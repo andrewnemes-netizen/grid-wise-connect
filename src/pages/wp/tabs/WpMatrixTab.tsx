@@ -177,7 +177,8 @@ export default function WpMatrixTab() {
         ))}
       </div>
 
-      <Card className="p-0 overflow-auto max-h-[calc(100vh-12rem)]">
+      <Card className="p-0 overflow-hidden">
+        <div className="max-h-[calc(100vh-18rem)] min-h-[22rem] overflow-auto">
         <table className="w-full text-xs">
           <thead className="bg-muted/40">
             <tr>
@@ -288,6 +289,7 @@ export default function WpMatrixTab() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
       <p className="text-[11px] text-muted-foreground">
         Every change is recorded in an immutable audit trail with previous status, new status, user and timestamp.
