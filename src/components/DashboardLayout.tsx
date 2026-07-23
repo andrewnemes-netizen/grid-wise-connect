@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { NotificationBell } from "@/components/NotificationBell";
+import { OutlookConnectBanner } from "@/components/outlook/OutlookConnectBanner";
 import epeLogo from "@/assets/epe-logo.png";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <NotificationBell />
             </div>
           </header>
+          <OutlookConnectBanner />
           <div className="flex-1">{children}</div>
         </main>
       </div>

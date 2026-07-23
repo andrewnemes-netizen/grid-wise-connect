@@ -48,6 +48,11 @@ export async function sendSurveyToSites(opts: SendSurveyOptions): Promise<SendSu
     },
   });
   if (error) throw error;
+  if (data?.error === "outlook_not_connected") {
+    const err = new Error(data.message ?? "outlook_not_connected");
+    (err as any).code = "outlook_not_connected";
+    throw err;
+  }
   const results: SendSurveyResultLink[] = (data?.results ?? []).filter((r: any) => r?.ok !== false);
   return {
     results,
