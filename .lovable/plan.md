@@ -1,14 +1,8 @@
-## Goal
-Apply the uploaded `App.tsx` changes while preserving the per-user Outlook routes.
+## Change
 
-## Changes to `src/App.tsx`
-Adopt the uploaded file, but:
-- Keep the two Outlook lazy imports (`OutlookConnect`, `OutlookCallback`).
-- Keep the `/auth/outlook/callback` and `/account/outlook` routes.
-- Keep the `RateCardDetail` lazy import pointing at the current location `./pages/admin/RateCardDetail` (do not move the file).
-- Keep the existing `/admin/rate-cards/:versionId` route wrapped in `ProtectedRoute` (matching current file — the uploaded version's extra `Suspense` wrapper is fine; either is acceptable).
+Apply the uploaded `Admin.tsx` diff. The only functional change vs current is the Estimating tab label/icon:
 
-Any other diffs between the uploaded file and the current file will be adopted verbatim.
+- Swap `Library` icon import for `Receipt` in `src/pages/Admin.tsx`.
+- Update the `estimating` `TabsTrigger` from `<Library …/>Estimating` to `<Receipt …/>Estimating & Quotes`.
 
-## Verification
-Typecheck runs automatically; confirm no route/import breakage.
+No other tabs, routes, components, imports, or logic change. Existing consolidated `EstimatingLibrary` panel and `/admin/rate-cards/:versionId` route remain wired as-is.
