@@ -3,7 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type OutlookConnectResult =
   | { ok: true }
-  | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout"; message?: string; email?: string };
+  | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout" | "oauth_error"; message?: string; email?: string };
+
+export function outlookConnectFailureMessage(result: OutlookConnectResult): string {
+  if (result.ok) return "Outlook connected";
+  if (result.message) return result.message;
+  if (result.reason === "wrong_tenant") return "Only ecopoweruk.com accounts can be connected.";
+  if (result.reason === "oauth_error") return "Microsoft sign-in did not complete. Try again and complete the prompt.";
+  if (result.reason === "timeout") return "Outlook did not confirm the connection. Try again, then wait for the popup to close.";
+  return "Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.";
+}
 
 async function waitForVerifiedOutlookConnection(): Promise<OutlookConnectResult> {
   for (let attempt = 0; attempt < 12; attempt += 1) {
@@ -68,25 +77,34 @@ async function connectOutlookDetailed(): Promise<OutlookConnectResult> {
 
     return new Promise<OutlookConnectResult>((resolve) => {
       let done = false;
-      const finish = async (oauthCompleted: boolean) => {
+      const finish = async (result: OutlookConnectResult | "verify") => {
         if (done) return;
         done = true;
         window.removeEventListener("message", onMessage);
         clearInterval(poll);
-        if (!oauthCompleted) {
-          resolve({ ok: false, reason: "cancelled" });
-          return;
-        }
-        resolve(await waitForVerifiedOutlookConnection());
+        if (result === "verify") resolve(await waitForVerifiedOutlookConnection());
+        else resolve(result);
       };
       const onMessage = (ev: MessageEvent) => {
         if (ev.origin !== window.location.origin) return;
+        if (ev.data?.type === "outlook-oauth-error") {
+          finish({
+            ok: false,
+            reason: "oauth_error",
+            message:
+              ev.data?.message ??
+              ev.data?.errorDescription ??
+              ev.data?.error ??
+              "Microsoft sign-in did not complete.",
+          });
+          return;
+        }
         if (ev.data?.type !== "outlook-oauth-complete") return;
-        finish(true);
+        finish("verify");
       };
       window.addEventListener("message", onMessage);
       const poll = setInterval(() => {
-        if (popup.closed) finish(false);
+        if (popup.closed) finish({ ok: false, reason: "cancelled" });
       }, 800);
     });
 }
