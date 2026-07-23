@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Library, Beaker, Handshake, Link2, Loader2 } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Beaker, Handshake, Link2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,7 @@ const Admin = () => {
           <TabsTrigger value="partners"><Handshake className="h-3.5 w-3.5 mr-1.5" />Partners</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
           <TabsTrigger value="learning"><Brain className="h-3.5 w-3.5 mr-1.5" />Route Learning</TabsTrigger>
-          <TabsTrigger value="estimating"><Library className="h-3.5 w-3.5 mr-1.5" />Estimating</TabsTrigger>
+          <TabsTrigger value="estimating"><Receipt className="h-3.5 w-3.5 mr-1.5" />Estimating & Quotes</TabsTrigger>
           <TabsTrigger value="flags"><Beaker className="h-3.5 w-3.5 mr-1.5" />Feature Flags</TabsTrigger>
           <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Integrations</TabsTrigger>
         </TabsList>
