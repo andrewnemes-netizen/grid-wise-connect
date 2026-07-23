@@ -4,7 +4,6 @@ import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as quotationTemplate } from '../_shared/transactional-email-templates/quotation.tsx'
 import { mirrorToOneDrive } from '../_shared/onedrive.ts'
-import { isAppUserConnected, sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Body {
   estimate_id: string
@@ -14,8 +13,6 @@ interface Body {
   subject?: string
   message?: string
   cc_emails?: string[]
-  /** Admin-only break-glass — force send from the shared EcoPower mailbox. */
-  use_shared_fallback?: boolean
 }
 
 const SIGNED_URL_TTL = 60 * 60 * 24 * 30 // 30 days
@@ -59,28 +56,6 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceKey)
-
-  // Preflight: decide sender path BEFORE any DB writes or PDF work.
-  const useShared = body.use_shared_fallback === true
-  if (useShared) {
-    const { data: roleRows } = await admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-    const isAdmin = (roleRows ?? []).some((r: any) => r.role === 'admin')
-    if (!isAdmin) {
-      return json({ error: 'forbidden', message: 'Only admins can send from the shared EcoPower mailbox.' }, 403)
-    }
-  } else {
-    const connected = await isAppUserConnected(userId, jwt)
-    if (!connected) {
-      return json({
-        ok: false,
-        error: 'outlook_not_connected',
-        message: 'Connect your Outlook account before sending.',
-      }, 200)
-    }
-  }
 
   // Load estimate for context + display info
   const { data: estimate, error: estErr } = await admin
@@ -148,7 +123,7 @@ Deno.serve(async (req) => {
   // Send via Microsoft Outlook connector (PDF attached)
   const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')
   const outlookKey = Deno.env.get('MICROSOFT_OUTLOOK_API_KEY')
-  if (useShared && (!lovableApiKey || !outlookKey)) {
+  if (!lovableApiKey || !outlookKey) {
     await admin
       .from('quotation_sends')
       .update({ status: 'failed', error_message: 'Outlook connector not configured' })
@@ -212,45 +187,19 @@ Deno.serve(async (req) => {
     ],
   }
 
-  // Send via the chosen path only — no silent fallback.
-  const sender: 'per_user' | 'shared' = useShared ? 'shared' : 'per_user'
   let sendFailure: { status: number; error: string } | null = null
-  let notConnected = false
 
-  if (sender === 'per_user') {
-    const perUser = await sendMailAsAppUser(userId, jwt, message)
-    if (!perUser.ok) {
-      if (perUser.notConnected) {
-        notConnected = true
-      } else {
-        sendFailure = { status: perUser.status, error: perUser.error }
-      }
-    }
-  } else {
-    const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${lovableApiKey}`,
-        'X-Connection-Api-Key': outlookKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message, saveToSentItems: true }),
-    })
-    if (!outlookRes.ok) {
-      sendFailure = { status: outlookRes.status, error: await outlookRes.text() }
-    }
-  }
-
-  if (notConnected) {
-    await admin
-      .from('quotation_sends')
-      .update({ status: 'failed', error_message: 'outlook_not_connected' })
-      .eq('id', logRow.id)
-    return json({
-      ok: false,
-      error: 'outlook_not_connected',
-      message: 'Connect your Outlook account before sending.',
-    }, 200)
+  const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${lovableApiKey}`,
+      'X-Connection-Api-Key': outlookKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message, saveToSentItems: true }),
+  })
+  if (!outlookRes.ok) {
+    sendFailure = { status: outlookRes.status, error: await outlookRes.text() }
   }
 
   if (sendFailure) {
@@ -284,7 +233,7 @@ Deno.serve(async (req) => {
     console.warn('OneDrive mirror (quotation) failed:', e instanceof Error ? e.message : e)
   }
 
-  return json({ success: true, sender, quotation_send_id: logRow.id, pdf_url: signed.signedUrl })
+  return json({ success: true, sender: 'shared', quotation_send_id: logRow.id, pdf_url: signed.signedUrl })
 })
 
 function json(data: Record<string, unknown>, status = 200) {
