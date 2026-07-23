@@ -1,36 +1,18 @@
 ## Goal
-Consolidate the three Admin tabs (*Estimating Import*, *Rate Library*, *Recipe Library*) into a single **Estimating** tab powered by the uploaded `EstimatingLibrary.tsx`, and add a dedicated rate-card version detail page at `/admin/rate-cards/:versionId`.
+Swap `src/pages/admin/RateCardDetail.tsx` for the uploaded revision, which restructures the rate-card editing UI.
 
 ## Changes
+- Overwrite `src/pages/admin/RateCardDetail.tsx` with the contents of `user-uploads://RateCardDetail.tsx` (default export renamed to `RateCardDetailPage` — App.tsx imports the default so no route change needed).
 
-### 1. New library component
-- Add `src/components/admin/EstimatingLibrary.tsx` verbatim from `user-uploads://EstimatingLibrary.tsx` (imports `GenericRateCardImport`, which already exists).
+## What this changes vs. the current page
+- Adds collapsible category groups with a header row per group.
+- Adds inline editing of `description` and `unit` (previously read-only).
+- Adds a version switcher `<select>` listing all sibling versions of the same rate card.
+- Approve button is disabled while any item still needs pricing (instead of just showing a warning).
+- Removes the productivity-per-day and default-crew-size columns.
+- Removes the draft-delete (trash) button.
+- Removes the in-page `hasRole("admin")` guard (admin gating is already enforced by the `/admin` parent tab that links here; the route in `App.tsx` should be confirmed to sit behind the same admin gate).
 
-### 2. Admin page — collapse three tabs into one
-`src/pages/Admin.tsx`:
-- Remove tab triggers **Estimating Import**, **Rate Library**, **Recipe Library**.
-- Add one new tab trigger **Estimating** (value `estimating`, `Library` icon).
-- Remove the three matching `<TabsContent>` blocks and add one that renders `<EstimatingLibrary />`.
-- Remove now-unused imports (`EstimatingImport`, `RateLibrary`, `RecipeLibrary`, `Receipt`, `BookOpen`).
-- Preserve every other tab (Layers, Rates, EV Hub, DNO, Gas, API, LA, SSEN Drive, Users, Orgs, Partners, Audit, Learning, Flags, Xero) exactly as-is.
-
-### 3. Rate card detail route
-- Add `src/pages/admin/RateCardDetail.tsx`:
-  - Reads `:versionId` from the URL.
-  - Fetches the single `rate_card_versions` row (with parent `rate_cards` + `contracts`) and its `rate_card_lines`.
-  - Reuses the existing edit/approve/clone/delete affordances currently in `RateLibrary.tsx` by extracting the per-version panel into a shared subcomponent `RateCardVersionPanel` (moved from `RateLibrary.tsx` into `src/components/admin/RateCardVersionPanel.tsx`) — so behaviour stays identical and there's no duplication.
-  - Renders inside the standard admin shell with a back link to `/admin?tab=estimating`.
-- Register the route in `src/App.tsx` under the existing admin-guarded section: `/admin/rate-cards/:versionId` → `RateCardDetail`.
-
-### 4. Legacy files
-- Delete `src/components/admin/EstimatingImport.tsx`, `src/components/admin/RateLibrary.tsx` (after extracting the shared panel), and `src/components/admin/RecipeLibrary.tsx`. Remove any remaining imports.
-- Search once for stray references (`rg -n "RecipeLibrary|EstimatingImport\\b|RateLibrary\\b"`) and clean up.
-
-### 5. Verification
-- Typecheck.
-- Manually confirm: `/admin` → *Estimating* tab shows the rate-card table + "Add rate card" import panel; clicking a row navigates to `/admin/rate-cards/:versionId` and lets you view/edit lines and approve/clone; Recipe Library is gone.
-
-## Out of scope
-- No schema changes.
-- No changes to the individual importers (ICP SOR, MSA, Synthetic, Generic Rate Card).
-- No changes to any non-Admin surface that consumes rate cards.
+## Notes / things to confirm
+- Confirm you're happy to drop the **productivity / crew** editing and the **delete draft** action from this page. If either is still needed, say so and I'll keep them.
+- The uploaded file uses `as any` casts on Supabase table names; that's fine but slightly looser typing than the current file.
