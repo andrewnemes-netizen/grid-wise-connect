@@ -152,6 +152,9 @@ export default function WpSiteRegisterTab() {
         throw new Error(`${invalid.length} site${invalid.length === 1 ? "" : "s"} missing required PoC fields`);
       }
       const bySiteId = new Map((assignment.sites ?? []).map((s) => [s.id, s]));
+      // Skip DB inserts on the "retry email only" path — tasks and audit rows
+      // were already created on the first attempt when Outlook was disconnected.
+      if (!assignment.emailOnlyRetry) {
       const rows = siteIds.map((sid) => ({
         work_package_id: wpId,
         site_id: sid,
@@ -188,6 +191,7 @@ export default function WpSiteRegisterTab() {
           },
         })),
       );
+      }
 
       if (assignment.sendEmail && (assignment.assigneeEmail || assignment.assigneeUserId)) {
         const siteLines = siteIds.map((sid) => {
@@ -767,13 +771,13 @@ export default function WpSiteRegisterTab() {
               onRetry={() =>
                 bulkSendPoc.mutate({
                   siteIds: lastPocPayload.siteIds,
-                  assignment: { ...lastPocPayload.assignment, useSharedFallback: false },
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: false, emailOnlyRetry: true },
                 })
               }
               onSendShared={() =>
                 bulkSendPoc.mutate({
                   siteIds: lastPocPayload.siteIds,
-                  assignment: { ...lastPocPayload.assignment, useSharedFallback: true },
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: true, emailOnlyRetry: true },
                 })
               }
             />
