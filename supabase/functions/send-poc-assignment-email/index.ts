@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       return json({ error: 'forbidden', message: 'Only admins can send from the shared EcoPower mailbox.' }, 403)
     }
   } else {
-    const connected = await isAppUserConnected(userId)
+    const connected = await isAppUserConnected(userId, jwt)
     if (!connected) {
       return json({
         ok: false,
@@ -140,7 +140,7 @@ Deno.serve(async (req) => {
 
   // Send via the chosen path only — no silent fallback.
   if (!useShared) {
-    const perUser = await sendMailAsAppUser(userId, message)
+    const perUser = await sendMailAsAppUser(userId, jwt, message)
     if (perUser.ok) return json({ success: true, sender: 'per_user' })
     if (perUser.notConnected) {
       return json({

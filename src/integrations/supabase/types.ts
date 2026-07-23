@@ -4167,6 +4167,39 @@ export type Database = {
         }
         Relationships: []
       }
+      outlook_app_user_connection_sessions: {
+        Row: {
+          created_at: string
+          error_reason: string | null
+          gateway_session_id: string
+          id: string
+          microsoft_email: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_reason?: string | null
+          gateway_session_id: string
+          id?: string
+          microsoft_email?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_reason?: string | null
+          gateway_session_id?: string
+          id?: string
+          microsoft_email?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       partner_users: {
         Row: {
           created_at: string

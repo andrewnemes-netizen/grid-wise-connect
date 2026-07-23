@@ -1,0 +1,2 @@
+ALTER TABLE public.outlook_app_user_connection_sessions
+DROP CONSTRAINT IF EXISTS outlook_app_user_connection_sessions_user_id_fkey;

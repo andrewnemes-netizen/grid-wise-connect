@@ -1,19 +1,13 @@
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
 // Helper for calling the Lovable App User Connector gateway for microsoft_outlook.
-// Signs a per-user connection token (HS256 JWT) with APP_USER_CONNECTION_KEY_SECRET
-// so gateway requests are authenticated as the individual signed-in app user.
-//
-// Contract (reverse-engineered against connector-gateway.lovable.dev):
-//   Authorization: Bearer <LOVABLE_API_KEY>
-//   X-Client-Api-Key: <MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY>
-//   X-Connection-Api-Key: HS256 JWT{ app_user_id, connector_id, iat, exp }
-//     signed with APP_USER_CONNECTION_KEY_SECRET.
-//
-// If the credential does not exist (user has not completed OAuth yet) the
-// gateway returns HTTP 401 "Credential not found" — callers should treat that
-// as "not connected" and fall back to the shared connector.
+// The connector gateway stores the real Microsoft tokens. This app only stores
+// the gateway OAuth session id returned when a connection starts, and uses the
+// signed-in app user's Cloud JWT as the per-user identity for gateway calls.
 
 const GATEWAY_ROOT = 'https://connector-gateway.lovable.dev'
 const CONNECTOR_ID = 'microsoft_outlook'
+const SESSION_TABLE = 'outlook_app_user_connection_sessions'
 
 /**
  * Only Microsoft accounts whose primary email/UPN ends in this domain are
@@ -34,43 +28,36 @@ export const DEFAULT_OUTLOOK_SCOPES = [
   'https://graph.microsoft.com/User.Read',
 ]
 
-function b64url(bytes: Uint8Array | string): string {
-  const b = typeof bytes === 'string' ? new TextEncoder().encode(bytes) : bytes
-  let s = ''
-  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i])
-  return btoa(s).replace(/=+$/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-}
-
-async function signJwtHs256(payload: Record<string, unknown>, secret: string): Promise<string> {
-  const header = { alg: 'HS256', typ: 'JWT' }
-  const p1 = b64url(JSON.stringify(header))
-  const p2 = b64url(JSON.stringify(payload))
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const sig = new Uint8Array(
-    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${p1}.${p2}`)),
-  )
-  return `${p1}.${p2}.${b64url(sig)}`
-}
-
 function need(name: string): string {
   const v = Deno.env.get(name)
   if (!v) throw new Error(`${name} is not configured`)
   return v
 }
 
-export async function appUserConnectionToken(appUserId: string): Promise<string> {
-  const secret = need('APP_USER_CONNECTION_KEY_SECRET')
-  const now = Math.floor(Date.now() / 1000)
-  return signJwtHs256(
-    { app_user_id: appUserId, connector_id: CONNECTOR_ID, iat: now, exp: now + 300 },
-    secret,
+function adminClient() {
+  return createClient(
+    need('SUPABASE_URL'),
+    need('SUPABASE_SERVICE_ROLE_KEY'),
   )
+}
+
+function isCredentialNotFound(status: number, text: string): boolean {
+  return status === 401 && /credential\s*not\s*found/i.test(text)
+}
+
+async function latestSession(appUserId: string): Promise<{ gateway_session_id: string; status: string } | null> {
+  const { data, error } = await adminClient()
+    .from(SESSION_TABLE)
+    .select('gateway_session_id, status')
+    .eq('user_id', appUserId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    console.error('Outlook session lookup failed:', error.message)
+    return null
+  }
+  return data as { gateway_session_id: string; status: string } | null
 }
 
 /**
@@ -79,12 +66,11 @@ export async function appUserConnectionToken(appUserId: string): Promise<string>
  * credential exists, or null if the gateway rejected the call (401 "Credential
  * not found" ⇒ user has not connected yet).
  */
-async function fetchAppUserMe(appUserId: string): Promise<{ status: number; body: any | null }> {
+async function fetchAppUserMe(appUserId: string, userJwt?: string): Promise<{ status: number; body: any | null }> {
   const lovableKey = need('LOVABLE_API_KEY')
   const clientKey = need('MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY')
-  const connKey = await appUserConnectionToken(appUserId)
   const res = await fetch(`${GATEWAY_ROOT}/${CONNECTOR_ID}/me`, {
-    headers: baseHeaders(clientKey, lovableKey, connKey),
+    headers: baseHeaders(clientKey, lovableKey, appUserId, userJwt),
   })
   const text = await res.text()
   if (!res.ok) {
@@ -106,8 +92,8 @@ export type TenantCheck =
  * the response body, so we key off the primary email domain, which for an
  * Entra work account matches the tenant's verified domain.
  */
-export async function verifyAppUserTenant(appUserId: string): Promise<TenantCheck> {
-  const me = await fetchAppUserMe(appUserId)
+export async function verifyAppUserTenant(appUserId: string, userJwt?: string): Promise<TenantCheck> {
+  const me = await fetchAppUserMe(appUserId, userJwt)
   if (!me.body) {
     return {
       ok: false,
@@ -124,12 +110,15 @@ export async function verifyAppUserTenant(appUserId: string): Promise<TenantChec
   return { ok: false, reason: 'wrong_tenant', email, status: me.status }
 }
 
-function baseHeaders(clientKey: string, lovableKey: string, connKey: string) {
-  return {
+function baseHeaders(clientKey: string, lovableKey: string, appUserId: string, userJwt?: string) {
+  const headers = {
     Authorization: `Bearer ${lovableKey}`,
     'X-Client-Api-Key': clientKey,
-    'X-Connection-Api-Key': connKey,
+    'X-App-User-ID': appUserId,
+    'X-App-User-Id': appUserId,
   } as Record<string, string>
+  if (userJwt) headers['X-App-User-Authorization'] = `Bearer ${userJwt}`
+  return headers
 }
 
 export interface StartAuthArgs {
@@ -164,11 +153,49 @@ export async function startAppUserOAuth(args: StartAuthArgs): Promise<{
   if (!res.ok) {
     throw new Error(`app-user oauth2/authorize failed [${res.status}]: ${text}`)
   }
-  try { return JSON.parse(text) } catch { throw new Error(`Bad JSON from oauth2/authorize: ${text}`) }
+  let parsed: { authorization_url: string; session_id?: string }
+  try { parsed = JSON.parse(text) } catch { throw new Error(`Bad JSON from oauth2/authorize: ${text}`) }
+  if (parsed.session_id) {
+    const { error } = await adminClient()
+      .from(SESSION_TABLE)
+      .upsert({
+        user_id: args.appUserId,
+        gateway_session_id: parsed.session_id,
+        status: 'pending',
+        microsoft_email: null,
+        error_reason: null,
+      }, { onConflict: 'gateway_session_id' })
+    if (error) throw new Error(`Failed to save Outlook connect session: ${error.message}`)
+  }
+  return parsed
 }
 
-export async function isAppUserConnected(appUserId: string): Promise<boolean> {
-  const check = await appUserConnectionCheck(appUserId)
+export async function completeAppUserOAuthSession(sessionId: string, userJwt?: string): Promise<TenantCheck> {
+  const admin = adminClient()
+  const { data: session, error: sessionErr } = await admin
+    .from(SESSION_TABLE)
+    .select('user_id, gateway_session_id')
+    .eq('gateway_session_id', sessionId)
+    .maybeSingle()
+  if (sessionErr || !session?.user_id) {
+    console.error('Outlook callback session not recognised:', sessionErr?.message ?? sessionId.slice(0, 8))
+    return { ok: false, reason: 'unknown' }
+  }
+
+  const check = await verifyAppUserTenant(session.user_id, userJwt)
+  await admin
+    .from(SESSION_TABLE)
+    .update({
+      status: check.ok ? 'connected' : check.reason === 'wrong_tenant' ? 'wrong_tenant' : 'failed',
+      microsoft_email: check.email ?? null,
+      error_reason: check.ok ? null : check.reason,
+    })
+    .eq('gateway_session_id', sessionId)
+  return check
+}
+
+export async function isAppUserConnected(appUserId: string, userJwt?: string): Promise<boolean> {
+  const check = await appUserConnectionCheck(appUserId, userJwt)
   return check.ok
 }
 
@@ -177,9 +204,9 @@ export async function isAppUserConnected(appUserId: string): Promise<boolean> {
  * "not connected" from "connected but wrong tenant". A wrong-tenant credential
  * is treated as NOT connected everywhere in the app.
  */
-export async function appUserConnectionCheck(appUserId: string): Promise<TenantCheck> {
+export async function appUserConnectionCheck(appUserId: string, userJwt?: string): Promise<TenantCheck> {
   try {
-    return await verifyAppUserTenant(appUserId)
+    return await verifyAppUserTenant(appUserId, userJwt)
   } catch (e) {
     console.error('Outlook app-user status error:', e instanceof Error ? e.message : String(e))
     return { ok: false, reason: 'unknown' }
@@ -192,14 +219,14 @@ export type SendMailAsUserResult =
 
 export async function sendMailAsAppUser(
   appUserId: string,
+  userJwt: string | undefined,
   message: Record<string, unknown>,
   opts: { saveToSentItems?: boolean } = {},
 ): Promise<SendMailAsUserResult> {
-  let lovableKey: string, clientKey: string, connKey: string
+  let lovableKey: string, clientKey: string
   try {
     lovableKey = need('LOVABLE_API_KEY')
     clientKey = need('MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY')
-    connKey = await appUserConnectionToken(appUserId)
   } catch (e) {
     return {
       ok: false,
@@ -210,7 +237,7 @@ export async function sendMailAsAppUser(
   }
   // Defensive tenant check right before the send — a credential might have
   // been established before this gate existed, or the account swapped after.
-  const check = await verifyAppUserTenant(appUserId)
+  const check = await verifyAppUserTenant(appUserId, userJwt)
   if (!check.ok) {
     if (check.reason === 'wrong_tenant') {
       return {
@@ -229,7 +256,7 @@ export async function sendMailAsAppUser(
   }
   const res = await fetch(`${GATEWAY_ROOT}/${CONNECTOR_ID}/me/sendMail`, {
     method: 'POST',
-    headers: { ...baseHeaders(clientKey, lovableKey, connKey), 'Content-Type': 'application/json' },
+    headers: { ...baseHeaders(clientKey, lovableKey, appUserId, userJwt), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
       saveToSentItems: opts.saveToSentItems ?? true,
@@ -238,7 +265,6 @@ export async function sendMailAsAppUser(
   if (res.ok) return { ok: true }
   const errText = await res.text()
   // 401 "Credential not found" ⇒ user has not connected their Outlook yet
-  const notConnected =
-    res.status === 401 && /credential\s*not\s*found/i.test(errText)
+  const notConnected = isCredentialNotFound(res.status, errText)
   return { ok: false, notConnected, status: res.status, error: errText }
 }
