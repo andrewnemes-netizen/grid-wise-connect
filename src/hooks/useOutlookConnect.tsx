@@ -1,13 +1,25 @@
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-async function waitForVerifiedOutlookConnection(): Promise<boolean> {
+export type OutlookConnectResult =
+  | { ok: true }
+  | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout"; message?: string; email?: string };
+
+async function waitForVerifiedOutlookConnection(): Promise<OutlookConnectResult> {
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const { data } = await supabase.functions.invoke("outlook-connect-status");
-    if (data?.connected === true) return true;
+    if (data?.connected === true) return { ok: true };
+    if (data?.reason === "wrong_tenant") {
+      return {
+        ok: false,
+        reason: "wrong_tenant",
+        message: data?.message ?? "Only ecopoweruk.com accounts can be connected.",
+        email: data?.email,
+      };
+    }
     await new Promise((resolve) => setTimeout(resolve, 750));
   }
-  return false;
+  return { ok: false, reason: "timeout" };
 }
 
 /**
@@ -21,6 +33,17 @@ async function waitForVerifiedOutlookConnection(): Promise<boolean> {
  */
 export function useOutlookConnect() {
   return useCallback(async (): Promise<boolean> => {
+    const result = await connectOutlookDetailed();
+    return result.ok;
+  }, []);
+}
+
+/** Same flow as useOutlookConnect but returns the detailed reason on failure. */
+export function useOutlookConnectDetailed() {
+  return useCallback(async (): Promise<OutlookConnectResult> => connectOutlookDetailed(), []);
+}
+
+async function connectOutlookDetailed(): Promise<OutlookConnectResult> {
     const returnUrl = `${window.location.origin}/auth/outlook/callback`;
     const { data, error } = await supabase.functions.invoke("outlook-connect-start", {
       body: { return_url: returnUrl },
@@ -43,7 +66,7 @@ export function useOutlookConnect() {
     const popup = window.open(authUrl, "outlook-connect", "width=520,height=720");
     if (!popup) throw new Error("Popup blocked — please allow popups for this site.");
 
-    return new Promise<boolean>((resolve) => {
+    return new Promise<OutlookConnectResult>((resolve) => {
       let done = false;
       const finish = async (oauthCompleted: boolean) => {
         if (done) return;
@@ -51,7 +74,7 @@ export function useOutlookConnect() {
         window.removeEventListener("message", onMessage);
         clearInterval(poll);
         if (!oauthCompleted) {
-          resolve(false);
+          resolve({ ok: false, reason: "cancelled" });
           return;
         }
         resolve(await waitForVerifiedOutlookConnection());
@@ -66,7 +89,6 @@ export function useOutlookConnect() {
         if (popup.closed) finish(false);
       }, 800);
     });
-  }, []);
 }
 
 /** Marker error thrown by helpers when the edge function reports outlook_not_connected. */
