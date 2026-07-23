@@ -47,9 +47,9 @@ export default function PocReturnForm() {
     if (!fl) return;
     const arr = Array.from(fl).filter(f => {
       const n = f.name.toLowerCase();
-      return n.endsWith(".pdf") || n.endsWith(".xlsx");
+      return n.endsWith(".pdf") || n.endsWith(".xlsx") || n.endsWith(".xlsm");
     });
-    if (arr.length !== fl.length) toast.warning("Only .pdf and .xlsx files are accepted");
+    if (arr.length !== fl.length) toast.warning("Only .pdf, .xlsx and .xlsm files are accepted");
     setFiles(prev => [...prev, ...arr]);
   };
 
@@ -61,8 +61,10 @@ export default function PocReturnForm() {
       const payloadFiles: any[] = [];
 
       for (const f of files) {
-        const isPdf = f.name.toLowerCase().endsWith(".pdf");
-        const fileType = isPdf ? "pdf" : "xlsx";
+        const lower = f.name.toLowerCase();
+        const isPdf = lower.endsWith(".pdf");
+        const isXlsm = lower.endsWith(".xlsm");
+        const fileType = isPdf ? "pdf" : isXlsm ? "xlsm" : "xlsx";
         const storagePath = `${info.return_id}/${crypto.randomUUID()}-${f.name}`;
 
         // 1. Upload raw file
@@ -182,12 +184,12 @@ export default function PocReturnForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="poc-files">Upload PDF or XLSX (rate schedule)</Label>
+              <Label htmlFor="poc-files">Upload PDF, XLSX or XLSM (rate schedule)</Label>
               <Input
                 id="poc-files"
                 type="file"
                 multiple
-                accept=".pdf,.xlsx"
+                accept=".pdf,.xlsx,.xlsm"
                 onChange={(e) => onPick(e.target.files)}
               />
             </div>
