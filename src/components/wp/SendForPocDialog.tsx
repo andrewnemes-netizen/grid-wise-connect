@@ -17,6 +17,7 @@ export interface PocAssignment {
   mode: "internal" | "external";
   assigneeUserId?: string | null;
   assigneeName?: string | null;
+  assigneeCompany?: string | null;
   assigneeEmail?: string | null;
   message?: string;
   dueDate: string; // ISO date
@@ -67,6 +68,7 @@ export function SendForPocDialog({
   const [internalUserId, setInternalUserId] = useState<string>("");
   const [contactId, setContactId] = useState<string>("__manual");
   const [externalName, setExternalName] = useState("");
+  const [externalCompany, setExternalCompany] = useState("");
   const [externalEmail, setExternalEmail] = useState("");
   const [message, setMessage] = useState("");
   const [dueDate, setDueDate] = useState(defaultDue);
@@ -83,6 +85,7 @@ export function SendForPocDialog({
       setInternalUserId("");
       setContactId("__manual");
       setExternalName("");
+      setExternalCompany("");
       setExternalEmail("");
       setMessage("");
       setDueDate(defaultDue);
@@ -151,6 +154,7 @@ export function SendForPocDialog({
       if (c) {
         setExternalName(c.full_name ?? "");
         setExternalEmail(c.email ?? "");
+        setExternalCompany(c.company ?? c.organisation ?? "");
       }
     }
   }, [contactId, contacts]);
@@ -199,6 +203,7 @@ export function SendForPocDialog({
       mode: "external",
       assigneeUserId: null,
       assigneeName: externalName.trim() || null,
+      assigneeCompany: externalCompany.trim() || null,
       assigneeEmail: externalEmail.trim(),
       message: message.trim() || undefined,
       dueDate,
@@ -365,6 +370,14 @@ export function SendForPocDialog({
                   placeholder="designer@company.com"
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Designer company</Label>
+              <Input
+                value={externalCompany}
+                onChange={(e) => setExternalCompany(e.target.value)}
+                placeholder="e.g. Acme Design Ltd"
+              />
             </div>
             {externalEmail && !isEmail(externalEmail) && (
               <p className="text-[11px] text-destructive">Enter a valid email address.</p>
