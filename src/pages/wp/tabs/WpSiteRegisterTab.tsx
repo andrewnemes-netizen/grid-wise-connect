@@ -34,6 +34,19 @@ import {
 import { validateSiteForPoc } from "@/lib/wp/pocValidation";
 import { summariseSiteStages, STAGE_STATUS_LABEL, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { generatePoPdf } from "@/lib/po-pdf";
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as any);
+  }
+  return btoa(binary);
+}
 
 type LaneFilter = "all" | "active" | "rejected" | "ready";
 
@@ -65,6 +78,8 @@ function laneState(pc: any): "ready" | "rejected" | "active" {
 export default function WpSiteRegisterTab() {
   const { id: wpId } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole("admin");
   const [q, setQ] = useState("");
   const [laneFilter, setLaneFilter] = useState<LaneFilter>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
