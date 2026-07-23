@@ -180,7 +180,7 @@ function generatePocPoPdf(input: PoPdfInput): Blob {
     recipientName,
     recipientCompany,
     recipientEmail,
-    companyName = "EcoPower UK",
+    companyName = "EcoPower Energy",
     companyAddress = [],
     programmeName,
     organisationName,
@@ -226,7 +226,8 @@ function generatePocPoPdf(input: PoPdfInput): Blob {
   doc.setTextColor(20, 20, 20);
   y += 16;
   const ctxRows = [
-    organisationName ? `Organisation: ${organisationName}` : null,
+    `Organisation: ${companyName}`,
+    organisationName ? `Client: ${organisationName}` : null,
     programmeName ? `Programme: ${programmeName}` : null,
     workPackage?.wp_code || workPackage?.name
       ? `Work Package: ${[workPackage?.wp_code, workPackage?.name].filter(Boolean).join(" — ")}`
@@ -284,12 +285,28 @@ function generatePocPoPdf(input: PoPdfInput): Blob {
   ty += 14;
   if (paymentTerms) { doc.text(`Payment terms: ${paymentTerms}`, marginX, ty); ty += 14; }
 
+  // Subtotal / VAT (20%) / Total
+  const subtotal = Number(po.order_value ?? 0);
+  const vat = Math.round(subtotal * 0.2 * 100) / 100;
+  const grandTotal = Math.round((subtotal + vat) * 100) / 100;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(60, 60, 60);
+  doc.text("Subtotal", labelX, ty);
+  doc.setTextColor(20, 20, 20);
+  doc.text(fmt(subtotal), rightX, ty, { align: "right" });
+  ty += 16;
+  doc.setTextColor(60, 60, 60);
+  doc.text("VAT (20%)", labelX, ty);
+  doc.setTextColor(20, 20, 20);
+  doc.text(fmt(vat), rightX, ty, { align: "right" });
+  ty += 18;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(13, 122, 95);
-  doc.text("Order Total", labelX, ty);
+  doc.text("Order Total (incl. VAT)", labelX, ty);
   doc.setTextColor(20, 20, 20);
-  doc.text(fmt(po.order_value), rightX, ty, { align: "right" });
+  doc.text(fmt(grandTotal), rightX, ty, { align: "right" });
   ty += 24;
 
   // Terms
