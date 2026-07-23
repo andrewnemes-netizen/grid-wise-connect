@@ -53,10 +53,12 @@ vi.mock("@/hooks/useOutlookConnect", () => ({
 
 // Supabase client — programmable per-test invocation queue.
 const invokeQueue: Array<{ data: any; error: any }> = [];
-const invokeMock: any = vi.fn(async (..._args: any[]) => {
-  const next = invokeQueue.shift() ?? { data: { ok: true }, error: null };
-  return next;
-});
+const invokeMock = vi.fn<(...args: any[]) => Promise<{ data: any; error: any }>>(
+  async (..._args: any[]) => {
+    const next = invokeQueue.shift() ?? { data: { ok: true }, error: null };
+    return next;
+  },
+);
 
 vi.mock("@/integrations/supabase/client", () => {
   // Minimal chainable stub for `supabase.from("quotation_sends").select().eq().order().limit()`
