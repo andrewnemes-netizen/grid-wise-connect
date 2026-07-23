@@ -526,6 +526,7 @@ export function EstimateEditor({ estimateId, onClose, onOpenEstimate, maximized,
           groups={(groups.data ?? []).map((g: any) => ({ id: g.id, name: g.name, cost_category: g.cost_category }))}
           defaultGroupId={rateCardOpen}
           currency={c}
+          estimateKind={e.kind as "build" | "poc" | undefined}
           onOpenChange={(o) => { if (!o) setRateCardOpen(false); }}
           onInserted={invalidateAll}
         />
