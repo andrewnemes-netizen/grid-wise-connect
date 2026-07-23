@@ -20,6 +20,7 @@ export function RateItemPicker({
   groups,
   defaultGroupId,
   currency,
+  estimateKind,
   onOpenChange,
   onInserted,
 }: {
@@ -27,6 +28,11 @@ export function RateItemPicker({
   groups: Group[];
   defaultGroupId?: string | null;
   currency: string;
+  /** "build" = EV Build work (defaults to the Synthetic rate card),
+   *  "poc" = ICP/PoC work (defaults to the ICP rate card).
+   *  Either way, a rate card named with "MSA" is treated as the fallback
+   *  for anything not covered by the primary card. */
+  estimateKind?: "build" | "poc";
   onOpenChange: (o: boolean) => void;
   onInserted: () => void;
 }) {
@@ -49,8 +55,26 @@ export function RateItemPicker({
         .order("version_number", { ascending: false });
       if (error) throw error;
       const list = (data ?? []) as any[];
-      if (!rateCardVersionId && list.length) setRateCardVersionId(list[0].id);
-      return list;
+
+      // Classify by name so EV Build quotes default to the Synthetic card,
+      // ICP/PoC quotes default to the ICP card, and an "MSA" card is always
+      // flagged as the fallback for whatever the primary card doesn't cover.
+      const nameOf = (v: any) => (v.rate_cards?.name ?? "").toLowerCase();
+      const isMsa = (v: any) => nameOf(v).includes("msa");
+      const isPrimary = (v: any) => {
+        if (isMsa(v)) return false;
+        if (estimateKind === "build") return nameOf(v).includes("synthetic");
+        if (estimateKind === "poc") return nameOf(v).includes("icp");
+        return false;
+      };
+      const rank = (v: any) => (isPrimary(v) ? 0 : isMsa(v) ? 2 : 1);
+      const sorted = [...list].sort((a, b) => rank(a) - rank(b));
+
+      if (!rateCardVersionId && sorted.length) setRateCardVersionId(sorted[0].id);
+      return sorted.map((v) => ({
+        ...v,
+        _tag: isMsa(v) ? "fallback" : isPrimary(v) ? "primary" : null,
+      }));
     },
   });
 
@@ -225,6 +249,7 @@ export function RateItemPicker({
                 {(versions.data ?? []).map((v: any) => (
                   <SelectItem key={v.id} value={v.id}>
                     {v.rate_cards?.name ?? "Rate card"} — v{v.version_number} ({v.status})
+                    {v._tag === "primary" ? " · Primary" : v._tag === "fallback" ? " · Fallback (MSA)" : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
