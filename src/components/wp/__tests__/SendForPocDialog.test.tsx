@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { SendForPocDialog, type PocAssignment } from "../SendForPocDialog";
@@ -52,42 +53,40 @@ describe("SendForPocDialog", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("shows the PO fee preview with total = fee × sites when basis is per_site", async () => {
+    const user = userEvent.setup();
     renderDialog();
-    // Switch to external tab
-    fireEvent.click(screen.getByRole("tab", { name: /external/i }));
-    // Enter designer email + fee
-    fireEvent.change(screen.getByPlaceholderText(/designer@company\.com/i), { target: { value: "d@x.com" } });
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 450/i), { target: { value: "500" } });
+    await user.click(screen.getByRole("tab", { name: /external/i }));
+    await user.type(await screen.findByPlaceholderText(/designer@company\.com/i), "d@x.com");
+    await user.type(screen.getByPlaceholderText(/e\.g\. 450/i), "500");
 
     const preview = await screen.findByTestId("po-preview");
-    // 500 × 2 sites = £1,000.00
     expect(preview.textContent).toMatch(/£1,000\.00/);
     expect(preview.textContent).toMatch(/2 sites/);
   });
 
   it("rejects zero/negative fee and blocks proceeding", async () => {
+    const user = userEvent.setup();
     renderDialog();
-    fireEvent.click(screen.getByRole("tab", { name: /external/i }));
-    fireEvent.change(screen.getByPlaceholderText(/designer@company\.com/i), { target: { value: "d@x.com" } });
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 450/i), { target: { value: "0" } });
+    await user.click(screen.getByRole("tab", { name: /external/i }));
+    await user.type(await screen.findByPlaceholderText(/designer@company\.com/i), "d@x.com");
+    await user.type(screen.getByPlaceholderText(/e\.g\. 450/i), "0");
 
     expect(await screen.findByText(/positive number/i)).toBeInTheDocument();
     expect(screen.getByTestId("poc-next-btn")).toBeDisabled();
   });
 
   it("requires the review step before onConfirm fires (no auto-send)", async () => {
+    const user = userEvent.setup();
     const { onConfirm } = renderDialog();
-    fireEvent.click(screen.getByRole("tab", { name: /external/i }));
-    fireEvent.change(screen.getByPlaceholderText(/designer@company\.com/i), { target: { value: "d@x.com" } });
-    fireEvent.change(screen.getByPlaceholderText(/e\.g\. 450/i), { target: { value: "300" } });
+    await user.click(screen.getByRole("tab", { name: /external/i }));
+    await user.type(await screen.findByPlaceholderText(/designer@company\.com/i), "d@x.com");
+    await user.type(screen.getByPlaceholderText(/e\.g\. 450/i), "300");
 
-    // First click: Review — must NOT invoke onConfirm
-    fireEvent.click(screen.getByTestId("poc-next-btn"));
+    await user.click(screen.getByTestId("poc-next-btn"));
     await screen.findByTestId("poc-review-step");
     expect(onConfirm).not.toHaveBeenCalled();
 
-    // Second click: actual send
-    fireEvent.click(screen.getByTestId("poc-confirm-send"));
+    await user.click(screen.getByTestId("poc-confirm-send"));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
     const arg = onConfirm.mock.calls[0][0] as PocAssignment;
     expect(arg.mode).toBe("external");
@@ -95,18 +94,16 @@ describe("SendForPocDialog", () => {
   });
 
   it("adminOnly=false skips PO fields entirely (legacy assign & email)", async () => {
+    const user = userEvent.setup();
     const { onConfirm } = renderDialog({ adminOnly: false });
-    fireEvent.click(screen.getByRole("tab", { name: /external/i }));
-    fireEvent.change(screen.getByPlaceholderText(/designer@company\.com/i), { target: { value: "d@x.com" } });
+    await user.click(screen.getByRole("tab", { name: /external/i }));
+    await user.type(await screen.findByPlaceholderText(/designer@company\.com/i), "d@x.com");
 
-    // Fee input must not render
     expect(screen.queryByPlaceholderText(/e\.g\. 450/i)).toBeNull();
 
-    fireEvent.click(screen.getByTestId("poc-next-btn"));
-    // Non-admin externals still get the review step to avoid silent send;
-    // if the product decision is different this test surfaces it deliberately.
+    await user.click(screen.getByTestId("poc-next-btn"));
     await screen.findByTestId("poc-review-step");
-    fireEvent.click(screen.getByTestId("poc-confirm-send"));
+    await user.click(screen.getByTestId("poc-confirm-send"));
     await waitFor(() => expect(onConfirm).toHaveBeenCalled());
     expect((onConfirm.mock.calls[0][0] as PocAssignment).po).toBeUndefined();
   });
