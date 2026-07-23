@@ -92,12 +92,22 @@ export function PocDesignerReturnReviewDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("contracts")
-        .select("id, name, clients:client_id(name)")
+        .select("id, name, client_id, status, clients:client_id(name)")
         .order("name");
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  useEffect(() => {
+    if (!open || contractId || (contracts as any[]).length === 0) return;
+    const activeContracts = (contracts as any[]).filter((c) => c.status !== "closed");
+    const preferred = activeContracts.find((c) => c.client_id && c.client_id === po?.client_id)
+      ?? (contracts as any[]).find((c) => c.client_id && c.client_id === po?.client_id)
+      ?? activeContracts[0]
+      ?? (contracts as any[])[0];
+    if (preferred?.id) setContractId(preferred.id);
+  }, [contractId, contracts, open, po?.client_id]);
 
   const runExtract = async () => {
     if (!(ret as any)?.id) return;
@@ -130,10 +140,12 @@ export function PocDesignerReturnReviewDialog({
     });
     if (dirty.length === 0) return;
     for (const r of dirty) {
-      await supabase.from("poc_designer_return_lines").update({
-        rate_code: r.rate_code, description: r.description,
+      const { error } = await supabase.from("poc_designer_return_lines").update({
+        rate_code: r.rate_code?.trim() || null,
+        description: r.description?.trim() || null,
         designer_cost: r.designer_cost, confirmed_unit_cost: r.confirmed_unit_cost,
       }).eq("id", r.id);
+      if (error) throw error;
     }
     toast.success(`Saved ${dirty.length} line(s)`);
     await refetchLines();
@@ -168,8 +180,27 @@ export function PocDesignerReturnReviewDialog({
     if (!contractId || selected.size === 0) return false;
     return Array.from(selected).every(id => {
       const r = rows.find(x => x.id === id);
-      return r && r.rate_code && r.description && r.confirmed_unit_cost != null;
+      return r
+        && !!r.rate_code?.trim()
+        && !!r.description?.trim()
+        && r.confirmed_unit_cost != null
+        && Number.isFinite(Number(r.confirmed_unit_cost));
     });
+  }, [selected, rows, contractId]);
+
+  const confirmBlocker = useMemo(() => {
+    if (selected.size === 0) return "Select at least one line";
+    if (!contractId) return "Select a contract";
+    const missing = Array.from(selected).filter((id) => {
+      const r = rows.find((x) => x.id === id);
+      return !r
+        || !r.rate_code?.trim()
+        || !r.description?.trim()
+        || r.confirmed_unit_cost == null
+        || !Number.isFinite(Number(r.confirmed_unit_cost));
+    }).length;
+    if (missing > 0) return `${missing} selected line${missing === 1 ? " is" : "s are"} missing a rate code, description or confirmed cost`;
+    return null;
   }, [selected, rows, contractId]);
 
   const signedUrl = async (path: string) => {
@@ -222,7 +253,17 @@ export function PocDesignerReturnReviewDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10"></TableHead>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={rows.length > 0 && rows.filter((r) => !r.reviewed).every((r) => selected.has(r.id))}
+                      onCheckedChange={(v) => {
+                        setSelected(v
+                          ? new Set(rows.filter((r) => !r.reviewed).map((r) => r.id))
+                          : new Set()
+                        );
+                      }}
+                    />
+                  </TableHead>
                   <TableHead className="w-32">Rate code</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="w-32 text-right">Designer £</TableHead>
@@ -247,7 +288,7 @@ export function PocDesignerReturnReviewDialog({
                     <TableCell>
                       <Input
                         value={r.rate_code ?? ""} disabled={r.reviewed}
-                        onChange={(e) => patchRow(r.id, { rate_code: e.target.value })}
+                        onChange={(e) => patchRow(r.id, { rate_code: e.target.value.toUpperCase() })}
                         className="h-8"
                       />
                     </TableCell>
@@ -306,6 +347,9 @@ export function PocDesignerReturnReviewDialog({
             <p className="text-xs text-muted-foreground">
               A new DRAFT rate card version will be created. Approve it in the Rate Library the same way as any other import.
             </p>
+            {confirmBlocker && (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{confirmBlocker}</p>
+            )}
           </div>
         </div>
 
