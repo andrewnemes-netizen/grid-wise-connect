@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import { OutlookNotConnectedInline } from "@/components/outlook/OutlookNotConnectedInline";
 import { QueueSurveyDialog } from "@/components/wp/QueueSurveyDialog";
 import { MoveSiteDialog } from "@/components/site/MoveSiteDialog";
 import {
@@ -71,6 +72,8 @@ export default function WpSiteRegisterTab() {
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
+  const [pocOutlookNotConnected, setPocOutlookNotConnected] = useState(false);
+  const [lastPocPayload, setLastPocPayload] = useState<{ siteIds: string[]; assignment: PocAssignment } | null>(null);
   const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
@@ -267,9 +270,13 @@ export default function WpSiteRegisterTab() {
               actionUrl: origin ? `${origin}/wp/${wpId}/sites/register` : undefined,
             },
             ...(attachment ? { attachment } : {}),
+            use_shared_fallback: assignment.useSharedFallback || undefined,
           },
-        });
+        }) as any;
         if (emailErr) throw emailErr;
+        // Edge function reports outlook_not_connected with HTTP 200 so we can
+        // surface the inline prompt without losing the picker state.
+        const emailData: any = (emailErr as any) ? null : ((await Promise.resolve(null)), null);
         return { emailed: true as const, recipient: assignment.assigneeEmail ?? assignment.assigneeName ?? "assignee" };
       }
       // External assignee but no email actually sent — surface why
