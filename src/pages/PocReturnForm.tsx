@@ -189,7 +189,7 @@ export default function PocReturnForm() {
                 id="poc-files"
                 type="file"
                 multiple
-                accept=".pdf,.xlsx,.xlsm"
+                accept=".pdf,.xlsx,.xlsm,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel,*/*"
                 onChange={(e) => onPick(e.target.files)}
               />
             </div>
