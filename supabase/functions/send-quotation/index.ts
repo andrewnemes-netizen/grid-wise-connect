@@ -4,6 +4,7 @@ import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as quotationTemplate } from '../_shared/transactional-email-templates/quotation.tsx'
 import { mirrorToOneDrive } from '../_shared/onedrive.ts'
+import { sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Body {
   estimate_id: string
@@ -172,40 +173,55 @@ Deno.serve(async (req) => {
   const toRecipients = [{ emailAddress: { address: body.recipient_email } }]
   const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))
 
-  const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
+  const message = {
+    subject,
+    body: { contentType: 'HTML', content: htmlBody },
+    toRecipients,
+    ccRecipients,
+    attachments: [
+      {
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        name: attachmentName,
+        contentType: 'application/pdf',
+        contentBytes: pdfB64,
+      },
+    ],
+  }
+
+  // 1. Try as signed-in user first (per-user Outlook connector).
+  const perUser = await sendMailAsAppUser(userId, message)
+  let sender: 'per_user' | 'shared' = 'per_user'
+  let sendFailure: { status: number; error: string } | null = null
+  if (!perUser.ok) {
+    if (!perUser.notConnected) {
+      sendFailure = { status: perUser.status, error: perUser.error }
+    } else {
+      sender = 'shared'
+    }
+  }
+
+  if (sender === 'shared' && !sendFailure) {
+    const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${lovableApiKey}`,
       'X-Connection-Api-Key': outlookKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      message: {
-        subject,
-        body: { contentType: 'HTML', content: htmlBody },
-        toRecipients,
-        ccRecipients,
-        attachments: [
-          {
-            '@odata.type': '#microsoft.graph.fileAttachment',
-            name: attachmentName,
-            contentType: 'application/pdf',
-            contentBytes: pdfB64,
-          },
-        ],
-      },
-      saveToSentItems: true,
-    }),
-  })
+      body: JSON.stringify({ message, saveToSentItems: true }),
+    })
+    if (!outlookRes.ok) {
+      sendFailure = { status: outlookRes.status, error: await outlookRes.text() }
+    }
+  }
 
-  if (!outlookRes.ok) {
-    const errText = await outlookRes.text()
-    console.error(`Outlook sendMail failed [${outlookRes.status}]: ${errText}`)
+  if (sendFailure) {
+    console.error(`Outlook sendMail failed [${sendFailure.status}]: ${sendFailure.error}`)
     await admin
       .from('quotation_sends')
-      .update({ status: 'failed', error_message: `[${outlookRes.status}] ${errText}` })
+      .update({ status: 'failed', error_message: `[${sendFailure.status}] ${sendFailure.error}` })
       .eq('id', logRow.id)
-    return json({ error: 'Outlook send failed', status: outlookRes.status, details: errText }, 502)
+    return json({ error: 'Outlook send failed', status: sendFailure.status, details: sendFailure.error }, 502)
   }
 
   await admin

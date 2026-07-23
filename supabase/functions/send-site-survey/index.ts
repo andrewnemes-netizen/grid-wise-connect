@@ -3,6 +3,7 @@ import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors'
 import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as surveyInviteTemplate } from '../_shared/transactional-email-templates/site-survey-invite.tsx'
+import { sendMailAsAppUser } from '../_shared/appUserOutlook.ts'
 
 interface Recipient { email: string; name?: string }
 interface Body {
@@ -142,7 +143,18 @@ Deno.serve(async (req) => {
 
       let sendOk = false
       let sendErr = ''
-      if (!lovableApiKey || !outlookKey) {
+      const message = {
+        subject: `Site survey — ${site.site_name}`,
+        body: { contentType: 'HTML', content: htmlBody },
+        toRecipients: [{ emailAddress: { address: r.email } }],
+      }
+
+      const perUser = await sendMailAsAppUser(userId, message)
+      if (perUser.ok) {
+        sendOk = true
+      } else if (!perUser.notConnected) {
+        sendErr = `per-user [${perUser.status}] ${perUser.error.slice(0, 200)}`
+      } else if (!lovableApiKey || !outlookKey) {
         sendErr = 'Outlook connector not configured'
       } else {
         const outlookRes = await fetch('https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail', {
@@ -152,14 +164,7 @@ Deno.serve(async (req) => {
             'X-Connection-Api-Key': outlookKey,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            message: {
-              subject: `Site survey — ${site.site_name}`,
-              body: { contentType: 'HTML', content: htmlBody },
-              toRecipients: [{ emailAddress: { address: r.email } }],
-            },
-            saveToSentItems: true,
-          }),
+          body: JSON.stringify({ message, saveToSentItems: true }),
         })
         if (outlookRes.ok) {
           sendOk = true
