@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
-import { useOutlookConnect } from "@/hooks/useOutlookConnect";
+import { outlookConnectFailureMessage, useOutlookConnectDetailed } from "@/hooks/useOutlookConnect";
 
 export default function OutlookConnect() {
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected" | "error">("loading");
   const [connecting, setConnecting] = useState(false);
-  const connect = useOutlookConnect();
+  const connect = useOutlookConnectDetailed();
 
   const refresh = useCallback(async () => {
     setStatus("loading");
@@ -23,9 +23,9 @@ export default function OutlookConnect() {
   const startConnect = useCallback(async () => {
     setConnecting(true);
     try {
-      const ok = await connect();
-      if (!ok) {
-        toast.error("Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.");
+      const result = await connect();
+      if (!result.ok) {
+        toast.error(outlookConnectFailureMessage(result));
         await refresh();
         return;
       }

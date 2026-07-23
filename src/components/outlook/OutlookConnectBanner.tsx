@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Loader2, Mail, X } from "lucide-react";
 import { toast } from "sonner";
-import { useOutlookConnect } from "@/hooks/useOutlookConnect";
+import { outlookConnectFailureMessage, useOutlookConnectDetailed } from "@/hooks/useOutlookConnect";
 import { useAuth } from "@/hooks/useAuth";
 
 const DISMISS_KEY = "outlook-banner-dismissed-this-session";
@@ -15,7 +15,7 @@ const DISMISS_KEY = "outlook-banner-dismissed-this-session";
  */
 export function OutlookConnectBanner() {
   const { user } = useAuth();
-  const connect = useOutlookConnect();
+  const connect = useOutlookConnectDetailed();
   const [state, setState] = useState<"idle" | "checking" | "disconnected" | "hidden">("idle");
   const [connecting, setConnecting] = useState(false);
 
@@ -51,10 +51,12 @@ export function OutlookConnectBanner() {
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const ok = await connect();
-      if (ok) {
+      const result = await connect();
+      if (result.ok) {
         toast.success("Outlook connected");
         setState("hidden");
+      } else {
+        toast.error(outlookConnectFailureMessage(result));
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to connect Outlook");

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Mail, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { useOutlookConnect } from "@/hooks/useOutlookConnect";
+import { outlookConnectFailureMessage, useOutlookConnectDetailed } from "@/hooks/useOutlookConnect";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
  * from the shared EcoPower mailbox — non-admins never see that button.
  */
 export function OutlookNotConnectedInline({ onRetry, onSendShared, busy, context }: Props) {
-  const connect = useOutlookConnect();
+  const connect = useOutlookConnectDetailed();
   const { hasRole } = useAuth();
   const isAdmin = hasRole("admin");
   const [connecting, setConnecting] = useState(false);
@@ -31,9 +31,9 @@ export function OutlookNotConnectedInline({ onRetry, onSendShared, busy, context
   const handleConnect = async () => {
     setConnecting(true);
     try {
-      const ok = await connect();
-      if (!ok) {
-        toast.error("Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.");
+      const result = await connect();
+      if (!result.ok) {
+        toast.error(outlookConnectFailureMessage(result));
         return;
       }
       toast.success("Outlook connected — retrying send…");
