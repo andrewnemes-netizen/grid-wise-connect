@@ -141,7 +141,7 @@ export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName,
         assigneeEmail: null,
         message: message.trim() || undefined,
         dueDate,
-        sendEmail: false,
+        sendEmail: true,
         sites: sitesPayload,
       });
     } else {
