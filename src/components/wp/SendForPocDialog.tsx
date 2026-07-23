@@ -22,6 +22,10 @@ export interface PocAssignment {
   dueDate: string; // ISO date
   sendEmail: boolean;
   sites: PocSiteEnriched[];
+  /** Set by the "Send from shared" admin retry path. */
+  useSharedFallback?: boolean;
+  /** When true, skip DB inserts and only (re)send the email — used after outlook_not_connected. */
+  emailOnlyRetry?: boolean;
 }
 
 interface Props {
@@ -31,11 +35,13 @@ interface Props {
   workPackageName?: string;
   onConfirm: (a: PocAssignment) => Promise<void> | void;
   submitting?: boolean;
+  /** When set, renders an inline "Outlook not connected" prompt inside the dialog. */
+  notConnectedSlot?: React.ReactNode;
 }
 
 const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
-export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName, onConfirm, submitting }: Props) {
+export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName, onConfirm, submitting, notConnectedSlot }: Props) {
   const siteCount = siteIds.length;
   const defaultDue = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() + 45);
@@ -172,6 +178,7 @@ export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName,
             Internal assignments create an in-app task. External assignments also email the designer.
           </DialogDescription>
         </DialogHeader>
+        {notConnectedSlot}
 
         <div className="rounded-md border p-3 space-y-2 bg-muted/30">
           <div className="text-xs font-medium">Site readiness</div>

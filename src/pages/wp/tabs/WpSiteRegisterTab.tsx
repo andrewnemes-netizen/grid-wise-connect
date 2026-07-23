@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SitePreconGatesDialog } from "@/components/wp/SitePreconGatesDialog";
 import { ClientDecisionDialog } from "@/components/wp/ClientDecisionDialog";
 import { SendForPocDialog, type PocAssignment } from "@/components/wp/SendForPocDialog";
+import { OutlookNotConnectedInline } from "@/components/outlook/OutlookNotConnectedInline";
 import { QueueSurveyDialog } from "@/components/wp/QueueSurveyDialog";
 import { MoveSiteDialog } from "@/components/site/MoveSiteDialog";
 import {
@@ -71,6 +72,8 @@ export default function WpSiteRegisterTab() {
   const [gatesFor, setGatesFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [decisionFor, setDecisionFor] = useState<{ siteId: string; siteName?: string } | null>(null);
   const [pocDialogOpen, setPocDialogOpen] = useState(false);
+  const [pocOutlookNotConnected, setPocOutlookNotConnected] = useState(false);
+  const [lastPocPayload, setLastPocPayload] = useState<{ siteIds: string[]; assignment: PocAssignment } | null>(null);
   const [queueSurveyOpen, setQueueSurveyOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
@@ -149,6 +152,9 @@ export default function WpSiteRegisterTab() {
         throw new Error(`${invalid.length} site${invalid.length === 1 ? "" : "s"} missing required PoC fields`);
       }
       const bySiteId = new Map((assignment.sites ?? []).map((s) => [s.id, s]));
+      // Skip DB inserts on the "retry email only" path — tasks and audit rows
+      // were already created on the first attempt when Outlook was disconnected.
+      if (!assignment.emailOnlyRetry) {
       const rows = siteIds.map((sid) => ({
         work_package_id: wpId,
         site_id: sid,
@@ -185,6 +191,7 @@ export default function WpSiteRegisterTab() {
           },
         })),
       );
+      }
 
       if (assignment.sendEmail && (assignment.assigneeEmail || assignment.assigneeUserId)) {
         const siteLines = siteIds.map((sid) => {
@@ -254,7 +261,7 @@ export default function WpSiteRegisterTab() {
           };
         }
 
-        const { error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
+        const { data: emailData, error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
           body: {
             recipientEmail: assignment.assigneeEmail ?? undefined,
             assigneeUserId: assignment.assigneeUserId ?? undefined,
@@ -267,9 +274,15 @@ export default function WpSiteRegisterTab() {
               actionUrl: origin ? `${origin}/wp/${wpId}/sites/register` : undefined,
             },
             ...(attachment ? { attachment } : {}),
+            use_shared_fallback: assignment.useSharedFallback || undefined,
           },
         });
         if (emailErr) throw emailErr;
+        // Edge function reports outlook_not_connected with HTTP 200 so we can
+        // keep the picker open and offer inline Connect/retry.
+        if ((emailData as any)?.error === "outlook_not_connected") {
+          return { emailed: false as const, outlookNotConnected: true as const };
+        }
         return { emailed: true as const, recipient: assignment.assigneeEmail ?? assignment.assigneeName ?? "assignee" };
       }
       // External assignee but no email actually sent — surface why
@@ -286,6 +299,14 @@ export default function WpSiteRegisterTab() {
     onSuccess: (result: any, vars) => {
       const n = vars.siteIds.length;
       const label = `POC assigned for ${n} site${n === 1 ? "" : "s"}`;
+      if (result?.outlookNotConnected) {
+        setLastPocPayload({ siteIds: vars.siteIds, assignment: vars.assignment });
+        setPocOutlookNotConnected(true);
+        // Task rows were already created — surface state but keep dialog open.
+        return;
+      }
+      setPocOutlookNotConnected(false);
+      setLastPocPayload(null);
       if (result?.emailed) {
         toast.success(`${label} — emailed ${result.recipient ?? vars.assignment.assigneeEmail ?? vars.assignment.assigneeName ?? ""}`);
       } else if (vars.assignment.mode === "external") {
@@ -738,10 +759,30 @@ export default function WpSiteRegisterTab() {
 
       <SendForPocDialog
         open={pocDialogOpen}
-        onOpenChange={setPocDialogOpen}
+        onOpenChange={(v) => { setPocDialogOpen(v); if (!v) { setPocOutlookNotConnected(false); setLastPocPayload(null); } }}
         siteIds={selectedIds}
         submitting={bulkSendPoc.isPending}
         onConfirm={(assignment) => bulkSendPoc.mutateAsync({ siteIds: selectedIds, assignment })}
+        notConnectedSlot={
+          pocOutlookNotConnected && lastPocPayload ? (
+            <OutlookNotConnectedInline
+              context="POC assignment"
+              busy={bulkSendPoc.isPending}
+              onRetry={() =>
+                bulkSendPoc.mutate({
+                  siteIds: lastPocPayload.siteIds,
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: false, emailOnlyRetry: true },
+                })
+              }
+              onSendShared={() =>
+                bulkSendPoc.mutate({
+                  siteIds: lastPocPayload.siteIds,
+                  assignment: { ...lastPocPayload.assignment, useSharedFallback: true, emailOnlyRetry: true },
+                })
+              }
+            />
+          ) : undefined
+        }
       />
 
       {wpId && (
