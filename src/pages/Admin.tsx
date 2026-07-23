@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Receipt, Library, BookOpen, Beaker, Handshake, Link2, Loader2 } from "lucide-react";
+import { Settings, Users, FileText, Shield, SlidersHorizontal, Layers, Zap, Globe, Radar, Flame, Building2, Brain, Lightbulb, HardDrive, Library, Beaker, Handshake, Link2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -24,9 +24,7 @@ import { OrgManagement } from "@/components/admin/OrgManagement";
 import { RouteLearningDashboard } from "@/components/admin/RouteLearningDashboard";
 import { LocalAuthorityDatasets } from "@/components/admin/LocalAuthorityDatasets";
 import { SsenDriveIngest } from "@/components/admin/SsenDriveIngest";
-import { EstimatingImport } from "@/components/admin/EstimatingImport";
-import { RateLibrary } from "@/components/admin/RateLibrary";
-import { RecipeLibrary } from "@/components/admin/RecipeLibrary";
+import { EstimatingLibrary } from "@/components/admin/EstimatingLibrary";
 import { FeatureFlagsPanel } from "@/components/admin/FeatureFlagsPanel";
 import { PartnerManagement } from "@/components/admin/PartnerManagement";
 import { XeroIntegration } from "@/components/admin/XeroIntegration";
@@ -69,9 +67,7 @@ const Admin = () => {
           <TabsTrigger value="partners"><Handshake className="h-3.5 w-3.5 mr-1.5" />Partners</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
           <TabsTrigger value="learning"><Brain className="h-3.5 w-3.5 mr-1.5" />Route Learning</TabsTrigger>
-          <TabsTrigger value="estimating"><Receipt className="h-3.5 w-3.5 mr-1.5" />Estimating Import</TabsTrigger>
-          <TabsTrigger value="ratelib"><Library className="h-3.5 w-3.5 mr-1.5" />Rate Library</TabsTrigger>
-          <TabsTrigger value="recipelib"><BookOpen className="h-3.5 w-3.5 mr-1.5" />Recipe Library</TabsTrigger>
+          <TabsTrigger value="estimating"><Library className="h-3.5 w-3.5 mr-1.5" />Estimating</TabsTrigger>
           <TabsTrigger value="flags"><Beaker className="h-3.5 w-3.5 mr-1.5" />Feature Flags</TabsTrigger>
           <TabsTrigger value="xero"><Link2 className="h-3.5 w-3.5 mr-1.5" />Integrations</TabsTrigger>
         </TabsList>
@@ -116,13 +112,7 @@ const Admin = () => {
           <RouteLearningDashboard />
         </TabsContent>
         <TabsContent value="estimating" className="mt-4">
-          <EstimatingImport />
-        </TabsContent>
-        <TabsContent value="ratelib" className="mt-4">
-          <RateLibrary />
-        </TabsContent>
-        <TabsContent value="recipelib" className="mt-4">
-          <RecipeLibrary />
+          <EstimatingLibrary />
         </TabsContent>
         <TabsContent value="flags" className="mt-4">
           <FeatureFlagsPanel />
