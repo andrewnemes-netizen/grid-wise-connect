@@ -2369,6 +2369,7 @@ export type Database = {
           hire_cost: number
           id: string
           is_current: boolean
+          kind: string
           labour_cost: number
           labour_hours: number
           locked: boolean
@@ -2415,6 +2416,7 @@ export type Database = {
           hire_cost?: number
           id?: string
           is_current?: boolean
+          kind?: string
           labour_cost?: number
           labour_hours?: number
           locked?: boolean
@@ -2461,6 +2463,7 @@ export type Database = {
           hire_cost?: number
           id?: string
           is_current?: boolean
+          kind?: string
           labour_cost?: number
           labour_hours?: number
           locked?: boolean
@@ -10445,6 +10448,8 @@ export type Database = {
           forecast_margin: number | null
           forecast_margin_pct: number | null
           name: string | null
+          poc_cost: number | null
+          poc_price: number | null
           programme_id: string | null
           status: string | null
           work_package_id: string | null
