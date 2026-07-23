@@ -18,7 +18,19 @@ export function useOutlookConnect() {
     if (error || !data?.authorization_url) {
       throw new Error(error?.message ?? "Failed to start Outlook connect");
     }
-    const popup = window.open(data.authorization_url, "outlook-connect", "width=520,height=720");
+    // Force Microsoft to show the account picker / login page every time,
+    // even when the browser already has an SSO session for another account.
+    // Without this, Entra silently re-consents the cached account and the
+    // popup closes so fast it looks like nothing happened.
+    let authUrl = data.authorization_url as string;
+    try {
+      const u = new URL(authUrl);
+      u.searchParams.set("prompt", "select_account");
+      authUrl = u.toString();
+    } catch {
+      authUrl += (authUrl.includes("?") ? "&" : "?") + "prompt=select_account";
+    }
+    const popup = window.open(authUrl, "outlook-connect", "width=520,height=720");
     if (!popup) throw new Error("Popup blocked — please allow popups for this site.");
 
     return new Promise<boolean>((resolve) => {
