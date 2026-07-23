@@ -113,12 +113,17 @@ export async function loadKpis(opts?: { clientId?: string | null; monthISO?: str
   const actualCostsMonth = (actRows ?? []).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
   const grossMargin = revenueMonthNet ? (revenueMonthNet - actualCostsMonth) / revenueMonthNet : 0;
 
-  // Pipeline value: sum of accepted / total site estimates
-  const seQ = supabase.from("site_estimates").select("total_price, status, client_decision");
-  const { data: seRows } = await seQ;
-  const pipelineValue = (seRows ?? [])
-    .filter((r: any) => r.client_decision !== "rejected")
-    .reduce((s: number, r: any) => s + Number(r.total_price ?? 0), 0);
+  // Pipeline value: read the same commercial-position view the WP Overview uses so
+  // Intelligence and Overview always agree. awarded_price = latest APPROVED WP-level
+  // estimate (falling back to summed APPROVED site_estimates); poc_price = latest
+  // APPROVED poc-kind estimates. The old standalone `estimates` table is not summed.
+  const { data: commRows } = await (supabase as any)
+    .from("v_wp_commercial_position")
+    .select("work_package_id, awarded_price, poc_price");
+  const pipelineValue = (commRows ?? []).reduce(
+    (s: number, r: any) => s + Number(r.awarded_price ?? 0) + Number(r.poc_price ?? 0),
+    0,
+  );
 
   // Variations
   const { data: varRows } = await supabase
