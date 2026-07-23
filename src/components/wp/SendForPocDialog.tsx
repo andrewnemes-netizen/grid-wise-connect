@@ -147,7 +147,7 @@ export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName,
         assigneeEmail: null,
         message: message.trim() || undefined,
         dueDate,
-        sendEmail: true,
+        sendEmail: false,
         sites: sitesPayload,
       });
     } else {
@@ -315,8 +315,14 @@ export function SendForPocDialog({ open, onOpenChange, siteIds, workPackageName,
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!canSubmit || submitting}>
-            {submitting ? "Sending…" : mode === "external" ? "Assign & email" : "Assign"}
+          <Button onClick={handleConfirm} disabled={!canSubmit || submitting || (mode === "external" && Boolean(notConnectedSlot))}>
+            {submitting
+              ? "Sending…"
+              : mode === "external" && notConnectedSlot
+              ? "Connect Outlook to send"
+              : mode === "external"
+              ? "Assign & email"
+              : "Assign"}
           </Button>
         </DialogFooter>
       </DialogContent>

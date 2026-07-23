@@ -302,6 +302,7 @@ export default function WpSiteRegisterTab() {
       if (result?.outlookNotConnected) {
         setLastPocPayload({ siteIds: vars.siteIds, assignment: vars.assignment });
         setPocOutlookNotConnected(true);
+        toast.error("Email not sent yet — connect Outlook in this box, then retry.");
         // Task rows were already created — surface state but keep dialog open.
         return;
       }
