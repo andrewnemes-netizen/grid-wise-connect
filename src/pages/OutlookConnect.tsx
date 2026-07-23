@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
+import { useOutlookConnect } from "@/hooks/useOutlookConnect";
 
 export default function OutlookConnect() {
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected" | "error">("loading");
   const [connecting, setConnecting] = useState(false);
+  const connect = useOutlookConnect();
 
   const refresh = useCallback(async () => {
     setStatus("loading");
@@ -21,41 +23,20 @@ export default function OutlookConnect() {
   const startConnect = useCallback(async () => {
     setConnecting(true);
     try {
-      const returnUrl = `${window.location.origin}/auth/outlook/callback`;
-      const { data, error } = await supabase.functions.invoke("outlook-connect-start", {
-        body: { return_url: returnUrl },
-      });
-      if (error || !data?.authorization_url) {
-        throw new Error(error?.message ?? "Failed to start OAuth");
-      }
-      const popup = window.open(data.authorization_url, "outlook-connect", "width=520,height=720");
-      if (!popup) {
-        toast.error("Popup blocked — please allow popups for this site.");
-        setConnecting(false);
+      const ok = await connect();
+      if (!ok) {
+        toast.error("Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.");
+        await refresh();
         return;
       }
-      const onMessage = (ev: MessageEvent) => {
-        if (ev.origin !== window.location.origin) return;
-        if (ev.data?.type !== "outlook-oauth-complete") return;
-        window.removeEventListener("message", onMessage);
-        setConnecting(false);
-        toast.success("Outlook connected");
-        refresh();
-      };
-      window.addEventListener("message", onMessage);
-      const poll = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(poll);
-          window.removeEventListener("message", onMessage);
-          setConnecting(false);
-          refresh();
-        }
-      }, 1000);
+      toast.success("Outlook connected");
+      await refresh();
     } catch (e) {
-      setConnecting(false);
       toast.error(e instanceof Error ? e.message : "Failed to connect Outlook");
+    } finally {
+      setConnecting(false);
     }
-  }, [refresh]);
+  }, [connect, refresh]);
 
   return (
     <div className="mx-auto max-w-2xl p-6 space-y-4">
@@ -82,7 +63,7 @@ export default function OutlookConnect() {
         )}
         {status === "disconnected" && (
           <div className="text-sm text-muted-foreground">
-            Not connected yet. Emails currently fall back to the shared Outlook mailbox.
+            Not connected yet. Emails that require your mailbox will pause until you connect Outlook.
           </div>
         )}
         {status === "error" && (

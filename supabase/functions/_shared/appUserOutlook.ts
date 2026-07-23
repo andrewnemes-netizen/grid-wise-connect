@@ -115,8 +115,12 @@ export async function isAppUserConnected(appUserId: string): Promise<boolean> {
     const res = await fetch(`${GATEWAY_ROOT}/${CONNECTOR_ID}/me`, {
       headers: baseHeaders(clientKey, lovableKey, connKey),
     })
-    return res.ok
-  } catch {
+    if (res.ok) return true
+    const body = await res.text()
+    console.error(`Outlook app-user status failed [${res.status}]: ${body.slice(0, 500)}`)
+    return false
+  } catch (e) {
+    console.error('Outlook app-user status error:', e instanceof Error ? e.message : String(e))
     return false
   }
 }
