@@ -76,7 +76,7 @@ export function EstimatingLibrary() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Input placeholder="Search rate card or contract…" value={search}
+          <Input placeholder="Search rate card or client…" value={search}
             onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
 
           <div className="rounded-md border overflow-hidden">
@@ -84,7 +84,7 @@ export function EstimatingLibrary() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Rate card</TableHead>
-                  <TableHead>Contract</TableHead>
+                  <TableHead>Client</TableHead>
                   <TableHead>Latest version</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Imported</TableHead>
