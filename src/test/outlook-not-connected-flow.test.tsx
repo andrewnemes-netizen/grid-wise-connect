@@ -44,7 +44,10 @@ vi.mock("@/hooks/useAuth", () => ({
 }));
 
 // Outlook connect popup helper — resolves with detailed success/failure.
-const connectMock = vi.fn(async () => ({ ok: true as const }));
+type MockOutlookConnectResult =
+  | { ok: true }
+  | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout" | "oauth_error"; message?: string };
+const connectMock = vi.fn<() => Promise<MockOutlookConnectResult>>(async () => ({ ok: true }));
 vi.mock("@/hooks/useOutlookConnect", () => ({
   useOutlookConnect: () => async () => (await connectMock()).ok,
   useOutlookConnectDetailed: () => connectMock,
