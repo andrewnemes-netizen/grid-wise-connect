@@ -53,7 +53,7 @@ vi.mock("@/hooks/useOutlookConnect", () => ({
 
 // Supabase client — programmable per-test invocation queue.
 const invokeQueue: Array<{ data: any; error: any }> = [];
-const invokeMock = vi.fn(async () => {
+const invokeMock: any = vi.fn(async (..._args: any[]) => {
   const next = invokeQueue.shift() ?? { data: { ok: true }, error: null };
   return next;
 });
