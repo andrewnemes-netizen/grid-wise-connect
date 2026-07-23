@@ -10,6 +10,11 @@ interface Body {
   subject?: string
   templateData?: Record<string, unknown>
   cc_emails?: string[]
+  attachment?: {
+    filename: string
+    contentBase64: string
+    contentType?: string
+  }
 }
 
 Deno.serve(async (req) => {
@@ -68,6 +73,20 @@ Deno.serve(async (req) => {
   const toRecipients = [{ emailAddress: { address: body.recipientEmail } }]
   const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))
 
+  const attachments =
+    body.attachment && body.attachment.filename && body.attachment.contentBase64
+      ? [
+          {
+            '@odata.type': '#microsoft.graph.fileAttachment',
+            name: body.attachment.filename,
+            contentType:
+              body.attachment.contentType ??
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            contentBytes: body.attachment.contentBase64,
+          },
+        ]
+      : undefined
+
   const outlookRes = await fetch(
     'https://connector-gateway.lovable.dev/microsoft_outlook/me/sendMail',
     {
@@ -83,6 +102,7 @@ Deno.serve(async (req) => {
           body: { contentType: 'HTML', content: htmlBody },
           toRecipients,
           ccRecipients,
+          ...(attachments ? { attachments } : {}),
         },
         saveToSentItems: true,
       }),
