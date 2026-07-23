@@ -81,7 +81,9 @@ export default function WpOverviewTab() {
       const { data, error } = await supabase
         .from("estimates" as any)
         .select("id,total_price,grand_total,currency,status")
-        .eq("work_package_id", wpId!);
+        .eq("work_package_id", wpId!)
+        .eq("kind", "build")
+        .is("deleted_at", null);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
@@ -96,7 +98,9 @@ export default function WpOverviewTab() {
       const { data, error } = await supabase
         .from("estimates" as any)
         .select("id,total_price,grand_total,currency,status")
-        .eq("work_package_id", wpId!);
+        .eq("work_package_id", wpId!)
+        .eq("kind", "poc")
+        .is("deleted_at", null);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
