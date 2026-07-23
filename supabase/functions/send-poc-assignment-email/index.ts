@@ -5,7 +5,8 @@ import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { template as pocTemplate } from '../_shared/transactional-email-templates/poc-assignment.tsx'
 
 interface Body {
-  recipientEmail: string
+  recipientEmail?: string
+  assigneeUserId?: string
   recipientName?: string
   subject?: string
   templateData?: Record<string, unknown>
@@ -42,7 +43,20 @@ Deno.serve(async (req) => {
   }
 
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!body.recipientEmail || !emailRe.test(body.recipientEmail)) {
+  let recipientEmail = body.recipientEmail?.trim() ?? ''
+  // Resolve email from assigneeUserId (internal designer) if not provided
+  if (!recipientEmail && body.assigneeUserId) {
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    if (serviceKey) {
+      const adminClient = createClient(supabaseUrl, serviceKey)
+      const { data: u, error: e } = await adminClient.auth.admin.getUserById(body.assigneeUserId)
+      if (e || !u?.user?.email) {
+        return json({ error: 'Could not resolve assignee email', details: e?.message }, 400)
+      }
+      recipientEmail = u.user.email
+    }
+  }
+  if (!recipientEmail || !emailRe.test(recipientEmail)) {
     return json({ error: 'valid recipientEmail required' }, 400)
   }
 
@@ -70,7 +84,7 @@ Deno.serve(async (req) => {
     }),
   )
 
-  const toRecipients = [{ emailAddress: { address: body.recipientEmail } }]
+  const toRecipients = [{ emailAddress: { address: recipientEmail } }]
   const ccRecipients = (body.cc_emails ?? []).map((e) => ({ emailAddress: { address: e } }))
 
   const attachments =

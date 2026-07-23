@@ -186,7 +186,7 @@ export default function WpSiteRegisterTab() {
         })),
       );
 
-      if (assignment.sendEmail && assignment.assigneeEmail) {
+      if (assignment.sendEmail && (assignment.assigneeEmail || assignment.assigneeUserId)) {
         const siteLines = siteIds.map((sid) => {
           const s = bySiteId.get(sid) as any;
           return {
@@ -256,7 +256,8 @@ export default function WpSiteRegisterTab() {
 
         const { error: emailErr } = await supabase.functions.invoke("send-poc-assignment-email", {
           body: {
-            recipientEmail: assignment.assigneeEmail,
+            recipientEmail: assignment.assigneeEmail ?? undefined,
+            assigneeUserId: assignment.assigneeUserId ?? undefined,
             templateData: {
               recipientName: assignment.assigneeName ?? undefined,
               workPackageName: undefined,
@@ -269,7 +270,7 @@ export default function WpSiteRegisterTab() {
           },
         });
         if (emailErr) throw emailErr;
-        return { emailed: true as const };
+        return { emailed: true as const, recipient: assignment.assigneeEmail ?? assignment.assigneeName ?? "assignee" };
       }
       // External assignee but no email actually sent — surface why
       if (assignment.mode === "external") {
@@ -286,7 +287,7 @@ export default function WpSiteRegisterTab() {
       const n = vars.siteIds.length;
       const label = `POC assigned for ${n} site${n === 1 ? "" : "s"}`;
       if (result?.emailed) {
-        toast.success(`${label} — emailed ${vars.assignment.assigneeEmail}`);
+        toast.success(`${label} — emailed ${result.recipient ?? vars.assignment.assigneeEmail ?? vars.assignment.assigneeName ?? ""}`);
       } else if (vars.assignment.mode === "external") {
         toast.warning(`${label} but NOT emailed — ${result?.reason ?? "email skipped"}`);
       } else {
