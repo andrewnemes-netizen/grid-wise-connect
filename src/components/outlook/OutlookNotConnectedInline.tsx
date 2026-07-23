@@ -33,7 +33,7 @@ export function OutlookNotConnectedInline({ onRetry, onSendShared, busy, context
     try {
       const ok = await connect();
       if (!ok) {
-        toast.error("Outlook connect was cancelled");
+        toast.error("Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.");
         return;
       }
       toast.success("Outlook connected — retrying send…");

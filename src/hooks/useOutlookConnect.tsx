@@ -13,8 +13,8 @@ async function waitForVerifiedOutlookConnection(): Promise<boolean> {
 /**
  * Opens the per-user Microsoft Outlook OAuth popup and resolves once the
  * user has finished (either by success message from the callback page, or by
-     * closing the popup). Returns `true` only after the backend confirms the
-     * mailbox credential is actually stored and usable.
+ * closing the popup). Returns `true` only after the backend confirms the
+ * mailbox credential is actually stored and usable.
  *
  * Shared by the settings page, the global banner, and every inline
  * "Connect Outlook & retry" prompt on send dialogs.
