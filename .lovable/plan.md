@@ -1,42 +1,24 @@
-## Problem
-Liam (`liam.french@ecopoweruk.com`) cannot load the project because the `Gridwise (Lovable) Entra` Microsoft Outlook App User Connector client is owned by `andrew.nemes@ecopoweruk.com` and has not been shared with Liam. This is a workspace-level access control issue, not a code bug.
-
 ## Goal
-Give Liam immediate access so he can open the project and use the per-user Outlook connection flow.
+Add the uploaded `GenericRateCardImport-2.tsx` as a new, independent fourth card in **Admin → Estimating Import**, alongside the existing Rate Library, Recipe Library, and ICP SOR importers — without touching those three.
 
-## Plan
+## Changes
 
-### Step 1: Add Liam to the workspace (if not already)
-- Andrew opens Lovable.
-- Clicks top-right **avatar** → **Workspace Settings** → **People**.
-- Clicks **Invite**.
-- Enters `liam.french@ecopoweruk.com`.
-- Sets role to **Editor** (or higher).
-- Sends invitation.
-- Liam accepts the invite and refreshes Lovable.
+1. **Create `src/components/admin/GenericRateCardImport.tsx`**
+   - Copy the uploaded file verbatim (contents of `user-uploads://GenericRateCardImport-2.tsx`).
+   - It already exports `GenericRateCardImport` and uses the same shadcn UI, XLSX, supabase client, react-query and `sonner` imports the existing importer uses, so no wiring changes required.
+   - Writes into the same `contracts` / `rate_cards` / `rate_card_versions` / `rate_items` tables the existing Rate Library importer uses — no schema change, no duplication of business entities.
 
-### Step 2: Grant Liam access to the App User Connector client
-- In the same **Workspace Settings**, open **App User Connectors** (separate from the standard Connectors list).
-- Open the existing client named `Gridwise (Lovable) Entra`.
-- Find the **Access / Permissions / Members** section.
-- Add `liam.french@ecopoweruk.com` as a member with access.
-- Save.
+2. **Update `src/components/admin/EstimatingImport.tsx`** (small, surgical edit)
+   - Add `import { GenericRateCardImport } from "./GenericRateCardImport";`
+   - In the `EstimatingImport()` layout (lines 475–481), render `<GenericRateCardImport />` after `<IcpSorImport />` as the fourth card.
+   - Do not modify `RateLibraryImport`, `RecipeLibraryImport`, or `IcpSorImport` — per the "don't touch the existing importers" rule established for the ICP SOR card.
 
-### Step 3: Verify Liam can access the project
-- Liam refreshes the browser.
-- He should no longer see the "This project uses app user clients you can't access" screen.
-- He can now open Gridwise Connect.
+## Not changing
+- `Admin.tsx` (already renders `<EstimatingImport />`).
+- Any database schema, RLS, or Edge Functions.
+- The other three importer components or their parsers.
 
-### Step 4: Connect Liam's personal Outlook
-- Liam navigates to the per-user Outlook connect page in the app.
-- Completes Microsoft consent.
-- The app stores his connection key via the gateway.
-
-### Step 5: End-to-end test
-- Liam triggers a test survey/POC email to `liam.french@ecopoweruk.com`.
-- Confirm the email arrives from his own Outlook mailbox.
-
-## Notes
-- This plan requires no code changes.
-- If the App User Connector client UI does not show a members/sharing option, the workspace plan may restrict client usage to the owner only. In that case, transfer ownership to a shared admin identity or recreate the client under a shared workspace owner account.
-- Standard project sharing (Share button) is not enough; the App User Connector client must be shared separately.
+## Verification
+- Build succeeds.
+- Admin → Estimating Import shows four cards: Rate Library, Recipe Library, ICP SOR, and the new "Rate Card import (generic)".
+- Uploading e.g. a CK MSA Rates workbook lets the user map columns and imports as a new DRAFT version under the chosen (or newly-created) contract.

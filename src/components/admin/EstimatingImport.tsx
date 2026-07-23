@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { GenericRateCardImport } from "./GenericRateCardImport";
 
 // ---------------- Shared ----------------
 function useContracts() {
@@ -478,6 +479,7 @@ export function EstimatingImport() {
       <RateLibraryImport />
       <RecipeLibraryImport />
       <IcpSorImport />
+      <GenericRateCardImport />
     </div>
   );
 }
