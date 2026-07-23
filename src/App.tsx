@@ -17,7 +17,7 @@ const MapView = lazy(() => import("./pages/MapView"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail"));
 const Admin = lazy(() => import("./pages/Admin"));
-const RateCardDetail = lazy(() => import("./pages/RateCardDetail"));
+const RateCardDetail = lazy(() => import("./pages/admin/RateCardDetail"));
 const ArchiveConsole = lazy(() => import("./pages/admin/ArchiveConsole"));
 const CapabilityGrantsConsole = lazy(() => import("./pages/admin/CapabilityGrantsConsole"));
 const LaProgramme = lazy(() => import("./pages/LaProgramme"));
@@ -48,6 +48,8 @@ const PartnerSites = lazy(() => import("./pages/partner/PartnerSites"));
 const PartnerHandover = lazy(() => import("./pages/partner/PartnerHandover"));
 const PartnerSnags = lazy(() => import("./pages/partner/PartnerSnags"));
 const SurveysPage = lazy(() => import("./pages/Surveys"));
+const OutlookConnect = lazy(() => import("./pages/OutlookConnect"));
+const OutlookCallback = lazy(() => import("./pages/OutlookCallback"));
 
 const queryClient = new QueryClient();
 
@@ -144,6 +146,8 @@ const AppRoutes = () => (
       <Route path="/quick-estimate" element={<QuickEstimate />} />
       <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
       <Route path="/survey/:token" element={<Suspense fallback={<LazyFallback />}><SurveyForm /></Suspense>} />
+      <Route path="/auth/outlook/callback" element={<Suspense fallback={<LazyFallback />}><OutlookCallback /></Suspense>} />
+      <Route path="/account/outlook" element={<ProtectedRoute><OutlookConnect /></ProtectedRoute>} />
       <Route path="/" element={<ProtectedRoute><MapView /></ProtectedRoute>} />
       <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
       <Route path="/surveys" element={<ProtectedRoute bare><Suspense fallback={<LazyFallback />}><SurveysPage /></Suspense></ProtectedRoute>} />
