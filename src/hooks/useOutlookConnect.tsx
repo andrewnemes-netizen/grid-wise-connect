@@ -1,10 +1,20 @@
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+async function waitForVerifiedOutlookConnection(): Promise<boolean> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const { data } = await supabase.functions.invoke("outlook-connect-status");
+    if (data?.connected === true) return true;
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  return false;
+}
+
 /**
  * Opens the per-user Microsoft Outlook OAuth popup and resolves once the
  * user has finished (either by success message from the callback page, or by
- * closing the popup). Returns `true` only when we got a success message.
+     * closing the popup). Returns `true` only after the backend confirms the
+     * mailbox credential is actually stored and usable.
  *
  * Shared by the settings page, the global banner, and every inline
  * "Connect Outlook & retry" prompt on send dialogs.
@@ -35,12 +45,16 @@ export function useOutlookConnect() {
 
     return new Promise<boolean>((resolve) => {
       let done = false;
-      const finish = (ok: boolean) => {
+      const finish = async (oauthCompleted: boolean) => {
         if (done) return;
         done = true;
         window.removeEventListener("message", onMessage);
         clearInterval(poll);
-        resolve(ok);
+        if (!oauthCompleted) {
+          resolve(false);
+          return;
+        }
+        resolve(await waitForVerifiedOutlookConnection());
       };
       const onMessage = (ev: MessageEvent) => {
         if (ev.origin !== window.location.origin) return;
