@@ -17,7 +17,6 @@ import { Loader2, Mail, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { generateQuotationPdf, downloadQuotationPdf } from "@/lib/quotation-pdf";
 import { OutlookNotConnectedInline } from "@/components/outlook/OutlookNotConnectedInline";
-import { useState as useReactState } from "react";
 
 interface Props {
   open: boolean;
