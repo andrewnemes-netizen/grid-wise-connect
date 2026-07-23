@@ -121,14 +121,9 @@ export async function isAppUserConnected(appUserId: string): Promise<boolean> {
   }
 }
 
-export interface SendMailAsUserResult {
-  ok: true
-} | {
-  ok: false
-  notConnected: boolean
-  status: number
-  error: string
-}
+export type SendMailAsUserResult =
+  | { ok: true }
+  | { ok: false; notConnected: boolean; status: number; error: string }
 
 export async function sendMailAsAppUser(
   appUserId: string,
