@@ -43,10 +43,16 @@ vi.mock("@/hooks/useAuth", () => ({
   }),
 }));
 
-// Outlook connect popup helper — resolves true (user finished OAuth).
-const connectMock = vi.fn(async () => true);
+// Outlook connect popup helper — resolves with detailed success/failure.
+type MockOutlookConnectResult =
+  | { ok: true }
+  | { ok: false; reason: "cancelled" | "wrong_tenant" | "timeout" | "oauth_error"; message?: string };
+const connectMock = vi.fn<() => Promise<MockOutlookConnectResult>>(async () => ({ ok: true }));
 vi.mock("@/hooks/useOutlookConnect", () => ({
-  useOutlookConnect: () => connectMock,
+  useOutlookConnect: () => async () => (await connectMock()).ok,
+  useOutlookConnectDetailed: () => connectMock,
+  outlookConnectFailureMessage: (result: any) =>
+    result?.message ?? "Outlook connection was not completed — finish Microsoft sign-in and consent, then try again.",
   isOutlookNotConnected: (d: any) => !!d && d.error === "outlook_not_connected",
   OutlookNotConnectedError: class extends Error {},
 }));
@@ -88,7 +94,7 @@ beforeEach(() => {
   invokeQueue.length = 0;
   invokeMock.mockClear();
   connectMock.mockClear();
-  connectMock.mockImplementation(async () => true);
+  connectMock.mockImplementation(async () => ({ ok: true as const }));
   currentRole = null;
 });
 
@@ -120,7 +126,7 @@ describe("OutlookNotConnectedInline (shared by all three send dialogs)", () => {
 
   it("does not call onRetry if the user cancels the popup", async () => {
     const onRetry = vi.fn();
-    connectMock.mockImplementationOnce(async () => false);
+    connectMock.mockImplementationOnce(async () => ({ ok: false as const, reason: "cancelled" as const }));
     render(<OutlookNotConnectedInline onRetry={onRetry} context="quotation" />);
     await userEvent.click(screen.getByRole("button", { name: /Connect Outlook & retry/i }));
     await waitFor(() => expect(connectMock).toHaveBeenCalledTimes(1));
