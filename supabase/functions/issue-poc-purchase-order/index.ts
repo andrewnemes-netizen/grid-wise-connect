@@ -145,19 +145,23 @@ Deno.serve(async (req) => {
     return json({ ok: true, warning: 'Email sent but PO status update failed', details: updErr.message, poNumber: po.po_number }, 200)
   }
 
-  // Audit
-  await admin.from('audit_log').insert({
-    action: 'poc_po.issued',
-    entity_type: 'purchase_order',
-    entity_id: po.id,
-    meta_json: {
-      po_number: po.po_number,
-      designer_email: body.designer_email,
-      work_package_id: body.work_package_id,
-      onedrive_ok: mirror.ok,
-      onedrive_path: mirror.path,
-    },
-  }).catch(() => {})
+  // Audit (best-effort)
+  try {
+    await admin.from('audit_log').insert({
+      action: 'poc_po.issued',
+      entity_type: 'purchase_order',
+      entity_id: po.id,
+      meta_json: {
+        po_number: po.po_number,
+        designer_email: body.designer_email,
+        work_package_id: body.work_package_id,
+        onedrive_ok: mirror.ok,
+        onedrive_path: mirror.path,
+      },
+    })
+  } catch (e) {
+    console.error('audit_log insert failed:', e instanceof Error ? e.message : String(e))
+  }
 
   return json({ ok: true, poNumber: po.po_number, onedrive: { ok: mirror.ok, webUrl: mirror.web_url ?? null } })
 })
