@@ -1,8 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 // Helper for calling the Lovable App User Connector gateway for microsoft_outlook.
-// The connector gateway stores the real Microsoft tokens; this app only tracks
-// the gateway OAuth session and verifies that the resulting account is allowed.
+// The connector gateway stores the real Microsoft tokens. This app only stores
+// the gateway OAuth session id returned when a connection starts, and uses the
+// signed-in app user's Cloud JWT as the per-user identity for gateway calls.
 
 const GATEWAY_ROOT = 'https://connector-gateway.lovable.dev'
 const CONNECTOR_ID = 'microsoft_outlook'
@@ -65,13 +66,11 @@ async function latestSession(appUserId: string): Promise<{ gateway_session_id: s
  * credential exists, or null if the gateway rejected the call (401 "Credential
  * not found" ⇒ user has not connected yet).
  */
-async function fetchAppUserMe(appUserId: string): Promise<{ status: number; body: any | null }> {
+async function fetchAppUserMe(appUserId: string, userJwt?: string): Promise<{ status: number; body: any | null }> {
   const lovableKey = need('LOVABLE_API_KEY')
   const clientKey = need('MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY')
-  const session = await latestSession(appUserId)
-  if (!session?.gateway_session_id) return { status: 401, body: null }
   const res = await fetch(`${GATEWAY_ROOT}/${CONNECTOR_ID}/me`, {
-    headers: baseHeaders(clientKey, lovableKey, session.gateway_session_id),
+    headers: baseHeaders(clientKey, lovableKey, appUserId, userJwt),
   })
   const text = await res.text()
   if (!res.ok) {
@@ -93,8 +92,8 @@ export type TenantCheck =
  * the response body, so we key off the primary email domain, which for an
  * Entra work account matches the tenant's verified domain.
  */
-export async function verifyAppUserTenant(appUserId: string): Promise<TenantCheck> {
-  const me = await fetchAppUserMe(appUserId)
+export async function verifyAppUserTenant(appUserId: string, userJwt?: string): Promise<TenantCheck> {
+  const me = await fetchAppUserMe(appUserId, userJwt)
   if (!me.body) {
     return {
       ok: false,
@@ -111,12 +110,15 @@ export async function verifyAppUserTenant(appUserId: string): Promise<TenantChec
   return { ok: false, reason: 'wrong_tenant', email, status: me.status }
 }
 
-function baseHeaders(clientKey: string, lovableKey: string, connKey: string) {
-  return {
+function baseHeaders(clientKey: string, lovableKey: string, appUserId: string, userJwt?: string) {
+  const headers = {
     Authorization: `Bearer ${lovableKey}`,
     'X-Client-Api-Key': clientKey,
-    'X-Connection-Api-Key': connKey,
+    'X-App-User-ID': appUserId,
+    'X-App-User-Id': appUserId,
   } as Record<string, string>
+  if (userJwt) headers['X-App-User-Authorization'] = `Bearer ${userJwt}`
+  return headers
 }
 
 export interface StartAuthArgs {
@@ -168,7 +170,7 @@ export async function startAppUserOAuth(args: StartAuthArgs): Promise<{
   return parsed
 }
 
-export async function completeAppUserOAuthSession(sessionId: string): Promise<TenantCheck> {
+export async function completeAppUserOAuthSession(sessionId: string, userJwt?: string): Promise<TenantCheck> {
   const admin = adminClient()
   const { data: session, error: sessionErr } = await admin
     .from(SESSION_TABLE)
@@ -180,7 +182,7 @@ export async function completeAppUserOAuthSession(sessionId: string): Promise<Te
     return { ok: false, reason: 'unknown' }
   }
 
-  const check = await verifyAppUserTenant(session.user_id)
+  const check = await verifyAppUserTenant(session.user_id, userJwt)
   await admin
     .from(SESSION_TABLE)
     .update({
@@ -192,8 +194,8 @@ export async function completeAppUserOAuthSession(sessionId: string): Promise<Te
   return check
 }
 
-export async function isAppUserConnected(appUserId: string): Promise<boolean> {
-  const check = await appUserConnectionCheck(appUserId)
+export async function isAppUserConnected(appUserId: string, userJwt?: string): Promise<boolean> {
+  const check = await appUserConnectionCheck(appUserId, userJwt)
   return check.ok
 }
 
@@ -202,9 +204,9 @@ export async function isAppUserConnected(appUserId: string): Promise<boolean> {
  * "not connected" from "connected but wrong tenant". A wrong-tenant credential
  * is treated as NOT connected everywhere in the app.
  */
-export async function appUserConnectionCheck(appUserId: string): Promise<TenantCheck> {
+export async function appUserConnectionCheck(appUserId: string, userJwt?: string): Promise<TenantCheck> {
   try {
-    return await verifyAppUserTenant(appUserId)
+    return await verifyAppUserTenant(appUserId, userJwt)
   } catch (e) {
     console.error('Outlook app-user status error:', e instanceof Error ? e.message : String(e))
     return { ok: false, reason: 'unknown' }
@@ -217,18 +219,14 @@ export type SendMailAsUserResult =
 
 export async function sendMailAsAppUser(
   appUserId: string,
+  userJwt: string | undefined,
   message: Record<string, unknown>,
   opts: { saveToSentItems?: boolean } = {},
 ): Promise<SendMailAsUserResult> {
-  let lovableKey: string, clientKey: string, connKey: string
+  let lovableKey: string, clientKey: string
   try {
     lovableKey = need('LOVABLE_API_KEY')
     clientKey = need('MICROSOFT_OUTLOOK_APP_USER_CONNECTOR_CLIENT_API_KEY')
-    const session = await latestSession(appUserId)
-    if (!session?.gateway_session_id) {
-      return { ok: false, notConnected: true, status: 401, error: 'not_connected' }
-    }
-    connKey = session.gateway_session_id
   } catch (e) {
     return {
       ok: false,
@@ -239,7 +237,7 @@ export async function sendMailAsAppUser(
   }
   // Defensive tenant check right before the send — a credential might have
   // been established before this gate existed, or the account swapped after.
-  const check = await verifyAppUserTenant(appUserId)
+  const check = await verifyAppUserTenant(appUserId, userJwt)
   if (!check.ok) {
     if (check.reason === 'wrong_tenant') {
       return {
@@ -258,7 +256,7 @@ export async function sendMailAsAppUser(
   }
   const res = await fetch(`${GATEWAY_ROOT}/${CONNECTOR_ID}/me/sendMail`, {
     method: 'POST',
-    headers: { ...baseHeaders(clientKey, lovableKey, connKey), 'Content-Type': 'application/json' },
+    headers: { ...baseHeaders(clientKey, lovableKey, appUserId, userJwt), 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
       saveToSentItems: opts.saveToSentItems ?? true,
