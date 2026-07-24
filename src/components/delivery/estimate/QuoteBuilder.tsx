@@ -165,15 +165,15 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
     const e = priceEdits[it.id];
     if (e?.marginPct != null && e.marginPct !== "") {
       const m = Number(e.marginPct);
-      if (!Number.isNaN(m)) return costOf(it) * (1 + m / 100);
+      if (!Number.isNaN(m) && m < 100) return costOf(it) / (1 - m / 100);
     }
     if (e?.price != null && e.price !== "") return Number(e.price);
     return Number(it.client_unit_price ?? 0);
   };
   const marginOf = (it: any): number => {
-    const cost = costOf(it);
-    if (cost <= 0) return 0;
-    return ((priceOf(it) - cost) / cost) * 100;
+    const price = priceOf(it);
+    if (price <= 0) return 0;
+    return ((price - costOf(it)) / price) * 100;
   };
 
   const grouped = useMemo(() => {
@@ -201,8 +201,8 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
       byAward[code] = (byAward[code] ?? 0) + linePrice;
     }
     const profit = price - cost;
-    const markupPct = cost > 0 ? (profit / cost) * 100 : 0;
-    return { cost, price, profit, markupPct, byAward };
+    const marginPct = price > 0 ? (profit / price) * 100 : 0;
+    return { cost, price, profit, marginPct, byAward };
   }, [items, qtyEdits, existingLines, priceEdits]);
 
   const dirtyCount = Object.keys(qtyEdits).length + Object.keys(priceEdits).length;
@@ -335,7 +335,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
         <div className="flex items-center gap-4">
           <Stat label="Cost" value={fmt(totals.cost, c)} />
           <Stat label="Price" value={fmt(totals.price, c)} />
-          <Stat label="Overall Margin" value={`${totals.markupPct.toFixed(1)}%`} accent large />
+          <Stat label="Overall Margin" value={`${totals.marginPct.toFixed(1)}%`} accent large />
           <Stat label="Profit" value={fmt(totals.profit, c)} />
           {versionId && (
             <Button onClick={save} disabled={saving || dirtyCount === 0}>
@@ -462,7 +462,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
                                   <Input
                                     type="number" step="0.1"
                                     className="h-8 text-right text-xs"
-                                    value={pEdit.marginPct ?? (cost > 0 ? (((price - cost) / cost) * 100).toFixed(1) : "0")}
+                                    value={pEdit.marginPct ?? (price > 0 ? (((price - cost) / price) * 100).toFixed(1) : "0")}
                                     onChange={(e) => {
                                       const v = e.target.value;
                                       setPriceEdits((prev) => ({
