@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PoundSterling, Wallet, ReceiptText, TrendingUp, Zap, CheckCircle2, PackageCheck, AlertTriangle, Calculator, ArrowRight } from "lucide-react";
+import { PoundSterling, Wallet, ReceiptText, TrendingUp, Zap, CheckCircle2, PackageCheck, AlertTriangle, Calculator, ArrowRight, Target, FileCheck2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function gbp(v: number | null | undefined) {
@@ -74,6 +74,22 @@ export default function WpOverviewTab() {
     },
   });
 
+  const { data: activePOs } = useQuery({
+    queryKey: ["wp-active-pos", wpId],
+    enabled: !!wpId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("purchase_orders")
+        .select("id,order_value,status")
+        .eq("work_package_id", wpId!)
+        .eq("status", "active");
+      if (error) throw error;
+      const rows = data ?? [];
+      const total = rows.reduce((s, r: any) => s + Number(r.order_value ?? 0), 0);
+      return { count: rows.length, total };
+    },
+  });
+
   const { data: evBuild } = useQuery({
     queryKey: ["wp-ev-build-estimate-summary", wpId],
     enabled: !!wpId,
@@ -109,6 +125,13 @@ export default function WpOverviewTab() {
   });
 
   const totalSites = siteCount ?? 0;
+
+  const totalOpportunity = Number(evBuild?.total ?? 0) + Number(pocEst?.total ?? 0);
+  const poSecured = Number(activePOs?.total ?? 0);
+  const hasAnyPO = (activePOs?.count ?? 0) > 0;
+  const actualCost = Number(commercial?.actual_cost ?? 0);
+  const forecastMargin = poSecured - actualCost;
+  const forecastMarginPct = poSecured > 0 ? forecastMargin / poSecured : null;
   const energisedCount = readiness.filter((r: any) => r.is_energised).length;
   const commissionedCount = readiness.filter((r: any) => r.is_commissioned).length;
   const readyForHandoverCount = readiness.filter((r: any) => r.ready_for_handover).length;
@@ -142,25 +165,36 @@ export default function WpOverviewTab() {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">Commercial position</h2>
         {loadingCommercial ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
-          </div>
-        ) : commercial ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <KpiCard icon={<Wallet className="h-4 w-4" />} label="Budget" value={gbp(commercial.budget_amount)} />
-            <KpiCard icon={<ReceiptText className="h-4 w-4" />} label="Awarded" value={gbp(commercial.awarded_grand_total)}
-                    sub={commercial.awarded_cost != null ? `cost ${gbp(commercial.awarded_cost)}` : undefined} />
-            <KpiCard icon={<PoundSterling className="h-4 w-4" />} label="Actual cost" value={gbp(commercial.actual_cost)}
-                    sub={commercial.cost_pct_of_awarded != null ? `${pct(commercial.cost_pct_of_awarded)} of awarded` : undefined} />
-            <KpiCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Forecast margin"
-              value={gbp(commercial.forecast_margin)}
-              sub={commercial.forecast_margin_pct != null ? pct(commercial.forecast_margin_pct) : undefined}
-              tone={Number(commercial.forecast_margin ?? 0) < 0 ? "danger" : "success"}
-            />
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
         ) : (
-          <Card><CardContent className="py-6 text-sm text-muted-foreground">No commercial data yet — add an estimate and PO commitments.</CardContent></Card>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard icon={<Target className="h-4 w-4" />} label="Total Opportunity" value={gbp(totalOpportunity)}
+                      sub="EV Build + ICP quoted" />
+              <KpiCard icon={<Calculator className="h-4 w-4" />} label="EV Build Opportunity" value={gbp(evBuild?.total)}
+                      sub={`${evBuild?.count ?? 0} quote${(evBuild?.count ?? 0) === 1 ? "" : "s"}`} />
+              <KpiCard icon={<Zap className="h-4 w-4" />} label="ICP Opportunity" value={gbp(pocEst?.total)}
+                      sub={`${pocEst?.count ?? 0} quote${(pocEst?.count ?? 0) === 1 ? "" : "s"}`} />
+              <KpiCard icon={<FileCheck2 className="h-4 w-4" />} label="PO Secured" value={gbp(poSecured)}
+                      sub={hasAnyPO ? `${activePOs?.count} active PO${(activePOs?.count ?? 0) === 1 ? "" : "s"}` : "No PO received yet"}
+                      tone={hasAnyPO ? "success" : undefined} />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard icon={<Wallet className="h-4 w-4" />} label="Budget" value={gbp(commercial?.budget_amount_manual)} />
+              <KpiCard icon={<PoundSterling className="h-4 w-4" />} label="Actual cost" value={gbp(actualCost)}
+                      sub={poSecured > 0 ? `${pct(actualCost / poSecured)} of PO secured` : undefined} />
+              <KpiCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="Forecast margin"
+                value={hasAnyPO ? gbp(forecastMargin) : "—"}
+                sub={hasAnyPO ? (forecastMarginPct != null ? pct(forecastMarginPct) : undefined) : "Based on PO Secured, once received"}
+                tone={hasAnyPO ? (forecastMargin < 0 ? "danger" : "success") : undefined}
+              />
+              <KpiCard icon={<ReceiptText className="h-4 w-4" />} label="% Secured by PO" value={totalOpportunity > 0 ? pct(poSecured / totalOpportunity) : "—"}
+                      sub="PO Secured vs Total Opportunity" />
+            </div>
+          </div>
         )}
       </div>
 
