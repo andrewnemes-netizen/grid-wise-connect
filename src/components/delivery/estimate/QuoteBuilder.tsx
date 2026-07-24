@@ -53,7 +53,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   const qc = useQueryClient();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [qtyEdits, setQtyEdits] = useState<Record<string, string>>({});
-  const [priceEdits, setPriceEdits] = useState<Record<string, { cost?: string; price?: string }>>({});
+  const [priceEdits, setPriceEdits] = useState<Record<string, { cost?: string; price?: string; marginPct?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [pickerVersionId, setPickerVersionId] = useState<string>("");
 
@@ -162,8 +162,18 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
     return edit != null && edit !== "" ? Number(edit) : Number(it.total_unit_cost ?? 0);
   };
   const priceOf = (it: any): number => {
-    const edit = priceEdits[it.id]?.price;
-    return edit != null && edit !== "" ? Number(edit) : Number(it.client_unit_price ?? 0);
+    const e = priceEdits[it.id];
+    if (e?.marginPct != null && e.marginPct !== "") {
+      const m = Number(e.marginPct);
+      if (!Number.isNaN(m)) return costOf(it) * (1 + m / 100);
+    }
+    if (e?.price != null && e.price !== "") return Number(e.price);
+    return Number(it.client_unit_price ?? 0);
+  };
+  const marginOf = (it: any): number => {
+    const cost = costOf(it);
+    if (cost <= 0) return 0;
+    return ((priceOf(it) - cost) / cost) * 100;
   };
 
   const grouped = useMemo(() => {
