@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft, CheckCircle, AlertTriangle, XCircle, MapPin, Download,
-  TrafficCone, Bus, Zap, ShieldAlert, BatteryCharging, Cable, PoundSterling,
+  TrafficCone, Bus, Zap, ShieldAlert, BatteryCharging,
   Calculator, ChevronDown,
 } from "lucide-react";
 import {
@@ -29,7 +29,6 @@ import { SocketPhaseBalanceCard } from "@/components/site/SocketPhaseBalanceCard
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
-type EstimateMode = "detailed" | "synthetic" | "history";
 
 function formatGBP(amount: number): string {
   return new Intl.NumberFormat("en-GB", {
@@ -53,10 +52,10 @@ const SiteDetail = () => {
   const { data: unitRates } = useUnitRates();
   const isInternal = hasRole("admin") || hasRole("engineer");
 
-  const [wpChooser, setWpChooser] = useState<{ mode: EstimateMode; wps: any[] } | null>(null);
-  const [noWpOpen, setNoWpOpen] = useState<EstimateMode | null>(null);
+  const [wpChooser, setWpChooser] = useState<{ wps: any[] } | null>(null);
+  const [noWpOpen, setNoWpOpen] = useState(false);
 
-  async function launchEstimate(mode: EstimateMode) {
+  async function launchEstimate() {
     if (!id) return;
     // 1. Active WP memberships for this site (exclude archived/cancelled WPs).
     const { data: rows, error } = await supabase
@@ -71,15 +70,13 @@ const SiteDetail = () => {
       .map((r: any) => r.work_packages)
       .filter((w: any) => w && !["ARCHIVED", "CANCELLED", "archived", "cancelled"].includes(String(w.status ?? "")));
 
-    if (active.length === 0) { setNoWpOpen(mode); return; }
-    if (active.length === 1) { navigateToEstimate(active[0].id, mode); return; }
-    setWpChooser({ mode, wps: active });
+    if (active.length === 0) { setNoWpOpen(true); return; }
+    if (active.length === 1) { navigateToEstimate(active[0].id); return; }
+    setWpChooser({ wps: active });
   }
 
-  function navigateToEstimate(wpId: string, mode: EstimateMode) {
-    const params = new URLSearchParams({ siteId: id!, mode, source: "portfolio" });
-    if (mode === "detailed") params.set("openEstimate", "new");
-    navigate(`/wp/${wpId}/commercial/estimating?${params.toString()}`);
+  function navigateToEstimate(wpId: string) {
+    navigate(`/wp/${wpId}/commercial/estimating`);
   }
 
   const { data: site, isLoading } = useQuery({
@@ -292,30 +289,11 @@ const SiteDetail = () => {
           <DropdownMenuContent align="end" className="w-64">
             <DropdownMenuLabel>Cost estimate</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => launchEstimate("detailed")}
-            >
-              <Cable className="h-4 w-4 mr-2" />
-              <div className="flex flex-col">
-                <span>Detailed Estimate</span>
-                <span className="text-xs text-muted-foreground">Opens Delivery Estimate Editor</span>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => launchEstimate("synthetic")}
-            >
-              <PoundSterling className="h-4 w-4 mr-2" />
-              <div className="flex flex-col">
-                <span>Fixed-rate Synthetic</span>
-                <span className="text-xs text-muted-foreground">Rate-card + recipe engine</span>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => launchEstimate("history")}>
+            <DropdownMenuItem onSelect={() => launchEstimate()}>
               <Calculator className="h-4 w-4 mr-2" />
               <div className="flex flex-col">
-                <span>Estimate History</span>
-                <span className="text-xs text-muted-foreground">All revisions for this site</span>
+                <span>Open EV Build Estimate</span>
+                <span className="text-xs text-muted-foreground">Rate-card driven quote builder</span>
               </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -331,7 +309,7 @@ const SiteDetail = () => {
           <div className="space-y-2">
             {wpChooser?.wps.map((w: any) => (
               <Button key={w.id} variant="outline" className="w-full justify-start"
-                onClick={() => { const m = wpChooser.mode; setWpChooser(null); navigateToEstimate(w.id, m); }}>
+                onClick={() => { setWpChooser(null); navigateToEstimate(w.id); }}>
                 <span className="font-medium mr-2">{w.code ?? "WP"}</span>
                 <span className="text-muted-foreground truncate">{w.name}</span>
               </Button>
@@ -340,7 +318,7 @@ const SiteDetail = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!noWpOpen} onOpenChange={(o) => !o && setNoWpOpen(null)}>
+      <Dialog open={noWpOpen} onOpenChange={(o) => !o && setNoWpOpen(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Site not attached to a Work Package</DialogTitle>
