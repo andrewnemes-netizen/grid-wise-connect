@@ -335,8 +335,8 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
         <div className="flex items-center gap-4">
           <Stat label="Cost" value={fmt(totals.cost, c)} />
           <Stat label="Price" value={fmt(totals.price, c)} />
-          <Stat label="Markup" value={`${totals.markupPct.toFixed(1)}%`} />
-          <Stat label="Profit" value={fmt(totals.profit, c)} accent />
+          <Stat label="Overall Margin" value={`${totals.markupPct.toFixed(1)}%`} accent large />
+          <Stat label="Profit" value={fmt(totals.profit, c)} />
           {versionId && (
             <Button onClick={save} disabled={saving || dirtyCount === 0}>
               <CheckCircle2 className="h-4 w-4 mr-1.5" /> Save {dirtyCount || ""} change{dirtyCount === 1 ? "" : "s"}
@@ -423,6 +423,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
                             <TableHead className="w-20">Unit</TableHead>
                             <TableHead className="w-14 text-center">Award</TableHead>
                             <TableHead className="w-28 text-right">Unit Cost</TableHead>
+                            <TableHead className="w-24 text-right">Margin %</TableHead>
                             <TableHead className="w-28 text-right">Unit Price</TableHead>
                             <TableHead className="w-24 text-center">Qty</TableHead>
                             <TableHead className="w-28 text-right">Line Cost</TableHead>
