@@ -503,11 +503,11 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, accent, large }: { label: string; value: string; accent?: boolean; large?: boolean }) {
   return (
     <div className="text-right">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`text-sm font-semibold tabular-nums ${accent ? "text-primary" : ""}`}>{value}</div>
+      <div className={`${large ? "text-base" : "text-sm"} font-semibold tabular-nums ${accent ? "text-primary" : ""}`}>{value}</div>
     </div>
   );
 }
