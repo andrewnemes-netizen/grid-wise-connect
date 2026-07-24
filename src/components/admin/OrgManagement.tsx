@@ -136,10 +136,32 @@ export function OrgManagement() {
     },
   });
 
+  // Partner-specific extra fields (contractor sub-type, status, contact)
+  // live in the separate `partners` table, keyed by org_id — the
+  // Organisations page is the only place that manages them now.
+  const { data: partnersByOrg = [] } = useQuery({
+    queryKey: ["admin-partners-by-org"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("partners").select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const getPartnerForOrg = (orgId: string) => (partnersByOrg as any[]).find((p) => p.org_id === orgId);
+
+  const [partnerSubType, setPartnerSubType] = useState("contractor");
+  const [partnerStatus, setPartnerStatus] = useState("active");
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [partnerNotes, setPartnerNotes] = useState("");
+  const resetPartnerFields = () => {
+    setPartnerSubType("contractor"); setPartnerStatus("active"); setPartnerEmail(""); setPartnerNotes("");
+  };
+
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ["admin-organisations"] });
     qc.invalidateQueries({ queryKey: ["admin-org-members"] });
     qc.invalidateQueries({ queryKey: ["admin-profiles-for-orgs"] });
+    qc.invalidateQueries({ queryKey: ["admin-partners-by-org"] });
   };
 
   const createOrg = useMutation({
@@ -151,8 +173,20 @@ export function OrgManagement() {
         org_type: orgType,
         org_type_other: orgType === "other" ? orgTypeOther.trim() : null,
       };
-      const { error } = await supabase.from("organisations").insert(payload);
+      const { data: org, error } = await supabase.from("organisations").insert(payload).select("id").single();
       if (error) throw error;
+
+      if (orgType === "partner") {
+        const { error: pErr } = await supabase.from("partners").insert({
+          org_id: (org as any).id,
+          name: orgName,
+          type: partnerSubType,
+          status: partnerStatus,
+          primary_contact_email: partnerEmail || null,
+          notes: partnerNotes || null,
+        });
+        if (pErr) throw pErr;
+      }
     },
     onSuccess: () => {
       invalidateAll();
@@ -160,6 +194,7 @@ export function OrgManagement() {
       setOrgName("");
       setOrgType("client");
       setOrgTypeOther("");
+      resetPartnerFields();
       toast({ title: "Organisation created" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -174,10 +209,25 @@ export function OrgManagement() {
       };
       const { error } = await (supabase as any).from("organisations").update(payload).eq("id", editingOrg.id);
       if (error) throw error;
+
+      // Switching an existing org to Partner type: give it a partners
+      // row if it doesn't already have one, so the extra fields show up.
+      if (orgType === "partner" && !getPartnerForOrg(editingOrg.id)) {
+        const { error: pErr } = await supabase.from("partners").insert({
+          org_id: editingOrg.id,
+          name: editingOrg.name,
+          type: partnerSubType,
+          status: partnerStatus,
+          primary_contact_email: partnerEmail || null,
+          notes: partnerNotes || null,
+        });
+        if (pErr) throw pErr;
+      }
     },
     onSuccess: () => {
       invalidateAll();
       setEditingOrg(null);
+      resetPartnerFields();
       toast({ title: "Organisation updated" });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -203,6 +253,11 @@ export function OrgManagement() {
 
   const deleteOrg = useMutation({
     mutationFn: async (id: string) => {
+      const linkedPartner = getPartnerForOrg(id);
+      if (linkedPartner) {
+        const { error: pErr } = await supabase.from("partners").delete().eq("id", linkedPartner.id);
+        if (pErr) throw pErr;
+      }
       const { error } = await supabase.from("organisations").delete().eq("id", id);
       if (error) throw error;
     },
@@ -275,6 +330,43 @@ export function OrgManagement() {
                     />
                   </div>
                 )}
+                {orgType === "partner" && (
+                  <div className="space-y-4 rounded-md border p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label>Partner Type</Label>
+                        <Select value={partnerSubType} onValueChange={setPartnerSubType}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="contractor">Contractor</SelectItem>
+                            <SelectItem value="icp">ICP</SelectItem>
+                            <SelectItem value="idno">IDNO</SelectItem>
+                            <SelectItem value="consultant">Consultant</SelectItem>
+                            <SelectItem value="supplier">Supplier</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Status</Label>
+                        <Select value={partnerStatus} onValueChange={setPartnerStatus}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Primary Contact Email</Label>
+                      <Input type="email" value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} placeholder="contact@partner.com" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Notes</Label>
+                      <Input value={partnerNotes} onChange={(e) => setPartnerNotes(e.target.value)} placeholder="Optional" />
+                    </div>
+                  </div>
+                )}
                 <Button className="w-full" disabled={!orgName.trim() || !canSaveType} onClick={() => createOrg.mutate()}>Create</Button>
               </div>
             </DialogContent>
@@ -305,6 +397,42 @@ export function OrgManagement() {
                 <Input value={orgTypeOther} onChange={(e) => setOrgTypeOther(e.target.value)} placeholder="e.g. Supplier" />
               </div>
             )}
+            {orgType === "partner" && editingOrg && !getPartnerForOrg(editingOrg.id) && (
+              <div className="space-y-4 rounded-md border p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  This org doesn't have partner details yet — set them up now.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Partner Type</Label>
+                    <Select value={partnerSubType} onValueChange={setPartnerSubType}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="contractor">Contractor</SelectItem>
+                        <SelectItem value="icp">ICP</SelectItem>
+                        <SelectItem value="idno">IDNO</SelectItem>
+                        <SelectItem value="consultant">Consultant</SelectItem>
+                        <SelectItem value="supplier">Supplier</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={partnerStatus} onValueChange={setPartnerStatus}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Primary Contact Email</Label>
+                  <Input type="email" value={partnerEmail} onChange={(e) => setPartnerEmail(e.target.value)} placeholder="contact@partner.com" />
+                </div>
+              </div>
+            )}
             <Button className="w-full" disabled={!canSaveType} onClick={() => updateOrgType.mutate()}>Save</Button>
           </div>
         </DialogContent>
@@ -333,8 +461,7 @@ export function OrgManagement() {
                     </Badge>
                     <Badge variant="outline" className="text-xs">{orgMembers.length} members</Badge>
                   </CardTitle>
-                  <div className="flex gap-1 flex-wrap">
-                    <CreateUserDialog orgId={org.id} orgName={org.name} onSuccess={invalidateAll} />
+                  <div className="flex gap-1 flex-wrap">                    <CreateUserDialog orgId={org.id} orgName={org.name} onSuccess={invalidateAll} />
                     {isSuperAdmin && (
                       <Button
                         variant="ghost"
@@ -376,6 +503,18 @@ export function OrgManagement() {
                     )}
                   </div>
                 </div>
+                {org.org_type === "partner" && (() => {
+                  const p = getPartnerForOrg(org.id);
+                  return p ? (
+                    <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px] capitalize">{p.type}</Badge>
+                      <Badge variant="outline" className={`text-[10px] capitalize ${p.status === "active" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30" : ""}`}>{p.status}</Badge>
+                      {p.primary_contact_email && <span>{p.primary_contact_email}</span>}
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 text-xs text-amber-600">No partner details set — use "Change type" to add them.</div>
+                  );
+                })()}
               </CardHeader>
               <CardContent className="pt-0">
                 {orgMembers.length === 0 ? (
