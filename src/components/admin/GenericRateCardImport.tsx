@@ -29,7 +29,7 @@ import { toast } from "sonner";
 
 type SheetRow = Record<string, any>;
 
-type FieldKey = "description" | "unit" | "cost" | "price" | "code" | "category";
+type FieldKey = "description" | "unit" | "cost" | "price" | "code" | "category" | "award_code";
 
 const FIELD_LABELS: Record<FieldKey, string> = {
   description: "Line Item / Description",
@@ -38,6 +38,7 @@ const FIELD_LABELS: Record<FieldKey, string> = {
   price: "Our Price (per item)",
   code: "Item Code (optional)",
   category: "Category (optional)",
+  award_code: "Award Code (C/I/E, optional)",
 };
 
 const REQUIRED_FIELDS: FieldKey[] = ["description", "unit", "cost", "price"];
@@ -55,6 +56,7 @@ function guessMapping(headers: string[]): Partial<Record<FieldKey, string>> {
     price: find([/our price/, /^price$/, /unit price|sell(ing)? price/, /price per item/]),
     code: find([/^(item )?code$/, /rate code/, /^ref(erence)?$/]),
     category: find([/^category$/, /group/]),
+    award_code: find([/^award ?code$/, /^scope$/, /award/]),
   };
 }
 
@@ -144,6 +146,7 @@ export function GenericRateCardImport() {
       price: mapping.price ? Number(r[mapping.price]) : null,
       code: mapping.code ? r[mapping.code] : null,
       category: mapping.category ? r[mapping.category] : null,
+      award_code: mapping.award_code ? r[mapping.award_code] : null,
     }));
   }, [rows, mapping]);
 
@@ -224,7 +227,18 @@ export function GenericRateCardImport() {
           total_unit_cost: mapping.cost ? Number(r[mapping.cost]) || 0 : 0,
           client_unit_price: mapping.price ? Number(r[mapping.price]) || 0 : 0,
           category: mapping.category ? String(r[mapping.category] ?? "").trim() || null : null,
-          needs_pricing: !mapping.cost || !mapping.price,
+          award_code: (() => {
+            if (!mapping.award_code) return null;
+            const raw = String(r[mapping.award_code] ?? "").trim().toUpperCase();
+            return ["C", "I", "E"].includes(raw) ? raw : null;
+          })(),
+          // Per-row: an item still needs pricing if either value is
+          // genuinely missing/zero on THIS row — not just whether the
+          // column was mapped at all across the whole sheet.
+          needs_pricing: !(
+            mapping.cost && Number(r[mapping.cost]) > 0 &&
+            mapping.price && Number(r[mapping.price]) > 0
+          ),
           cost_split_available: false,
           source_sheet: wbSheetNameSafe(file),
         };
@@ -350,6 +364,7 @@ export function GenericRateCardImport() {
                     <TableHead className="text-right">Our Price</TableHead>
                     <TableHead>Code</TableHead>
                     <TableHead>Category</TableHead>
+                    <TableHead>Award Code</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -361,6 +376,7 @@ export function GenericRateCardImport() {
                       <TableCell className="text-xs text-right">{r.price != null && !Number.isNaN(r.price) ? `£${r.price.toFixed(2)}` : "—"}</TableCell>
                       <TableCell className="text-xs">{r.code ?? "auto"}</TableCell>
                       <TableCell className="text-xs">{r.category ?? "—"}</TableCell>
+                      <TableCell className="text-xs">{r.award_code ?? "—"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
