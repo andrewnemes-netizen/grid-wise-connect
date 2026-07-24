@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Plus, Building2, UserPlus, Trash2, Users } from "lucide-react";
+import { Plus, Building2, UserPlus, Trash2, Users, ChevronDown, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 
 function CreateUserDialog({ orgId, orgName, onSuccess }: { orgId: string; orgName: string; onSuccess: () => void }) {
@@ -106,6 +106,8 @@ export function OrgManagement() {
   const [editingOrg, setEditingOrg] = useState<any | null>(null);
   const [addMemberOrgId, setAddMemberOrgId] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [expandedOrgs, setExpandedOrgs] = useState<Record<string, boolean>>({});
+  const toggleOrg = (id: string) => setExpandedOrgs((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const { data: orgs = [], isLoading } = useQuery({
     queryKey: ["admin-organisations", myOrgId],
@@ -449,13 +451,29 @@ export function OrgManagement() {
       ) : (
         orgs.map((org: any) => {
           const orgMembers = getOrgMembers(org.id);
+          const isExpanded = !!expandedOrgs[org.id];
           return (
             <Card key={org.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    {org.name}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => toggleOrg(org.id)}
+                      aria-label={isExpanded ? "Collapse" : "Expand"}
+                    >
+                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => toggleOrg(org.id)}
+                      className="flex items-center gap-2 hover:underline"
+                    >
+                      <Building2 className="h-4 w-4" />
+                      {org.name}
+                    </button>
                     <Badge variant={orgTypeBadgeVariant(org.org_type ?? "client")} className="text-[10px] uppercase">
                       {orgTypeLabel(org)}
                     </Badge>
@@ -516,11 +534,12 @@ export function OrgManagement() {
                   );
                 })()}
               </CardHeader>
-              <CardContent className="pt-0">
-                {orgMembers.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No members yet</p>
-                ) : (
-                  <Table>
+              {isExpanded && (
+                <CardContent className="pt-0">
+                  {orgMembers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No members yet</p>
+                  ) : (
+                    <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>User</TableHead>
@@ -543,9 +562,10 @@ export function OrgManagement() {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
-                )}
-              </CardContent>
+                    </Table>
+                  )}
+                </CardContent>
+              )}
             </Card>
           );
         })
