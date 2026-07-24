@@ -17,6 +17,25 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant={variant as any}>{status}</Badge>;
 }
 
+/** Natural sort for rate codes like "1.01", "1.10", "2.01", "10.03" — plain
+ *  alphabetical sort would put "1.10" before "1.2" and "10.01" before "2.01". */
+function compareCodes(a?: string | null, b?: string | null) {
+  const pa = String(a ?? "").split(/(\d+)/).filter(Boolean);
+  const pb = String(b ?? "").split(/(\d+)/).filter(Boolean);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const sa = pa[i] ?? "", sb = pb[i] ?? "";
+    const numeric = /^\d+$/.test(sa) && /^\d+$/.test(sb);
+    if (numeric) {
+      const diff = Number(sa) - Number(sb);
+      if (diff !== 0) return diff;
+    } else if (sa !== sb) {
+      return sa.localeCompare(sb);
+    }
+  }
+  return 0;
+}
+
 export default function RateCardDetailPage() {
   const { versionId } = useParams<{ versionId: string }>();
   const navigate = useNavigate();
@@ -77,7 +96,10 @@ export default function RateCardDetailPage() {
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(it);
     }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    for (const arr of m.values()) arr.sort((a, b) => compareCodes(a.rate_code, b.rate_code));
+    // Order groups by the lowest code within each group, so groups appear
+    // in the same 1, 2, 3… order as their items, not alphabetically by name.
+    return Array.from(m.entries()).sort((a, b) => compareCodes(a[1][0]?.rate_code, b[1][0]?.rate_code));
   }, [items]);
 
   const needsPricingCount = (items as any[]).filter((i) => i.needs_pricing).length;
@@ -183,7 +205,7 @@ export default function RateCardDetailPage() {
             </select>
           )}
           {v.status === "DRAFT" ? (
-            <Button size="sm" onClick={approve}>Approve version</Button>
+            <Button size="sm" onClick={approve} disabled={needsPricingCount > 0}>Approve version</Button>
           ) : (
             <Button size="sm" variant="outline" onClick={cloneToDraft}>
               <Copy className="h-3.5 w-3.5 mr-1.5" /> New draft version
@@ -196,7 +218,7 @@ export default function RateCardDetailPage() {
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {needsPricingCount} item(s) still need pricing. You can approve now and complete pricing later from the Quote Builder or on this page.
+            {needsPricingCount} item(s) still need pricing. Approval is blocked until every item has a unit cost.
           </AlertDescription>
         </Alert>
       )}

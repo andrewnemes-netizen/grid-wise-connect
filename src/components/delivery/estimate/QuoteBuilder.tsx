@@ -30,6 +30,25 @@ const fmt = (n: number | null | undefined, ccy = "GBP") =>
  * Used identically for both EV Build and PoC/ICP estimates — the only
  * difference is which rate card defaults to primary vs fallback.
  */
+/** Natural sort for rate codes like "1.01", "1.10", "2.01", "10.03" — plain
+ *  alphabetical sort would put "1.10" before "1.2" and "10.01" before "2.01". */
+function compareCodes(a?: string | null, b?: string | null) {
+  const pa = String(a ?? "").split(/(\d+)/).filter(Boolean);
+  const pb = String(b ?? "").split(/(\d+)/).filter(Boolean);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const sa = pa[i] ?? "", sb = pb[i] ?? "";
+    const numeric = /^\d+$/.test(sa) && /^\d+$/.test(sb);
+    if (numeric) {
+      const diff = Number(sa) - Number(sb);
+      if (diff !== 0) return diff;
+    } else if (sa !== sb) {
+      return sa.localeCompare(sb);
+    }
+  }
+  return 0;
+}
+
 export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -154,7 +173,8 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
       if (!m.has(k)) m.set(k, []);
       m.get(k)!.push(it);
     }
-    return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    for (const arr of m.values()) arr.sort((a, b) => compareCodes(a.rate_code, b.rate_code));
+    return Array.from(m.entries()).sort((a, b) => compareCodes(a[1][0]?.rate_code, b[1][0]?.rate_code));
   }, [items]);
 
   const totals = useMemo(() => {
