@@ -119,6 +119,23 @@ export default function WpSiteRegisterTab() {
 
   const siteIds = useMemo(() => rows.map((r: any) => r.site_id).filter(Boolean), [rows]);
 
+  const { data: latlngRows = [] } = useQuery({
+    queryKey: ["wp-site-latlng", wpId, siteIds.join(",")],
+    enabled: !!wpId && siteIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("v_sites_latlng")
+        .select("id, lat, lng")
+        .in("id", siteIds);
+      if (error) throw error;
+      return (data ?? []) as { id: string; lat: number; lng: number }[];
+    },
+  });
+  const latlngBySite = useMemo(
+    () => new Map((latlngRows as any[]).map((r) => [r.id, { lat: r.lat, lng: r.lng }])),
+    [latlngRows],
+  );
+
   const { data: precon = [] } = useQuery({
     queryKey: ["wp-site-precon-status", wpId],
     enabled: !!wpId,
