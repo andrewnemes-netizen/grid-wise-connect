@@ -3,190 +3,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Trash2, Plus, Users, Briefcase, Link2 } from "lucide-react";
+import { Trash2, Plus, Users, Link2 } from "lucide-react";
 
 export function PartnerManagement() {
   return (
-    <Tabs defaultValue="partners" className="space-y-4">
+    <Tabs defaultValue="users" className="space-y-4">
       <TabsList>
-        <TabsTrigger value="partners"><Briefcase className="h-3.5 w-3.5 mr-1.5" />Partners</TabsTrigger>
         <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Partner Users</TabsTrigger>
         <TabsTrigger value="allocations"><Link2 className="h-3.5 w-3.5 mr-1.5" />WP Allocations</TabsTrigger>
       </TabsList>
-      <TabsContent value="partners"><PartnersTab /></TabsContent>
       <TabsContent value="users"><PartnerUsersTab /></TabsContent>
       <TabsContent value="allocations"><AllocationsTab /></TabsContent>
     </Tabs>
-  );
-}
-
-function PartnersTab() {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "contractor", status: "active", primary_contact_email: "", notes: "" });
-
-  const { data: partners = [], isLoading } = useQuery({
-    queryKey: ["admin-partners"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("partners").select("*").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: orgs = [] } = useQuery({
-    queryKey: ["admin-orgs-min"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("organisations").select("id,name").order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const [orgId, setOrgId] = useState<string>("");
-
-  const createPartner = useMutation({
-    mutationFn: async () => {
-      if (!orgId) throw new Error("Select an organisation");
-      if (!form.name.trim()) throw new Error("Name required");
-      const { error } = await supabase.from("partners").insert({
-        org_id: orgId,
-        name: form.name.trim(),
-        type: form.type,
-        status: form.status,
-        primary_contact_email: form.primary_contact_email || null,
-        notes: form.notes || null,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Partner created");
-      qc.invalidateQueries({ queryKey: ["admin-partners"] });
-      setOpen(false);
-      setForm({ name: "", type: "contractor", status: "active", primary_contact_email: "", notes: "" });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  const deletePartner = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("partners").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Partner deleted");
-      qc.invalidateQueries({ queryKey: ["admin-partners"] });
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Partners</CardTitle>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="h-4 w-4 mr-1" />New Partner</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Partner</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Organisation</Label>
-                <Select value={orgId} onValueChange={setOrgId}>
-                  <SelectTrigger><SelectValue placeholder="Select organisation" /></SelectTrigger>
-                  <SelectContent>
-                    {orgs.map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Name</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Type</Label>
-                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contractor">Contractor</SelectItem>
-                      <SelectItem value="icp">ICP</SelectItem>
-                      <SelectItem value="idno">IDNO</SelectItem>
-                      <SelectItem value="consultant">Consultant</SelectItem>
-                      <SelectItem value="supplier">Supplier</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Primary Contact Email</Label>
-                <Input type="email" value={form.primary_contact_email} onChange={(e) => setForm({ ...form, primary_contact_email: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => createPartner.mutate()} disabled={createPartner.isPending}>Create</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardHeader>
-      <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead className="w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">Loading…</TableCell></TableRow>
-            ) : partners.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">No partners yet</TableCell></TableRow>
-            ) : partners.map((p: any) => (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.name}</TableCell>
-                <TableCell><Badge variant="outline">{p.type}</Badge></TableCell>
-                <TableCell><Badge variant={p.status === "active" ? "default" : "secondary"}>{p.status}</Badge></TableCell>
-                <TableCell className="text-xs text-muted-foreground">{p.primary_contact_email || "—"}</TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" onClick={() => {
-                    if (confirm(`Delete partner "${p.name}"?`)) deletePartner.mutate(p.id);
-                  }}><Trash2 className="h-4 w-4" /></Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
   );
 }
 
