@@ -84,12 +84,12 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rate_card_versions" as any)
-        .select("id, version_number, status, rate_cards!inner(name)")
+        .select("id, version_number, status, rate_cards!inner(name, archived_at)")
         .in("status", ["APPROVED", "DRAFT"])
         .order("status", { ascending: true })
         .order("version_number", { ascending: false });
       if (error) throw error;
-      const list = (data ?? []) as any[];
+      const list = ((data ?? []) as any[]).filter((v) => !v.rate_cards?.archived_at);
       const kind = (estimate as any)?.kind;
       const nameOf = (v: any) => (v.rate_cards?.name ?? "").toLowerCase();
       const isMsa = (v: any) => nameOf(v).includes("msa");
