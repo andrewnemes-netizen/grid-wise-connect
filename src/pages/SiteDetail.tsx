@@ -26,6 +26,7 @@ import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 import { SiteSurveysPanel } from "@/components/site/SiteSurveysPanel";
 import { SocketPhaseBalanceCard } from "@/components/site/SocketPhaseBalanceCard";
+import { SiteCommercialOverview } from "@/components/site/SiteCommercialOverview";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
@@ -341,6 +342,8 @@ const SiteDetail = () => {
       </Dialog>
 
       <SiteSurveysPanel siteId={site.id} />
+
+      <SiteCommercialOverview siteId={site.id} />
 
       {/* Master Score Banner */}
       {masterScore != null && (
