@@ -8365,6 +8365,81 @@ export type Database = {
         }
         Relationships: []
       }
+      stage_checklist_items: {
+        Row: {
+          check_key: string
+          checked: boolean
+          checked_at: string | null
+          checked_by: string | null
+          created_at: string
+          id: string
+          site_id: string
+          stage: string
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          check_key: string
+          checked?: boolean
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          site_id: string
+          stage: string
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          check_key?: string
+          checked?: boolean
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          site_id?: string
+          stage?: string
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stage_checklist_items_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_checklist_items_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stage_checklist_items_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_site_precon_status"
+            referencedColumns: ["site_id"]
+          },
+          {
+            foreignKeyName: "stage_checklist_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "stage_checklist_items_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stage_definitions: {
         Row: {
           allowed_owner_roles: string[]
