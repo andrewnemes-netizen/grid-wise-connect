@@ -131,6 +131,12 @@ export default function WpOverviewTab() {
   const totalOpportunity = Number(evBuild?.total ?? 0) + Number(pocEst?.total ?? 0);
   const totalOpportunityCost = Number(evBuild?.cost ?? 0) + Number(pocEst?.cost ?? 0);
   const accumulatedMarginPct = totalOpportunity > 0 ? (totalOpportunity - totalOpportunityCost) / totalOpportunity : null;
+  const evMarginPct = Number(evBuild?.total ?? 0) > 0
+    ? (Number(evBuild!.total) - Number(evBuild!.cost ?? 0)) / Number(evBuild!.total)
+    : null;
+  const icpMarginPct = Number(pocEst?.total ?? 0) > 0
+    ? (Number(pocEst!.total) - Number(pocEst!.cost ?? 0)) / Number(pocEst!.total)
+    : null;
   const poSecured = Number(activePOs?.total ?? 0);
   const hasAnyPO = (activePOs?.count ?? 0) > 0;
   const actualCost = Number(commercial?.actual_cost ?? 0);
@@ -197,9 +203,11 @@ export default function WpOverviewTab() {
               />
               <KpiCard icon={<ReceiptText className="h-4 w-4" />} label="% Secured by PO" value={totalOpportunity > 0 ? pct(poSecured / totalOpportunity) : "—"}
                       sub="PO Secured vs Total Opportunity" />
-              <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Accumulated Margin %" value={accumulatedMarginPct != null ? pct(accumulatedMarginPct) : "—"}
-                      sub="Across all quoted work (price vs cost)"
-                      tone={accumulatedMarginPct != null ? (accumulatedMarginPct < 0 ? "danger" : "success") : undefined} />
+              <MarginKpiCard
+                totalPct={accumulatedMarginPct}
+                evPct={evMarginPct}
+                icpPct={icpMarginPct}
+              />
             </div>
           </div>
         )}
@@ -317,6 +325,38 @@ function KpiCard({ icon, label, value, sub, tone }: { icon: React.ReactNode; lab
       <CardContent className="pt-0">
         <div className={`text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
         {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarginKpiCard({ totalPct, evPct, icpPct }: { totalPct: number | null; evPct: number | null; icpPct: number | null }) {
+  const toneClass = totalPct == null ? "text-foreground" : totalPct < 0 ? "text-destructive" : "text-emerald-600";
+  const subTone = (v: number | null) =>
+    v == null ? "text-muted-foreground" : v < 0 ? "text-destructive" : "text-emerald-600";
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+          <TrendingUp className="h-4 w-4" />Accumulated Margin %
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className={`text-2xl font-semibold tabular-nums ${toneClass}`}>
+          {totalPct != null ? pct(totalPct) : "—"}
+        </div>
+        <div className="text-[11px] text-muted-foreground mt-0.5">Across all quoted work (price vs cost)</div>
+        <div className="mt-2 flex items-center gap-3 text-[11px] tabular-nums">
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">EV</span>
+            <span className={`font-medium ${subTone(evPct)}`}>{evPct != null ? pct(evPct) : "—"}</span>
+          </div>
+          <span className="text-muted-foreground/40">·</span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">ICP</span>
+            <span className={`font-medium ${subTone(icpPct)}`}>{icpPct != null ? pct(icpPct) : "—"}</span>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
