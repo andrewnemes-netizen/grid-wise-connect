@@ -5435,6 +5435,7 @@ export type Database = {
       }
       rate_items: {
         Row: {
+          award_code: string | null
           category: string | null
           client_unit_price: number | null
           cost_code: string | null
@@ -5462,6 +5463,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          award_code?: string | null
           category?: string | null
           client_unit_price?: number | null
           cost_code?: string | null
@@ -5489,6 +5491,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          award_code?: string | null
           category?: string | null
           client_unit_price?: number | null
           cost_code?: string | null
@@ -6418,6 +6421,64 @@ export type Database = {
             columns: ["ruleset_id"]
             isOneToOne: false
             referencedRelation: "ev_hub_rulesets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scope_awards: {
+        Row: {
+          award_code: string
+          awarded_at: string | null
+          awarded_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          partner_id: string | null
+          updated_at: string
+          work_package_id: string
+        }
+        Insert: {
+          award_code: string
+          awarded_at?: string | null
+          awarded_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          updated_at?: string
+          work_package_id: string
+        }
+        Update: {
+          award_code?: string
+          awarded_at?: string | null
+          awarded_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          partner_id?: string | null
+          updated_at?: string
+          work_package_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scope_awards_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scope_awards_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "v_wp_commercial_position"
+            referencedColumns: ["work_package_id"]
+          },
+          {
+            foreignKeyName: "scope_awards_work_package_id_fkey"
+            columns: ["work_package_id"]
+            isOneToOne: false
+            referencedRelation: "work_packages"
             referencedColumns: ["id"]
           },
         ]
