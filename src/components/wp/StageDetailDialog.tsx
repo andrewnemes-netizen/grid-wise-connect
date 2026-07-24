@@ -13,6 +13,8 @@ import { STAGE_LABEL_MAP, STAGE_STATUS_LABEL, MULTI_RECIPIENT_STAGES, getNextSta
 import { computeWaitTargetDate, isWaitingStage } from "@/lib/wp/waitingStages";
 import { isCounterStage } from "@/lib/wp/counterStages";
 import { RecipientPicker } from "@/components/wp/RecipientPicker";
+import { getStageChecklist } from "@/lib/wp/stageChecklists";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export type StageRow = {
   id: string;
@@ -66,6 +68,35 @@ export function StageDetailDialog({
   // Keyed by next stage key so branch points (survey_completed) can hold two.
   const [nextRecipients, setNextRecipients] = useState<Record<string, { userIds: string[]; contactIds: string[] }>>({});
 
+  // Stage checklist (mandatory sub-tasks before Done).
+  const checklist = getStageChecklist(stage);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+
+  const { data: checklistRows = [], refetch: refetchChecklist } = useQuery({
+    queryKey: ["stage-checklist", siteId, stage],
+    enabled: checklist.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("stage_checklist_items")
+        .select("check_key,checked_at")
+        .eq("site_id", siteId)
+        .eq("stage", stage);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  useEffect(() => {
+    if (!checklist.length) return;
+    const map: Record<string, boolean> = {};
+    for (const r of checklistRows as any[]) {
+      if (r.checked_at) map[r.check_key] = true;
+    }
+    setChecked(map);
+  }, [checklistRows, stage]);
+
+  const allChecklistDone = checklist.every((c) => checked[c.key]);
+
   useEffect(() => {
     setStatus((initialStatus ?? row?.workflow_status ?? "not_started") as StageStatus);
     setUserIds(row?.recipient_user_ids?.length ? row!.recipient_user_ids! : (row?.owner_id ? [row.owner_id] : []));
@@ -104,10 +135,39 @@ export function StageDetailDialog({
   const blocked = isTerminalAction
     ? (nextStages.length > 0 && !hasNextRecipient)
     : false;
+  const checklistBlocked = isTerminalAction && checklist.length > 0 && !allChecklistDone;
+
+  const toggleCheck = async (key: string, next: boolean) => {
+    setChecked((prev) => ({ ...prev, [key]: next }));
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id ?? null;
+      const payload: any = {
+        site_id: siteId,
+        work_package_id: wpId,
+        stage,
+        check_key: key,
+        checked_at: next ? new Date().toISOString() : null,
+        checked_by: next ? uid : null,
+      };
+      const { error } = await (supabase as any)
+        .from("stage_checklist_items")
+        .upsert(payload, { onConflict: "site_id,stage,check_key" });
+      if (error) throw error;
+      refetchChecklist();
+    } catch (e: any) {
+      setChecked((prev) => ({ ...prev, [key]: !next }));
+      toast.error(e.message ?? "Failed to update checklist");
+    }
+  };
 
   const save = async () => {
     if (blocked) {
       toast.error("Pick who the next stage goes to before marking Done.");
+      return;
+    }
+    if (checklistBlocked) {
+      toast.error("Complete all checklist items before marking Done.");
       return;
     }
     setSaving(true);
@@ -270,6 +330,27 @@ export function StageDetailDialog({
                 />
               </div>
             )}
+            {checklist.length > 0 && (
+              <div className="col-span-2 rounded-md border bg-muted/20 p-3 space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Required before Done
+                </div>
+                {checklist.map((item) => (
+                  <label key={item.key} className="flex items-start gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={!!checked[item.key]}
+                      onCheckedChange={(v) => toggleCheck(item.key, !!v)}
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
+                {checklistBlocked && (
+                  <p className="text-[11px] text-destructive">
+                    Tick every item above before marking this stage Done.
+                  </p>
+                )}
+              </div>
+            )}
             <label className="flex flex-col gap-1">
               <span className="text-xs text-muted-foreground">Planned start</span>
               <Input type="date" value={plannedStart ?? ""} onChange={(e) => setPlannedStart(e.target.value)} />
@@ -327,7 +408,7 @@ export function StageDetailDialog({
             </span>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || blocked}>
+          <Button onClick={save} disabled={saving || blocked || checklistBlocked}>
             {isTerminalAction ? "Mark Done & Notify" : "Save"}
           </Button>
         </DialogFooter>
