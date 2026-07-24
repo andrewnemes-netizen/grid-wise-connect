@@ -165,15 +165,15 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
     const e = priceEdits[it.id];
     if (e?.marginPct != null && e.marginPct !== "") {
       const m = Number(e.marginPct);
-      if (!Number.isNaN(m)) return costOf(it) * (1 + m / 100);
+      if (!Number.isNaN(m) && m < 100) return costOf(it) / (1 - m / 100);
     }
     if (e?.price != null && e.price !== "") return Number(e.price);
     return Number(it.client_unit_price ?? 0);
   };
   const marginOf = (it: any): number => {
-    const cost = costOf(it);
-    if (cost <= 0) return 0;
-    return ((priceOf(it) - cost) / cost) * 100;
+    const price = priceOf(it);
+    if (price <= 0) return 0;
+    return ((price - costOf(it)) / price) * 100;
   };
 
   const grouped = useMemo(() => {
