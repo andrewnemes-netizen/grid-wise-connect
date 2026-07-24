@@ -46,7 +46,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
         .select(`
           id, name, kind, currency, status, rate_card_version_id, total_cost, total_price,
           site:sites(id, site_name, postcode),
-          work_package:work_packages(id, ref, name)
+          work_package:work_packages(id, code, name)
         `)
         .eq("id", estimateId).single();
       if (error) throw error;
@@ -298,7 +298,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
             <Badge variant="outline">{e.kind === "poc" ? "ICP / PoC Quote" : "EV Build Quote"}</Badge>
           </div>
           <div className="text-xs text-muted-foreground">
-            {e.work_package?.name ?? e.work_package?.ref ?? "—"}
+            {e.work_package?.name ?? e.work_package?.code ?? "—"}
             {rateCardMeta && <> · {rateCardMeta.rate_card?.name} v{rateCardMeta.version_number} ({rateCardMeta.status})</>}
           </div>
         </div>
