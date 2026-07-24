@@ -53,7 +53,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   const qc = useQueryClient();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [qtyEdits, setQtyEdits] = useState<Record<string, string>>({});
-  const [priceEdits, setPriceEdits] = useState<Record<string, { cost?: string; price?: string }>>({});
+  const [priceEdits, setPriceEdits] = useState<Record<string, { cost?: string; price?: string; marginPct?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [pickerVersionId, setPickerVersionId] = useState<string>("");
 
@@ -162,8 +162,18 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
     return edit != null && edit !== "" ? Number(edit) : Number(it.total_unit_cost ?? 0);
   };
   const priceOf = (it: any): number => {
-    const edit = priceEdits[it.id]?.price;
-    return edit != null && edit !== "" ? Number(edit) : Number(it.client_unit_price ?? 0);
+    const e = priceEdits[it.id];
+    if (e?.marginPct != null && e.marginPct !== "") {
+      const m = Number(e.marginPct);
+      if (!Number.isNaN(m)) return costOf(it) * (1 + m / 100);
+    }
+    if (e?.price != null && e.price !== "") return Number(e.price);
+    return Number(it.client_unit_price ?? 0);
+  };
+  const marginOf = (it: any): number => {
+    const cost = costOf(it);
+    if (cost <= 0) return 0;
+    return ((priceOf(it) - cost) / cost) * 100;
   };
 
   const grouped = useMemo(() => {
@@ -325,8 +335,8 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
         <div className="flex items-center gap-4">
           <Stat label="Cost" value={fmt(totals.cost, c)} />
           <Stat label="Price" value={fmt(totals.price, c)} />
-          <Stat label="Markup" value={`${totals.markupPct.toFixed(1)}%`} />
-          <Stat label="Profit" value={fmt(totals.profit, c)} accent />
+          <Stat label="Overall Margin" value={`${totals.markupPct.toFixed(1)}%`} accent large />
+          <Stat label="Profit" value={fmt(totals.profit, c)} />
           {versionId && (
             <Button onClick={save} disabled={saving || dirtyCount === 0}>
               <CheckCircle2 className="h-4 w-4 mr-1.5" /> Save {dirtyCount || ""} change{dirtyCount === 1 ? "" : "s"}
@@ -413,6 +423,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
                             <TableHead className="w-20">Unit</TableHead>
                             <TableHead className="w-14 text-center">Award</TableHead>
                             <TableHead className="w-28 text-right">Unit Cost</TableHead>
+                            <TableHead className="w-24 text-right">Margin %</TableHead>
                             <TableHead className="w-28 text-right">Unit Price</TableHead>
                             <TableHead className="w-24 text-center">Qty</TableHead>
                             <TableHead className="w-28 text-right">Line Cost</TableHead>
@@ -448,13 +459,21 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
                                   ) : fmt(it.total_unit_cost, c)}
                                 </TableCell>
                                 <TableCell className="text-xs text-right">
-                                  {it.needs_pricing ? (
-                                    <Input type="number" step="0.01" placeholder="Set price"
-                                      className="h-8 text-right text-xs"
-                                      value={pEdit.price ?? (it.client_unit_price ? String(it.client_unit_price) : "")}
-                                      onChange={(e) => setPriceEdits((prev) => ({ ...prev, [it.id]: { ...prev[it.id], price: e.target.value } }))}
-                                    />
-                                  ) : fmt(it.client_unit_price, c)}
+                                  <Input
+                                    type="number" step="0.1"
+                                    className="h-8 text-right text-xs"
+                                    value={pEdit.marginPct ?? (cost > 0 ? (((price - cost) / cost) * 100).toFixed(1) : "0")}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setPriceEdits((prev) => ({
+                                        ...prev,
+                                        [it.id]: { ...prev[it.id], marginPct: v, price: undefined },
+                                      }));
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">
+                                  {fmt(price, c)}
                                 </TableCell>
                                 <TableCell>
                                   <Input
@@ -484,11 +503,11 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, accent, large }: { label: string; value: string; accent?: boolean; large?: boolean }) {
   return (
     <div className="text-right">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={`text-sm font-semibold tabular-nums ${accent ? "text-primary" : ""}`}>{value}</div>
+      <div className={`${large ? "text-base" : "text-sm"} font-semibold tabular-nums ${accent ? "text-primary" : ""}`}>{value}</div>
     </div>
   );
 }
