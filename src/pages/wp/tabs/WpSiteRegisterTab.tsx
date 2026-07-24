@@ -119,6 +119,23 @@ export default function WpSiteRegisterTab() {
 
   const siteIds = useMemo(() => rows.map((r: any) => r.site_id).filter(Boolean), [rows]);
 
+  const { data: latlngRows = [] } = useQuery({
+    queryKey: ["wp-site-latlng", wpId, siteIds.join(",")],
+    enabled: !!wpId && siteIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("v_sites_latlng")
+        .select("id, lat, lng")
+        .in("id", siteIds);
+      if (error) throw error;
+      return (data ?? []) as { id: string; lat: number; lng: number }[];
+    },
+  });
+  const latlngBySite = useMemo(
+    () => new Map((latlngRows as any[]).map((r) => [r.id, { lat: r.lat, lng: r.lng }])),
+    [latlngRows],
+  );
+
   const { data: precon = [] } = useQuery({
     queryKey: ["wp-site-precon-status", wpId],
     enabled: !!wpId,
@@ -709,6 +726,7 @@ export default function WpSiteRegisterTab() {
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Site</TableHead>
                 <TableHead>Postcode</TableHead>
+                <TableHead>Coordinates</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Viability</TableHead>
@@ -726,12 +744,12 @@ export default function WpSiteRegisterTab() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={14}><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell colSpan={15}><Skeleton className="h-5 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
                     {rows.length === 0 ? "No sites allocated to this work package yet." : "No sites match your search."}
                   </TableCell>
                 </TableRow>
@@ -763,6 +781,24 @@ export default function WpSiteRegisterTab() {
                       {r.local_ref && <span className="text-[11px] text-muted-foreground ml-2">{r.local_ref}</span>}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{s?.postcode ?? "—"}</TableCell>
+                    <TableCell className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                      {(() => {
+                        const ll = s?.id ? latlngBySite.get(s.id) : null;
+                        if (!ll) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            className="hover:underline"
+                            title="Copy coordinates"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard?.writeText(`${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`);
+                            }}
+                          >
+                            {ll.lat.toFixed(4)}, {ll.lng.toFixed(4)}
+                          </button>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>
                       {stage ? <Badge variant="secondary" className="text-[10px]">{(stage as any).label}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
                     </TableCell>

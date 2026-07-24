@@ -446,6 +446,13 @@ export type Database = {
             foreignKeyName: "audit_log_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -1456,6 +1463,13 @@ export type Database = {
             foreignKeyName: "design_submissions_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -1676,6 +1690,13 @@ export type Database = {
             foreignKeyName: "dno_offer_sites_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offer_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -1746,6 +1767,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dno_offers_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -2520,6 +2548,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -4402,6 +4437,13 @@ export type Database = {
             foreignKeyName: "po_line_sites_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "po_line_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -5644,6 +5686,13 @@ export type Database = {
             foreignKeyName: "resource_allocations_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resource_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -6310,6 +6359,13 @@ export type Database = {
             foreignKeyName: "route_amendments_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "route_amendments_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -6412,6 +6468,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_design_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -6872,6 +6935,13 @@ export type Database = {
             foreignKeyName: "site_estimates_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_estimates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -6956,6 +7026,13 @@ export type Database = {
             foreignKeyName: "site_handover_docs_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_handover_docs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -7003,6 +7080,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_notes_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -7164,6 +7248,13 @@ export type Database = {
             foreignKeyName: "site_precon_gates_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_precon_gates_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -7226,6 +7317,13 @@ export type Database = {
             foreignKeyName: "site_socket_groups_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_socket_groups_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -7275,6 +7373,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_history_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -7369,6 +7474,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey1"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -7491,6 +7603,13 @@ export type Database = {
             foreignKeyName: "site_stage_status_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_stage_status_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -7569,6 +7688,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_survey_responses_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -7682,6 +7808,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_surveys_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -8359,6 +8492,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studies_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -9508,6 +9648,13 @@ export type Database = {
             foreignKeyName: "workflow_instances_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workflow_instances_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -9805,6 +9952,13 @@ export type Database = {
             foreignKeyName: "wp_estimate_sites_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -9885,6 +10039,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_estimate_variation_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -10102,6 +10263,13 @@ export type Database = {
             foreignKeyName: "wp_partner_allocations_site_id_fkey"
             columns: ["site_id"]
             isOneToOne: false
+            referencedRelation: "v_sites_latlng"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_partner_allocations_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
             referencedRelation: "v_wp_site_precon_status"
             referencedColumns: ["site_id"]
           },
@@ -10162,6 +10330,13 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wp_sites_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "v_sites_latlng"
             referencedColumns: ["id"]
           },
           {
@@ -10640,6 +10815,24 @@ export type Database = {
           snag_open_major: number | null
           snag_total: number | null
           work_package_id: string | null
+        }
+        Relationships: []
+      }
+      v_sites_latlng: {
+        Row: {
+          id: string | null
+          lat: number | null
+          lng: number | null
+        }
+        Insert: {
+          id?: string | null
+          lat?: never
+          lng?: never
+        }
+        Update: {
+          id?: string | null
+          lat?: never
+          lng?: never
         }
         Relationships: []
       }
