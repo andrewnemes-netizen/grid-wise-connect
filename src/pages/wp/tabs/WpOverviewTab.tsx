@@ -96,14 +96,15 @@ export default function WpOverviewTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("estimates" as any)
-        .select("id,total_price,grand_total,currency,status")
+        .select("id,total_price,grand_total,total_cost,currency,status")
         .eq("work_package_id", wpId!)
         .eq("kind", "build")
         .is("deleted_at", null);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
-      return { count: rows.length, total };
+      const cost = rows.reduce((s, r) => s + Number(r.total_cost ?? 0), 0);
+      return { count: rows.length, total, cost };
     },
   });
 
@@ -113,20 +114,23 @@ export default function WpOverviewTab() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("estimates" as any)
-        .select("id,total_price,grand_total,currency,status")
+        .select("id,total_price,grand_total,total_cost,currency,status")
         .eq("work_package_id", wpId!)
         .eq("kind", "poc")
         .is("deleted_at", null);
       if (error) throw error;
       const rows = (data ?? []) as any[];
       const total = rows.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
-      return { count: rows.length, total };
+      const cost = rows.reduce((s, r) => s + Number(r.total_cost ?? 0), 0);
+      return { count: rows.length, total, cost };
     },
   });
 
   const totalSites = siteCount ?? 0;
 
   const totalOpportunity = Number(evBuild?.total ?? 0) + Number(pocEst?.total ?? 0);
+  const totalOpportunityCost = Number(evBuild?.cost ?? 0) + Number(pocEst?.cost ?? 0);
+  const accumulatedMarginPct = totalOpportunity > 0 ? (totalOpportunity - totalOpportunityCost) / totalOpportunity : null;
   const poSecured = Number(activePOs?.total ?? 0);
   const hasAnyPO = (activePOs?.count ?? 0) > 0;
   const actualCost = Number(commercial?.actual_cost ?? 0);
@@ -180,7 +184,7 @@ export default function WpOverviewTab() {
                       sub={hasAnyPO ? `${activePOs?.count} active PO${(activePOs?.count ?? 0) === 1 ? "" : "s"}` : "No PO received yet"}
                       tone={hasAnyPO ? "success" : undefined} />
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <KpiCard icon={<Wallet className="h-4 w-4" />} label="Budget" value={gbp(commercial?.budget_amount_manual)} />
               <KpiCard icon={<PoundSterling className="h-4 w-4" />} label="Actual cost" value={gbp(actualCost)}
                       sub={poSecured > 0 ? `${pct(actualCost / poSecured)} of PO secured` : undefined} />
@@ -193,6 +197,9 @@ export default function WpOverviewTab() {
               />
               <KpiCard icon={<ReceiptText className="h-4 w-4" />} label="% Secured by PO" value={totalOpportunity > 0 ? pct(poSecured / totalOpportunity) : "—"}
                       sub="PO Secured vs Total Opportunity" />
+              <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Accumulated Margin %" value={accumulatedMarginPct != null ? pct(accumulatedMarginPct) : "—"}
+                      sub="Across all quoted work (price vs cost)"
+                      tone={accumulatedMarginPct != null ? (accumulatedMarginPct < 0 ? "danger" : "success") : undefined} />
             </div>
           </div>
         )}
