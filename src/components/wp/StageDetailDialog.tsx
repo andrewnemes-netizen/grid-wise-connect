@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -12,9 +13,8 @@ import { formatDistanceToNow } from "date-fns";
 import { STAGE_LABEL_MAP, STAGE_STATUS_LABEL, MULTI_RECIPIENT_STAGES, getNextStages, type StageKey, type StageStatus } from "@/lib/wp/stageStatus";
 import { computeWaitTargetDate, isWaitingStage } from "@/lib/wp/waitingStages";
 import { isCounterStage } from "@/lib/wp/counterStages";
-import { RecipientPicker } from "@/components/wp/RecipientPicker";
 import { getStageChecklist } from "@/lib/wp/stageChecklists";
-import { Checkbox } from "@/components/ui/checkbox";
+import { RecipientPicker } from "@/components/wp/RecipientPicker";
 
 export type StageRow = {
   id: string;
@@ -68,35 +68,6 @@ export function StageDetailDialog({
   // Keyed by next stage key so branch points (survey_completed) can hold two.
   const [nextRecipients, setNextRecipients] = useState<Record<string, { userIds: string[]; contactIds: string[] }>>({});
 
-  // Stage checklist (mandatory sub-tasks before Done).
-  const checklist = getStageChecklist(stage);
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
-
-  const { data: checklistRows = [], refetch: refetchChecklist } = useQuery({
-    queryKey: ["stage-checklist", siteId, stage],
-    enabled: checklist.length > 0,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("stage_checklist_items")
-        .select("check_key,checked_at")
-        .eq("site_id", siteId)
-        .eq("stage", stage);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  useEffect(() => {
-    if (!checklist.length) return;
-    const map: Record<string, boolean> = {};
-    for (const r of checklistRows as any[]) {
-      if (r.checked_at) map[r.check_key] = true;
-    }
-    setChecked(map);
-  }, [checklistRows, stage]);
-
-  const allChecklistDone = checklist.every((c) => checked[c.key]);
-
   useEffect(() => {
     setStatus((initialStatus ?? row?.workflow_status ?? "not_started") as StageStatus);
     setUserIds(row?.recipient_user_ids?.length ? row!.recipient_user_ids! : (row?.owner_id ? [row.owner_id] : []));
@@ -122,6 +93,55 @@ export function StageDetailDialog({
     },
   });
 
+  const checklistDefs = getStageChecklist(stage);
+
+  const { data: checklistRows = [], refetch: refetchChecklist } = useQuery({
+    queryKey: ["stage-checklist", siteId, stage],
+    enabled: checklistDefs.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).from("stage_checklist_items")
+        .select("check_key,checked,checked_by,checked_at")
+        .eq("site_id", siteId).eq("stage", stage);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const checkedByIds = Array.from(new Set((checklistRows as any[]).filter((r) => r.checked_by).map((r) => r.checked_by)));
+  const { data: checkerProfiles = [] } = useQuery({
+    queryKey: ["stage-checklist-checkers", checkedByIds.join(",")],
+    enabled: checkedByIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("id, display_name, full_name").in("id", checkedByIds);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const checkerName = (userId: string) => {
+    const p = (checkerProfiles as any[]).find((p) => p.id === userId);
+    return p?.display_name ?? p?.full_name ?? "Someone";
+  };
+
+  const rowByKey = (key: string) => (checklistRows as any[]).find((r) => r.check_key === key);
+  const allChecklistItemsChecked = checklistDefs.every((d) => rowByKey(d.key)?.checked);
+
+  const toggleChecklistItem = async (key: string, checked: boolean) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const patch: any = {
+      work_package_id: wpId,
+      site_id: siteId,
+      stage,
+      check_key: key,
+      checked,
+      checked_by: checked ? (userData.user?.id ?? null) : null,
+      checked_at: checked ? new Date().toISOString() : null,
+    };
+    const { error } = await (supabase as any).from("stage_checklist_items")
+      .upsert(patch, { onConflict: "site_id,stage,check_key" });
+    if (error) { toast.error(error.message); return; }
+    refetchChecklist();
+  };
+
   const multi = MULTI_RECIPIENT_STAGES.has(stage);
   const isTerminalAction = status === "done";
   const nextStages = isTerminalAction ? getNextStages(stage) : [];
@@ -133,41 +153,12 @@ export function StageDetailDialog({
   // For non-Done saves, use the in-place picker as before.
   // For Done, require a recipient on at least one next stage (unless terminal-with-no-next).
   const blocked = isTerminalAction
-    ? (nextStages.length > 0 && !hasNextRecipient)
+    ? (nextStages.length > 0 && !hasNextRecipient) || !allChecklistItemsChecked
     : false;
-  const checklistBlocked = isTerminalAction && checklist.length > 0 && !allChecklistDone;
-
-  const toggleCheck = async (key: string, next: boolean) => {
-    setChecked((prev) => ({ ...prev, [key]: next }));
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const uid = userRes.user?.id ?? null;
-      const payload: any = {
-        site_id: siteId,
-        work_package_id: wpId,
-        stage,
-        check_key: key,
-        checked_at: next ? new Date().toISOString() : null,
-        checked_by: next ? uid : null,
-      };
-      const { error } = await (supabase as any)
-        .from("stage_checklist_items")
-        .upsert(payload, { onConflict: "site_id,stage,check_key" });
-      if (error) throw error;
-      refetchChecklist();
-    } catch (e: any) {
-      setChecked((prev) => ({ ...prev, [key]: !next }));
-      toast.error(e.message ?? "Failed to update checklist");
-    }
-  };
 
   const save = async () => {
     if (blocked) {
       toast.error("Pick who the next stage goes to before marking Done.");
-      return;
-    }
-    if (checklistBlocked) {
-      toast.error("Complete all checklist items before marking Done.");
       return;
     }
     setSaving(true);
@@ -289,6 +280,33 @@ export function StageDetailDialog({
                 </SelectContent>
               </Select>
             </label>
+            {checklistDefs.length > 0 && (
+              <div className="col-span-2 rounded-md border bg-muted/20 p-3 space-y-2">
+                <span className="text-xs text-muted-foreground">Required before this stage can be marked Done</span>
+                {checklistDefs.map((item) => {
+                  const row = rowByKey(item.key);
+                  const isChecked = !!row?.checked;
+                  return (
+                    <div key={item.key} className="flex items-start gap-2">
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={(v) => toggleChecklistItem(item.key, v === true)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm">{item.label}</div>
+                        {isChecked && row?.checked_by && (
+                          <div className="text-[11px] text-muted-foreground">
+                            Checked by {checkerName(row.checked_by)}
+                            {row.checked_at && <> · {formatDistanceToNow(new Date(row.checked_at), { addSuffix: true })}</>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {isTerminalAction ? (
               nextStages.length === 0 ? (
                 <div className="col-span-2 rounded-md border bg-muted/20 p-3 text-xs text-muted-foreground">
@@ -328,27 +346,6 @@ export function StageDetailDialog({
                   label={multi ? "Notify who? (multiple recipients)" : "Recipients for this stage"}
                   requiredHint={null}
                 />
-              </div>
-            )}
-            {checklist.length > 0 && (
-              <div className="col-span-2 rounded-md border bg-muted/20 p-3 space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Required before Done
-                </div>
-                {checklist.map((item) => (
-                  <label key={item.key} className="flex items-start gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={!!checked[item.key]}
-                      onCheckedChange={(v) => toggleCheck(item.key, !!v)}
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                ))}
-                {checklistBlocked && (
-                  <p className="text-[11px] text-destructive">
-                    Tick every item above before marking this stage Done.
-                  </p>
-                )}
               </div>
             )}
             <label className="flex flex-col gap-1">
@@ -404,11 +401,13 @@ export function StageDetailDialog({
         <DialogFooter className="flex-col sm:flex-row items-stretch sm:items-center gap-2 px-6 py-4 border-t shrink-0 bg-background">
           {blocked && (
             <span className="text-[11px] text-destructive mr-auto">
-              Select a recipient on the next stage before saving Done — they will be notified immediately.
+              {!allChecklistItemsChecked
+                ? "Tick all required checklist items before saving Done."
+                : "Select a recipient on the next stage before saving Done — they will be notified immediately."}
             </span>
           )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || blocked || checklistBlocked}>
+          <Button onClick={save} disabled={saving || blocked}>
             {isTerminalAction ? "Mark Done & Notify" : "Save"}
           </Button>
         </DialogFooter>
