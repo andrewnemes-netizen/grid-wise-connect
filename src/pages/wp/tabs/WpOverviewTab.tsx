@@ -15,7 +15,7 @@ function gbp(v: number | null | undefined) {
 
 function pct(v: number | null | undefined) {
   if (v == null) return "—";
-  return `${Math.round(Number(v) * 100) / 100}%`;
+  return `${(Number(v) * 100).toFixed(1)}%`;
 }
 
 export default function WpOverviewTab() {
