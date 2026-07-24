@@ -726,6 +726,7 @@ export default function WpSiteRegisterTab() {
                 <TableHead className="w-12">#</TableHead>
                 <TableHead>Site</TableHead>
                 <TableHead>Postcode</TableHead>
+                <TableHead>Coordinates</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Viability</TableHead>
@@ -743,12 +744,12 @@ export default function WpSiteRegisterTab() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={14}><Skeleton className="h-5 w-full" /></TableCell>
+                    <TableCell colSpan={15}><Skeleton className="h-5 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
                     {rows.length === 0 ? "No sites allocated to this work package yet." : "No sites match your search."}
                   </TableCell>
                 </TableRow>
