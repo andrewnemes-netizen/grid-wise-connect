@@ -25,8 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { estimateConnectionCost } from "@/lib/connectionCosts";
 import { normalizeUkCoords } from "@/lib/normalizeUkCoords";
 import { SiteSurveysPanel } from "@/components/site/SiteSurveysPanel";
-import { SocketPhaseBalanceCard } from "@/components/site/SocketPhaseBalanceCard";
 import { SiteCommercialOverview } from "@/components/site/SiteCommercialOverview";
+import { SocketPhaseBalanceCard } from "@/components/site/SocketPhaseBalanceCard";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
@@ -343,8 +343,6 @@ const SiteDetail = () => {
 
       <SiteSurveysPanel siteId={site.id} />
 
-      <SiteCommercialOverview siteId={site.id} />
-
       {/* Master Score Banner */}
       {masterScore != null && (
         <Card className={masterVerdict === "INSTALL" ? "border-emerald-300 bg-emerald-50" : masterVerdict === "AVOID" ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}>
@@ -357,6 +355,8 @@ const SiteDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      {id && <SiteCommercialOverview siteId={id} />}
 
       {/* Score Breakdown Pillars */}
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
