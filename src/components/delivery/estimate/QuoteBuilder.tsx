@@ -38,7 +38,7 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   const [saving, setSaving] = useState(false);
   const [pickerVersionId, setPickerVersionId] = useState<string>("");
 
-  const { data: estimate, isLoading: estimateLoading } = useQuery({
+  const { data: estimate, isLoading: estimateLoading, error: estimateError } = useQuery({
     queryKey: ["quote-builder-estimate", estimateId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -277,6 +277,14 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
   };
 
   if (estimateLoading) return <div className="p-8 text-sm text-muted-foreground">Loading quote…</div>;
+  if (estimateError) return (
+    <div className="p-8 text-sm text-destructive space-y-2">
+      <div className="font-medium">Couldn't load this quote.</div>
+      <div className="text-xs font-mono bg-destructive/10 rounded p-2 whitespace-pre-wrap">
+        {(estimateError as any)?.message ?? String(estimateError)}
+      </div>
+    </div>
+  );
   if (!estimate) return <div className="p-8 text-sm text-muted-foreground">Estimate not found.</div>;
 
   const e: any = estimate;
