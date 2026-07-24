@@ -32,12 +32,12 @@ type SheetRow = Record<string, any>;
 type FieldKey = "description" | "unit" | "cost" | "price" | "code" | "category" | "award_code";
 
 const FIELD_LABELS: Record<FieldKey, string> = {
+  code: "Item Code (optional)",
+  category: "Category (optional)",
   description: "Line Item / Description",
   unit: "Unit",
   cost: "Our Cost (per item)",
   price: "Our Price (per item)",
-  code: "Item Code (optional)",
-  category: "Category (optional)",
   award_code: "Award Code (C/I/E, optional)",
 };
 
@@ -358,24 +358,24 @@ export function GenericRateCardImport() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Our Cost</TableHead>
                     <TableHead className="text-right">Our Price</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Category</TableHead>
                     <TableHead>Award Code</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {preview.map((r, i) => (
                     <TableRow key={i}>
+                      <TableCell className="text-xs">{r.code ?? "auto"}</TableCell>
+                      <TableCell className="text-xs">{r.category ?? "—"}</TableCell>
                       <TableCell className="text-xs">{r.description ?? "—"}</TableCell>
                       <TableCell className="text-xs">{r.unit ?? "—"}</TableCell>
                       <TableCell className="text-xs text-right">{r.cost != null && !Number.isNaN(r.cost) ? `£${r.cost.toFixed(2)}` : "—"}</TableCell>
                       <TableCell className="text-xs text-right">{r.price != null && !Number.isNaN(r.price) ? `£${r.price.toFixed(2)}` : "—"}</TableCell>
-                      <TableCell className="text-xs">{r.code ?? "auto"}</TableCell>
-                      <TableCell className="text-xs">{r.category ?? "—"}</TableCell>
                       <TableCell className="text-xs">{r.award_code ?? "—"}</TableCell>
                     </TableRow>
                   ))}
