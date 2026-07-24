@@ -459,13 +459,21 @@ export function QuoteBuilder({ estimateId, onClose }: { estimateId: string; onCl
                                   ) : fmt(it.total_unit_cost, c)}
                                 </TableCell>
                                 <TableCell className="text-xs text-right">
-                                  {it.needs_pricing ? (
-                                    <Input type="number" step="0.01" placeholder="Set price"
-                                      className="h-8 text-right text-xs"
-                                      value={pEdit.price ?? (it.client_unit_price ? String(it.client_unit_price) : "")}
-                                      onChange={(e) => setPriceEdits((prev) => ({ ...prev, [it.id]: { ...prev[it.id], price: e.target.value } }))}
-                                    />
-                                  ) : fmt(it.client_unit_price, c)}
+                                  <Input
+                                    type="number" step="0.1"
+                                    className="h-8 text-right text-xs"
+                                    value={pEdit.marginPct ?? (cost > 0 ? (((price - cost) / cost) * 100).toFixed(1) : "0")}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setPriceEdits((prev) => ({
+                                        ...prev,
+                                        [it.id]: { ...prev[it.id], marginPct: v, price: undefined },
+                                      }));
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell className="text-xs text-right tabular-nums">
+                                  {fmt(price, c)}
                                 </TableCell>
                                 <TableCell>
                                   <Input
