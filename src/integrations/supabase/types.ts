@@ -5394,6 +5394,7 @@ export type Database = {
       }
       rate_cards: {
         Row: {
+          archived_at: string | null
           category: string | null
           code: string | null
           contract_id: string | null
@@ -5404,6 +5405,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           category?: string | null
           code?: string | null
           contract_id?: string | null
@@ -5414,6 +5416,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           category?: string | null
           code?: string | null
           contract_id?: string | null
