@@ -64,7 +64,7 @@ const Admin = () => {
           <TabsTrigger value="ssen-drive"><HardDrive className="h-3.5 w-3.5 mr-1.5" />SSEN Drive</TabsTrigger>
           <TabsTrigger value="users"><Users className="h-3.5 w-3.5 mr-1.5" />Users & Roles</TabsTrigger>
           <TabsTrigger value="orgs"><Building2 className="h-3.5 w-3.5 mr-1.5" />Organisations</TabsTrigger>
-          <TabsTrigger value="partners"><Handshake className="h-3.5 w-3.5 mr-1.5" />Partners</TabsTrigger>
+          <TabsTrigger value="partners"><Handshake className="h-3.5 w-3.5 mr-1.5" />Partner Access</TabsTrigger>
           <TabsTrigger value="audit"><FileText className="h-3.5 w-3.5 mr-1.5" />Audit Log</TabsTrigger>
           <TabsTrigger value="learning"><Brain className="h-3.5 w-3.5 mr-1.5" />Route Learning</TabsTrigger>
           <TabsTrigger value="estimating"><Receipt className="h-3.5 w-3.5 mr-1.5" />Estimating & Quotes</TabsTrigger>
