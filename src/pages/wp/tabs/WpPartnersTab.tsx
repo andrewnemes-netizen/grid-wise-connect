@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Settings } from "lucide-react";
-import { ScopeAwardsPanel } from "@/components/delivery/ScopeAwardsPanel";
+import { ScopeAwardsPanel } from "@/components/wp/ScopeAwardsPanel";
 
 export default function WpPartnersTab() {
   const { id: wpId } = useParams<{ id: string }>();
