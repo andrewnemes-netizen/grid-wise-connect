@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Settings } from "lucide-react";
+import { ScopeAwardsPanel } from "@/components/delivery/ScopeAwardsPanel";
 
 export default function WpPartnersTab() {
   const { id: wpId } = useParams<{ id: string }>();
@@ -76,6 +77,8 @@ export default function WpPartnersTab() {
           </Button>
         </div>
       </div>
+
+      {wpId && <ScopeAwardsPanel workPackageId={wpId} />}
 
       {isLoading ? (
         <Card className="p-6 text-sm text-muted-foreground">Loading partners…</Card>
