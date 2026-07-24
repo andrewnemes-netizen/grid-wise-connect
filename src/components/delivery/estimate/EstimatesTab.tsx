@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Plus, FileText, ArrowRight, Trash2, MapPin, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { EstimateEditor } from "./EstimateEditor";
+import { QuoteBuilder } from "./QuoteBuilder";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -391,23 +391,13 @@ function Stat({ label, value, accent, big }: { label: string; value: string; acc
 }
 
 function EditorDialog({ openId, setOpenId }: { openId: string | null; setOpenId: (id: string | null) => void }) {
-  const [maximized, setMaximized] = useState(false);
   return (
-    <Dialog open={!!openId} onOpenChange={(o) => { if (!o) { setOpenId(null); setMaximized(false); } }}>
-      <DialogContent
-        className={
-          maximized
-            ? "max-w-none w-screen h-screen rounded-none border-0 p-0 overflow-hidden flex flex-col sm:rounded-none"
-            : "max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col"
-        }
-      >
+    <Dialog open={!!openId} onOpenChange={(o) => { if (!o) setOpenId(null); }}>
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 overflow-hidden flex flex-col">
         {openId && (
-          <EstimateEditor
+          <QuoteBuilder
             estimateId={openId}
-            onClose={() => { setOpenId(null); setMaximized(false); }}
-            onOpenEstimate={(id) => setOpenId(id)}
-            maximized={maximized}
-            onToggleMaximize={() => setMaximized((m) => !m)}
+            onClose={() => setOpenId(null)}
           />
         )}
       </DialogContent>
