@@ -231,6 +231,8 @@ export default function WpSiteRegisterTab() {
             address: s?.address ?? null,
             siteId: s?.siteId ?? null,
             postcode: s?.postcode ?? null,
+            lat: s?.lat ?? null,
+            lng: s?.lng ?? null,
             sockets: s?.socket_count ?? null,
             kwPerSocket: s?.kwPerSocket ?? null,
             totalConnectedKw: s?.totalConnectedKw ?? null,
@@ -309,6 +311,7 @@ export default function WpSiteRegisterTab() {
           const pt = (s.phaseTotals ?? {}) as Record<string, number | null>;
           return {
             Address: s.address ?? "", "Site ID": s.siteId ?? "", Postcode: s.postcode ?? "",
+            Latitude: (s as any).lat ?? "", Longitude: (s as any).lng ?? "",
             Sockets: s.sockets ?? "", "kW per socket": s.kwPerSocket ?? "",
             "Total connected kW": s.totalConnectedKw ?? "",
             "Phase L1 (kW)": pt.L1 ?? "", "Phase L2 (kW)": pt.L2 ?? "", "Phase L3 (kW)": pt.L3 ?? "",
