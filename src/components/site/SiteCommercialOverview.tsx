@@ -75,9 +75,13 @@ export function SiteCommercialOverview({ siteId }: { siteId: string }) {
 
   const evBuildTotal = evBuild.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
   const pocTotal = poc.reduce((s, r) => s + Number(r.grand_total ?? r.total_price ?? 0), 0);
+  const evBuildCost = sum(evBuild, "total_cost");
+  const pocCost = sum(poc, "total_cost");
   const totalOpportunity = evBuildTotal + pocTotal;
   const totalCost = sum(estimates, "total_cost");
   const marginPct = totalOpportunity > 0 ? (totalOpportunity - totalCost) / totalOpportunity : null;
+  const evMarginPct = evBuildTotal > 0 ? (evBuildTotal - evBuildCost) / evBuildTotal : null;
+  const icpMarginPct = pocTotal > 0 ? (pocTotal - pocCost) / pocTotal : null;
 
   if (isLoading) return null;
 
@@ -93,9 +97,35 @@ export function SiteCommercialOverview({ siteId }: { siteId: string }) {
         <KpiCard icon={<FileCheck2 className="h-4 w-4" />} label="PO Secured" value={gbp(poSecured)}
                 sub={poSecured > 0 ? "Itemised to this site" : "No PO itemised to this site yet"}
                 tone={poSecured > 0 ? "success" : undefined} />
-        <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Margin %" value={pct(marginPct)}
-                tone={marginPct != null ? (marginPct < 0 ? "danger" : "success") : undefined} />
+        <MarginKpiCard totalPct={marginPct} evPct={evMarginPct} icpPct={icpMarginPct} />
       </div>
     </div>
+  );
+}
+
+function MarginKpiCard({ totalPct, evPct, icpPct }: { totalPct: number | null; evPct: number | null; icpPct: number | null }) {
+  const toneClass = totalPct == null ? "text-foreground" : totalPct < 0 ? "text-destructive" : "text-emerald-600";
+  const subTone = (v: number | null) =>
+    v == null ? "text-muted-foreground" : v < 0 ? "text-destructive" : "text-emerald-600";
+  return (
+    <Card>
+      <CardContent className="py-3 space-y-1">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <TrendingUp className="h-4 w-4" />Margin %
+        </div>
+        <div className={`text-xl font-semibold tabular-nums ${toneClass}`}>{pct(totalPct)}</div>
+        <div className="flex items-center gap-2 text-[11px] tabular-nums pt-0.5">
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">EV</span>
+            <span className={`font-medium ${subTone(evPct)}`}>{evPct != null ? pct(evPct) : "—"}</span>
+          </div>
+          <span className="text-muted-foreground/40">·</span>
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground">ICP</span>
+            <span className={`font-medium ${subTone(icpPct)}`}>{icpPct != null ? pct(icpPct) : "—"}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
