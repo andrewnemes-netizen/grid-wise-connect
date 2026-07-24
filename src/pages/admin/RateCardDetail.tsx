@@ -183,7 +183,7 @@ export default function RateCardDetailPage() {
             </select>
           )}
           {v.status === "DRAFT" ? (
-            <Button size="sm" onClick={approve} disabled={needsPricingCount > 0}>Approve version</Button>
+            <Button size="sm" onClick={approve}>Approve version</Button>
           ) : (
             <Button size="sm" variant="outline" onClick={cloneToDraft}>
               <Copy className="h-3.5 w-3.5 mr-1.5" /> New draft version
@@ -196,7 +196,7 @@ export default function RateCardDetailPage() {
         <Alert>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {needsPricingCount} item(s) still need pricing. Approval is blocked until every item has a unit cost.
+            {needsPricingCount} item(s) still need pricing. You can approve now and complete pricing later from the Quote Builder or on this page.
           </AlertDescription>
         </Alert>
       )}
