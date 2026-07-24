@@ -22,7 +22,7 @@ export default function RateCardDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [edits, setEdits] = useState<Record<string, { description?: string; unit?: string; total_unit_cost?: string; client_unit_price?: string }>>({});
+  const [edits, setEdits] = useState<Record<string, { description?: string; unit?: string; total_unit_cost?: string; client_unit_price?: string; award_code?: string }>>({});
   const [saving, setSaving] = useState(false);
 
   const { data: version, isLoading: versionLoading } = useQuery({
@@ -44,7 +44,7 @@ export default function RateCardDetailPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("rate_items" as any)
-        .select("id, rate_code, description, unit, category, total_unit_cost, client_unit_price, needs_pricing")
+        .select("id, rate_code, description, unit, category, total_unit_cost, client_unit_price, needs_pricing, award_code")
         .eq("rate_card_version_id", versionId!)
         .order("category")
         .order("description");
@@ -83,7 +83,7 @@ export default function RateCardDetailPage() {
   const needsPricingCount = (items as any[]).filter((i) => i.needs_pricing).length;
   const pendingCount = Object.keys(edits).length;
 
-  const setField = (id: string, field: "description" | "unit" | "total_unit_cost" | "client_unit_price", val: string) => {
+  const setField = (id: string, field: "description" | "unit" | "total_unit_cost" | "client_unit_price" | "award_code", val: string) => {
     setEdits((prev) => ({ ...prev, [id]: { ...prev[id], [field]: val } }));
   };
 
@@ -103,6 +103,10 @@ export default function RateCardDetailPage() {
         }
         if (patch.client_unit_price != null && patch.client_unit_price !== "") {
           upd.client_unit_price = Number(patch.client_unit_price);
+        }
+        if (patch.award_code != null) {
+          const norm = patch.award_code.trim().toUpperCase();
+          upd.award_code = ["C", "I", "E"].includes(norm) ? norm : null;
         }
         if (Object.keys(upd).length === 0) return;
         const { error } = await supabase.from("rate_items" as any).update(upd).eq("id", id);
@@ -238,6 +242,7 @@ export default function RateCardDetailPage() {
                         <TableHead className="w-28">Unit</TableHead>
                         <TableHead className="w-32 text-right">Our Cost (£)</TableHead>
                         <TableHead className="w-32 text-right">Our Price (£)</TableHead>
+                        <TableHead className="w-24">Award</TableHead>
                         <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -248,6 +253,10 @@ export default function RateCardDetailPage() {
                         const unit = edit.unit ?? it.unit ?? "";
                         const cost = edit.total_unit_cost ?? (it.total_unit_cost ?? "");
                         const price = edit.client_unit_price ?? (it.client_unit_price ?? "");
+                        const awardCode = edit.award_code ?? (it.award_code ?? "");
+                        // Pricing can be completed even on an APPROVED version if the
+                        // item was still unpriced — matches the relaxed DB trigger.
+                        const pricingLocked = readOnly && !it.needs_pricing;
                         return (
                           <TableRow key={it.id}>
                             <TableCell className="text-xs font-mono text-muted-foreground">{it.rate_code}</TableCell>
@@ -263,13 +272,26 @@ export default function RateCardDetailPage() {
                             </TableCell>
                             <TableCell>
                               <Input type="number" step="0.01" className="h-8 text-right text-xs"
-                                disabled={readOnly} value={cost as any}
+                                disabled={pricingLocked} value={cost as any}
                                 onChange={(e) => setField(it.id, "total_unit_cost", e.target.value)} />
                             </TableCell>
                             <TableCell>
                               <Input type="number" step="0.01" className="h-8 text-right text-xs"
-                                disabled={readOnly} value={price as any}
+                                disabled={pricingLocked} value={price as any}
                                 onChange={(e) => setField(it.id, "client_unit_price", e.target.value)} />
+                            </TableCell>
+                            <TableCell>
+                              <select
+                                className="h-8 w-full rounded-md border bg-background px-1 text-xs disabled:opacity-50"
+                                disabled={readOnly}
+                                value={awardCode}
+                                onChange={(e) => setField(it.id, "award_code", e.target.value)}
+                              >
+                                <option value="">—</option>
+                                <option value="C">C · Civils</option>
+                                <option value="I">I · ICP</option>
+                                <option value="E">E · Electrical</option>
+                              </select>
                             </TableCell>
                             <TableCell>
                               {it.needs_pricing && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
