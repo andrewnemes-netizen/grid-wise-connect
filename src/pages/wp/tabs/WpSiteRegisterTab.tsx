@@ -781,6 +781,24 @@ export default function WpSiteRegisterTab() {
                       {r.local_ref && <span className="text-[11px] text-muted-foreground ml-2">{r.local_ref}</span>}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{s?.postcode ?? "—"}</TableCell>
+                    <TableCell className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                      {(() => {
+                        const ll = s?.id ? latlngBySite.get(s.id) : null;
+                        if (!ll) return <span className="text-muted-foreground">—</span>;
+                        return (
+                          <button
+                            className="hover:underline"
+                            title="Copy coordinates"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard?.writeText(`${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`);
+                            }}
+                          >
+                            {ll.lat.toFixed(4)}, {ll.lng.toFixed(4)}
+                          </button>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell>
                       {stage ? <Badge variant="secondary" className="text-[10px]">{(stage as any).label}</Badge> : <span className="text-muted-foreground text-xs">—</span>}
                     </TableCell>
